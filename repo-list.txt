@@ -2,9 +2,6 @@ git clone https://github.com/buildpacks/docs.git buildpacks
 git clone https://github.com/cert-manager/website.git cert-manager-website
 git clone https://github.com/chaos-mesh/website.git chaos-mesh-website
 git clone  https://github.com/backstage/backstage.git
-git clone https://github.com/buildpacks/docs.git buildpacks
-git clone https://github.com/cert-manager/website.git cert-manager-website
-git clone https://github.com/chaos-mesh/website.git chaos-mesh-website
 git clone https://github.com/cilium/cilium.git
 git clone https://github.com/cloud-custodian/cloud-custodian.git
 git clone https://github.com/projectcontour/contour.git
