@@ -8,4 +8,4 @@
    - `cd CNCF-Incubating`
    - `git sparse-checkout set --no-cone '*.md'`
    - `git checkout`
- - Have fun working on CNCF graduated documentation sites!
+ - Have fun working on CNCF incubating documentation sites!
