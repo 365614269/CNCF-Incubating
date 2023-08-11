@@ -1,0 +1,66 @@
+name: Clone Repositories
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  clone:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Git credentials
+      run: |
+        git config --global user.name "docs-bot"
+        git config --global user.email "365614269@qq.com"
+        git config --global credential.helper store
+
+    - name: Clone repositories
+      run: |
+        IFS=$'\n'
+
+        if [ -d modules ]; then
+          rm -rf modules
+        fi
+        mkdir modules
+        
+        cd modules
+        for file in $(cat ../repo-list.txt)
+        do
+          echo "正在处理文件 $file"
+          eval "$file"
+        done
+
+    - name: Push repositories to your repository
+      run: |
+        pwd
+        ls -l
+        cd modules
+        ls -l
+        for d in $(find . -maxdepth 1 -type d)
+        do
+          if [ "$d" != "." ]; then
+            pwd
+            cd "$d"
+            pwd
+            rm -rf .git
+            git add .
+            git status
+            cd ..
+          fi
+        done
+        git commit -m "Updated repository"
+        git push -v origin main
+    
+    - name: Clean up temporary directory
+      run: |
+        pwd
+        ls -l
+        rm -rf modules

@@ -1,2 +1,11 @@
 # CNCF_Incubating
-Includes all the CNCF incubating projects with renewal every day.
+ - This repository includes all the CNCF incubating projects' documentation sites.
+ - It is renewed everyday automatically.
+ - The documentation sites do not exist as submodules, but as plain files.
+ - The sites are included in the modules directory.
+ - If you only want to clone the .md files, you can run:
+   - `git clone -n --depth=1 --filter=tree:0 https://github.com/365614269/CNCF-Incubating.git`
+   - `cd CNCF-Incubating`
+   - `git sparse-checkout set --no-cone '*.md'`
+   - `git checkout`
+ - Have fun working on CNCF graduated documentation sites!

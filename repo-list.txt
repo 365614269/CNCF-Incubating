@@ -1,0 +1,41 @@
+git clone https://github.com/buildpacks/docs.git buildpacks
+git clone https://github.com/cert-manager/website.git cert-manager-website
+git clone https://github.com/chaos-mesh/website.git chaos-mesh-website
+git clone  https://github.com/backstage/backstage.git
+git clone https://github.com/buildpacks/docs.git buildpacks
+git clone https://github.com/cert-manager/website.git cert-manager-website
+git clone https://github.com/chaos-mesh/website.git chaos-mesh-website
+git clone https://github.com/cilium/cilium.git
+git clone https://github.com/cloud-custodian/cloud-custodian.git
+git clone https://github.com/projectcontour/contour.git
+git clone https://github.com/cloudevents/spec.git cloudevents-spec
+git clone https://github.com/containernetworking/cni.dev.git
+git clone https://github.com/cortexproject/cortex.git
+git clone https://github.com/crossplane/docs.git crossplane-docs
+git clone https://github.com/cubefs/cubefs.git
+git clone https://github.com/dapr/docs.git dapr-docs
+git clone https://github.com/dragonflyoss/d7y.io.git dragonfly
+git clone https://github.com/emissary-ingress/emissary.git
+git clone https://github.com/falcosecurity/falco-website.git
+git clone https://github.com/grpc/grpc.io.git
+git clone https://github.com/in-toto/in-toto.io.git
+git clone https://github.com/karmada-io/website.git karmada
+git clone https://github.com/kedacore/keda-docs.git
+git clone https://github.com/keptn/lifecycle-toolkit.git keptn
+git clone https://github.com/keycloak/keycloak.git
+git clone https://github.com/knative/docs.git knative
+git clone https://github.com/kubeedge/website.git kubeedge
+git clone https://github.com/kubevela/kubevela.github.io.git
+git clone https://github.com/kubevirt/kubevirt.git
+git clone https://github.com/kyverno/website.git kyverno
+git clone https://github.com/litmuschaos/litmus-docs.git
+git clone https://github.com/longhorn/website.git longhorn-website
+git clone https://github.com/nats-io/nats.docs.git
+git clone https://github.com/notaryproject/notaryproject.dev.git
+git clone https://github.com/openkruise/openkruise.io.git
+git clone https://github.com/open-telemetry/opentelemetry.io.git
+git clone https://github.com/operator-framework/operator-lifecycle-manager.git
+git clone https://github.com/operator-framework/operator-sdk.git
+git clone https://github.com/thanos-io/thanos.git
+git clone https://github.com/volcano-sh/website.git volcano
+git clone https://github.com/OpenObservability/OpenMetrics.git
