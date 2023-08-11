@@ -1,0 +1,21 @@
+.card
+  height: 100%
+  box-shadow: 5px 10px 15px #e4e4e4;
+  border-radius: 5px
+
+  display: flex
+  flex-direction: column
+
+  &.is-dark
+    background-color: $black-bis
+    color: $white-bis
+
+  &-content
+    flex: 1
+
+  &-is-wrapped
+    flex-wrap: wrap
+  
+  &.is-collapsible
+    & + &
+      margin-top: 0.5rem

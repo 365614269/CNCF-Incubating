@@ -1,0 +1,93 @@
+baseURL = "https://buildpacks.io/"
+languageCode = "en-us"
+
+title = "Cloud Native Buildpacks"
+theme = "buildpacks"
+
+pygmentsUseClasses = true
+pygmentsCodefences = true
+
+[markup.goldmark.renderer]
+unsafe= true
+
+[params]
+twitter_handle = "buildpacks_io"
+github_base_url = "https://github.com/buildpacks"
+slack_invite_url = "https://slack.cncf.io"
+description = "Cloud Native Buildpacks transform your application source code into images that can run on any cloud."
+
+pack_version_env_var = "PACK_VERSION"
+
+featureKatacoda = false
+
+[menu]
+
+  [[menu.main]]
+  identifier = "features"
+  name       = "Features"
+  url        = "/features"
+  weight     = 1
+
+  [[menu.main]]
+  identifier = "community"
+  name       = "Community"
+  url        = "/community"
+  weight     = 2
+
+  [[menu.main]]
+  identifier = "blog"
+  name       = "Blog"
+  url        = "https://medium.com/buildpacks"
+  weight     = 3
+
+  [[menu.main]]
+  identifier = "registry"
+  name       = "Registry"
+  url        = "https://registry.buildpacks.io/"
+  weight     = 4
+
+  [[menu.footer1]]
+  name       = "DevStats"
+  url        = "https://buildpacks.devstats.cncf.io/d/8/dashboards?orgId=1&refresh=15m"
+  weight     = 1
+
+  [[menu.footer1]]
+  name       = "Analytics"
+  url        = "https://datastudio.google.com/reporting/4b23856c-6c24-44f5-86f2-333d0ad3f236"
+  weight     = 2
+
+  [[menu.footer1]]
+  name       = "Privacy Policy"
+  url        = "https://www.linuxfoundation.org/privacy/"
+  weight     = 3
+
+  [[menu.footer2]]
+  name       = "Mailing List"
+  url        = "https://lists.cncf.io/g/cncf-buildpacks/join"
+  weight     = 1
+
+  [[menu.footer2]]
+  name       = "Slack"
+  url        = "https://slack.cncf.io"
+  weight     = 2
+
+  [[menu.footer2]]
+  name       = "Twitter"
+  url        = "https://twitter.com/buildpacks_io"
+  weight     = 3
+
+  [[menu.footer2]]
+  name       = "GitHub"
+  url        = "https://github.com/buildpacks"
+  weight     = 4
+
+[security]
+  enableInlineShortcodes = false
+  [security.exec]
+    allow = ['^dart-sass-embedded$', '^go$', '^npx$', '^postcss$']
+    osEnv = ['(?i)^(PATH|PATHEXT|APPDATA|TMP|TEMP|TERM)$']
+  [security.funcs]
+    getenv = ['^HUGO_', 'PACK_VERSION']
+  [security.http]
+    methods = ['(?i)GET|POST']
+    urls = ['.*']

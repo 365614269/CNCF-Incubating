@@ -1,0 +1,108 @@
+name: "Deploy Keptn Lifecycle Toolkit on GH cluster"
+description: "Creates a Kind cluster and deploys Keptn Lifecycle Toolkit"
+inputs:
+  kind-version:
+    required: false
+    description: "Version of kind that should be used"
+    # renovate: datasource=github-releases depName=kubernetes-sigs/kind
+    default: "v0.17.0"
+  k8s-version:
+    required: false
+    description: "Kubernetes that should be used"
+    # renovate: datasource=github-releases depName=kubernetes/kubernetes
+    default: "v1.25.3"
+  runtime_tag:
+    description: "Tag for the runner image"
+    required: true
+  cluster-name:
+    required: false
+    description: "Name of the kind cluster"
+    default: "test-cluster"
+  helm-install:
+    required: false
+    description: "Install KLT via helm instead of manifest if true"
+    default: "true"
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        cache-dependency-path: '**/go.sum'
+        check-latest: true
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: ~/download/artifacts
+
+    - name: "Create single kind Cluster"
+      uses: helm/kind-action@v1.8.0
+      with:
+        cluster_name: ${{ inputs.cluster-name }}
+        version: ${{ inputs.kind-version }}
+        node_image: "kindest/node:${{ inputs.k8s-version }}"
+        kubectl_version: ${{ inputs.k8s-version }}
+
+    - name: Import images in k3d
+      shell: bash
+      run: |
+        cd ~/download/artifacts
+        for image in $(ls | grep image.tar);
+        do
+          echo "Importing image: $image"
+          kind load image-archive $image/$image -n ${{ inputs.cluster-name }}
+        done
+
+    - name: Install lifecycle-toolkit with manifests
+      if: ${{ inputs.helm-install == 'false' }}
+      shell: bash
+      run: |
+        echo "Installing KLT using manifests"
+        sed -i 's/imagePullPolicy: Always/imagePullPolicy: Never/g' ~/download/artifacts/lifecycle-operator-manifest-test/release.yaml
+        sed -i 's/ghcr.io\/keptn\/functions-runtime:.*/localhost:5000\/keptn\/functions-runtime:${{ inputs.runtime_tag }}/g' \
+          ~/download/artifacts/lifecycle-operator-manifest-test/release.yaml
+        sed -i 's/ghcr.io\/keptn\/python-runtime:.*/localhost:5000\/keptn\/python-runtime:${{ inputs.runtime_tag }}/g' \
+          ~/download/artifacts/lifecycle-operator-manifest-test/release.yaml
+        kubectl create namespace keptn-lifecycle-toolkit-system
+        kubectl apply -f ~/download/artifacts/lifecycle-operator-manifest-test
+
+        sed -i 's/imagePullPolicy: Always/imagePullPolicy: Never/g' ~/download/artifacts/certificate-operator-manifest-test/release.yaml
+        kubectl apply -f ~/download/artifacts/certificate-operator-manifest-test
+        kubectl rollout status deployment certificate-operator -n keptn-lifecycle-toolkit-system -w
+
+        sed -i 's/imagePullPolicy: Always/imagePullPolicy: Never/g' ~/download/artifacts/metrics-operator-manifest-test/release.yaml
+        kubectl apply -f ~/download/artifacts/metrics-operator-manifest-test
+        kubectl rollout status deployment metrics-operator -n keptn-lifecycle-toolkit-system -w
+
+        sed -i 's/imagePullPolicy: Always/imagePullPolicy: Never/g' ~/download/artifacts/scheduler-manifest-test/release.yaml
+        kubectl apply -f ~/download/artifacts/scheduler-manifest-test
+        kubectl rollout status deployment scheduler -n keptn-lifecycle-toolkit-system -w
+        kubectl rollout status deployment lifecycle-operator -n keptn-lifecycle-toolkit-system -w
+
+    - name: Install lifecycle-toolkit with helm
+      if: ${{ inputs.helm-install == 'true'  }}
+      env:
+        RELEASE_REGISTRY: "localhost:5000/keptn"
+      shell: bash
+      run: |
+        echo "Installing KLT using helm"
+        helm version
+        helm install -n keptn-lifecycle-toolkit-system --create-namespace toolkit ./helm/chart  \
+          --set scheduler.scheduler.imagePullPolicy=Never \
+          --set scheduler.scheduler.image.tag=${{ inputs.runtime_tag }} \
+          --set scheduler.scheduler.image.repository="localhost:5000/keptn/scheduler" \
+          --set lifecycleOperator.manager.imagePullPolicy=Never \
+          --set lifecycleOperator.manager.image.tag=${{ inputs.runtime_tag }} \
+          --set lifecycleOperator.manager.image.repository="localhost:5000/keptn/lifecycle-operator" \
+          --set metricsOperator.manager.imagePullPolicy=Never \
+          --set metricsOperator.manager.image.tag=${{ inputs.runtime_tag }} \
+          --set metricsOperator.manager.image.repository="localhost:5000/keptn/metrics-operator" \
+          --set lifecycleOperator.manager.env.functionRunnerImage=localhost:5000/keptn/functions-runtime:${{ inputs.runtime_tag }} \
+          --set lifecycleOperator.manager.env.pythonRunnerImage=localhost:5000/keptn/python-runtime:${{ inputs.runtime_tag }} \
+          --set certificateOperator.manager.imagePullPolicy=Never \
+          --set certificateOperator.manager.image.tag=${{ inputs.runtime_tag }} \
+          --set certificateOperator.manager.image.repository="localhost:5000/keptn/certificate-operator" \
+          --debug --wait --timeout 1m

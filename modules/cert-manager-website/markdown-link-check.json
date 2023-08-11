@@ -1,0 +1,21 @@
+{
+  "ignorePatterns": [
+    {
+      "description": "Ignore root relative links to images which markdown-link-check is unable to verify",
+      "pattern": "^/"
+    },
+    {
+      "description": "Ignore in-page anchor links defined using <a id=''> syntax,. See https://github.com/tcort/markdown-link-check/issues/225",
+      "pattern": "^#"
+    },
+    {
+      "description": "Ignore external links which may fail due to network flakiness and rate limits on foreign servers",
+      "pattern": "^https?://"
+    },
+    {
+      "description": "Ignore links to yaml manifests which are served from public/, which markdown-link-check is unable to verify",
+      "pattern": "^[^:/]+.yaml"
+    }
+  ],
+  "aliveStatusCodes": [200, 0]
+}

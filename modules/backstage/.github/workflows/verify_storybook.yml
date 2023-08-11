@@ -1,0 +1,56 @@
+name: Storybook
+on:
+  # NOTE: If you change these you must update verify_storybook-noop.yml as well
+  pull_request:
+    paths:
+      - '.github/workflows/verify_storybook.yml'
+      - 'storybook/**'
+      - 'packages/config/src/**'
+      - 'packages/theme/src/**'
+      - 'packages/types/src/**'
+      - 'packages/errors/src/**'
+      - 'packages/version-bridge/src/**'
+      - 'packages/test-utils/src/**'
+      - 'packages/core-app-api/src/**'
+      - 'packages/core-plugin-api/src/**'
+      - 'packages/core-components/src/**'
+      - '**/*.stories.tsx'
+
+jobs:
+  chromatic:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        node-version: [16.x]
+
+    name: Storybook
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Required to retrieve git history
+
+      - name: use node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: https://registry.npmjs.org/ # Needed for auth
+      - name: yarn install
+        uses: backstage/actions/yarn-install@v0.6.4
+        with:
+          cache-prefix: ${{ runner.os }}-v${{ matrix.node-version }}
+      - name: storybook yarn install
+        run: yarn install --immutable
+        working-directory: storybook
+
+      - run: yarn build-storybook
+
+      - uses: chromaui/action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # projectToken intentionally shared to allow collaborators to run Chromatic on forks
+          # https://www.chromatic.com/docs/custom-ci-provider#run-chromatic-on-external-forks-of-open-source-projects
+          projectToken: 9tzak77m9nj
+          workingDir: storybook
+          storybookBuildDir: dist

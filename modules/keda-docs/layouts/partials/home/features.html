@@ -1,0 +1,34 @@
+{{ $features := site.Params.features }}
+<section class="section">
+  <div class="container has-text-centered">
+    <p style="padding:10px" class="title is-inline-block underline--magical is-size-1 is-size-3-mobile" id="features">
+      Features
+    </p>
+
+    <br />
+
+    <div style="margin-top: 20px;" class="columns is-multiline is-variable is-4">
+      {{ range $features }}
+      <div class="column is-one-third">
+        <div class="card has-no-shadow is-borderless has-extra-bottom-margin">
+          <div class="card-content is-paddingless">
+            <p class="title has-text-secondary is-spaced">
+              <span class="icon">
+               <i class="fa-lg {{ .icon }} fa-2x" alt="{{ .title }}"></i>
+              </span>
+            </p>
+
+            <p class="subtitle is-size-3 is-size-4-mobile has-text-weight-bold">
+              {{ .title }}
+            </p>
+     
+            <p class="content is-medium">
+              {{ .content | markdownify }}
+            </p>
+          </div>
+        </div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>

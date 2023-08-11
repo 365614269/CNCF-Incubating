@@ -1,0 +1,13 @@
+{{ $data := (index site.Data site.Language.Lang).usecases }}
+
+<div class="grid-1 grid-lg-{{ len $data }} gap-3">
+  {{ range $index, $item := $data }}
+  <div class="use-cases-item">
+    <a href="{{ .url }}" class="d-flex align-items-baseline text-decoration-none">
+      <h6 class="w-100 text-body">{{ .title }}</h6>
+      <i class="fa fa-arrow-right"></i>
+    </a>
+    <p class="mb-0">{{ .description }}</p>
+  </div>
+  {{ end }}
+</div>

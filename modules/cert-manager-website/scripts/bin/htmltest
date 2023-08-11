@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+# Copyright 2022 The cert-manager Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# This script downloads a htmltest binary for local use if such a binary
+# doesn't already exist.
+
+# Arguments are then proxied through to the downloaded binary, allowing
+# this script to be used as a drop-in replacement for calling the binary directly.
+
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+VERSION="0.16.0"
+
+source "${REPO_ROOT}/scripts/bin/lib.sh"
+
+htmltest="${REPO_ROOT}/bin/htmltest"
+mkdir -p "$(dirname "$htmltest")"
+
+if ! command -v curl &>/dev/null; then
+    echo "Ensure curl command is installed"
+    exit 1
+fi
+
+if ! test -f "${htmltest}"; then
+    echo "+++ Fetching htmltest binary and saving to bin/htmltest"
+    detect_and_set_goos_goarch
+
+    tmpdir="$(mktemp -d)"
+    if [ "$GOOS" = "darwin" ]; then
+        curl -Lo "${tmpdir}/file" "https://github.com/wjdp/htmltest/releases/download/v${VERSION}/htmltest_${VERSION}_macos_amd64.tar.gz"
+        check_sha "${tmpdir}/file" "3137bc847801511ed9596a4f91357daffffaee96b148d8bd9bb19b939f3c1f71"
+    elif [ "$GOOS" = "linux" ]; then
+        curl -Lo "${tmpdir}/file" "https://github.com/wjdp/htmltest/releases/download/v${VERSION}/htmltest_${VERSION}_linux_amd64.tar.gz"
+        check_sha "${tmpdir}/file" "4835e857f75d317e84fda6f9b112c70696095f8656740ca9421e74eb7e75f041"
+    else
+        echo "Unsupported OS: $GOOS"
+        exit 1
+    fi
+
+    tar -C "$tmpdir" -xf "${tmpdir}/file"
+    mv "${tmpdir}/htmltest" "${htmltest}"
+    chmod +x "${htmltest}"
+    rm -rf "${tmpdir}"
+fi
+
+"${htmltest}" "$@"

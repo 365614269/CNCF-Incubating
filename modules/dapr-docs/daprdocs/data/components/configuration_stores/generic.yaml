@@ -1,0 +1,10 @@
+- component: Redis
+  link: redis-configuration-store
+  state: Stable
+  version: v1
+  since: "1.11"
+- component: PostgreSQL
+  link: postgresql-configuration-store
+  state: Stable
+  version: v1
+  since: "1.11"

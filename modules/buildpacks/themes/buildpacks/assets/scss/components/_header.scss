@@ -1,0 +1,29 @@
+/**********************************
+
+Header
+
+**********************************/
+
+header .navbar-light .navbar-nav .nav-link {
+  white-space: nowrap;
+  text-decoration: none;
+  color: $blue-dark;
+
+  &:hover {
+    text-decoration: inherit;
+  }
+
+  border-bottom: 2px solid rgba($blue-light, 0.25);
+
+  &.active {
+    border-bottom-color: $blue-light;
+  }
+}
+
+header .logo img {
+  width: auto;
+  min-width: 160px;
+  @media (min-width: 768px) {
+    width: 200px;
+  }
+}

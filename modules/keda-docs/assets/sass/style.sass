@@ -1,0 +1,327 @@
+@charset "utf-8"
+{{ $fontAwesomeVersion := site.Params.font_awesome_version }}
+{{ $fonts := site.Params.fonts }}
+{{ if $fonts }}
+{{ $fontSlice := (slice) }}
+{{ range $fonts }}
+{{ $fontSlice = $fontSlice | append (printf "%s:%s" (replace .name " " "+") (delimit .sizes ",")) }}
+{{ end }}
+{{ $fontsUrl := printf "https://fonts.googleapis.com/css?family=%s" (delimit $fontSlice "|") }}
+@import url("{{ $fontsUrl }}")
+{{ end }}
+
+{{ with $fontAwesomeVersion }}
+{{ $fontAwesomeUrl := printf "https://use.fontawesome.com/releases/v%s/css/all.css" . }}
+@import url("{{ $fontAwesomeUrl }}")
+{{ end }}
+
+// Site-specific variables here
+$keda-blue: #326de6 
+$keda-light-blue: #679bf0
+$twitter-blue: rgb(29, 161, 242)
+$slack-green: #2EB67D
+$k8s-blue: #326ce5
+
+// Initial Bulma imports
+@import "bulma/sass/utilities/initial-variables"
+@import "bulma/sass/utilities/functions"
+
+// Bulma-specific overrides
+$primary: $keda-blue
+$secondary: $keda-light-blue
+$footer-color: $white-bis
+$footer-background-color: $black
+$navbar-height: 4rem
+$navbar-burger-color: $primary
+$code: $primary
+$code-background: $white-bis
+$modal-content-width: 50%
+$list-radius: none
+$input-icon-color: $secondary
+$input-icon-active-color: $primary
+$input-color: $black
+
+// Font overrides
+{{ if $fonts }}
+// Sans-serif font
+{{ with (index (where $fonts ".type" "sans_serif") 0).name }}
+$family-sans-serif: "{{ . }}", BlinkMacSystemFont, -apple-system, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", "Helvetica", "Arial", sans-serif
+{{ end }}
+
+// Monospace font
+{{ with (index (where $fonts ".type" "monospace") 0).name }}
+$family-monospace: "{{ . }}", monospace
+{{ end }}
+{{ end }}
+
+// Final Bulma imports
+@import "bulma/sass/utilities/derived-variables"
+
+$card-border: 1.5px solid $grey-lighter
+
+$colors: mergeColorMaps(("secondary": ($secondary, $white-bis), "slack-green": ($slack-green, $white), "twitter-blue": ($twitter-blue, $white), "orange": ($orange, $white)), $colors)
+
+$card-shadow: none
+$card-color: $black
+//$card-content-padding: 1.5rem 2rem
+//$card-header-padding: 1rem $card-content-padding
+$card-shadow: none
+$card-header-weight: $weight-bold
+$card-header-shadow:  0 0.125em 0.125em rgba($scheme-invert, 0.1)
+$card-footer-border-top: $card-border
+$message-header-color: $dark !important
+$message-body-color: $dark !important
+$message-header-padding: 1em 1.25em
+$message-body-padding: $message-header-padding
+$hero-body-padding: 4rem 1.5rem
+
+// Bulma core
+@import "bulma/sass/utilities/_all"
+@import "bulma/sass/base/_all"
+@import "bulma/sass/elements/container"
+@import "bulma/sass/grid/columns"
+@import "bulma/sass/grid/tiles"
+@import "bulma/sass/layout/hero"
+@import "bulma/sass/layout/section"
+@import "bulma/sass/layout/footer"
+
+// Elements
+
+// @import "bulma/sass/elements/box"
+@import "bulma/sass/elements/button"
+@import "bulma/sass/elements/content"
+@import "bulma/sass/elements/icon"
+// @import "bulma/sass/elements/image"
+// @import "bulma/sass/elements/notification"
+// @import "bulma/sass/elements/progress"
+// @import "bulma/sass/elements/table"
+@import "bulma/sass/elements/tag"
+@import "bulma/sass/elements/title"
+// @import "bulma/sass/elements/other"
+
+// Forms
+@import "bulma/sass/form/shared"
+@import "bulma/sass/form/input-textarea"
+// @import "bulma/sass/form/checkbox-radio"
+// @import "bulma/sass/form/select"
+// @import "bulma/sass/form/file"
+@import "bulma/sass/form/tools"
+
+// Components
+// @import "bulma/sass/components/breadcrumb"
+@import "bulma/sass/components/card"
+@import "bulma/sass/components/dropdown"
+@import "bulma/sass/components/level"
+@import "bulma/sass/components/list"
+@import "bulma/sass/components/media"
+@import "bulma/sass/components/menu"
+@import "bulma/sass/components/message"
+@import "bulma/sass/components/modal"
+@import "bulma/sass/components/navbar"
+@import "bulma/sass/components/pagination"
+// @import "bulma/sass/components/panel"
+// @import "bulma/sass/components/tabs"
+
+// Custom CSS
+@import "card"
+@import "content"
+@import "nav"
+
+*, *::before, *::after 
+  max-width: 100vw
+
+.has-extra-top-margin
+  margin-top: 1.5rem
+
+.has-extra-sm-right-margin
+  margin-right: 0.5rem
+
+.list-item
+  padding: 1rem 1.5rem
+
+  .content
+    margin-top: 0.5rem
+  
+.title, .subtitle
+  &.has-shadow
+    text-shadow: 0 0 10px #000
+
+.card
+  &.is-borderless
+    border: none
+
+  &.has-extra-bottom-margin
+    margin-bottom: 2rem
+
+.has-mouse-icon
+  &:hover
+    cursor: pointer
+
+.is-sticky
+  position: sticky
+  position: -webkit-sticky
+  top: $navbar-height + 2.5rem
+
+.is-page
+  display: flex
+  flex-direction: column
+  min-height: 100vh
+
+  .is-main
+    flex: 1
+    overflow: hidden
+
+=logo($desk, $tab, $touch)
+  +desktop
+    width: $desk
+  +tablet-only
+    width: $tab
+  +mobile
+    width: $touch
+
+.is-cncf-logo
+  +logo(40%, 20%, 70%)
+
+.is-hero-logo
+  +logo(75%, 80%, 50%)
+
+.is-footer-logo
+  +logo(40%, 60%, 40%)
+
+.is-org-logo
+  width: auto
+  max-height: 8rem
+
+.is-bold-letter
+  color: $secondary
+  border-bottom: 4px solid $primary
+
+.title
+  line-height: 1.5
+
+  .icon
+    margin-left: 0.75rem
+
+.has-background-pattern
+	background-color: transparent 
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1600 800'%3E%3Cg stroke='%23000' stroke-width='66.7' stroke-opacity='0.05' %3E%3Ccircle fill='%2324CEFF' cx='0' cy='0' r='1800'/%3E%3Ccircle fill='%232fc2f4' cx='0' cy='0' r='1700'/%3E%3Ccircle fill='%2337b6e8' cx='0' cy='0' r='1600'/%3E%3Ccircle fill='%233daadc' cx='0' cy='0' r='1500'/%3E%3Ccircle fill='%23419ecf' cx='0' cy='0' r='1400'/%3E%3Ccircle fill='%234492c2' cx='0' cy='0' r='1300'/%3E%3Ccircle fill='%234587b5' cx='0' cy='0' r='1200'/%3E%3Ccircle fill='%23467ca8' cx='0' cy='0' r='1100'/%3E%3Ccircle fill='%2345719b' cx='0' cy='0' r='1000'/%3E%3Ccircle fill='%2344668e' cx='0' cy='0' r='900'/%3E%3Ccircle fill='%23425c81' cx='0' cy='0' r='800'/%3E%3Ccircle fill='%233f5274' cx='0' cy='0' r='700'/%3E%3Ccircle fill='%233b4867' cx='0' cy='0' r='600'/%3E%3Ccircle fill='%23363f5a' cx='0' cy='0' r='500'/%3E%3Ccircle fill='%2331364e' cx='0' cy='0' r='400'/%3E%3Ccircle fill='%232c2d42' cx='0' cy='0' r='300'/%3E%3Ccircle fill='%23252536' cx='0' cy='0' r='200'/%3E%3Ccircle fill='%231F1D2B' cx='0' cy='0' r='100'/%3E%3C/g%3E%3C/svg%3E") 
+	background-attachment: fixed 
+	background-size: cover 
+
+.has-extra-padding
+  margin: 1.5rem 0
+
+
+.is-youtube-embed
+  width: 100%
+  height: 20rem
+
+.pagination
+  &.has-bottom-margin
+    margin-bottom: 4rem
+
+.footer
+  .buttons
+    +touch
+      margin-top: 1rem
+
+  a
+    color: $secondary
+
+    &:hover
+      color: #00aeff
+	
+#cncf
+	&:hover 
+		color: #00aeff
+
+hr
+  &.is-thick
+    margin: 3rem 0
+
+.subtitle
+  a
+    color: $secondary !important
+
+    &:hover
+      color: $keda-blue !important
+
+.navbar-item
+  .icon
+    margin-left: 0.1rem
+
+.buttons
+  &.are-spaced
+    .button:not(:first-child)
+      margin-left: 0.5rem
+	
+.has-no-shadow 
+	box-shadow: none !important
+
+.is-info-light
+	background: hsl(206, 70%, 96%)
+	
+.section 
+	padding: 4rem 1.5rem
+
+@media screen and (max-width: 1024px)
+  .section
+    width: 100vw
+	
+.underline--magical
+  background-image: linear-gradient(to right, rgb(250, 112, 154) 0%, rgb(254, 225, 64) 100%)
+  background-repeat: no-repeat
+  background-size: 100% 0.2em
+  background-position: 0 88%
+  transition: background-size 0.25s ease-in-out
+  &:hover
+    background-size: 100% 88%
+
+.underline--magical-1
+  background-image: linear-gradient(to right, #B2FEFA 0%, #0ED2F7 100%)
+  background-repeat: no-repeat
+  background-size: 100% 0.2em
+  background-position: 0 88%
+  transition: background-size 0.25s ease-in-out
+  &:hover
+    background-size: 100% 88%
+
+.underline--magical-2
+  background-image: linear-gradient(to right, #E29587 0%, #D66D75 100%)
+  background-repeat: no-repeat
+  background-size: 100% 0.2em
+  background-position: 0 88%
+  transition: background-size 0.25s ease-in-out
+  &:hover
+    background-size: 100% 88%
+
+.underline--magical-3
+  background-image: linear-gradient(to right, #A7BFE8 0%, #6190E8 100%)
+  background-repeat: no-repeat
+  background-size: 100% 0.2em
+  background-position: 0 88%
+  transition: background-size 0.25s ease-in-out
+  &:hover
+    background-size: 100% 88%
+
+.underline--magical-4
+  background-image: linear-gradient(to right, #F8FFAE 0%, #43C6AC 100%)
+  background-repeat: no-repeat
+  background-size: 100% 0.2em
+  background-position: 0 88%
+  transition: background-size 0.25s ease-in-out
+  &:hover
+    background-size: 100% 88%
+
+.underline--magical-5
+  background-image: linear-gradient(to right, #FDB99B 0%, #CF8BF3 100%)
+  background-repeat: no-repeat
+  background-size: 100% 0.2em
+  background-position: 0 88%
+  transition: background-size 0.25s ease-in-out
+  &:hover
+    background-size: 100% 88%
+ 
+@media screen and (min-width: 769px)
+  .md-height-desktop
+      height: 9rem

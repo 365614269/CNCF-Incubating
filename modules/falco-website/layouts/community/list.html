@@ -1,0 +1,213 @@
+{{ define "main" }}
+
+{{/*  Header  */}}
+<section class="row community-header">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-5 col-md-6 col-12 order-1 order-md-0">
+        <h2 class="my-4">Welcome to the Falco flock!</h2>
+        <p>Falco is an open source security project, hosted by the CNCF. Our community is passionate about securing containers and clouds. We love open source and Falco. <br>As a vendor neutral project, <a href="#contribute">we</a> welcome a broad range of contributions. Please take a moment to check out the different ways you can participate or obtain support. <br>Come fly with us!</p>
+        <a href="https://github.com/falcosecurity/.github/blob/main/CONTRIBUTING.md#how-to-contribute" class="text-center btn btn-primary btn-lg mt-md-4 mt-3" role="button">Contribute</a>
+      </div>
+      <div class="col-lg-6 col-md-6 offset-lg-1 col-12 mt-md-4 community-header__cover">
+        <img class="img-fluid" src="/img/community/falco_flock.jpg" alt="plug" />
+      </div>
+    </div>
+  </div>
+</section>
+
+{{/*  Connect  */}}
+<section class="row">
+    <div class="container">
+      <div class="row">
+          <div class="col">
+              <h3 class="mb-4">Connect</h3>
+          </div>
+      </div>
+      <div class="row">
+        <div class="col">
+            <div class="grid-1 grid-lg-3 gap-4">
+                <div class="card shadow">
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <h6  class="card-title">Follow us on social</h6>
+                        <div class="card-text d-flex gap-4 mt-3">
+                            <a class="d-flex text-body" href="https://twitter.com/falco_org" target="_blank">
+                                <img class="mr-2" src="/img/icons/twitter.svg" alt="twitter">
+                                <span>Twitter</span>
+                            </a>
+                            <a class="d-flex text-body" href="https://www.linkedin.com/company/falco-security-oss" target="_blank">
+                                <img class="mr-2" src="/img/icons/linkedin.svg" alt="linkedin">
+                                <span>Linkedin</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card shadow">
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <h6 class="card-title">Join Kubernetes #falco</h6>
+                        <div class="card-text d-flex gap-4 mt-3">
+                            <a class="d-flex text-body" href="https://kubernetes.slack.com/messages/falco" target="_blank">
+                                <img class="mr-2" src="/img/icons/slack.svg" alt="slack">
+                                <span>Slack</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card shadow">
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <h6 class="card-title">Understand our governance</h6>
+                        <div class="card-text d-flex gap-4 mt-3">
+                            <a class="d-flex text-body" href="https://github.com/falcosecurity/evolution/blob/main/GOVERNANCE.md" target="_blank">
+                                <img class="mr-2" src="/img/icons/github.svg" alt="slack">
+                                <span>Github</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+{{/*  Github  */}}
+<section class="row community-git">
+    <div class="container">
+        <div class="row">
+            <div class="col-12 col-md-6 d-flex flex-row flex-md-column gap-3 align-items-start justify-content-between mb-5 mb-md-0">
+                <div>
+                    <h3 >Create an issue</h3>
+                    <p class="my-2 my-md-3">Report bugs and make requests</p>
+                </div>
+                <a href="https://github.com/falcosecurity/falco/issues/new/choose" class="text-center btn btn-outline-primary btn-lg" target="_blank">Go to GitHub</a>
+            </div>
+            <div class="col-12 col-md-6 d-flex flex-row flex-md-column gap-3 align-items-start justify-content-between">
+                <div>
+                    <h3>Meet our maintainers</h3>
+                    <p class="my-2 my-md-3">Check out the leaders of the project</p>
+                </div>
+                <a href="https://github.com/falcosecurity/evolution/blob/main/MAINTAINERS.md" class="text-center btn btn-outline-primary btn-lg" target="_blank">Go to GitHub</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+{{/*  Support  */}}
+<section class="row">
+    <div class="container">
+        <div class="row">
+            <div class="col">
+                <h3 class="mb-4">Get support</h3>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 col-md-6 mb-3 mb-md-0">
+                <a class="card card-sm btn btn-light bg-light h-100 p-0" href="https://kubernetes.slack.com/messages/falco" target="_blank">
+                    <div class="card-body d-flex justify-content-center align-items-center">
+                        <img width=40 height=40 src="/img/icons/slack.svg" alt="slack">
+                        <p class="w-100 text-left mb-0 mx-3">
+                            Ask a question in Kubernetes <strong>#falco</strong>
+                        </p>
+                        <i class="fa fa-arrow-right text-primary"></i>
+                    </div>
+                </a>
+            </div>
+            <div class="col-12 col-md-6">
+                <a class="card card-sm btn btn-light bg-light h-100 p-0" href="https://lists.cncf.io/g/cncf-falco-dev/" target="_blank">
+                    <div class="card-body d-flex justify-content-center align-items-center">
+                        <img width=40 height=40 src="/img/icons/envelope-open-fill.svg" alt="slack">
+                        <p class="w-100 text-left mb-0 mx-3">
+                            Discuss and get help from other users via our mailing list
+                        </p>
+                        <i class="fa fa-arrow-right text-primary"></i>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+{{/*  Join the community  */}}
+<section class="row">
+    <div class="container">
+        <div class="row">
+            <div class="col">
+                <h3 class="mb-2">Join the Falco community</h3>
+            </div>
+        </div>
+        <div class="row community">
+            <div class="col position-relative d-flex flex-column">
+                <div class="position-absolute d-flex gap-3 align-items-center community__call-invitation order-0">
+                    <div class="d-flex align-self-center icon">
+                        <img src="/img/icons/telephone.svg" alt="community-call" />
+                    </div>
+                    <p class="mb-0">Join a Falco <a href="https://lists.cncf.io/g/cncf-falco-dev/calendar" target="_blank">community call</a> - every Wednesday at 16:00 (UTC)</p>
+                </div>
+                
+                <div class="position-absolute d-flex gap-3 align-items-center community__events order-2">
+                    <div class="d-flex align-self-center icon">
+                        <img src="/img/icons/calendar.svg" alt="community-events" />
+                    </div>
+                    <p class="mb-0">Attend our <a href="/community/events">events</a></p>
+                </div>
+                
+                <div class="position-absolute d-flex gap-3 align-items-center community__contribute order-5" id="contribute">
+                    <div class="d-flex align-self-center icon">
+                        <img src="/img/icons/plus-circle-fill.svg" alt="community-contribute" />
+                    </div>
+                    <p class="mb-0">Contribute</p>
+                </div>
+                
+                <div class="position-absolute community__links order-6">
+                    <a class="card card-sm btn btn-light bg-light p-0" href="https://github.com/falcosecurity/.github/blob/main/CONTRIBUTING.md" target="_blank" role="button">
+                        <div class="card-body d-flex flex-column justify-content-center">
+                            <div class="card-text d-flex align-items-center gap-4">
+                                <p class="w-100 text-left mb-0">We welcome code and non-code contributions, including blogs, docs, newsletter, events</p>
+                                <i class="fa fa-arrow-right text-primary"></i>
+                            </div>
+                        </div>
+                    </a>
+                    <a class="card card-sm btn btn-light bg-light p-0 mt-3" href="https://github.com/falcosecurity/.github/blob/main/CONTRIBUTING.md#code-of-conduct" target="_blank" role="button">
+                        <div class="card-body d-flex flex-column justify-content-center gap-4">
+                            <div class="card-text d-flex align-items-center">
+                                <p class="w-100 text-left mb-0">Code of conduct and contribution guidelines</p>
+                                <i class="fa fa-arrow-right text-primary"></i>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <img class="community__call order-1 img-fluid" src="/img/community/call.jpg" alt="community-call" loading="lazy"/>
+                <img class="community__bar order-3 img-fluid" src="/img/community/bar.jpg" alt="community-bar" loading="lazy"/>
+                <img class="community__presentation order-4 img-fluid" src="/img/community/presentation.jpg" alt="community-presentation" loading="lazy"/>
+                <img class="community__coding order-7 img-fluid" src="/img/community/coding.jpg" alt="community-coding" loading="lazy"/>
+                <img class="community__arrow1 img-fluid d-none d-md-block" src="/img/community/arrow1.svg" alt="community-arrow1" loading="lazy"/>
+                <img class="community__arrow2 img-fluid d-none d-md-block" src="/img/community/arrow2.svg" alt="community-arrow2" loading="lazy"/>
+            </div>
+        </div>
+    </div>
+</section>
+
+{{/*  Promotion  */}}
+{{/*  TODO: uncomment when Promotion page is ready  */}}
+{{/* <section class="row">
+    <div class="container">
+        <div class="row">
+            <div class="col">
+                <a class="card btn bg-info p-0" href="https://lists.cncf.io/g/cncf-falco-dev/" target="_blank">
+                    <div class="card-body d-flex text-left align-items-center gap-5">
+                        <div>
+                            <h4>Promotion</h4>
+                            <p class="mb-0">Are you interested in learning more about Falco or giving a talk about Falco? Excellent! The Falco community has created this collection of materials to help you get started. The community periodically reviews these materials to ensure they are accurate and up-to-date.</p>
+                        </div>
+                        <div class="icon-button shadow flex-shrink-0">
+                            <i class="fa fa-arrow-right"></i>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</section> */}}
+
+{{ end }}

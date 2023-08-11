@@ -1,0 +1,110 @@
+// Overrides card-pane.scss
+.card {
+  max-width: unset;
+  border-radius: $card-border-radius !important;
+
+  &-sm {
+    border-radius: $card-border-radius-sm !important;
+    
+    .card-body {
+      padding: $card-spacer-x-sm;
+    }
+  }
+
+  &-md {
+    border-radius: $card-border-radius-md !important;
+    .card-body {
+      padding: $card-spacer-x-md !important;
+      &-md {
+        padding-top: $card-spacer-x-sm !important;
+        padding-bottom: $card-spacer-x-sm !important;
+      }
+    }
+  }
+
+  .card-text {
+    :last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.card-deck {
+  max-width: unset;
+}
+
+// FAQ card
+.faq-card {
+  scroll-margin-top: 4rem;
+
+  &:not(:last-child) {
+    margin-bottom: 1rem;
+  }
+
+  .card-text {
+    margin-top: 1.5rem;
+  }
+
+  p {
+    margin-bottom: 1.5rem;
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  &__control {
+    min-width: 2rem;
+  }
+
+  button[data-toggle="collapse"] {
+    &:focus,
+    :active {
+      box-shadow: none !important;
+    }
+
+    i {
+      color: $gray-600;
+      transition: rotate 0.5s;
+      font-size: 1rem;
+    }
+
+    &[aria-expanded="true"] {
+      i.fa-plus {
+        rotate: 45deg;
+        color: $primary;
+      }
+    }
+  }
+}
+
+// Landing/Feature card
+.feature-card {
+  height: max-content;
+  
+  &__title {
+    font-size: 1.625rem;
+  }
+
+  &__expand-control {
+    &:hover {
+      text-decoration: none;
+    }
+
+    &[aria-expanded="false"] {
+      .expanded {
+        display: none;
+      }
+    }
+
+    &[aria-expanded="true"] {
+      .collapsed {
+        display: none;
+      }
+    }
+  }
+}
+
+.testimonial-card {
+  height: 31rem;
+  background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='40' ry='40' stroke='%2300AEC7FF' stroke-width='2' stroke-dasharray='6%25%2c 2%25' stroke-dashoffset='27' stroke-linecap='butt'/%3e%3c/svg%3e");
+}

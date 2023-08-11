@@ -1,0 +1,65 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  repository_dispatch:
+    types:
+      - pack-release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go environment
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.x'
+      - name: Install Dependencies
+        run: sudo apt-get install make curl jq
+      - name: Install pack
+        uses: buildpacks/github-actions/setup-pack@v5.2.0
+        with:
+          pack-version: '0.30.0-rc1'
+      - name: Test
+        run: make test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: make build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check links
+        run: |
+          make check-links
+      - name: Upload public folder
+        uses: actions/upload-artifact@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: public
+          path: ./public
+
+  deploy:
+    if: (github.event_name == 'repository_dispatch') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download public folder
+        uses: actions/download-artifact@v3
+        with:
+          name: public
+          path: ./public
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          cname: buildpacks.io
+          full_commit_message: ${{ github.event.head_commit.message }}

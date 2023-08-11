@@ -1,0 +1,67 @@
+.sidebar {
+  font-size: 1rem;
+  padding: 10px 0 0 0;
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  a {
+    text-decoration: none;
+    color: $gray-light;
+    display: inline-block;
+    transition: opacity 0.2s;
+  }
+
+  .depth-0 {
+    > a {
+      display: block;
+      padding: 0 20px 10px 20px;
+      font-weight: 600;
+      position: relative;
+
+      &:before {
+        position: absolute;
+        content: "•";
+        left: 6px;
+        opacity: 0.30;
+      }
+    }
+
+    padding: 10px 0;
+    border-bottom: 1px solid rgba($gray-light, 0.10);
+  }
+
+  li.parent {
+    background: rgba($white, 0.5);
+  }
+  
+  li[class*="depth-"]:not(.depth-0) {
+    margin-left: 15px;
+    
+    a {
+      padding: .25rem 1rem;
+    }
+
+    &.parent {
+      background: 0 .75rem url("/images/list-item.svg") no-repeat;
+
+      > a {
+        color: $blue-dark;
+      }
+    }
+
+    &.active {
+      background: 0 .75rem url("/images/list-item-active.svg") no-repeat;
+
+      > a {
+        color: $pink;
+      }
+    }
+  }
+}

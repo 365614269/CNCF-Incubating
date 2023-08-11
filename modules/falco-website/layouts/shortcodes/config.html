@@ -1,0 +1,32 @@
+<strong>{{ $lang := string site.Language }}</strong>
+{{ $config := (index site.Data $lang).config }}
+<table>
+  <thead>
+    <tr>
+      <th>
+        Config
+      </th>
+      <th>
+        Type
+      </th>
+      <th>
+        Description
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {{ range $config }}
+    <tr id="{{ .name }}">
+      <td>
+        <code>{{ .name }}</code>
+      </td>
+      <td>
+        {{ .type | markdownify }}
+      </td>
+      <td>
+        {{ .description | markdownify }}
+      </td>
+    </tr>
+    {{ end }}
+  </tbody>
+</table>

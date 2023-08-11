@@ -1,0 +1,40 @@
+end-users:
+  other: End-Users
+vendors:
+  other: Vendors
+integrations:
+  other: Integrations
+copyright:
+  other: Copyright
+documentation_copyright_notice:
+  other: Documentation Distributed under CC BY 4.0
+main_copyright_notice:
+  other: The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of The Linux Foundation, please see our <a href="https://www.linuxfoundation.org/trademark-usage">Trademark Usage page</a>
+cncf_status_statement:
+  other: We are a <a href="https://cncf.io/">CNCF</a> incubated Project
+version_banner_title:
+  other: "You are viewing documentation for Falco version:"
+version_banner_warning:
+  other: " documentation is no longer actively maintained. The version you are currently viewing is a static snapshot. For up-to-date documentation, see the "
+latest_version:
+  other: "latest version"
+cloud-native-runtime-security:
+  other: 클라우드 네이티브 런타임 보안
+home_falco_description:
+  other: |
+    클라우드 네이티브 런타임 보안 프로젝트 인 <b>Falco</b>는 사실상 <b>Kubernetes</b> 위협 탐지 엔진입니다.<br /><br />
+    <small>Falco는 2016 년 Sysdig에 의해 생성되었으며 CNCF에 합류 한 최초의 런타임 보안 프로젝트입니다.
+        인큐베이션 수준 프로젝트. Falco는 예상치 못한 애플리케이션 동작을 감지하고 위협에 대해 경고합니다.
+        실행 시간.</small>
+home_featured_videos:
+  other: 추천 동영상
+home_falco_intro_title:
+  other: 클라우드 네이티브 런타임 보안 프로젝트 인 <b>Falco</b>는 사실상 <b>Kubernetes</b> 위협 탐지 엔진입니다.
+home_falco_intro_main:
+  other: 애플리케이션 및 컨테이너의 동작을 관찰하여 런타임 위협을 감지합니다.
+home_falco_intro_plugins:
+  other: Falco 플러그인을 사용하여 클라우드 환경 전반에 걸쳐 위협 탐지를 확장합니다.
+home_falco_intro_cncf:
+  other: Falco는 인큐베이션 수준 프로젝트로 CNCF에 합류한 최초의 런타임 보안 프로젝트입니다.
+home_falco_intro_camera:
+  other: Falco는 예기치 않은 행동, 침입 및 데이터 도난을 실시간으로 감지하는 보안 카메라 역할을 합니다.

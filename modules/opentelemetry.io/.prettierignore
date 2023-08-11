@@ -1,0 +1,17 @@
+# Base
+
+/iconography
+/themes
+
+/layouts/*
+!/layouts/shortcodes
+/layouts/shortcodes/*
+!/layouts/shortcodes/docs
+
+# Ignore content-modules except for published Community pages
+
+/content-modules/*
+!/content-modules/community
+/content-modules/community/*
+!/content-modules/community/mission-vision-values.md
+!/content-modules/community/roadmap.md

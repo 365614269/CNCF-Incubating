@@ -1,0 +1,23 @@
+{
+  "name": "knative-serving-cloudevents",
+  "version": "1.0.0",
+  "description": "Simple CloudEvents sample in Node.js",
+  "repository": "https://github.com/knative/docs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "production": "npm start",
+    "dev": "nodemon index.js",
+    "lint": "standard --fix"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "cloudevents": "^6.0.1",
+    "express": "^4.17.3",
+    "nodemon": "^2.0.20"
+  },
+  "devDependencies": {
+    "standard": "^14.3.4"
+  }
+}

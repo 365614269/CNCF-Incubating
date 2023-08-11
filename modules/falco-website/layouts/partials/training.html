@@ -1,0 +1,63 @@
+{{ $providers := index $.Site.Data.training.providers }}
+
+{{ $offerings := slice }}
+{{ range $.Site.Data.training.offerings }}
+{{ $offerings = $offerings | append . }}
+{{ end }}
+
+{{ $courses := where $offerings "type" "course" }}
+
+<section class="row relative td-box--gradient td-box--height-auto">
+    <div class="container text-center">
+
+        <div class="subtitle is-3 is-muted">
+            <div class="col-md-12">
+              <div class="container doc-content">
+                <h1>Courses</h1>
+              </div>
+            </div>
+          </div>
+          <br />
+
+        <div class="row h-30">
+            {{- range $provider,$provider_data := $providers }}
+                {{ $provider_offerings := where $courses "provider.name" $provider }}
+                <div class="col-xs-12 col-sm-6 col-md-3 px-3 pb-3">
+
+                    {{ partial "training-provider.html" . }}
+                    <ul style='text-align:left;list-style-type:circle;' >
+                        {{ range $offering, $offering_data := sort $provider_offerings "provider.order" }}
+                            {{ partial "training-offering.html" . }}
+                        {{ end }}
+                    </ul>
+
+                </div>
+            {{- end }}
+        </div>
+
+        <br />
+        <br />
+
+        <div class="row">
+            <div class="col-md-12">
+              <div class="container doc-content">
+                <a name="add"></a><h2>Adding new training resources</h2>
+                <p>
+                  Falco training is built and maintained by its community members.
+                  Have you created any material that might be useful for others to learn about Falco and Runtime Security?
+                  Open a PR and add it here!
+                </p>
+
+                <div class="doc-content training-cta">
+                  <a href="https://github.com/falcosecurity/falco-website/edit/master/config/_default/params.toml"
+                     target="_blank"
+                     class="btn btn-primary btn-lg">
+                     Add new resources
+                  </a>
+                </div>
+              </div>
+            </div>
+        </div>
+
+    </div>
+</section>

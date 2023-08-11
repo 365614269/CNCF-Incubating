@@ -1,0 +1,124 @@
+/**********************************
+
+Button
+
+**********************************/
+
+/** Sizes **/
+
+$btn-font-size: 1rem;
+$btn-sm-font-size: .80rem;
+$btn-h-padding: 20px;
+$btn-v-padding: 10px;
+$icon-proportion: 1.30;
+
+%button-base {
+  padding: $btn-v-padding $btn-h-padding;
+  border-radius: 5px;
+  display: inline-block;
+  text-decoration: none;
+  line-height: 130%;
+  font-size: $btn-font-size;
+}
+
+%button-base:hover {
+  text-decoration: none;
+  opacity: .9;
+}
+
+.button-small {
+  font-size: $btn-sm-font-size;
+  padding: $btn-v-padding*.75 $btn-h-padding*.75;
+}
+
+/** Colors **/
+
+.button {
+  @extend %button-base;
+  color: white;
+}
+
+.button:hover {
+  color: white;
+  text-decoration: none;
+  opacity: .9;
+}
+
+.button-light {
+  @extend %button-base;
+  color: #000000;
+  border: 1px solid #e0e0e0;
+}
+
+.button-light:hover {
+  color: #000000;
+  opacity: .75;
+}
+
+/** Special **/
+
+.icon-button {
+  display: flex;
+  width: fit-content;
+  padding-right: $btn-h-padding + 5px; /* makes them look more even to have more right padding */
+}
+
+.icon-button::before {
+  content: '';
+  display: inline-block;
+  align-self: center;
+  margin: 0 10px 0 0;
+  height: $btn-font-size * $icon-proportion;
+  width: $btn-font-size * $icon-proportion;
+  min-width: $btn-font-size * $icon-proportion;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.button-small.icon-button {
+  padding-right: ($btn-h-padding + 5px) * .75;
+}
+
+.button-small.icon-button::before {
+  height: $btn-sm-font-size * $icon-proportion;
+  width: $btn-sm-font-size * $icon-proportion;
+  min-width: $btn-sm-font-size * $icon-proportion;
+}
+
+.icon-button.blank::before {
+  width: 0px;
+  min-width: 0px;
+}
+
+.button-small.icon-button.blank::before {
+  width: 0px;
+  min-width: 0px;
+}
+
+.button.download-button::before {
+  background-image: url('/images/download-icon.svg');
+}
+
+.button.learn-button::before {
+  background-image: url('/images/learn-icon.svg');
+}
+
+.button.github-button::before {
+  background-image: url('/images/github-mark.svg');
+}
+
+.button-light.github-button::before {
+  background-image: url('/images/github-mark.svg');
+  -webkit-filter: brightness(0);
+  filter: brightness(0);
+}
+
+.button.slack-button::before {
+  background-image: url('/images/slack-mark.svg');
+}
+
+.button-light.slack-button::before {
+  background-image: url('/images/slack-mark.svg');
+  -webkit-filter: brightness(0);
+  filter: brightness(0);
+}

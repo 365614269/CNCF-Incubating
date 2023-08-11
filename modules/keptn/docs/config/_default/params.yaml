@@ -1,0 +1,24 @@
+github_branch: main
+github_project_repo: https://github.com/keptn/lifecycle-toolkit
+github_repo: https://github.com/keptn/lifecycle-toolkit
+github_subdir: docs
+
+versions:
+  - url: /docs/
+    version: branch-preview
+  - url: https://main.lifecycle.keptn.sh/docs
+    version: development
+  - url: https://lifecycle.keptn.sh/docs
+    version: latest
+
+mermaid:
+  enable: true
+
+currentversion: main
+
+links:
+  developer:
+    - desc: Development takes place here!
+      icon: fab fa-github
+      name: Keptn Lifecycle Toolkit GitHub Repository
+      url: https://github.com/keptn/lifecycle-toolkit

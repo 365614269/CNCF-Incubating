@@ -1,0 +1,40 @@
+end-users:
+  other: 最终用户
+vendors:
+  other: 供应商
+integrations:
+  other: 整合
+copyright:
+  other: 版权信息
+documentation_copyright_notice:
+  other: Documentation Distributed under CC BY 4.0
+main_copyright_notice:
+  other: The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of The Linux Foundation, please see our <a href="https://www.linuxfoundation.org/trademark-usage">Trademark Usage page</a>
+cncf_status_statement:
+  other: We are a <a href="https://cncf.io/">CNCF</a> incubated Project
+version_banner_title:
+  other: "You are viewing documentation for Falco version:"
+version_banner_warning:
+  other: " documentation is no longer actively maintained. The version you are currently viewing is a static snapshot. For up-to-date documentation, see the "
+latest_version:
+  other: "latest version"
+cloud-native-runtime-security:
+  other: 云原生运行时安全性
+home_falco_description:
+  other: |
+    云原生运行时安全项目<b>Falco</b>是事实上的<b>Kubernetes</b>威胁检测引擎<br /><br />
+    <small>Falco由Sysdig于2016年创建，是第一个以其身份加入CNCF的运行时安全项目
+        孵化级项目。 Falco检测到意外的应用程序行为并在以下情况下发出威胁警报
+        运行。</small>
+home_featured_videos:
+  other: 精选视频
+home_falco_intro_title:
+  other: 云原生运行时安全项目<b>Falco</b>是事实上的<b>Kubernetes</b>威胁检测引擎
+home_falco_intro_main:
+  other: 它通过观察应用程序和容器的行为来检测运行时威胁
+home_falco_intro_plugins:
+  other: 使用 Falco 插件跨云环境扩展威胁检测。
+home_falco_intro_cncf:
+  other: Falco 是第一个作为孵化级项目加入 CNCF 的运行时安全项目。
+home_falco_intro_camera:
+  other: Falco 充当安全摄像头，实时检测意外行为、入侵和数据盗窃。

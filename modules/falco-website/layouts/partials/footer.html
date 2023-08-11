@@ -1,0 +1,54 @@
+{{ $links := .Site.Params.links }}
+<footer class="py-5 row d-print-none">
+  <div class="container-fluid mx-sm-5">
+    <div class="row">
+      <div class="col-12 col-sm-6 col-md-4 text-center text-sm-left">
+        {{ with $links }}
+        {{ with index . "developer"}}
+        {{ template "footer-links-block"  . }}
+        {{ end }}
+        {{ end }}
+      </div>
+      <div class="col-12 col-sm-6 col-md-8 text-center text-sm-right">
+        {{ range .Site.Menus.main }}
+        {{ $url := urls.Parse .URL }}
+        {{ $baseurl := urls.Parse $.Site.Params.Baseurl }}
+          <a class="pl-lg-4 pl-sm-2 text-white font-weight-normal" href="{{ .URL | relLangURL }}" {{ if ne $url.Host $baseurl.Host }}target="_blank"{{ end }}>{{ .Name }}</a>
+        {{ end }}
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-12 col-sm-8 text-center text-sm-left text-white">
+        {{ with .Site.Params.copyright }}
+          <small>&copy; {{ now.Year}} {{ .}} | {{ T "documentation_copyright_notice" | safeHTML }} </small>
+        {{ end }}
+        <br />
+        {{ with .Site.Params.copyright_linux }}
+          <small>&copy; {{ now.Year}} {{ .}}
+            {{ T "footer_all_rights_reserved" }} <br /> {{ T "main_copyright_notice" | safeHTML }} {{ T "privacy_policy" | safeHTML }}</small>
+        {{ end }}
+        <br />
+        {{ with .Site.Params.privacy_policy }}
+          <small class="ml-1">
+            <a href="{{ . }}" target="_blank">{{ T "footer_privacy_policy" }}</a>
+          </small>
+        {{ end }}
+        {{ if not .Site.Params.ui.footer_about_disable }}
+        {{ with .Site.GetPage "about" }}<p class="mt-2"><a href="{{ .RelPermalink }}">{{ .Title }}</a></p>{{ end }}
+        {{ end }}
+      </div>
+    </div>
+  </div>
+</footer>
+{{ define "footer-links-block" }}
+<ul class="list-inline mb-0">
+  {{ range . }}
+  <li class="list-inline-item mx-2 h3" data-toggle="tooltip" data-placement="top" title="{{ .name }}"
+    aria-label="{{ .name }}">
+    <a class="text-white" target="_blank" rel="noopener noreferrer" href="{{ .url }}" aria-label="{{ .name }}">
+      <i class="{{ .icon }}"></i>
+    </a>
+  </li>
+  {{ end }}
+</ul>
+{{ end }}

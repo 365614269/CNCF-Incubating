@@ -1,0 +1,78 @@
+title = "CNI"
+disableKinds = ["taxonomy", "taxonomyTerm"]
+
+enableGitInfo = true
+
+[caches]
+ [caches.assets]
+  dir = ":cacheDir/_gen"
+  maxAge = -1
+ [caches.getcsv]
+  dir = ":cacheDir/:project"
+  maxAge = "60s"
+ [caches.getjson]
+  dir = ":cacheDir/:project"
+  maxAge = "60s"
+ [caches.images]
+  dir = ":cacheDir/_images"
+  maxAge = -1
+ [caches.modules]
+  dir = ":cacheDir/modules"
+  maxAge = -1
+
+[markup.highlight]
+style = "paraiso-dark"
+
+[params]
+projectName = "CNI"
+font_awesome_version = "5.12.0"
+description = "The Container Network Interface"
+favicon = "favicon.png"
+repositoryUrl = "https://github.com/containernetworking/cni.dev"
+contentDir = "/content/"
+
+# Version Menu Parameters
+version_menu = "Versions"
+
+[params.versions]
+latest = "v1.1"
+all    = ["current", "v1.1", "v1.0", "v0.9", "v0.8", "v0.7", "v0.6"]
+
+[params.logos]
+navbar = "cni-horizontal-color.png"
+
+[[params.social]]
+name = "GitHub"
+color = "#000000"
+url = "https://github.com/containernetworking"
+icon = "fab fa-github"
+
+[[params.fonts]]
+name = "Fira Sans"
+sizes = [300, 400, 600, 700]
+type = "sans_serif"
+
+[[params.fonts]]
+name = "Fira Mono"
+sizes = [300, 400, 600, 700]
+type = "monospace"
+
+[[params.fonts]]
+name = "Fire Sans"
+sizes = [100, 200, 300, 400, 500, 600, 700]
+type = "heading_font"
+
+[[menu.main]]
+name = "Home"
+url = "/"
+weight = 1
+
+[[menu.main]]
+name = "Documentation"
+url = "/docs/"
+weight = 2
+
+[[menu.main]]
+name = "Plugins"
+url = "/plugins/current/"
+weight = 3

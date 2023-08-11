@@ -1,0 +1,11 @@
+node_modules/
+package-lock.json
+/public
+.idea
+resources/
+.DS_Store
+.hugo_build.lock
+
+# Link checker artifacts
+bin/
+tmp/

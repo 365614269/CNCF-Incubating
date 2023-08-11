@@ -1,0 +1,113 @@
+<header class="navbar docs-navbar navbar-expand-lg py-0 align-items-center">
+
+  <div class="docs-left-toggle">
+    <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas"
+    data-bs-target="#bdSidebar" aria-controls="bdSidebar" aria-label="Toggle docs content">
+      {{ partialCached "icons/hamburger.svg" (dict "class" "" "width" "1.5rem" "height" "1.5rem") }}
+      <span class="d-none fs-6 pe-1">Browse</span>
+    </button>
+  </div>
+
+  <div class="docs-right-toggle order-3">
+    <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas"
+    data-bs-target="#offcanvas" aria-controls="offcanvas" aria-label="Toggle Crossplane navigation">
+      <svg class="bi white" aria-hidden="true"><use xlink:href="#three-dots"></use></svg>
+    </button>
+  </div>
+
+  <div class="navbar-brand">
+    <a href="https://www.crossplane.io" aria-label="Crossplane">
+      <img
+      src="/img/crossplane-logo.svg"
+      alt="Crossplane logo"
+      srcset="/img/crossplane-logo.svg 1x, /img/crossplane-logo.svg 2x"
+      width="152px"
+      decoding="async"
+      data-nimg="future"
+      loading="lazy">
+    </a>
+  </div>
+
+  <div class="w-100 offcanvas-lg offcanvas-end" tabindex="-1" id="offcanvas" aria-labelledby="offcanvasLabel">
+
+    <div class="offcanvas-body p-0">
+
+      <div class="offcanvas-header p-0">
+        <div class="navbar-brand">
+          <a href="https://www.crossplane.io" aria-label="Crossplane">
+            <img
+            src="/img/crossplane-logo.svg"
+            alt="Crossplane logo"
+            srcset="/img/crossplane-logo.svg 1x, /img/crossplane-logo.svg 2x"
+            width="152px"
+            decoding="async"
+            data-nimg="future"
+            loading="lazy">
+          </a>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close" data-bs-target="#offcanvas"></button>
+      </div>
+
+
+      <div class="navbar-center-links collapse navbar-collapse justify-content-evenly show">
+        <ul class="navbar-nav align-items-center ">
+          <li class="nav-item">
+            <a class="navbar-link" href="https://www.crossplane.io/why-control-planes">Why Control Planes?</a>
+          </li>
+          <li class="nav-item">
+            <a class="navbar-link"  aria-current="page" href="{{.Site.BaseURL}}">Documentation</a>
+          </li>
+          <li class="nav-item">
+            <a class="navbar-link"  href="https://www.crossplane.io/community">Community</a>
+          </li>
+          <li class="nav-item">
+            <a class="navbar-link"  href="https://blog.crossplane.io/">Blog</a>
+          </li>
+        </ul>
+      </div>
+
+      <div class="navbar-icons flex-shrink-1 show">
+          <ul class="navbar-nav">
+            <li class="nav-item col-xs p-2">
+              <a class="navbar-link" href="https://github.com/crossplane" title="Crossplane Github Repository" target="_blank" rel="noopener">
+                {{ partialCached "icons/github.svg" .}} <span class="icon-label">Crossplane GitHub</span>
+              </a>
+            </li>
+
+            <li class="nav-item col-xs p-2">
+              <div id="slack"><a class="navbar-link" href="https://slack.crossplane.io" title="Join the Crossplane Slack" target="_blank" rel="noopener">
+                {{ partialCached "icons/slack.svg" . }} <span class="icon-label">Crossplane Slack</span>
+              </a>
+            </div>
+            {{ if .IsHome }}
+            <a class="navbar-link" href="https://slack.crossplane.io" title="Join the Crossplane Slack" target="_blank" rel="noopener">
+              <div id="tooltip" class="" role="tooltip">
+                Join the Crossplane Slack
+                <div id="arrow" data-popper-arrow></div>
+              </div>
+            </a>
+            {{ end }}
+            </li>
+
+            <li class="nav-item col-x p-2">
+              <div class="vr d-lg-flex mx-lg-2 text-white"></div>
+            </li>
+
+            <li class="nav-item col-xs p-2">
+              <div class="form-check form-switch color-switcher" >
+                <input class="d-flex form-check-input" type="checkbox" id="darkSwitch" />
+                <label class="d-flex navbar-link form-check-label" for="darkSwitch">Dark Mode</label>
+              </div>
+            </li>
+          </ul>
+      </div>
+    </div>
+  </div>
+
+{{ if eq (os.Getenv "CONTEXT")  "deploy-preview"}}
+  <div class="position-absolute px-5 w-50 top-100 start-50 translate-middle bg-warning rounded-3 d-flex justify-content-center">
+    <div class="fs-4">Deploy Preview for PR <a href="https://github.com/crossplane/docs/pull/{{os.Getenv "REVIEW_ID" }}">#{{os.Getenv "REVIEW_ID" }}</a></div>
+  </div>
+{{ end }}
+
+</header>

@@ -1,0 +1,148 @@
+.docs-navbar {
+  box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15), inset 0 -1px 0 rgba(0, 0, 0, .15);
+  height: 80px;
+  background: $navbar-background-color;
+  min-height: 80px;
+  padding-left: 24px;
+  padding-right: 24px;
+
+  .navbar-icons{
+    svg {
+      height: 24px;
+      width: 24px;
+    }
+  }
+
+  .navbar-link {
+    color: $navbar-link-color;
+    font-size: $navbar-link-font-size;
+    text-decoration: none;
+    letter-spacing: normal;
+
+    &:hover {
+      opacity: 1.5;
+      text-decoration: none;
+      color: $navbar-link-color-hover;
+    }
+  }
+
+  // Mobile View
+  @include media-breakpoint-down(lg) {
+
+    .offcanvas-lg{
+      border: none;
+    }
+
+    .offcanvas-body{
+      background: $navbar-background-color;
+      padding: 24px !important;
+    }
+
+    .offcanvas-header{
+      min-height: initial !important;
+
+      .btn-close{
+        opacity: 1 !important;
+      }
+
+    }
+
+    .navbar-toggler{
+      color: white;
+    }
+
+    .navbar-brand{
+      width: initial !important;
+    }
+
+
+    .navbar-center-links{
+      padding-top: 3rem;
+
+      .nav-item{
+        padding-bottom: 1rem;
+
+        .navbar-link{
+          font-size: 20px;
+        }
+      }
+
+    }
+
+    .navbar-icons{
+      padding-top: 2rem !important;
+
+      .nav-item{
+        padding-bottom: 1rem !important;
+      }
+
+      .icon-label{
+        display: inline !important;
+        padding-left: 1rem;
+      }
+    }
+
+    .vr{
+      display: none !important;
+    }
+
+  }
+
+  // Desktop View
+  @include media-breakpoint-up(lg) {
+
+    //spacing fixes between large screens and mobile view
+    @include media-breakpoint-down(xxl){
+      .navbar-brand{
+        width: initial !important;
+      }
+
+      .navbar-icons{
+        min-width: 0 !important;
+      }
+
+      .navbar-link{
+        padding-left: 5px !important;
+        padding-right: 5px !important;
+      }
+    }
+
+    .offcanvas{
+      display: none;
+    }
+
+    .navbar-center-links {
+      padding-bottom: 1px !important; //nudge to match www
+      margin-left: -2px;
+
+      .nav-item a{
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+    }
+
+    .navbar-icons{
+      min-width: 375px;
+
+      .icon-label{
+        display: none;
+      }
+
+      svg {
+        height: 24px;
+        width: 24px;
+      }
+    }
+
+    .navbar-brand{
+      width: 100%;
+      max-width: 375px;
+      padding-bottom: 9px !important; //nudge to match www
+      padding-top: 0px !important;
+    }
+
+
+  }
+
+}

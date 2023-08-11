@@ -1,0 +1,55 @@
+{{ $allowed_tags := (index $.Site.Data .Site.Language.Lang).blog_tags }}
+
+<section class="row td-content td-box--light">
+	<div class="container">
+		<div class="row">
+			<div class="col-12">
+				{{ partial "featured-image.html" (dict "p" . "class" "d-none d-md-block post__img mb-5") }}
+			</div>
+		</div>
+		<div class="row flex-xl-nowrap"> 
+      <div class="col">
+				{{ if not .Site.Params.ui.breadcrumb_disable }}{{ partial "breadcrumb.html" . }}{{ end }}
+				<div class="d-flex align-items-center mb-3 post__content">
+					{{ with .Params.author }}
+						<b class="text-uppercase text-dark mr-3">{{ . | markdownify }}</b>
+					{{ end}}
+					<time datetime="{{  $.Date.Format "2006-01-02" }}" class="text-muted">{{ $.Date.Format $.Site.Params.time_format_default  }}</time>
+					<button class="btn btn-link text-muted p-0" aria-label="Copy link" onclick="copyLinkClickHandler({{ .Permalink }})">
+						<i class="fa fa-link ml-2"></i>
+					</button>
+				</div>
+				<h1>{{ .Title }}</h1>
+				<ul class="taxonomy-terms post__tags">
+					{{ range .Params.tags }}
+						{{ if (in $allowed_tags . ) }}
+							<li class="mr-1 mb-1 d-inline-block">
+								<a class="btn btn-light py-0 px-3 rounded-pill" href="{{ urlize (printf `/tags/%s` .) }}">{{ . }}</a>
+							</li>
+						{{ end }}
+					{{ end }}
+				</ul>
+			</div>
+		</div>
+	</div>
+</section>
+
+<section class="td-content">
+	<div class="container">
+		<div class="row flex-xl-nowrap"> 
+      <div class="col-10">
+				{{ .Content }}
+				{{ if (.Site.Params.DisqusShortname) }}
+					<br />
+					{{ partial "disqus-comment.html" . }}
+					<br />
+				{{ end }}
+
+				{{ partial "pager.html" . }}
+			</div>
+			<aside class="d-none d-xl-block col-xl-2 td-sidebar-toc d-print-none">
+				{{ partial "toc.html" . }}
+			</aside>
+		</div>
+	</div>
+</section>

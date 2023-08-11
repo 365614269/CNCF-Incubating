@@ -1,0 +1,15 @@
+# Hugo-generated assets
+public/
+resources/
+
+# npm assets
+node_modules/
+
+# files
+package-lock.json
+yarn.lock
+
+# Link checker artefacts
+bin/
+tmp/
+

@@ -1,0 +1,10 @@
+{
+  "emphasis-style": false,
+  "line-length": false,
+  "link-fragments": false,
+  "list-marker-space": false,
+  "no-emphasis-as-header": false,
+  "no-hard-tabs": false,
+  "no-inline-html": false,
+  "no-trailing-punctuation": false
+}

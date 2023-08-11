@@ -1,0 +1,52 @@
+/**********************************
+
+Colors
+
+**********************************/
+
+/* Primary colors */
+$pink: #DF0A6B;
+$blue-dark: #242960;
+$blue-light: #47529E;
+
+/* Shades */
+$white: #FFFFFF;
+$off-white: #F8F9FA;
+$off-gray: #EFEFEF;
+$off-blue: #f4f5fd;
+$gray-light: #7C6E75;
+$gray-dark: #302C2E;
+$black: #000000;
+$green: #1bb9a5;
+
+.text-pink {
+  color: $pink;
+}
+
+.bg-pink {
+  background-color: $pink;
+}
+
+.text-blue {
+  color: $blue-light;
+}
+
+.bg-blue {
+  background-color: $blue-light;
+}
+
+.bg-off-blue {
+  background-color: $off-blue;
+}
+
+.bg-white {
+  background-color: $white;
+}
+
+.bg-transparent {
+  background-color: transparent;
+}
+
+.bg-green {
+  background-color: $green;
+}

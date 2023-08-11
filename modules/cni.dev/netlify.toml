@@ -1,0 +1,24 @@
+[build]
+publish = "public"
+command = "make production-build"
+
+[build.environment]
+HUGO_VERSION = "0.80.0"
+
+[context.production.environment]
+HUGO_BASEURL = "https://www.cni.dev/"
+HUGO_ENV = "production"
+HUGO_ENABLEGITINFO = "true"
+
+[context.deploy-preview]
+command = "make preview-build"
+
+[context.branch-deploy]
+command = "make preview-build"
+
+[[redirects]]
+from = "/plugins/"
+to = "/plugins/current/"
+status = 301
+force = false
+

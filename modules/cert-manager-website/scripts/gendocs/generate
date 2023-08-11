@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+# Copyright 2022 The cert-manager Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script constructs a 'content/' directory that contains content for all
+# configured versions of the documentation.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+
+${REPO_ROOT}/scripts/gendocs/generate-new-import-path-docs
+
+# NOTE: Currently, generate-trust-manager builds against a specific named tag. Given that we we should (hopefully)
+# never change an already existing tag, there's little need to run this script against every build, but we might
+# want to add this in the future if we start building against branches (as we do for cert-manager)
+
+# ${REPO_ROOT}/scripts/gendocs/generate-trust-manager
+
+###### WARNING ######
+# If you uncomment the below line to build API docs with the import path "github.com/jetstack/cert-manager",
+# you'll also need to uncomment versions in "${REPO_ROOT}/scripts/gendocs/generate-old-import-path-docs"
+###### WARNING ######
+#${REPO_ROOT}/scripts/gendocs/generate-old-import-path-docs

@@ -1,0 +1,30 @@
+{
+  "title": {
+    "message": "KubeVela",
+    "description": "The title in the navbar"
+  },
+  "item.label.Documentation": {
+    "message": "文档",
+    "description": "Navbar item with label Documentation"
+  },
+  "item.label.Blog": {
+    "message": "博客",
+    "description": "Navbar item with label Blog"
+  },
+  "item.label.Videos": {
+    "message": "视频",
+    "description": "Navbar item with label Videos"
+  },
+  "item.label.Community": {
+    "message": "社区",
+    "description": "Navbar item with label Community"
+  },
+  "item.label.Examples": {
+    "message": "参考样例",
+    "description": "Navbar item with label Examples"
+  },
+  "item.label.Mirror": {
+    "message": "国内加速",
+    "description": "Navbar item with label Mirror"
+  }
+}

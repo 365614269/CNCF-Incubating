@@ -1,0 +1,41 @@
+{{- $releases_url := (.Get 0) -}}
+{{- $gh_project_repo := ($.Site.Param "github_project_repo") -}}
+{{- $dataJSON := false }}
+
+{{- with $github_token := (os.Getenv "HUGO_GITHUB_TOKEN" | default false ) -}}
+  {{- $bearer_token := dict "Authorization" (printf "Bearer %s" .) -}}
+  {{- $dataJSON = getJSON $releases_url $bearer_token -}}
+{{- else }}
+  {{- $dataJSON = getJSON $releases_url -}}
+{{- end }}
+
+{{ with $dataJSON }}
+<div class="changelog">
+    {{- $separator := false -}}
+
+    {{- range $release := $dataJSON }}
+
+        {{- with $separator }} {{/* No separator before the first entry */}}
+            {{ . | markdownify }}
+        {{- end }}
+
+        <div class="changelog-item">
+            <h2 class="title is-size-3 is-size-4-mobile">
+              {{- with .tag_name -}}
+                  {{- $link := printf "%s/tree/%s" $gh_project_repo . -}}
+                  Version <a href="{{ $link }}" target="_blank">{{ . }}</a>
+              {{- end -}}
+            </h2>
+
+            <div class="changelog-item-content content">
+              <h3 class="title is-size-3 is-size-4-mobile">Download</h3>
+              {{ .body | markdownify }}
+            </div>
+        </div>
+
+        {{- $separator = "<hr />" -}}
+    {{- end -}}
+</div>
+{{ else }}
+  {{ $.Page.Scratch.Set "github_error" true }}
+{{ end }}

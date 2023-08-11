@@ -1,0 +1,50 @@
+{
+  "name": "kubevela-io",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "docusaurus": "docusaurus",
+    "start": "docusaurus start",
+    "build": "NODE_OPTIONS=\"--max-old-space-size=4096\" docusaurus build",
+    "swizzle": "docusaurus swizzle",
+    "deploy": "NODE_OPTIONS=\"--max-old-space-size=4096\" docusaurus deploy",
+    "clear": "docusaurus clear",
+    "serve": "docusaurus serve",
+    "write-translations": "docusaurus write-translations",
+    "write-heading-ids": "docusaurus write-heading-ids"
+  },
+  "dependencies": {
+    "@babel/helper-get-function-arity": "^7.16.7",
+    "@docusaurus/core": "2.4.1",
+    "@docusaurus/plugin-content-blog": "2.4.1",
+    "@docusaurus/plugin-content-docs": "2.4.1",
+    "@docusaurus/plugin-content-pages": "2.4.1",
+    "@docusaurus/plugin-sitemap": "2.4.1",
+    "@docusaurus/preset-classic": "2.4.1",
+    "@docusaurus/theme-mermaid": "^2.4.1",
+    "@mdx-js/react": "1.6.22",
+    "asciinema-player": "^3.5.0",
+    "clsx": "^1.2.1",
+    "docusaurus-plugin-image-zoom": "^1.0.1",
+    "docusaurus-plugin-sass": "^0.2.4",
+    "mdx-mermaid": "^1.3.2",
+    "mermaid": "^10.2.4",
+    "nodejieba": "^2.6.0",
+    "react": "17.0.2",
+    "react-dom": "17.0.2",
+    "react-github-btn": "^1.4.0",
+    "sass": "^1.63.6"
+  },
+  "browserslist": {
+    "production": [
+      ">0.5%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

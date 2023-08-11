@@ -1,0 +1,20 @@
+{{ $announcements := $.Site.Data.en.announcements }}
+{{ if $announcements }}
+  {{ $announcementsSorted := sort $announcements "index" "desc" }}
+  {{ $latest_announcement := first 1 $announcementsSorted }}
+  <div class="announcement-bar d-none justify-content-center align-items-center">
+    {{ range $latest_announcement }}
+      <span>{{ .content | markdownify }}</span>
+      <span id="announcement-bar-start-date" hidden>{{ .startDate }}</span>
+      <span id="announcement-bar-end-date" hidden>{{ .endDate }}</span>
+      <span id="announcement-bar-index" hidden>{{ .index }}</span>
+    {{ end }}
+    <button
+      class="btn btn-link p-0 announcement-bar__button-close"
+      onclick="announcementBarHide()"
+      aria-label="close announcement bar"
+    >
+      <i class="fa fa-plus text-white"></i>
+    </button>
+  </div>
+{{ end }}

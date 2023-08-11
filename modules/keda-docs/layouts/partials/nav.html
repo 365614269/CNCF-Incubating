@@ -1,0 +1,93 @@
+{{ $here           := .RelPermalink }}
+{{ $docs           :=  where site.Sections "Section" "docs" }}
+{{ $currentSection := .CurrentSection }}
+{{ $root           := .FirstSection }}
+{{ $thisVersion    := index (split .File.Path "/") 1 }}
+<div class="nav">
+  {{ range $docs }}
+  {{ range .Sections }}
+  {{ $version := index (split .File.Path "/") 1 }}
+  {{ $sameVersion := eq $version $thisVersion }}
+  {{ if $sameVersion }}
+  {{ $isThisSection := eq .CurrentSection.Title $currentSection.Title }}
+  {{ $isHere := eq $here .RelPermalink }}
+  <div class="nav-section" x-data="{ open: {{ $isThisSection }} }">
+    <div class="nav-section-title is-size-5 is-size-6-mobile{{ if $isHere }} is-active{{ end }}" href="{{ .RelPermalink }}">
+      <a href="{{ .RelPermalink }}">
+        {{ .Title }}
+      </a>
+      {{ if .RegularPages }}
+      <span @click="open = !open">
+        <i class="fas fa-md has-text-secondary" :class="{ 'fa-caret-down': !open, 'fa-caret-up': open }"></i>
+      </span>
+      {{ end }}
+    </div>
+
+    {{ with .RegularPages }}
+    <ul class="nav-section-links" x-show="open">
+      {{ range . }}
+      {{ $isHere := eq $here .RelPermalink }}
+      {{ $title := cond (isset .Params "short") .Params.short .Title }}
+      <li class="nav-section-link{{ if $isHere }} is-active{{ end }}">
+        <a href="{{ .RelPermalink }}">
+          {{ $title }}
+        </a>
+      </li>
+
+      {{ if $isHere }}
+      {{ if gt (len .TableOfContents) 32 }}
+      <div class="nav-section-toc">
+        {{ .TableOfContents }}
+      </div>
+      {{ end }}
+      {{ end }}
+      {{ end }}
+    </ul>
+    {{ end }}
+  </div>
+
+  {{ with .Sections }}
+  {{ range . }}
+  {{ $isThisSection := eq .CurrentSection.Title $currentSection.Title }}
+  {{ $regularPages := .RegularPages -}}
+  <div class="nav-subsection" x-data="{ open: {{ $isThisSection }} }">
+    <div class="nav-section-title is-size-5 is-size-6-mobile{{ if $isHere }} is-active{{ end }}" href="{{ .RelPermalink }}">
+      <a href="{{ .RelPermalink }}">
+        {{ .Title }}
+      </a>
+      {{ if $regularPages }}
+      <span @click="open = !open">
+        <i class="fas fa-md has-text-secondary" :class="{ 'fa-caret-down': !open, 'fa-caret-up': open }"></i>
+      </span>
+      {{ end }}
+    </div>
+
+    {{ with $regularPages }}
+    <ul class="nav-section-links" x-show="open">
+      {{ range . }}
+      {{ $isHere := eq $here .RelPermalink }}
+      {{ $title := cond (isset .Params "short") .Params.short .Title }}
+      <li class="nav-section-link{{ if $isHere }} is-active{{ end }}">
+        <a href="{{ .RelPermalink }}">
+          {{ $title }}
+        </a>
+      </li>
+
+      {{ if $isHere }}
+      {{ if gt (len .TableOfContents) 32 }}
+      <div class="nav-section-toc">
+        {{ .TableOfContents }}
+      </div>
+      {{ end }}
+      {{ end }}
+      {{ end }}
+    </ul>
+    {{ end }}
+  </div>
+  {{ end }}
+  {{ end }}
+
+  {{ end }} <!-- docs with same version -->
+  {{ end }} <!-- versions -->
+  {{ end }} <!-- docs sections -->
+</div>

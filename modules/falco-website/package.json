@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "devDependencies": {
+    "autoprefixer": "^10.4.14",
+    "lodash": ">=4.17.21",
+    "postcss": ">=8.4.27",
+    "postcss-cli": "^10.1.0"
+  },
+  "dependencies": {
+    "date-fns": "^2.30.0",
+    "date-fns-tz": "^2.0.0",
+    "node-fetch": "^3.3.2"
+  }
+}

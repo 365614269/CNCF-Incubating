@@ -1,0 +1,58 @@
+{
+  "name": "@backstage/backend-tasks",
+  "description": "Common distributed task management library for Backstage backends",
+  "version": "0.5.5-next.2",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.cjs.js",
+    "types": "dist/index.d.ts"
+  },
+  "backstage": {
+    "role": "node-library"
+  },
+  "homepage": "https://backstage.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/backstage/backstage",
+    "directory": "packages/backend-tasks"
+  },
+  "keywords": [
+    "backstage"
+  ],
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "backstage-cli package build",
+    "lint": "backstage-cli package lint",
+    "test": "backstage-cli package test",
+    "prepack": "backstage-cli package prepack",
+    "postpack": "backstage-cli package postpack",
+    "clean": "backstage-cli package clean",
+    "start": "backstage-cli package start"
+  },
+  "dependencies": {
+    "@backstage/backend-common": "workspace:^",
+    "@backstage/config": "workspace:^",
+    "@backstage/errors": "workspace:^",
+    "@backstage/types": "workspace:^",
+    "@types/luxon": "^3.0.0",
+    "cron": "^2.0.0",
+    "knex": "^2.0.0",
+    "lodash": "^4.17.21",
+    "luxon": "^3.0.0",
+    "uuid": "^8.0.0",
+    "winston": "^3.2.1",
+    "zod": "^3.21.4"
+  },
+  "devDependencies": {
+    "@backstage/backend-test-utils": "workspace:^",
+    "@backstage/cli": "workspace:^",
+    "@types/cron": "^2.0.0",
+    "wait-for-expect": "^3.0.2"
+  },
+  "files": [
+    "dist",
+    "migrations/**/*.{js,d.ts}"
+  ]
+}

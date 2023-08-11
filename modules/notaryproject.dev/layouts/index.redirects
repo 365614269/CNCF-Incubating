@@ -1,0 +1,2 @@
+{{ $latest := site.Params.versions.latest }}
+

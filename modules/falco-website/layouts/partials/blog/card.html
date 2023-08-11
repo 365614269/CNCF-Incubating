@@ -1,0 +1,37 @@
+{{ $allowed_tags := (index $.Site.Data .Site.Language.Lang).blog_tags }}
+
+{{ $tag := .Scratch.Get "selected_tag" }}
+
+<div class="post__cover">
+  <a href="{{ .RelPermalink }}" class="text-decoration-none">
+    {{ partial "featured-image.html" (dict "p" . "class" "d-block post__cover") }}
+  </a>
+</div>
+<div class="post__content">
+  <div class="d-flex align-items-center text-muted text-uppercase">
+    <small class="flex-grow-1">{{ .Params.author }}</small>
+    <small class="flex-shrink-0">{{ .Date.Format ($.Param "time_format_default") }}</small>
+    <button class="btn btn-link text-muted p-0" aria-label="Copy link" onclick="copyLinkClickHandler({{ .Permalink }})">
+      <i class="fa fa-link ml-2"></i>
+    </button>
+  </div>
+
+  <a href="{{ .RelPermalink }}" class="text-decoration-none">
+    <h5 class="text-body mt-3">{{ .LinkTitle }}</h5>
+  </a>
+  <a href="{{ .RelPermalink }}" class="text-decoration-none">
+    <p class="text-dark font-weight-normal">
+      {{ .Plain | safeHTML | truncate 240 }}
+    </p>
+  </a>
+  <ul class="taxonomy-terms post__tags">
+    {{ range .Params.tags }}
+      {{ $class := cond (eq $tag .) "btn-info" "btn-light" }}
+      {{ if (in $allowed_tags . ) }}
+        <li class="mr-1 mb-1 d-inline-block">
+          <a class="btn py-0 px-3 rounded-pill {{ $class }}" href="{{ urlize (printf `/tags/%s` .) }}">{{ . }}</a>
+        </li>
+        {{ end }}
+    {{ end }}
+  </ul>
+</div>

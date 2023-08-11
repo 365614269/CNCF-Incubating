@@ -1,0 +1,90 @@
+=active
+  font-weight: $weight-bold
+
+  a
+    color: $primary !important
+
+=split-x
+  display: flex
+  flex-direction: row
+  justify-content: space-between
+
+.nav
+  padding-top: 5rem
+  padding-bottom: 2rem
+
+  &-subsection
+    &-title
+      a
+        font-weight: 500
+        color: $dark
+
+      +split-x
+
+      &.is-active
+        +active
+
+  &-section
+    &-title
+      a
+        font-weight: 600
+        color: $dark
+
+      +split-x
+
+      &.is-active
+        +active
+
+  &-section, &-subsection
+    &-toc
+      padding: 0.35rem 0 0.75rem 1rem
+      //padding: 0.75rem 0 0.75rem 1rem
+
+      li a
+        color: $grey
+
+      ul + ul
+        margin-top: 0.3rem
+
+    ul.nav-section-links
+      margin: 0.5rem 0 0.75rem 1rem
+
+      li.nav-section-link
+        font-size: 1.1rem
+
+        a
+          color: $dark
+
+        &.is-active
+          +active
+
+        & + li.nav-section-link
+          margin-top: 0.4rem
+
+    & + &
+      margin-top: 1rem
+
+.scrolled
+    background: #1d1c29 !important
+    transition: background 1000ms
+
+.navbar-link, .navbar-item
+	color: white;
+
+.navbar-link, .navbar-end .navbar-item
+	&:hover
+		color:#00aeff
+
+.navbar-dropdown .navbar-item
+	color: #4a4a4a
+
+@media screen and (max-width: 1024px)
+  .is-fixed-top
+    overflow: hidden
+
+  .is-left-padded
+    padding-left: 40px
+
+@media screen and (max-width: 1023px)
+  .navbar-link, .navbar-item
+    color: $dark

@@ -1,0 +1,18 @@
+/public
+/node_modules
+/resources
+package-lock.json
+*.tern-port
+*/**/.tern-port
+.DS_Store
+.hugo_build*
+
+# Link checker artifacts
+bin/
+tmp/
+
+# editors
+.idea
+.vscode
+
+.netlify

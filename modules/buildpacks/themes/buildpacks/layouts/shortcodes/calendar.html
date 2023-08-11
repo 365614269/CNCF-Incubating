@@ -1,0 +1,121 @@
+<script type="application/javascript">
+    const CAL_CONFIG = {{ $.Site.Data.calendar | jsonify | safeJS }};
+    const CAL_BASE_URL = "https://teamup.com/";
+    const API_BASE_URL = "https://api.teamup.com/";
+    const API_OPTIONS = {
+        headers: {
+            "Teamup-Token": CAL_CONFIG.token
+        }
+    };
+    const START_DATE = function () {
+        let date = new Date();
+        date.setMonth(date.getMonth() - 3);
+        return date.toISOString().split('T')[0];
+    }();
+    const END_DATE = function () {
+        let date = new Date();
+        date.setMonth(date.getMonth() + 6);
+        return date.toISOString().split('T')[0];
+    }();
+
+    Promise.all(
+        CAL_CONFIG.subcalendars.map(subcalendar => {
+            // get subcalendar data from teamup
+            return axios.get(
+                `${API_BASE_URL}${CAL_CONFIG.id}/events?`
+                    .concat(
+                        `startDate=${START_DATE}`,
+                        `&endDate=${END_DATE}`,
+                        `&subcalendarId[]=${subcalendar.id}`
+                    ), API_OPTIONS)
+                .then(result => {
+                    subcalendar.events = result.data.events;
+                    return subcalendar;
+                })
+        })).then(subcalendars => {
+            // convert to usable events and merge all calendar events to a single array
+            return subcalendars.flatMap(subcalendar => {
+                return subcalendar.events.map(teamup_event => {
+                    let event = {
+                        id: teamup_event.id,
+                        title: teamup_event.title,
+                        backgroundColor: subcalendar.color,
+                        start: teamup_event.start_dt,
+                        end: teamup_event.end_dt,
+                        url: "javascript:void(0);",
+                        extendedProps: {
+                            teamup_event,
+                        }
+                    };
+                    return event;
+                })
+            })
+        }).then(events => {
+            $(function () {
+                (new FullCalendar.Calendar(document.getElementById('calendar-view'), {
+                    initialView: 'dayGridWeek',
+                    height: 'auto',
+                    headerToolbar: {
+                        start: 'title',
+                        end: 'dayGridWeek,dayGridMonth prev,today,next'
+                    },
+                    events: events,
+                    eventClick: function ({ event }) {
+                        let url = `${CAL_BASE_URL}${CAL_CONFIG.id}/events/${event.extendedProps.teamup_event.id}/pointer`;
+                        let modal = $("#event-modal");
+                        modal.find('iframe').attr('src', url);
+                        modal.on("hidden.bs.modal", function () {
+                            $(this).find('iframe').attr("src", "");
+                        });
+                        modal.modal('show');
+                    },
+                    views: {
+                        dayGridMonth: {
+                            weekends: true,
+                            fixedWeekCount: false,
+                            showNonCurrentDates: false,
+                        },
+                        dayGridWeek: {
+                            weekends: false
+                        }
+                    }
+                })).render();
+            });
+        });
+</script>
+
+
+<div id='calendar-view' class="calendar"></div>
+<div class="row pt-3 small">
+    <div class='col-md-4'>
+        <span class="font-italic text-muted">
+            * Events displayed in local time.
+        </span>
+    </div>
+    <div class='col-md-8 text-right d-none d-xl-block'>
+        <span>
+            Download events as <code>.ics</code>:
+        </span>
+        <ul class="ml-0 d-inline">
+            {{- range $calData := $.Site.Data.calendar.subcalendars }}
+            <li class="d-inline text-white rounded px-2 py-1" style="background-color: {{ $calData.color }};">
+                <a style="text-decoration: none; white-space: nowrap;"
+                    href="https://ics.teamup.com/feed/{{ $.Site.Data.calendar.id }}/{{ $calData.id }}.ics">{{ $calData.name }}</a>
+            </li>
+            {{ end }}
+        </ul>
+    </div>
+</div>
+
+<div class="modal" id="event-modal" role="dialog" style="overflow-y: hidden;">
+    <div class="modal-dialog h-100">
+        <div class="modal-header bg-transparent border-0 p-3">
+            <button type="button" class="close text-white py-0 pr-2 opacity-100" data-dismiss="modal">&times;</button>
+        </div>
+        <div class="modal-content h-75 border-0 rounded-0">
+            <div class="modal-body m-0 p-0">
+                <iframe class="h-100 w-100 d-block border-0" title="calendar"></iframe>
+            </div>
+        </div>
+    </div>
+</div>

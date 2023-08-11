@@ -1,0 +1,121 @@
+@import "changelog";
+@import "training";
+@import "base";
+@import "version_banner";
+@import "utilities";
+@import "collapse";
+@import "tabs";
+@import "community";
+@import "announcement";
+@import "landing";
+@import "toasts";
+@import "consent";
+@import "glossary";
+
+// Mixins
+@import "mixins/grid";
+@import "mixins/icon";
+
+// Overrides
+@import "card";
+@import "type";
+@import "tables";
+@import "pagination";
+
+.icon {
+  padding: 1rem;
+  width: max-content;
+  border-radius: 50vh;
+  background-color: $white;
+  align-self: flex-start;
+  box-shadow: 0 0.25rem 1.5rem rgba($black, 0.1);
+
+  &-vendor {
+    max-width: 4rem;
+  }
+}
+
+.icon-button {
+  height: 4rem;
+  width: 4rem;
+  border-radius: 50vh;
+  background-color: $white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0.25rem 1.5rem rgba($black, 0.1) !important;
+}
+
+//
+// Boxes
+//
+.td-box {
+  .row {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+//
+// Misc
+//
+main {
+  p,
+  li {
+    color: $dark;
+  }
+}
+
+footer {
+  min-height: unset;
+  background-color: $black;
+
+  .list-inline-item {
+    font-size: 2rem;
+  }
+}
+
+a {
+  font-weight: $font-weight-bold;
+}
+
+img[src*="#img-fit"] {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
+img[src*="#img-fit"] {
+  object-fit: contain;
+}
+
+#documentation {
+  h1 {
+    font-size: $h3-font-size;
+  }
+  h2 {
+    font-size: $h5-font-size;
+  }
+  h3 {
+    font-size: $h6-font-size;
+  }
+}
+
+.contributor-date {
+  min-width: 350px;
+  font-size: 1.25rem;
+}
+
+#open_preferences_center {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  i {
+    font-size: 2rem;
+  }
+}
+
+.color-icon {
+  height: 5rem;
+  width: 5rem;
+  border-radius: 50vh;
+}

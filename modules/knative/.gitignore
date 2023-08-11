@@ -1,0 +1,28 @@
+.DS_Store
+.idea/
+.vscode/
+.history/
+__pycache__
+hack/__pycache__
+/site/
+/temp/
+/temp-blog/
+/blog/site/
+/blog/overrides/
+/blog/docs/stylesheets/
+/node_modules/
+venv/
+
+# TODO clean up images copied between blog/ and docs/
+blog/docs/images/case-studies/
+
+.settings/
+.classpath
+.project
+*.class
+
+# Don't include maven wrapper jar
+maven-wrapper.jar
+
+# Ignore Python virtual environments
+.venv

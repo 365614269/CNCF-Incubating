@@ -1,0 +1,151 @@
+baseURL = "https://longhorn.io"
+languageCode = "en-us"
+title = "Longhorn"
+pluralizeListTitles = false
+enableRobotsTXT = true
+pygmentsCodeFences = true
+pygmentsCodeFencesGuessSyntax = true
+enableGitInfo = true
+disableKinds = ["taxonomy", "taxonomyTerm"]
+
+[markup.highlight]
+style = "paraiso-dark"
+
+[params]
+description = "Cloud native distributed block storage for Kubernetes"
+tagline = "Easy to use, 100% open source, run anywhere"
+versions = ["1.5.1", "1.5.0", "1.4.3", "1.4.2", "1.4.1", "1.4.0", "1.3.3", "1.3.2", "1.3.1", "1.3.0", "1.2.6", "1.1.3", "1.6.0-dev", "1.5.2-dev", "1.4.4-dev", "1.3.4-dev"]
+archived_versions = ["1.2.5", "1.2.4", "1.2.3", "1.2.2", "1.2.1", "1.2.0", "1.1.2", "1.1.1", "1.1.0", "0.8.0", "0.8.1"]
+alpine_js_version = "2.2.5"
+locale = "en_US"
+
+[[params.why]]
+text = "Add persistent storage to [Kubernetes](https://kubernetes.io) in one click"
+src = "/img/logos/kubernetes-icon-color.svg"
+
+[[params.why]]
+text = "Fast failover for stateful services"
+icon = "cloud-upload"
+
+[[params.why]]
+text = "Improving fault tolerance of your applications"
+icon = "rainy"
+
+[[params.features]]
+title = "Highly available persistent storage for Kubernetes"
+text = """
+In the past, ITOps and DevOps have found it hard to add replicated storage to Kubernetes clusters. As a result many non-cloud-hosted Kubernetes clusters don’t support persistent storage. External storage arrays are non-portable and can be extremely expensive.
+
+Longhorn delivers simplified, easy to deploy and upgrade, 100% open source, cloud-native persistent block storage without the cost overhead of open core or proprietary alternatives.
+"""
+
+[[params.features]]
+title = "Easy incremental snapshots and backups"
+text = """
+Longhorn’s built-in incremental snapshot and backup features keep the volume data safe in or out of the Kubernetes cluster.
+
+Scheduled backups of persistent storage volumes in Kubernetes clusters is simplified with Longhorn’s intuitive, free management UI.
+"""
+
+[[params.features]]
+title = "Cross-cluster disaster recovery"
+text = """
+External replication solutions will recover from a disk failure by re-replicating the entire data store. This can take days, during which time the cluster performs poorly and has a higher risk of failure.
+
+Using Longhorn, you can control the granularity to the maximum, easily create a disaster recovery volume in another Kubernetes cluster and fail over to it in the event of an emergency.
+
+If your main cluster fails, you can bring up the app in the DR cluster quickly with a defined RPO and RTO.
+"""
+
+[[params.promo_features]]
+title = "Highly available persistent storage for Kubernetes"
+text = """
+Longhorn is based on Kubernetes and built for Kubernetes, 100% open source, cloud-native persistent block storage without the cost overhead of open core or proprietary alternatives.
+"""
+
+[[params.promo_features]]
+title = "Easy deployment, management, upgrade"
+text = """
+Longhorn delivers simplified methods for easy deploy, upgrade, and management.
+"""
+
+[[params.promo_features]]
+title = "Builtin snapshots and backups"
+text = """
+Longhorn’s built-in incremental snapshot and backup features keep the volume data safe in or out of the Kubernetes cluster.
+"""
+
+[[params.promo_features]]
+title = "Cross-cluster disaster recovery"
+text = """
+Longhorn can easily create a disaster recovery volume in another Kubernetes cluster and fail over to it in the event of an emergency. If your main cluster fails, you can bring up the app in the DR cluster quickly with a defined RPO and RTO.
+"""
+
+[[params.promo_features]]
+title = "CSI compatible storage driver"
+text = """
+Longhorn supports complete capabilities of CSI storage driver like volume creation, expansion, cloning, encryption, snapshot, restoring, etc.
+"""
+
+[[params.promo_features]]
+title = "Native virtual workload storage backend"
+text = """
+Longhorn provides built-in virtual disk image management and volume live-migration to support the integration with virtual workload orchestration solutions like Harvester and KubeVirt.
+"""
+
+[[params.promo_features]]
+title = "Microservices for volume lifecycle management"
+text = """
+Longhorn adopts microservices architecture to isolate each volume operations to avoid any cascading impacts among volume failures.
+"""
+
+[[params.promo_features]]
+title = "Community first"
+text = """
+Longhorn team has active, frequent, periodic community issues review meetings to discuss and reply users' questions/feedbacks, will plan the highly voted requests to the roadmap to reflect users interests.
+"""
+
+[params.social]
+github = "https://github.com/longhorn/longhorn"
+slack = "https://cloud-native.slack.com/messages/longhorn"
+#twitter = "longhorn"
+
+[params.logos]
+navbar = "longhorn-horizontal-color.png"
+hero = "longhorn-icon-white.png"
+footer = "longhorn-horizontal-black.png"
+
+[outputs]
+home = ["HTML", "REDIRECTS", "RSS"]
+
+[privacy.twitter]
+disable = false
+enableDNT = false
+simple = true
+
+[[params.fonts]]
+name = "Poppins"
+sizes = [300, 400, 500, 700]
+type = "sans_serif"
+
+[[params.fonts]]
+name = "Roboto Mono"
+sizes = [300, 400, 600, 700]
+type = "monospace"
+
+[[menu.main]]
+name = "Blog"
+url = "/blog"
+weight = 1
+
+[[menu.main]]
+name = "Knowledge Base"
+url = "/kb"
+weight = 1
+
+[mediaTypes."text/netlify"]
+delimiter = ""
+
+[outputFormats.REDIRECTS]
+mediaType = "text/netlify"
+baseName = "_redirects"

@@ -1,0 +1,23 @@
+# Hugo default output directory
+.hugo_build.lock
+/public
+/resources
+
+# npm resources
+/node_modules
+package-lock.json
+
+## OS Files
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# OSX
+.DS_Store
+*~
+
+# Link checker
+bin/
+tmp/

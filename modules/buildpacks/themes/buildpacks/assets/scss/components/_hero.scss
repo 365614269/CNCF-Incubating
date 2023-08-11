@@ -1,0 +1,85 @@
+/**********************************
+
+Hero
+
+**********************************/
+@keyframes colorIn {
+  0% { filter: grayscale(1); }
+  100% { filter: grayscale(0); }
+}
+
+.hero {
+  background-image: url("/images/bg-pattern.png");
+  background-color: $blue-light;
+  background-blend-mode: multiply;
+
+  .container {
+    padding: 4vw;
+    text-align: center;
+
+    .strong {
+      font-weight: bold;
+    }
+
+    h2 {
+      font-weight: 300;
+      color: $white;
+      text-shadow: 2px 2px rgba($black, .2);
+    }
+
+    .button-holder {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 0;
+    }
+
+    .button {
+      margin: 20px 0 10px;
+      max-width: 200px;
+      box-shadow: 2px 2px rgba($black, .1);
+    }
+
+    .nav-item {
+      .nav-link {
+        margin-right: 10px;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        background-color: $blue-dark;
+        opacity: 1;
+
+        &:not(.active) {
+          img {
+            filter: grayscale(1.0);
+          }
+
+          &:hover {
+            img {
+              animation: colorIn 500ms;
+              filter: none;
+            }
+          }
+        }
+        
+        &.active {
+          background-color: $white;
+          color: $white  !important;
+        }
+      }
+    }
+  }
+
+  @media (min-width: 768px) {
+    .container.hero {
+      .button-holder {
+        flex-direction: row;
+      }
+
+      .button {
+        margin-right: 20px;
+        margin-bottom: 0;
+      }
+    }
+  }
+}

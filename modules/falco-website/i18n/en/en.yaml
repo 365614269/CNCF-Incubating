@@ -1,0 +1,110 @@
+end-users:
+  other: End-Users
+vendors:
+  other: Vendors
+integrations:
+  other: Integrations
+copyright:
+  other: Copyright
+documentation_copyright_notice:
+  other: Documentation Distributed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>
+created_by:
+  other: Created by
+created_by_originally:
+  other: Falco was originally created by
+main_copyright_notice:
+  other: The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of The Linux Foundation, please see our <a class="text-white" href="https://www.linuxfoundation.org/trademark-usage">Trademark Usage page</a>.
+privacy_policy:
+  other: <a class="text-white" href="https://www.linuxfoundation.org/privacy">Privacy Policy</a> and <a class="text-white" href="https://www.linuxfoundation.org/terms">Terms of Use</a>.
+cncf_status_statement:
+  other: We are a <a href="https://cncf.io/">CNCF</a> incubated Project
+version_banner_title:
+  other: "You are viewing documentation for Falco version:"
+version_banner_warning:
+  other: " documentation is no longer actively maintained. The version you are currently viewing is a static snapshot. For up-to-date documentation, see the "
+latest_version:
+  other: "latest version"
+cloud-native-runtime-security:
+  other: Cloud-Native Runtime Security
+home_falco_description:
+  other: |
+    <b>Falco</b>, the cloud-native runtime security project, is the de facto <b>Kubernetes threat detection engine</b><br /><br />
+    <small>Falco is the first runtime security project to join CNCF as an incubation-level project.
+        Falco acts as a security camera detecting unexpected behavior, intrusions, and data theft 
+        in real time.</small>
+home_featured_videos:
+  other: Featured Videos
+home_falco_intro_title:
+  other: <b>Falco</b>, the cloud-native runtime security project, is the de facto <b>Kubernetes threat detection engine</b>
+home_falco_intro_main:
+  other: Detects threats at runtime by observing the behavior of your applications and containers.
+home_falco_intro_plugins:
+  other: Extends threat detection across cloud environments with Falco Plugins.
+home_falco_intro_cncf:
+  other: Falco is the first runtime security project to join CNCF as an incubation-level project.
+home_falco_intro_camera:
+  other: Falco acts as a security camera detecting unexpected behavior, intrusions, and data theft in real time.
+home_falco_community:
+  other: Join the Falco community
+home_falco_primary_btn:
+  other: Try Falco
+add_your_logo_btn:
+  other: Add your logo
+add_your_story_btn:
+  other: Add your story
+falco_blog:
+  other: Falco blog
+falco_events:
+  other: Events
+falco_on_youtube:
+  other: Falco on YouTube
+home_falco_is_used_by:
+  other: Trusted by
+home_falco_features:
+  other: What makes Falco different?
+home_show_more:
+  other: Show more
+home_show_less:
+  other: Show less
+home_falco_what_is_falco_title:
+  other: Detect security threats in real time
+home_falco_what_is_falco:
+  other: Falco is a cloud-native security tool designed for Linux systems. It employs custom rules on kernel events, which are enriched with container and Kubernetes metadata, to provide real-time alerts. Falco helps you gain visibility into abnormal behavior, potential security threats, and compliance violations, contributing to comprehensive runtime security.
+home_stories_from_our_users:
+  other: Stories From Our Users
+home_falco_cncf:
+  other: We are a CNCF incubated project
+
+general_previous_page:
+  other: Previous page
+general_next_page:
+  other: Next page
+general_yes:
+  other: "Yes"
+general_no:
+  other: "No"
+general_share:
+  other: Share
+general_back:
+  other: Back
+feedback_title:
+  other: Was this page helpful?
+feedback_subtitle:
+  other: Let us know! You feedback will help us to improve the content and to stay in touch with our users.
+feedback_yes:
+  other: Glad to hear it! Please <a href="https://github.com/falcosecurity/falco-website/issues/new">tell us how we can improve</a>.
+feedback_no:
+  other: Sorry to hear that. Please <a href="https://github.com/falcosecurity/falco-website/issues/new">tell us how we can improve</a>.
+blog_title:
+  other: Blog
+blog_invite:
+  other: Do you have something to share? Contribute to Falco <a href="https://github.com/falcosecurity/community/blob/main/blog-contribution-guidelines.md">blog</a>!
+
+ui_search:
+  other: Search
+ui_featured_videos:
+  other: Featured videos
+ui_news:
+  other: News
+ui_events:
+  other: Events

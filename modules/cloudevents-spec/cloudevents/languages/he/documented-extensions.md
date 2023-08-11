@@ -1,0 +1,2 @@
+# CloudEvents Extension Attributes
+מסמך זה טרם תורגם. בבקשה תשתמשו [בגרסה האנגלית של המסמך](../../documented-extensions.md) לבינתיים.

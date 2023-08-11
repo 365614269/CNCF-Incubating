@@ -1,0 +1,34 @@
+.content
+  a sup
+    margin-left: 0.1rem
+
+  ol li pre
+    margin-bottom: 1rem
+
+  .highlight
+    margin-bottom: 1rem
+
+  &.is-constrained
+    max-width: 90ch
+
+  &.has-bottom-margin
+    margin-bottom: 8rem
+
+  // Headline hashes
+  .headline-hash
+    display: none
+    margin-left: 0.25rem
+    color: $secondary
+
+  @for $i from 1 through 6
+    h#{$i}
+      &:hover > .headline-hash
+        display: inline
+
+  figure img
+    +desktop
+      width: 100%
+
+  @media screen and (min-width: 769px)
+    .is-search-result > .column, .is-external-search-result > .column 
+      width: 50%

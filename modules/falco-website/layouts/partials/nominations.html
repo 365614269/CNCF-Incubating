@@ -1,0 +1,29 @@
+{{ $nominations := site.Data.nominations }}
+
+{{ range $nominations }}
+  <tr class="nomination-item">
+    {{ $link := .link }}
+    <td><a class="font-weight-bold nomination-item__link" {{ with $link}} href="{{ $link }}"{{ end }}>{{ .month }}</a></td>
+    <td>{{ .open }}</td>
+    <td>{{ .close }}</td>
+    <td>{{ .period }}</td>
+    <td class="nomination-item__date">{{ .announcement }}</td>
+  </tr>
+{{ end }}
+
+<script>
+  (() =>
+    Array.from(document.getElementsByClassName("nomination-item")).forEach(
+      (item) => {
+        const [date] = item.getElementsByClassName("nomination-item__date");
+        const month = new Date(date.innerText).getMonth();
+        const currentMonth = new Date().getMonth();
+
+        if (currentMonth > month) {
+          const [link] = item.getElementsByClassName("nomination-item__link");
+          link.replaceWith(link.innerText);
+          item.classList.add("text-secondary");
+        }
+      }
+    ))();
+</script>

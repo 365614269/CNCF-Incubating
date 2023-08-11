@@ -1,0 +1,66 @@
+<div class='docs'>
+  <div class="container">
+    <div class='row'>
+      <div class='col-md-3 docs-sidebar'>
+        {{ partial "sidebar.html" . }}
+      </div>
+      <div class='col-md-9 docs-content'>
+        {{ partial "support.html" . }}
+
+        <div class="heading">
+          <h1 class="title">{{ .Title | markdownify }}</h1>
+        </div>
+
+        {{ .Content }}
+
+        {{ if .Params.include_summaries }}
+          {{- $titleOnlyAfterDepth := (int .Params.summaries_titles_only_after_depth | default 1) -}}
+          {{- $maxDepth := (int .Params.summaries_max_depth | default 2) -}}
+          {{- template "subsection-summary" dict "currentSection" . "depth" 0 "titleOnlyAfterDepth" $titleOnlyAfterDepth  "maxDepth" $maxDepth -}}
+        {{ end }}
+
+        {{ partial "footline.html" . }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- templates -->
+{{- define "subsection-summary" }}
+  {{- $depth := (int .depth) }}
+  {{- $maxDepth := (int .maxDepth) }}
+  {{- $titleOnlyAfterDepth := .titleOnlyAfterDepth }}
+  {{- $headerLvl := (add $depth 2) -}}
+  {{- if (lt $depth $maxDepth) -}}
+    {{- with .currentSection}}
+      {{- $pages := sort (.Pages | union .Sections) "Weight" }}
+      {{ range $pages }}
+        {{ if (ge $depth $titleOnlyAfterDepth) }}
+          <ul>
+            <li class="list-item-icon"><h{{ $headerLvl }}><a href="{{.Permalink}}" class="">{{ .Title }}</a></h{{ $headerLvl }}></li>
+            {{ if .Params.include_summaries }}
+              {{- template "subsection-summary" dict "currentSection" . "depth" (add $depth 1)  "titleOnlyAfterDepth" $titleOnlyAfterDepth "maxDepth" $maxDepth -}}
+            {{ end }}
+          </ul>
+        {{ else }}
+          <h{{ $headerLvl }}><a href="{{.Permalink}}" class="">{{ .Title | markdownify }}</a></h{{ $headerLvl }}>
+          <p class="m-1">{{ .Summary | replaceRE "<h[0-9].*>.*</h[0-9]>" "" | plainify | safeHTML }}</p>
+
+          {{ if .Params.include_summaries }}
+            {{- template "subsection-summary" dict "currentSection" . "depth" (add $depth 1)  "titleOnlyAfterDepth" $titleOnlyAfterDepth "maxDepth" $maxDepth -}}
+
+            {{- if (eq (add $depth 1) $maxDepth) -}}
+            <div class="text-md-right">
+              <a class="small text-pink mr-md-3 text-decoration-none" href="{{.Permalink}}">Learn more →</a>
+            </div>
+            {{- end }}
+          {{ else }}
+            <div class="text-md-right">
+              <a class="small text-pink mr-md-3 text-decoration-none" href="{{.Permalink}}">Learn more →</a>
+            </div>
+          {{- end }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end}}

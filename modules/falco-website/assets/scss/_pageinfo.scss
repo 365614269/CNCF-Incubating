@@ -1,0 +1,21 @@
+.pageinfo {
+  width: 100%;
+
+  @include media-breakpoint-up(xl) {
+    max-width: 80% !important;
+  }
+
+  @each $color, $value in $theme-colors {
+    &-#{$color} {
+      background-color: rgba($value, 0.1);
+      background-color: rgba($value, 1);
+    }
+  }
+
+  &-primary {
+    background-color: $info;
+  }
+  &-secondary {
+    background-color: $light;
+  }
+}

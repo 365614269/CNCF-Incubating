@@ -1,0 +1,13 @@
+
+{{ $playlists := site.Data.videos }}
+{{ $template := $playlists.template }}
+{{ $plug := $playlists.plug }}
+
+{{ $ids := slice (dict "id" $playlists.pinned) (dict "id" $playlists.featured "take" 2)}}
+{{ $params := dict "ids" $ids "template" $template "plug" $plug }}
+{{ $js := resources.Get "js/videos.js" | js.Build (dict "params" $params) }}
+
+<div id="{{ $playlists.pinned }}"></div>
+<div id="{{ $playlists.featured }}"></div>
+
+<script src="{{ $js.RelPermalink}}" async></script>

@@ -1,0 +1,263 @@
+name: CI
+on:
+  push:
+    branches:
+      - 'main'
+      - '[0-9]+.[1-9][0-9]*.x'
+  pull_request:
+    branches:
+      - 'main'
+      - '[0-9]+.[1-9][0-9]*.x'
+      - 'epic/*'
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - "netlify.toml"
+
+env:
+  GO_VERSION: "~1.20"
+  # renovate: datasource=github-releases depName=kubernetes-sigs/controller-tools
+  CONTROLLER_TOOLS_VERSION: "v0.12.1"
+  ENVTEST_K8S_VERSION: "1.24.2"
+  SCHEDULER_COMPATIBLE_K8S_VERSION: "v0.24.3"
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare_ci_run:
+    name: Prepare CI Run
+    runs-on: ubuntu-22.04
+    outputs:
+      GIT_SHA: ${{ steps.extract_branch.outputs.GIT_SHA }}
+      BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
+      BRANCH_SLUG: ${{ steps.extract_branch.outputs.BRANCH_SLUG }}
+      DATETIME: ${{ steps.get_datetime.outputs.DATETIME }}
+      BUILD_TIME: ${{ steps.get_datetime.outputs.BUILD_TIME }}
+      NON_FORKED_AND_NON_ROBOT_RUN: ${{ steps.get_run_type.outputs.NON_FORKED_AND_NON_ROBOT_RUN }}
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Extract branch name
+        id: extract_branch
+        uses: keptn/gh-action-extract-branch-name@main
+
+      - name: Get current date and time
+        id: get_datetime
+        run: |
+          DATETIME=$(date +'%Y%m%d%H%M')
+          BUILD_TIME=$(date -u "+%F_%T")
+          echo "DATETIME=$DATETIME" >> "$GITHUB_OUTPUT"
+          echo "BUILD_TIME=$BUILD_TIME" >> "$GITHUB_OUTPUT"
+
+      - name: Get workflow run type
+        id: get_run_type
+        env:
+          NON_FORKED_AND_NON_ROBOT_RUN: >
+            ${{
+              ( github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' ) &&
+              ( github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository )
+            }}
+        run: |
+          echo "github.actor != 'renovate[bot]' = ${{ github.actor != 'renovate[bot]' }}"
+          echo "github.actor != 'dependabot[bot]' = ${{ github.actor != 'dependabot[bot]' }}"
+          echo "github.event_name == 'push' = ${{ github.event_name == 'push' }}"
+          echo "github.event.pull_request.head.repo.full_name == github.repository = \
+            ${{ github.event.pull_request.head.repo.full_name == github.repository }}"
+          echo "NON_FORKED_AND_NON_ROBOT_RUN = $NON_FORKED_AND_NON_ROBOT_RUN"
+          echo "NON_FORKED_AND_NON_ROBOT_RUN=$NON_FORKED_AND_NON_ROBOT_RUN" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Unit Tests
+    needs: prepare_ci_run
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        config:
+          - name: "lifecycle-operator"
+            folder: "lifecycle-operator/"
+          - name: "metrics-operator"
+            folder: "metrics-operator/"
+          - name: "scheduler"
+            folder: "scheduler/"
+          - name: "certificate-operator"
+            folder: "klt-cert-manager/"
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: '${{ matrix.config.folder }}go.sum'
+          check-latest: true
+
+      - name: Unit Test ${{ matrix.config.name }}
+        working-directory: ./${{ matrix.config.folder }}
+        run: make test
+
+      - name: Report code coverage
+        uses: codecov/codecov-action@v3
+        with:
+          flags: ${{ matrix.config.name }}
+
+  build_image:
+    name: Build Docker Image
+    needs: prepare_ci_run
+    runs-on: ubuntu-22.04
+    env:
+      BRANCH: ${{ needs.prepare_ci_run.outputs.BRANCH }}
+      DATETIME: ${{ needs.prepare_ci_run.outputs.DATETIME }}
+      BUILD_TIME: ${{ needs.prepare_ci_run.outputs.BUILD_TIME }}
+      GIT_SHA: ${{ needs.prepare_ci_run.outputs.GIT_SHA }}
+      RELEASE_REGISTRY: "localhost:5000/keptn"
+    strategy:
+      matrix:
+        config:
+          - name: "lifecycle-operator"
+            folder: "lifecycle-operator/"
+          - name: "metrics-operator"
+            folder: "metrics-operator/"
+          - name: "scheduler"
+            folder: "scheduler/"
+          - name: "functions-runtime"
+            folder: "functions-runtime/"
+          - name: "python-runtime"
+            folder: "python-runtime/"
+          - name: "certificate-operator"
+            folder: "klt-cert-manager/"
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Cache build tools
+        id: cache-build-tools
+        uses: actions/cache@v3
+        with:
+          path: ./${{ matrix.config.folder }}bin
+          key: build-tools-${{ github.ref_name }}
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ matrix.config.folder }}
+          platforms: linux/amd64
+          target: production
+          tags: |
+            ${{ env.RELEASE_REGISTRY }}/${{ matrix.config.name }}:dev-${{ env.DATETIME }}
+          build-args: |
+            GIT_HASH=${{ env.GIT_SHA }}
+            RELEASE_VERSION=dev-${{ env.DATETIME }}
+            BUILD_TIME=${{ env.BUILD_TIME }}
+            CONTROLLER_TOOLS_VERSION=${{ env.CONTROLLER_TOOLS_VERSION }}
+            SCHEDULER_COMPATIBLE_K8S_VERSION=${{ env.SCHEDULER_COMPATIBLE_K8S_VERSION }}
+          builder: ${{ steps.buildx.outputs.name }}
+          push: false
+          cache-from: type=gha,scope=${{ github.ref_name }}-${{ matrix.config.name }}
+          cache-to: type=gha,scope=${{ github.ref_name }}-${{ matrix.config.name }}
+          outputs: type=docker,dest=/tmp/${{ matrix.config.name }}-image.tar
+
+      - name: Upload image as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.config.name }}-image.tar
+          path: /tmp/${{ matrix.config.name }}-image.tar
+
+      - name: Install controller-gen
+        if: matrix.config.name == 'lifecycle-operator' || matrix.config.name == 'metrics-operator'
+        working-directory: ./${{ matrix.config.folder }}
+        run: make controller-gen
+
+      - name: Generate release.yaml
+        if: matrix.config.name != 'functions-runtime' && matrix.config.name != 'python-runtime'
+        working-directory: ./${{ matrix.config.folder }}
+        env:
+          CHART_APPVERSION: dev-${{ env.DATETIME }}
+        run: make release-manifests
+
+      - name: Upload release.yaml for tests
+        if: matrix.config.name != 'functions-runtime' && matrix.config.name != 'python-runtime'
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.config.name }}-manifest-test
+          path: ${{ matrix.config.folder }}/config/rendered/release.yaml
+
+  component_tests:
+    name: Component Tests
+    needs: prepare_ci_run
+    uses: ./.github/workflows/component-test.yml
+
+  integration_tests:
+    name: Integration Tests
+    needs:
+      - prepare_ci_run
+      - build_image
+    strategy:
+      matrix:
+        helm: [true, false]
+    with:
+      runtime_tag: dev-${{ needs.prepare_ci_run.outputs.DATETIME }}
+      helm-install: ${{ matrix.helm }}
+    uses: ./.github/workflows/integration-test.yml
+
+  load-tests:
+    name: Load Tests
+    needs: [prepare_ci_run, build_image]
+    with:
+      runtime_tag: dev-${{ needs.prepare_ci_run.outputs.DATETIME }}
+    uses: ./.github/workflows/load-test.yml
+
+  e2e_tests:
+    name: End to End Tests
+    needs: [prepare_ci_run, build_image]
+    with:
+      runtime_tag: dev-${{ needs.prepare_ci_run.outputs.DATETIME }}
+    uses: ./.github/workflows/e2e-test.yml
+
+  performance_tests:
+    name: Performance Tests
+    needs: [prepare_ci_run, build_image]
+    with:
+      runtime_tag: dev-${{ needs.prepare_ci_run.outputs.DATETIME }}
+    uses: ./.github/workflows/performance-test.yml
+
+  helm_charts_build:
+    name: Publish helm chart changes to charts repo
+    if: github.event_name == 'push' && needs.prepare_ci_run.outputs.NON_FORKED_AND_NON_ROBOT_RUN == 'true'
+    needs: [prepare_ci_run, build_image]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out klt repo
+        uses: actions/checkout@v3
+
+      - name: Check out helm-charts repo
+        uses: actions/checkout@v3
+        with:
+          repository: 'keptn/lifecycle-toolkit-charts'
+          path: ./helm-charts-repository
+          token: ${{ secrets.KEPTN_BOT_TOKEN }}
+
+      - name: Copy charts from klt to helm repo
+        run: rsync -av --delete --exclude='charts/*.tgz' ./helm/chart/ ./helm-charts-repository/charts/keptn-lifecycle-toolkit/
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.KEPTN_BOT_TOKEN }}
+          path: ./helm-charts-repository
+          commit-message: "feat: update KLT chart"
+          signoff: true
+          branch: klt-chart-update-${{ needs.prepare_ci_run.outputs.BRANCH_SLUG }}
+          delete-branch: true
+          base: main
+          title: "Update KLT Helm chart"
+          body: |
+            :robot: **This is an automated PR for updating and releasing Helm charts from keptn/lifecycle-toolkit!** :robot:

@@ -1,0 +1,37 @@
+# Top-level navigation (horizontal)
+
+[[main]]
+  name = "About"
+  weight = -103
+  url = "#td-block-1"
+
+[[main]]
+  name = "Documentation"
+  weight = -102
+  url = "/docs"
+
+[[main]]
+  name = "Policies"
+  weight = -101
+  url = "/policies"
+
+[[main]]
+  name = "Resources"
+  weight = -99
+  url = "/resources"
+
+[[main]]
+  name = "Playground"
+  weight = -98
+  url = "https://playground.kyverno.io/"
+
+[[main]]
+  name = "Community"
+  weight = -97
+  url = "/community"
+
+[[main]]
+  name = "Products"
+  weight = -90
+  url = "/support"
+

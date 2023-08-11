@@ -1,0 +1,8 @@
+- component: GCP Pub/Sub
+  link: setup-gcp-pubsub
+  state: Stable
+  version: v1
+  since: "1.11"
+  features:
+    bulkPublish: false
+    bulkSubscribe: false

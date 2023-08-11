@@ -1,0 +1,22 @@
+{{/* notaryproject-docsy file override */ -}}
+<footer class="footer bg-dark flex space-between is-align-items-center is-mobile-responsive">
+  <div class="img-container-sm">
+    <a href="{{ .Site.Home.RelPermalink }}">
+      {{ $image := resources.Get "icons/logo-dark.png" }}
+      <img src="{{ $image.RelPermalink }}" alt="notary logo">
+    </a>
+  </div>
+  <div class="row text-center text-white small">
+    <div class="col-12 text-center py-2 order-sm-2">
+      <a href="https://www.linuxfoundation.org/terms" target="_blank" rel="noopener">Terms</a> |
+      <a href="https://www.linuxfoundation.org/privacy" target="_blank" rel="noopener">Privacy</a> |
+      <a href="https://www.linuxfoundation.org/trademark-usage" target="_blank" rel="noopener">Trademarks</a> |
+      <a href="{{ .Site.Params.github_repo }}/blob/{{ .Site.Params.github_branch }}/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+  <div>
+    <small class="text-white">
+      &copy; copyright {{ now.Year }} | All Rights Reserved
+    </small>
+  </div>
+</footer>

@@ -1,0 +1,403 @@
+baseURL = "https://falco.org"
+title = "The Falco Project"
+theme = ["docsy"]
+
+# Language settings
+contentDir = "content/en"
+defaultContentLanguage = "en"
+defaultContentLanguageInSubdir = false
+enableRobotsTXT = true
+disableBrowserError = true
+
+ignoreErrors = ["error-remote-getjson"]
+
+# disableKinds = ["category", "tags"]
+
+[params.taxonomy]
+taxonomyCloud = ["categories", "tags"] # set taxonomyCloud = [] to hide taxonomy clouds
+taxonomyCloudTitle = ["Categories", "Tag Cloud"] # if used, must have same length as taxonomyCloud
+taxonomyPageHeader = ["categories", "tags"]
+
+
+# [taxonomies]
+# tag = "tags"
+# category = "categories"
+# doc = "posts"
+
+
+ignoreFiles = [ "^OWNERS$", "README[-]+[a-z]*\\.md", "^node_modules$", "content/en/docs/doc-contributor-tools" ]
+
+timeout = 3000
+
+enableEmoji = true
+
+# Highlighting config.
+pygmentsCodeFences = true
+pygmentsUseClasses = false
+# Use the new Chroma Go highlighter in Hugo.
+pygmentsUseClassic = false
+#pygmentsOptions = "linenos=table"
+# See https://help.farbox.com/pygments.html
+pygmentsStyle = "emacs"
+
+# Enable Git variables like commit, lastmod
+enableGitInfo = true
+
+[caches]
+ [caches.assets]
+  dir = ":cacheDir/_gen"
+  maxAge = -1
+ [caches.getcsv]
+  dir = ":cacheDir/:project"
+  maxAge = "60s"
+ [caches.getjson]
+  dir = ":cacheDir/:project"
+  maxAge = "60s"
+ [caches.images]
+  dir = ":cacheDir/_images"
+  maxAge = -1
+ [caches.modules]
+  dir = ":cacheDir/modules"
+  maxAge = -1
+
+[markup]
+ [markup.goldmark]
+   [markup.goldmark.extensions]
+     definitionList = true
+     table = true
+     typographer = false
+   [markup.goldmark.parser]
+     attribute = true
+     autoHeadingID = true
+     autoHeadingIDType = "blackfriday"
+   [markup.goldmark.renderer]
+     unsafe = true
+  [markup.highlight]
+    codeFences = true
+    guessSyntax = false
+    hl_Lines = ""
+    lineNoStart = 1
+    lineNos = false
+    lineNumbersInTable = true
+    noClasses = true
+    style = "emacs"
+    tabWidth = 4
+  [markup.tableOfContents]
+    endLevel = 3
+    ordered = false
+    startLevel = 2
+
+[frontmatter]
+date = ["date", ":filename", "publishDate", "lastmod"]
+
+[permalinks]
+blog = "/:section/:slug/"
+
+[sitemap]
+  filename = "sitemap.xml"
+  priority = 0.75
+
+# Be explicit about the output formats. We (currently) only want an RSS feed for the home page.
+[outputs]
+home = [ "HTML", "RSS", "HEADERS" ]
+page = [ "HTML"]
+section = [ "HTML", "RSS" ]
+
+# Add a "text/netlify" media type for auto-generating the _headers file
+[mediaTypes]
+[mediaTypes."text/netlify"]
+delimiter = ""
+
+[outputFormats]
+[outputFormats.RSS]
+baseName = "feed"
+
+# _headers file output (uses the template at layouts/index.headers)
+[outputFormats.HEADERS]
+mediatype = "text/netlify"
+baseName = "_headers"
+isPlainText = true
+notAlternative = true
+
+# Image processing configuration.
+[imaging]
+resampleFilter = "CatmullRom"
+quality = 75
+anchor = "smart"
+
+[services]
+[services.googleAnalytics]
+# Fake GA ID so the Docsy feedback feature remains enabled.
+# The actual ID is set via Netlify.
+id = "UA-00000000-0"
+
+# Additional menu items
+
+[[menu.main]]
+    identifier = "about"
+    name = "About"
+    weight = 30
+    url = "/about/"
+[[menu.main]]
+    identifier = "what-is-falco"
+    name = "What is Falco?"
+    weight = 2
+    url = "/about/"
+    parent = "about"
+    [menu.main.params]
+        description = "Learn about Falco and how it works"
+[[menu.main]]
+    identifier = "why-choose-falco"
+    name = "Why choose Falco?"
+    weight = 3
+    url = "/about/why-falco/"
+    parent = "about"
+    [menu.main.params]
+        description = "Benefits of Falco for runtime security"
+[[menu.main]]
+    identifier = "use-cases"
+    name = "Falco use cases"
+    url = "/about/use-cases/"
+    parent = "about"
+    weight = 4
+    [menu.main.params]
+        description = "Threat detection and regulatory compliance"
+# TODO: uncomment when MITRE content is ready
+# [[menu.main]]
+#     identifier = "mitre"
+#     name = "Mitre ATT&CK framework"
+#     url = "/about/mitre/"
+#     parent = "about"
+#     weight = 6
+#     [menu.main.params]
+#       description = "Something about this section"
+[[menu.main]]
+    identifier = "ecosystem"
+    name = "Falco ecosystem"
+    url = "/about/ecosystem/"
+    parent = "about"
+    weight = 8
+    [menu.main.params]
+        description = "Integrations, plugins, end users and vendors"
+# TODO: uncomment when case-studies page is ready
+# [[menu.main]]
+#     identifier = "case-studies"
+#     name = "Case Studies"
+#     url = "/about/case-studies/"
+#     parent = "about"
+#     weight = 9
+#     [menu.main.params]
+#         description = "Falco adoption in the industry with specific use cases."
+[[menu.main]]
+    identifier = "faq"
+    name = "FAQ"
+    url = "/about/faq/"
+    parent = "about"
+    weight = 10
+    [menu.main.params]
+        description = "The most common questions about the whole Falco <br/> ecosystem"
+[[menu.main]]
+    identifier = "documentation"
+    name = "Docs"
+    weight = 40
+    url = "/docs/"
+[[menu.main]]
+    identifier = "blog"
+    name = "Blog"
+    weight = 50
+    url = "/blog/"
+[[menu.main]]
+    identifier = "community"
+    name = "Community"
+    weight = 60
+    url = "/community/"
+[[menu.main]]
+    identifier = "community-about"
+    name = "About the community"
+    url = "/community/"
+    parent = "community"
+    weight = 12
+    [menu.main.params]
+        description = "For users and contributors"
+[[menu.main]]
+    identifier = "community-events"
+    name = "Events"
+    url = "/community/events/"
+    parent = "community"
+    weight = 14
+    [menu.main.params]
+        description = "Meet and learn about Falco"
+[[menu.main]]
+    identifier = "community-contributors"
+    name = "Contributors"
+    url = "/community/contributors/"
+    parent = "community"
+    weight = 16
+    [menu.main.params]
+        description = "The people who build Falco"
+[[menu.main]]
+    identifier = "falco-brand"
+    name = "Falco brand "
+    url = "/community/falco-brand/"
+    parent = "community"
+    weight = 18
+    [menu.main.params]
+        description = "Brand guidelines"
+[[menu.main]]
+    identifier = "training"
+    name = "Training"
+    weight = 70
+    url = "/training/"
+
+# Specify a value here if your content directory is not in your repo's root directory
+#github_subdir = "userguide"
+
+
+# Sections to publish in the main RSS feed.
+rss_sections = ["blog"]
+
+
+# Language configuration
+
+
+# Everything below this are Site Params
+
+[params]
+copyright = "The Falco Authors"
+copyright_linux =  "The Linux Foundation ®."
+sysdig = "https://sysdig.com/opensource/"
+time_format_blog = "Monday, January 02, 2006"
+time_format_default = "Jan 2, 2006"
+
+# Menu title if your navbar has a versions selector to access old versions of your site.
+# This menu appears only if you have at least one [params.versions] set.
+version_menu = "Versions"
+
+# SHA256 checksum variable
+sha256sum = "59201c1339cc53e86edcd7d2e7273e52f784b3cf7d4a3142059112b3b9062f6d"
+
+# A link to latest version of the docs. Used in the "version-banner" partial to
+# point people to the main doc site.
+url_latest_version = "https://falco.org"
+
+# Repository links (https://www.docsy.dev/docs/adding-content/repository-links)
+# Repository configuration (URLs for in-page links to opening issues and suggesting changes)
+github_repo = "https://github.com/falcosecurity/falco-website"
+# Specify a value here if your content directory is not in your repo's root directory
+# github_subdir = "userguide"
+# An optional link to a related project repo. For example, the sibling repository where your product code lives.
+github_project_repo = "https://github.com/falcosecurity/falco"
+# Specify a value here if you have would like to reference a different branch for the other github settings
+# github_branch =
+
+# Enable Algolia DocSearch
+algolia_docsearch = false
+
+#Enable offline search with Lunr.js
+offlineSearch = true
+offlineSearchSummaryLength = 70
+offlineSearchMaxResults = 10
+
+# Enable syntax highlighting and copy buttons on code blocks with Prism
+prism_syntax_highlighting = true
+
+# Site Featured image
+images = ['images/featured/default-01.png']
+
+# User interface configuration
+[params.ui]
+# Enable to show the side bar menu in its compact state.
+sidebar_menu_compact = false
+# Show expand/collapse icon for sidebar sections.
+sidebar_menu_foldable = true
+# Extends foldable functionality to the branch
+sidebar_cache_limit = 1
+#  Set to true to disable breadcrumb navigation.
+docs_breadcrumb_disable = true
+breadcrumb_disable = false
+#  Set to true to hide the sidebar search box (the top nav search box will still be displayed if search is enabled)
+sidebar_search_disable = true
+#  Set to false if you don't want to display a logo (/assets/icons/logo.svg) in the top nav bar
+navbar_logo = true
+
+# Adds a H2 section titled "Feedback" to the bottom of each doc. The responses are sent to Google Analytics as events.
+# This feature depends on [services.googleAnalytics] and will be disabled if "services.googleAnalytics.id" is not set.
+# If you want this feature, but occasionally need to remove the "Feedback" section from a single page,
+# add "hide_feedback: true" to the page's front matter.
+[params.ui.feedback]
+enable = true
+# The responses that the user sees after clicking "yes" (the page was helpful) or "no" (the page was not helpful).
+# Update with your own repository and response text.
+yes = 'Glad to hear it! Please <a href="https://github.com/falcosecurity/falco-website/issues/new">tell us how we can improve</a>.'
+no = 'Sorry to hear that. Please <a href="https://github.com/falcosecurity/falco-website/issues/new">tell us how we can improve</a>.'
+
+# Adds a reading time to the top of each doc.
+# If you want this feature, but occasionally need to remove the Reading time from a single page,
+# add "hide_readingtime: true" to the page's front matter
+[params.ui.readingtime]
+enable = false
+
+[params.ui.footer_about_disable]
+enable = true
+
+[params.links]
+# End user relevant links. These will show up on left side of footer and in the community page if you have one.
+ [[params.links.user]]
+	name = "User mailing list"
+	url = "https://lists.cncf.io/g/cncf-falco-dev/"
+	icon = "fa fa-envelope"
+        desc = "Discussion and help from your fellow users"
+[[params.links.user]]
+	name ="Twitter"
+	url = "https://twitter.com/falco_org"
+	icon = "fab fa-twitter"
+        desc = "Follow us on Twitter to get the latest news!"
+[[params.links.user]]
+	name = "Stack Overflow"
+	url = "https://stackoverflow.com/questions/tagged/falco"
+	icon = "fab fa-stack-overflow"
+        desc = "Practical questions and curated answers"
+[[params.links.user]]
+	name = "Calendar"
+	url = "https://lists.cncf.io/g/cncf-falco-dev/calendar"
+	icon = "fas fa-calendar-alt"
+        desc = "Subscribe to the Falco calendar, through this ics feed"
+[[params.links.user]]
+	name = "Community Calls records"
+	url = "https://www.youtube.com/playlist?list=PLgVVUpW8NIJAaZtszf1_nxB2y6mQrlY4s"
+	icon = "fa fa-video"
+        desc = "You missed a Community Call? You can watch the record"
+# Developer relevant links. These will show up on right side of footer and in the community page if you have one.
+[[params.links.developer]]
+	name = "GitHub"
+	url = "https://github.com/falcosecurity/falco"
+	icon = "fab fa-github"
+        desc = "Development takes place here!"
+[[params.links.developer]]
+	name = "Slack"
+	url = "https://kubernetes.slack.com/messages/falco"
+	icon = "fab fa-slack"
+        desc = "Chat with other project developers"
+[[params.links.developer]]
+	name = "Developer mailing list"
+	url = "https://lists.cncf.io/g/cncf-falco-dev"
+	icon = "fa fa-envelope"
+        desc = "Discuss development issues around the project"
+[[params.links.developer]]
+	name = "Contributor of the Month"
+	url = "/docs/contribute/contributor-of-the-month/"
+	icon = "fa fa-star"
+        desc = "View the contributors of the month"
+
+[params.mermaid]
+enable = false
+theme = "default"
+
+[params.print]
+disable_toc = false
+
+# To edit the list of Adopters or Training Providers, go to `./params.toml`
+
+[params.training]
+
+[params.adopters]

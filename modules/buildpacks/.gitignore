@@ -1,0 +1,29 @@
+## OS Files
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# OSX
+.DS_Store
+
+# Artifacts
+/public
+/resources
+
+# IDEs
+.idea/
+*.iml
+
+# Generated files
+content/docs/tools/pack/cli/pack*
+
+# Hugo
+.hugo_build.lock
+
+# Tools
+/bin
+/tmp
+
+/tools/bin
