@@ -149,11 +149,11 @@ func TestRemoteClusterRun(t *testing.T) {
 					IPCache:               &ipc,
 					RemoteIdentityWatcher: allocator,
 					ClusterIDsManager:     NewClusterMeshUsedIDs(),
-					Metrics:               newMetrics(),
+					Metrics:               NewMetrics(),
 				},
 				globalServices: newGlobalServiceCache(metrics.NoOpGauge),
 			}
-			rc := cm.newRemoteCluster("foo", nil).(*remoteCluster)
+			rc := cm.NewRemoteCluster("foo", nil).(*remoteCluster)
 			ready := make(chan error)
 
 			remoteClient := &remoteEtcdClientWrapper{

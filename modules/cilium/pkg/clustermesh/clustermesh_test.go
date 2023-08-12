@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cilium/cilium/pkg/clustermesh/internal"
+	"github.com/cilium/cilium/pkg/clustermesh/common"
 	"github.com/cilium/cilium/pkg/clustermesh/types"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	cmutils "github.com/cilium/cilium/pkg/clustermesh/utils"
@@ -140,15 +140,15 @@ func TestClusterMesh(t *testing.T) {
 
 	usedIDs := NewClusterMeshUsedIDs()
 	cm := NewClusterMesh(hivetest.Lifecycle(t), Configuration{
-		Config:                internal.Config{ClusterMeshConfig: dir},
+		Config:                common.Config{ClusterMeshConfig: dir},
 		ClusterIDName:         types.ClusterIDName{ClusterID: 255, ClusterName: "test2"},
 		NodeKeyCreator:        testNodeCreator,
 		NodeObserver:          &testObserver{},
 		RemoteIdentityWatcher: mgr,
 		IPCache:               ipc,
 		ClusterIDsManager:     usedIDs,
-		Metrics:               newMetrics(),
-		InternalMetrics:       internal.MetricsProvider(subsystem)(),
+		Metrics:               NewMetrics(),
+		CommonMetrics:         common.MetricsProvider(subsystem)(),
 	})
 	require.NotNil(t, cm, "Failed to initialize clustermesh")
 
