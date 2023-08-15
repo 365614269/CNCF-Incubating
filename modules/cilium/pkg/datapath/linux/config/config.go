@@ -38,7 +38,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/callsmap"
 	"github.com/cilium/cilium/pkg/maps/configmap"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
-	"github.com/cilium/cilium/pkg/maps/egressmap"
 	"github.com/cilium/cilium/pkg/maps/encrypt"
 	"github.com/cilium/cilium/pkg/maps/eventsmap"
 	"github.com/cilium/cilium/pkg/maps/fragmap"
@@ -77,7 +76,21 @@ var (
 // HeaderfileWriter is a wrapper type which implements datapath.ConfigWriter.
 // It manages writing of configuration of datapath program headerfiles.
 type HeaderfileWriter struct {
-	nodeExtraDefines []dpdef.Fn
+	nodeExtraDefines   dpdef.Map
+	nodeExtraDefineFns []dpdef.Fn
+}
+
+func NewHeaderfileWriter(nodeExtraDefines []dpdef.Map, nodeExtraDefineFns []dpdef.Fn) (*HeaderfileWriter, error) {
+	merged := make(dpdef.Map)
+	for _, defines := range nodeExtraDefines {
+		if err := merged.Merge(defines); err != nil {
+			return nil, err
+		}
+	}
+	return &HeaderfileWriter{
+		nodeExtraDefines:   merged,
+		nodeExtraDefineFns: nodeExtraDefineFns,
+	}, nil
 }
 
 func writeIncludes(w io.Writer) (int, error) {
@@ -190,7 +203,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	cDefinesMap["IPCACHE_MAP_SIZE"] = fmt.Sprintf("%d", ipcachemap.MaxEntries)
 	cDefinesMap["NODE_MAP"] = nodemap.MapName
 	cDefinesMap["NODE_MAP_SIZE"] = fmt.Sprintf("%d", nodemap.MaxEntries)
-	cDefinesMap["EGRESS_POLICY_MAP"] = egressmap.PolicyMapName
 	cDefinesMap["SRV6_VRF_MAP4"] = srv6map.VRFMapName4
 	cDefinesMap["SRV6_VRF_MAP6"] = srv6map.VRFMapName6
 	cDefinesMap["SRV6_POLICY_MAP4"] = srv6map.PolicyMapName4
@@ -333,10 +345,6 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 
 	if option.Config.EnableXDPPrefilter {
 		cDefinesMap["ENABLE_PREFILTER"] = "1"
-	}
-
-	if option.Config.EnableIPv4EgressGateway {
-		cDefinesMap["ENABLE_EGRESS_GATEWAY"] = "1"
 	}
 
 	if option.Config.EnableEndpointRoutes {
@@ -727,18 +735,18 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	}
 	cDefinesMap["EPHEMERAL_MIN"] = fmt.Sprintf("%d", ephemeralMin)
 
-	for _, fn := range h.nodeExtraDefines {
+	if err := cDefinesMap.Merge(h.nodeExtraDefines); err != nil {
+		return err
+	}
+
+	for _, fn := range h.nodeExtraDefineFns {
 		defines, err := fn()
 		if err != nil {
 			return err
 		}
 
-		for key, value := range defines {
-			if _, ok := cDefinesMap[key]; ok {
-				return fmt.Errorf("extra node define overwrites key %q", key)
-			}
-
-			cDefinesMap[key] = value
+		if err := cDefinesMap.Merge(defines); err != nil {
+			return err
 		}
 	}
 

@@ -32,6 +32,11 @@ export interface BackendModuleConfig {
 // @public
 export interface BackendModuleRegistrationPoints {
   // (undocumented)
+  registerExtensionPoint<TExtensionPoint>(
+    ref: ExtensionPoint<TExtensionPoint>,
+    impl: TExtensionPoint,
+  ): void;
+  // (undocumented)
   registerInit<
     Deps extends {
       [name in string]: unknown;
@@ -159,18 +164,6 @@ export function createServiceFactory<
   TDeps extends {
     [name in string]: ServiceRef<unknown>;
   },
-  TOpts extends object | undefined = undefined,
->(
-  config: (options: TOpts) => RootServiceFactoryConfig<TService, TImpl, TDeps>,
-): (options: TOpts) => ServiceFactory<TService, 'root'>;
-
-// @public
-export function createServiceFactory<
-  TService,
-  TImpl extends TService,
-  TDeps extends {
-    [name in string]: ServiceRef<unknown>;
-  },
   TContext = undefined,
   TOpts extends object | undefined = undefined,
 >(
@@ -191,23 +184,6 @@ export function createServiceFactory<
     options?: TOpts,
   ) => PluginServiceFactoryConfig<TService, TContext, TImpl, TDeps>,
 ): (options?: TOpts) => ServiceFactory<TService, 'plugin'>;
-
-// @public
-export function createServiceFactory<
-  TService,
-  TImpl extends TService,
-  TDeps extends {
-    [name in string]: ServiceRef<unknown>;
-  },
-  TContext = undefined,
-  TOpts extends object | undefined = undefined,
->(
-  config:
-    | PluginServiceFactoryConfig<TService, TContext, TImpl, TDeps>
-    | ((
-        options: TOpts,
-      ) => PluginServiceFactoryConfig<TService, TContext, TImpl, TDeps>),
-): (options: TOpts) => ServiceFactory<TService, 'plugin'>;
 
 // @public
 export function createServiceRef<TService>(
