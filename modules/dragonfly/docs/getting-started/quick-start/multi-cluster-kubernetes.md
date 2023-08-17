@@ -46,20 +46,20 @@ apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
   - role: worker
-  extraPortMappings:
-  - containerPort: 30950
-    hostPort: 8080
-  labels:
-    cluster: a
+    extraPortMappings:
+      - containerPort: 30950
+        hostPort: 8080
+    labels:
+      cluster: a
   - role: worker
-  labels:
-    cluster: a
+    labels:
+      cluster: a
   - role: worker
-  labels:
-    cluster: b
+    labels:
+      cluster: b
   - role: worker
-  labels:
-    cluster: b
+    labels:
+      cluster: b
 ```
 
 Create cluster using the configuration file:
