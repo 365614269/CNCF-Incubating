@@ -241,7 +241,7 @@ spec:
 Create manager REST service using the configuration file:
 
 ```shell
-kubectl apply -f manager-rest-svc.yaml -n dragonfly-system
+kubectl apply -f manager-rest-svc.yaml -n cluster-a
 ```
 
 ### Visit manager console
@@ -400,7 +400,7 @@ Create dragonfly cluster B using the configuration file:
 <!-- markdownlint-disable -->
 
 ```shell
-$ helm install --wait --create-namespace --namespace cluster-b dragonfly dragonfly/dragonfly -f charts-config-cluster-a.yaml
+$ helm install --wait --create-namespace --namespace cluster-b dragonfly dragonfly/dragonfly -f charts-config-cluster-b.yaml
 NAME: dragonfly
 LAST DEPLOYED: Mon Aug  7 22:13:51 2023
 NAMESPACE: cluster-b

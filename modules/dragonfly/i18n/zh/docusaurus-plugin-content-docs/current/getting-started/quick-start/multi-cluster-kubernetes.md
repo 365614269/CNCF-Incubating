@@ -240,7 +240,7 @@ spec:
 使用配置文件创建 Manager REST 服务的 Service 资源：
 
 ```shell
-kubectl apply -f manager-rest-svc.yaml -n dragonfly-system
+kubectl apply -f manager-rest-svc.yaml -n cluster-a
 ```
 
 ### 访问 Manager 控制台
@@ -389,7 +389,7 @@ jaeger:
 <!-- markdownlint-disable -->
 
 ```shell
-$ helm install --wait --create-namespace --namespace cluster-b dragonfly dragonfly/dragonfly -f charts-config-cluster-a.yaml
+$ helm install --wait --create-namespace --namespace cluster-b dragonfly dragonfly/dragonfly -f charts-config-cluster-b.yaml
 NAME: dragonfly
 LAST DEPLOYED: Mon Aug  7 22:13:51 2023
 NAMESPACE: cluster-b
