@@ -2,13 +2,13 @@
 title: Try Falco on Linux
 description: Learn how to install Falco on Linux
 slug: falco-linux-quickstart
-aliases: [/falco-linux-quickstart]
+aliases: [/try-falco-on-ubuntu/]
 weight: 20
 ---
 
 In this scenario, you will learn how to install Falco on an Ubuntu host, trigger a Falco rule by generating a suspicious event, and then examine the output.
 
-This activity aims to give you a quick example of how Falco works. After you complete it, you should be able to move on to [trying falco on  kubernetes](../falco-kubernetes-quickstart/) or spend some time reading some [additional resources]( ../falco-additional ).
+This activity aims to give you a quick example of how Falco works. After you complete it, you should be able to move on to [trying falco on  kubernetes](/docs/getting-started/falco-kubernetes-quickstart/) or spend some time reading some [additional resources](/docs/getting-started/falco-additional).
 
 ## Prerequisites
 This lab is based on installing Falco using the kernel module on Ubuntu.
@@ -105,11 +105,11 @@ Regardless of which setup you used above, this section will show you how to inst
 
 * When prompted, choose the **Kmod** option. This will compile the Falco module for your specific kernel version.
 
-    ![Dialog window - Choose the Kmod driver](../images/dialog-1.png)
+    ![Dialog window - Choose the Kmod driver](/docs/getting-started/images/dialog-1.png)
 
 * When prompted, choose **Yes**. Although we won't use the functionality in this exercise, this option allows Falco to update its rules automatically.
 
-    ![Dialog window - Choose the follow automatic ruleset updates](../images/dialog-2.png)
+    ![Dialog window - Choose the follow automatic ruleset updates](/docs/getting-started/images/dialog-2.png)
 
 Wait for the Falco installation to complete - this should only take a few minutes.
 

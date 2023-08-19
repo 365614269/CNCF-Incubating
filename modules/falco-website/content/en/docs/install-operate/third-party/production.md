@@ -1,7 +1,7 @@
 ---
 title: Production Environment
 description: Integrations built on the Falco core in a production environment
-aliases: [docs/getting-started/third-party/production]
+aliases: [/docs/getting-started/third-party/production]
 weight: 30
 ---
 
@@ -56,7 +56,7 @@ to the file:
 Environment='FALCO_BPF_PROBE=""'
 ```
 
-If you are [installing Falco with Helm](https://falco.org/docs/getting-started/third-party/install-tools/#helm), you will need to set the `driver.kind` option to `ebpf`:
+If you are [installing Falco with Helm](/docs/getting-started/third-party/install-tools/#helm), you will need to set the `driver.kind` option to `ebpf`:
 
 ```
 helm install falco falcosecurity/falco --set driver.kind=ebpf

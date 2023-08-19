@@ -3,6 +3,7 @@ title: Okta Events
 description: Keep an eye on your activity within this famous authentication service
 linktitle: Okta Events
 weight: 50
+aliases: [/docs/event-sources/okta/]
 ---
 
 The Falco [Okta](https://github.com/falcosecurity/plugins/blob/master/plugins/okta/README.md) plugin can read [Okta](https://www.okta.com/) logs and emit events for each Okta log entry.
@@ -15,7 +16,7 @@ Falco also distributes out-of-the-box [rules](https://github.com/falcosecurity/f
 
 ## Configuration
 
-See the [README](https://github.com/falcosecurity/plugins/blob/master/plugins/okta/README.md#settings) for information on configuring the plugin. This simply involves providing the `organization/api` token as part of init params. These can be added to `falco.yaml` under the `plugins` [configuration key](https://falco.org/docs/reference/daemon/config-options/) key.
+See the [README](https://github.com/falcosecurity/plugins/blob/master/plugins/okta/README.md#settings) for information on configuring the plugin. This simply involves providing the `organization/api` token as part of init params. These can be added to `falco.yaml` under the `plugins` [configuration key](/docs/reference/daemon/config-options/) key.
 
 The plugin does not use any open params configuration.
 
