@@ -18,9 +18,26 @@ We use *breaking :warning:* to mark changes that are not backward compatible (re
 
 ### Changed
 
+- [#6664](https://github.com/thanos-io/thanos/pull/6664) *: Update Prometheus to 2.46.1.
+
 ### Removed
 
-## [v0.32.0](https://github.com/thanos-io/thanos/tree/release-0.32) - Release in progress
+## [v0.32.1](https://github.com/thanos-io/thanos/tree/release-0.32) - 28.08.2023
+
+### Fixed
+
+- [#6650](https://github.com/thanos-io/thanos/pull/6650) Store: fix error handling in decodePostings
+- [#6654](https://github.com/thanos-io/thanos/pull/6654) Store: fix ignored error in postings
+- [#6655](https://github.com/thanos-io/thanos/pull/6655) Store: fix bufio pool handling
+- [#6669](https://github.com/thanos-io/thanos/pull/6669) Store: Fix mutable stringset memory usage
+
+### Added
+
+### Changed
+
+### Removed
+
+## [v0.32.0](https://github.com/thanos-io/thanos/tree/release-0.32) - 23.08.2023
 
 ### Added
 
@@ -44,6 +61,7 @@ We use *breaking :warning:* to mark changes that are not backward compatible (re
 - [#6264](https://github.com/thanos-io/thanos/pull/6264) Query: Add Thanos logo in navbar
 - [#6234](https://github.com/thanos-io/thanos/pull/6234) Query: Add ability to switch between `thanos` and `prometheus` engines dynamically via UI and API.
 - [#6346](https://github.com/thanos-io/thanos/pull/6346) Query: Add ability to generate SQL-like query explanations when `thanos` engine is used.
+- [#6646](https://github.com/thanos-io/thanos/pull/6646) Compact and Bucket: Add `--disable-admin-operations` flag in Compactor UI and Bucket UI
 
 ### Fixed
 - [#6503](https://github.com/thanos-io/thanos/pull/6503) *: Change the engine behind `ContentPathReloader` to be completely independent of any filesystem concept. This effectively fixes this configuration reload when used with Kubernetes ConfigMaps, Secrets, or other volume mounts.
@@ -76,7 +94,7 @@ We use *breaking :warning:* to mark changes that are not backward compatible (re
 - [#6168](https://github.com/thanos-io/thanos/pull/6168) Receiver: Make ketama hashring fail early when configured with number of nodes lower than the replication factor.
 - [#6201](https://github.com/thanos-io/thanos/pull/6201) Query-Frontend: Disable absent and absent_over_time for vertical sharding.
 - [#6212](https://github.com/thanos-io/thanos/pull/6212) Query-Frontend: Disable scalar for vertical sharding.
-- [#6107](https://github.com/thanos-io/thanos/pull/6107) Change default user id in container image from 0(root) to 1001
+- [#6107](https://github.com/thanos-io/thanos/pull/6107) *breaking :warning:* Change default user id in container image from 0(root) to 1001
 - [#6228](https://github.com/thanos-io/thanos/pull/6228) Conditionally generate debug messages in ProxyStore to avoid memory bloat.
 - [#6231](https://github.com/thanos-io/thanos/pull/6231) mixins: Add code/grpc-code dimension to error widgets.
 - [#6244](https://github.com/thanos-io/thanos/pull/6244) mixin(Rule): Add rule evaluation failures to the Rule dashboard.

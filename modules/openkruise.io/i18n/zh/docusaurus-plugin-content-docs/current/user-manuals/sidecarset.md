@@ -187,6 +187,12 @@ spec:
     transferEnv:
     - sourceContainerName: main
       envName: PROXY_IP
+    - sourceContainerNameFrom:
+        fieldRef:
+          apiVersion: "v1"
+          fieldPath: "metadata.labels['cName']"
+        # fieldPath: "metadata.annotations['cName']"
+      envName: TC
   volumes:
   - Name: nginx.conf
     hostPath: /data/nginx/conf
@@ -199,6 +205,7 @@ spec:
     - 共享所有卷：通过 spec.containers[i].shareVolumePolicy.type = enabled | disabled 来控制是否挂载pod应用容器的卷，常用于日志收集等 sidecar，配置为 enabled 后会把应用容器中所有挂载点注入 sidecar 同一路经下(sidecar中本身就有声明的数据卷和挂载点除外）
 - 环境变量共享
     - 可以通过 spec.containers[i].transferEnv 来从别的容器获取环境变量，会把名为 sourceContainerName 容器中名为 envName 的环境变量拷贝到本容器
+    - sourceContainerNameFrom 支持 downwardAPI 来获取容器name，比如：metadata.name, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`
 
 #### 注入暂停
 **FEATURE STATE:** Kruise v0.10.0
@@ -254,7 +261,7 @@ spec:
 ```
 
 #### 通过自定义版本标识指定注入的 Sidecar 版本
-用户可以通过在发版时，同时给 SidecarSet 打上 `apps.kruise.io/sidecarset-custom-version=<your-version-id>` 来标记每一个历史版本，SidecarSet 会将这个 label 向下带入到对应的 ControllerRevision 对象，以便用户进行筛选，并且允许用户在选择注入历史版本时，使用改 `<your-version-id>` 来进行描述。
+用户可以通过在发版时，同时给 SidecarSet 打上 `apps.kruise.io/sidecarset-custom-version=<your-version-id>` 来标记每一个历史版本，SidecarSet 会将这个 label 向下带入到对应的 ControllerRevision 对象，以便用户进行筛选，并且允许用户在选择注入历史版本时，使用该 `<your-version-id>` 来进行描述。
 
 假设用户只想灰度 `10%` 的 Pods 到 `version-2`，并且对于新创建的 Pod 希望都注入更加稳定的 `version-1` 版本来控制灰度风险：
 ```yaml

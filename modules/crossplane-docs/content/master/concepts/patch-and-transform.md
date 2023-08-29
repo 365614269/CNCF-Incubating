@@ -1505,6 +1505,7 @@ converts the input based on one of the following conversion types:
 * `ToBase64` - Create a new base64 string from the input. 
 * `FromBase64` - Create a new text string from a base64 input.
 * `ToJson` - Convert the input string to valid JSON.
+* `FromJson` - Convert the input JSON string to an object.
 * `ToSha1` - Create a SHA-1 hash of the input string.
 * `ToSha256` - Create a SHA-256 hash of the input string.
 * `ToSha512` - Create a SHA-512 hash of the input string.
@@ -1535,8 +1536,7 @@ patches:
       - type: string
         string:
           type: Format
-          format:
-            fmt: "the-field-%s"
+          fmt: "the-field-%s"
 ```
 
 #### Regular expression type

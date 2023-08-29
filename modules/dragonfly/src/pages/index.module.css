@@ -625,42 +625,46 @@ a {
 }
 
 .imageCard:nth-child(8) .userImage {
-  transform: scale(1.1);
+  transform: scale(1.4);
 }
 
-.imageCard:nth-child(11) .userImage {
+.imageCard:nth-child(10) .userImage {
   transform: scale(1.2);
 }
 
-.imageCard:nth-child(12) .userImage {
+.imageCard:nth-child(11) .userImage {
   transform: scale(0.8);
 }
 
-.imageCard:nth-child(13) .userImage {
+.imageCard:nth-child(12) .userImage {
   transform: scale(2);
 }
 
-.imageCard:nth-child(16) .userImage {
-  transform: scale(0.85);
+.imageCard:nth-child(13) .userImage {
+  transform: scale(0.8);
+}
+
+.imageCard:nth-child(15) .userImage {
+  transform: scale(0.9);
 }
 
 .imageCard:nth-child(18) .userImage {
   transform: scale(0.85);
 }
 
-.imageCard:nth-child(21) .userImage {
-  transform: scale(0.83);
+.imageCard:nth-child(19) .userImage {
+  transform: scale(0.85);
 }
 
-.imageCard:nth-child(23) .userImage {
+.imageCard:nth-child(21) .userImage {
   transform: scale(1.5);
 }
 
-.imageCard:nth-child(27) .userImage {
+.imageCard:nth-child(25) .userImage {
   transform: scale(0.87);
 }
 
-.imageCard:nth-child(28) .userImage {
+.imageCard:nth-child(26) .userImage {
   transform: scale(0.75);
 }
 

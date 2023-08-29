@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import useBaseUrl from '@docusaurus/useBaseUrl';
-import Translate, { translate } from '@docusaurus/Translate';
+import Translate, {translate} from '@docusaurus/Translate';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './index.module.css';
 import GitHubButton from 'react-github-btn';
@@ -18,7 +18,7 @@ import LottieEcosystem from './components/Ecosystem';
 import LottieHostlevel from './components/PeerLevelControl';
 
 export default function Home() {
-  const { siteConfig } = useDocusaurusContext();
+  const {siteConfig} = useDocusaurusContext();
   const UserList = [
     {
       imgURL: 'img/user/alibaba-group.svg',
@@ -61,12 +61,6 @@ export default function Home() {
       alt: 'cainiao',
       herf: 'https://global.cainiao.com/',
       name: 'Cai Niao',
-    },
-    {
-      imgURL: 'img/user/china-mobile.svg',
-      alt: 'china-mobile',
-      herf: 'http://www.zj.chinamobile.com',
-      name: ' China Mobile',
     },
     {
       imgURL: 'img/user/china-unicom.svg',
@@ -116,13 +110,6 @@ export default function Home() {
       herf: 'https://www.huya.com/',
       name: ' Huya',
     },
-    // TODO There is an internal process to get that approval.
-    // {
-    // imgURL: 'img/user/intel.svg',
-    // alt: 'intel',
-    // herf: 'https://www.intel.cn/',
-    // name: 'Intel',
-    // },
     {
       imgURL: 'img/user/jd.png',
       alt: 'jd',
@@ -197,14 +184,12 @@ export default function Home() {
     },
   ];
   const PartnersList = [
-    { imgURL: 'img/partners/ant-group.svg', alt: 'ant-group' },
-    { imgURL: 'img/partners/alibaba-group.svg', alt: 'alibaba-group' },
-    // TODO There is an internal process to get that approval.
-    // { imgURL: 'img/partners/intel.svg', alt: 'intel' },
-    { imgURL: 'img/partners/douyin.png', alt: 'douyin' },
-    { imgURL: 'img/partners/kuaishou.svg', alt: 'kuaishou' },
-    { imgURL: 'img/partners/baidu.svg', alt: 'baidu' },
-    { imgURL: 'img/partners/didi.svg', alt: 'didi' },
+    {imgURL: 'img/partners/ant-group.svg', alt: 'ant-group'},
+    {imgURL: 'img/partners/alibaba-group.svg', alt: 'alibaba-group'},
+    {imgURL: 'img/partners/douyin.png', alt: 'douyin'},
+    {imgURL: 'img/partners/kuaishou.svg', alt: 'kuaishou'},
+    {imgURL: 'img/partners/baidu.svg', alt: 'baidu'},
+    {imgURL: 'img/partners/didi.svg', alt: 'didi'},
   ];
   const DevelopmentInfoList = [
     {
@@ -505,7 +490,7 @@ export default function Home() {
   );
 }
 
-const Button = ({ children, href }) => {
+const Button = ({children, href}) => {
   return (
     <div>
       <Link className={styles.button} to={href}>

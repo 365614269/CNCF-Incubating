@@ -9,6 +9,17 @@ versions:
     dependencies:
       envoy: "1.27.0"
       kubernetes:
+        - "1.28"
+        - "1.27"
+        - "1.26"
+      gateway-api:
+        - v1alpha2
+        - v1beta1
+  - version: v1.25.2
+    supported: "true"
+    dependencies:
+      envoy: "1.26.4"
+      kubernetes:
         - "1.27"
         - "1.26"
         - "1.25"
@@ -16,7 +27,7 @@ versions:
         - v1alpha2
         - v1beta1
   - version: v1.25.1
-    supported: "true"
+    supported: "false"
     dependencies:
       envoy: "1.26.4"
       kubernetes:

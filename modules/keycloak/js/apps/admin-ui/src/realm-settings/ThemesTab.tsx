@@ -73,9 +73,8 @@ export const RealmSettingsThemesTab = ({
                 }}
                 selections={field.value}
                 variant={SelectVariant.single}
-                aria-label={t("loginTheme")}
                 isOpen={loginThemeOpen}
-                placeholderText="Select a theme"
+                placeholderText={t("selectATheme")}
                 data-testid="select-login-theme"
               >
                 {themeTypes.login.map((theme, idx) => (
@@ -117,18 +116,20 @@ export const RealmSettingsThemesTab = ({
                 variant={SelectVariant.single}
                 aria-label={t("accountTheme")}
                 isOpen={accountThemeOpen}
-                placeholderText="Select a theme"
+                placeholderText={t("selectATheme")}
                 data-testid="select-account-theme"
               >
-                {themeTypes.account.map((theme, idx) => (
-                  <SelectOption
-                    selected={theme.name === field.value}
-                    key={`account-theme-${idx}`}
-                    value={theme.name}
-                  >
-                    {t(`${theme.name}`)}
-                  </SelectOption>
-                ))}
+                {themeTypes.account
+                  .filter((theme) => theme.name !== "base")
+                  .map((theme, idx) => (
+                    <SelectOption
+                      selected={theme.name === field.value}
+                      key={`account-theme-${idx}`}
+                      value={theme.name}
+                    >
+                      {t(`${theme.name}`)}
+                    </SelectOption>
+                  ))}
               </Select>
             )}
           />
@@ -138,7 +139,7 @@ export const RealmSettingsThemesTab = ({
           fieldId="kc-admin-ui-theme"
           labelIcon={
             <HelpItem
-              helpText={t("realm-settings-help:adminUITheme")}
+              helpText={t("realm-settings-help:adminTheme")}
               fieldLabelId="realm-settings:adminTheme"
             />
           }
@@ -157,20 +158,21 @@ export const RealmSettingsThemesTab = ({
                 }}
                 selections={field.value}
                 variant={SelectVariant.single}
-                aria-label={t("adminUITheme")}
                 isOpen={adminUIThemeOpen}
-                placeholderText="Select a theme"
+                placeholderText={t("selectATheme")}
                 data-testid="select-admin-theme"
               >
-                {themeTypes.admin.map((theme, idx) => (
-                  <SelectOption
-                    selected={theme.name === field.value}
-                    key={`admin-theme-${idx}`}
-                    value={theme.name}
-                  >
-                    {t(`${theme.name}`)}
-                  </SelectOption>
-                ))}
+                {themeTypes.admin
+                  .filter((theme) => theme.name !== "base")
+                  .map((theme, idx) => (
+                    <SelectOption
+                      selected={theme.name === field.value}
+                      key={`admin-theme-${idx}`}
+                      value={theme.name}
+                    >
+                      {t(`${theme.name}`)}
+                    </SelectOption>
+                  ))}
               </Select>
             )}
           />
@@ -199,9 +201,8 @@ export const RealmSettingsThemesTab = ({
                 }}
                 selections={field.value}
                 variant={SelectVariant.single}
-                aria-label={t("emailTheme")}
                 isOpen={emailThemeOpen}
-                placeholderText="Select a theme"
+                placeholderText={t("selectATheme")}
                 data-testid="select-email-theme"
               >
                 {themeTypes.email.map((theme, idx) => (
