@@ -93,7 +93,7 @@ func TestPanicCheckMetaPartitions(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	mp := newMetaPartition(partitionID, 1, defaultMaxMetaPartitionInodeID, vol.mpReplicaNum, vol.Name, vol.ID)
+	mp := newMetaPartition(partitionID, 1, defaultMaxMetaPartitionInodeID, vol.mpReplicaNum, vol.Name, vol.ID, 0)
 	vol.addMetaPartition(mp)
 	mp = nil
 	c.checkMetaPartitions()
@@ -206,7 +206,7 @@ func TestPanicCheckBadMetaPartitionRecovery(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	dp := newMetaPartition(partitionID, 0, defaultMaxMetaPartitionInodeID, vol.mpReplicaNum, vol.Name, vol.ID)
+	dp := newMetaPartition(partitionID, 0, defaultMaxMetaPartitionInodeID, vol.mpReplicaNum, vol.Name, vol.ID, 0)
 	c.BadMetaPartitionIds.Store(fmt.Sprintf("%v", dp.PartitionID), dp)
 	c.scheduleToCheckMetaPartitionRecoveryProgress()
 }
@@ -335,12 +335,15 @@ func TestBalanceMetaPartition(t *testing.T) {
 	nodeSetM := make(map[uint64]struct{})
 	// get all metaNodes
 	sortNodes := server.cluster.getSortLeaderMetaNodes(zoneM, nodeSetM)
-	require.Equal(t, len(sortNodes.nodes), 7)
+	require.Equal(t, len(sortNodes.nodes), server.cluster.metaNodeCount())
 
 	// get noeExist zone metaNodes, should has 0 node
 	zoneM["noeExist"] = struct{}{}
 	sortNodes = server.cluster.getSortLeaderMetaNodes(zoneM, nodeSetM)
-	require.Nil(t, sortNodes)
+	// if there are no nodes selected, sortNodes is nil
+	if sortNodes != nil {
+		require.Equal(t, len(sortNodes.nodes), 0)
+	}
 
 	// get testZone2 metaNodes, should has 4 node
 	zoneM[testZone2] = struct{}{}

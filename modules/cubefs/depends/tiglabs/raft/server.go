@@ -218,6 +218,15 @@ func (rs *RaftServer) ChangeMember(id uint64, changeType proto.ConfChangeType, p
 	return
 }
 
+func (rs *RaftServer) IsRestoring(id uint64) bool {
+	rs.mu.RLock()
+	defer rs.mu.RUnlock()
+	if raft, ok := rs.rafts[id]; ok {
+		return raft.restoringSnapshot.Get() || raft.applied() == 0
+	}
+	return true
+}
+
 func (rs *RaftServer) Status(id uint64) (status *Status) {
 	rs.mu.RLock()
 	raft, ok := rs.rafts[id]
@@ -432,6 +441,7 @@ func (rs *RaftServer) sendHeartbeat() {
 		msg.From = rs.config.NodeID
 		msg.To = to
 		msg.Context = proto.EncodeHBConext(ctx)
+		logger.Debug("send heartbeat msg[%v] to id:%d", msg, to)
 		rs.config.transport.Send(msg)
 	}
 }

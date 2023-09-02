@@ -15,6 +15,8 @@
 package proto
 
 import (
+	"time"
+
 	"github.com/cubefs/cubefs/util"
 )
 
@@ -27,6 +29,7 @@ const (
 	AdminRemoveApiQpsLimit                    = "/admin/rmApiQpsLimit"
 	AdminGetCluster                           = "/admin/getCluster"
 	AdminSetClusterInfo                       = "/admin/setClusterInfo"
+	AdminGetMonitorPushAddr                   = "/admin/getMonitorPushAddr"
 	AdminGetDataPartition                     = "/dataPartition/get"
 	AdminLoadDataPartition                    = "/dataPartition/load"
 	AdminCreateDataPartition                  = "/dataPartition/create"
@@ -41,6 +44,7 @@ const (
 	AdminUpdateVol                            = "/vol/update"
 	AdminVolShrink                            = "/vol/shrink"
 	AdminVolExpand                            = "/vol/expand"
+	AdminVolForbidden                         = "/vol/forbidden"
 	AdminCreateVol                            = "/admin/createVol"
 	AdminGetVol                               = "/admin/getVol"
 	AdminClusterFreeze                        = "/cluster/freeze"
@@ -58,6 +62,7 @@ const (
 	AdminGetIsDomainOn                        = "/admin/getIsDomainOn"
 	AdminUpdateNodeSetCapcity                 = "/admin/updateNodeSetCapcity"
 	AdminUpdateNodeSetId                      = "/admin/updateNodeSetId"
+	AdminUpdateNodeSetNodeSelector            = "/admin/updateNodeSetNodeSelector"
 	AdminUpdateDomainDataUseRatio             = "/admin/updateDomainDataRatio"
 	AdminUpdateZoneExcludeRatio               = "/admin/updateZoneExcludeRatio"
 	AdminSetNodeRdOnly                        = "/admin/setNodeRdOnly"
@@ -79,6 +84,15 @@ const (
 	AdminSetDpDiscard                         = "/admin/setDpDiscard"
 	AdminGetDiscardDp                         = "/admin/getDiscardDp"
 
+	AdminSetConLcNodeNum  = "/admin/setConLcNodeNum"
+	AdminGetAllLcNodeInfo = "/admin/getAllLcNodeInfo"
+
+	AdminLcNode = "/admin/lcnode"
+
+	AdminUpdateDecommissionDiskFactor = "/admin/updateDecommissionDiskFactor"
+	AdminQueryDecommissionDiskLimit   = "/admin/queryDecommissionDiskLimit"
+	AdminEnableAutoDecommissionDisk   = "/admin/enableAutoDecommissionDisk"
+	AdminQueryAutoDecommissionDisk    = "/admin/queryAutoDecommissionDisk"
 	//graphql master api
 	AdminClusterAPI = "/api/cluster"
 	AdminUserAPI    = "/api/user"
@@ -135,6 +149,8 @@ const (
 	CancelDecommissionDisk             = "/disk/cancelDecommission"
 	QueryDecommissionDiskDecoFailedDps = "/disk/queryDecommissionFailedDps"
 	QueryBadDisks                      = "/disk/queryBadDisks"
+	RestoreStoppedAutoDecommissionDisk = "/disk/restoreStoppedAutoDecommissionDisk"
+	QueryAllDecommissionDisk           = "/disk/queryAllDecommissionDisk"
 	GetDataNode                        = "/dataNode/get"
 	AddMetaNode                        = "/metaNode/add"
 	DecommissionMetaNode               = "/metaNode/decommission"
@@ -152,13 +168,33 @@ const (
 	AdminDeleteMetaReplica             = "/metaReplica/delete"
 	AdminPutDataPartitions             = "/dataPartitions/set"
 
+	//admin multi version snapshot
+	AdminCreateVersion     = "/multiVer/create"
+	AdminDelVersion        = "/multiVer/del"
+	AdminGetVersionInfo    = "/multiVer/get"
+	AdminGetAllVersionInfo = "/multiVer/getAll"
+	AdminGetVolVer         = "/vol/getVer"
+	AdminSetVerStrategy    = "/vol/SetVerStrategy"
+
+	// S3 lifecycle configuration APIS
+	SetBucketLifecycle    = "/s3/setLifecycle"
+	GetBucketLifecycle    = "/s3/getLifecycle"
+	DeleteBucketLifecycle = "/s3/deleteLifecycle"
+
+	AddLcNode = "/lcNode/add"
+
+	QueryDisableDisk = "/dataNode/queryDisableDisk"
 	// Operation response
 	GetMetaNodeTaskResponse = "/metaNode/response" // Method: 'POST', ContentType: 'application/json'
 	GetDataNodeTaskResponse = "/dataNode/response" // Method: 'POST', ContentType: 'application/json'
+	GetLcNodeTaskResponse   = "/lcNode/response"   // Method: 'POST', ContentType: 'application/json'
 
 	GetTopologyView = "/topo/get"
 	UpdateZone      = "/zone/update"
 	GetAllZones     = "/zone/list"
+	GetAllNodeSets  = "/nodeSet/list"
+	GetNodeSet      = "/nodeSet/get"
+	UpdateNodeSet   = "/nodeSet/update"
 
 	// Header keys
 	SkipOwnerValidation = "Skip-Owner-Validation"
@@ -189,6 +225,11 @@ const (
 	QuotaGet    = "/quota/get"
 	// QuotaBatchModifyPath = "/quota/batchModifyPath"
 	QuotaListAll = "/quota/listAll"
+
+	// s3 qos api
+	S3QoSSet    = "/s3/qos/set"
+	S3QoSGet    = "/s3/qos/get"
+	S3QoSDelete = "/s3/qos/delete"
 )
 
 var GApiInfo map[string]string = map[string]string{
@@ -335,6 +376,22 @@ type UidSpaceRsp struct {
 	Reserve     string
 }
 
+type VolumeVerStrategy struct {
+	KeepVerCnt  int
+	Periodic    int
+	Enable      bool
+	ForceUpdate bool
+	UTime       time.Time
+}
+
+type VolumeVerInfo struct {
+	Name             string
+	VerSeq           uint64
+	VerSeqPrepare    uint64
+	VerPrepareStatus uint8
+	Enabled          bool
+}
+
 // ClusterInfo defines the cluster infomation.
 type ClusterInfo struct {
 	Cluster                     string
@@ -343,6 +400,7 @@ type ClusterInfo struct {
 	MetaNodeDeleteWorkerSleepMs uint64
 	DataNodeDeleteLimitRate     uint64
 	DataNodeAutoRepairLimitRate uint64
+	DpMaxRepairErrCnt           uint64
 	DirChildrenNumLimit         uint32
 	EbsAddr                     string
 	ServicePath                 string
@@ -363,6 +421,8 @@ type CreateDataPartitionRequest struct {
 	CreateType          int
 	LeaderSize          int
 	DecommissionedDisks []string
+	IsMultiVer          bool
+	VerSeq              uint64
 }
 
 // CreateDataPartitionResponse defines the response to the request of creating a data partition.
@@ -434,12 +494,25 @@ type LoadDataPartitionResponse struct {
 	VolName           string
 }
 
+type StopDataPartitionRepairRequest struct {
+	PartitionId uint64
+	Stop        bool
+}
+
+// DeleteDataPartitionResponse defines the response to the request of deleting a data partition.
+type StopDataPartitionRepairResponse struct {
+	Status      uint8
+	Result      string
+	PartitionId uint64
+}
+
 // File defines the file struct.
 type File struct {
 	Name     string
 	Crc      uint32
 	Size     uint32
 	Modified int64
+	ApplyID  uint64
 }
 
 // LoadMetaPartitionMetricRequest defines the request of loading the meta partition metrics.
@@ -470,6 +543,24 @@ type QosToDataNode struct {
 	QosFlowWriteLimit uint64
 }
 
+// MultiVersionOpRequest defines the request of
+type MultiVersionOpRequest struct {
+	VolumeID string
+	VerSeq   uint64
+	Op       uint8
+	Addr     string
+}
+
+// MultiVersionOpResponse defines the response to the request of l.
+type MultiVersionOpResponse struct {
+	VolumeID string
+	Addr     string
+	Op       uint8
+	VerSeq   uint64
+	Status   uint8
+	Result   string
+}
+
 type QuotaHeartBeatInfos struct {
 	QuotaHbInfos []*QuotaHeartBeatInfo
 }
@@ -494,19 +585,21 @@ type HeartBeatRequest struct {
 	UidLimitToMetaNode
 	QuotaHeartBeatInfos
 	TxInfos
+	ForbiddenVols []string
 }
 
-// PartitionReport defines the partition report.
-type PartitionReport struct {
-	VolName         string
-	PartitionID     uint64
-	PartitionStatus int
-	Total           uint64
-	Used            uint64
-	DiskPath        string
-	IsLeader        bool
-	ExtentCount     int
-	NeedCompare     bool
+// DataPartitionReport defines the partition report.
+type DataPartitionReport struct {
+	VolName                    string
+	PartitionID                uint64
+	PartitionStatus            int
+	Total                      uint64
+	Used                       uint64
+	DiskPath                   string
+	IsLeader                   bool
+	ExtentCount                int
+	NeedCompare                bool
+	DecommissionRepairProgress float64
 }
 
 type DataNodeQosResponse struct {
@@ -529,10 +622,12 @@ type DataNodeHeartbeatResponse struct {
 	MaxCapacity         uint64 // maximum capacity to create partition
 	StartTime           int64
 	ZoneName            string
-	PartitionReports    []*PartitionReport
+	PartitionReports    []*DataPartitionReport
 	Status              uint8
 	Result              string
 	BadDisks            []string
+	CpuUtil             float64            `json:"cpuUtil"`
+	IoUtils             map[string]float64 `json:"ioUtil"`
 }
 
 // MetaPartitionReport defines the meta partition report.
@@ -559,10 +654,19 @@ type MetaPartitionReport struct {
 type MetaNodeHeartbeatResponse struct {
 	ZoneName             string
 	Total                uint64
-	Used                 uint64
+	MemUsed              uint64
 	MetaPartitionReports []*MetaPartitionReport
 	Status               uint8
 	Result               string
+	CpuUtil              float64 `json:"cpuUtil"`
+}
+
+// LcNodeHeartbeatResponse defines the response to the lc node heartbeat.
+type LcNodeHeartbeatResponse struct {
+	Status                uint8
+	Result                string
+	LcScanningTasks       map[string]*LcNodeRuleTaskResponse
+	SnapshotScanningTasks map[string]*SnapshotVerDelTaskResponse
 }
 
 // DeleteFileRequest defines the request to delete a file.
@@ -634,6 +738,7 @@ type MetaPartitionLoadResponse struct {
 	PartitionID uint64
 	DoCompare   bool
 	ApplyID     uint64
+	CommittedID uint64
 	MaxInode    uint64
 	DentryCount uint64
 	InodeCount  uint64
@@ -683,6 +788,12 @@ type MetaPartitionView struct {
 	Status      int8
 }
 
+type DataNodeDisksRequest struct {
+}
+
+type DataNodeDisksResponse struct {
+}
+
 type OSSSecure struct {
 	AccessKey string
 	SecretKey string
@@ -702,6 +813,7 @@ type VolView struct {
 	DeleteLockTime int64
 	CacheTTL       int
 	VolType        int
+	Forbidden      bool
 }
 
 func (v *VolView) SetOwner(owner string) {
@@ -866,6 +978,9 @@ type SimpleVolView struct {
 	CacheRule        string
 	PreloadCapacity  uint64
 	Uids             []UidSimpleInfo
+	// multi version snapshot
+	LatestVer uint64
+	Forbidden bool
 }
 
 type NodeSetInfo struct {
@@ -932,9 +1047,11 @@ func NewVolInfo(name, owner string, createTime int64, status uint8, totalSize, u
 
 // ZoneView define the view of zone
 type ZoneView struct {
-	Name    string
-	Status  string
-	NodeSet map[uint64]*NodeSetView
+	Name                string
+	Status              string
+	DataNodesetSelector string
+	MetaNodesetSelector string
+	NodeSet             map[uint64]*NodeSetView
 }
 
 type NodeSetView struct {

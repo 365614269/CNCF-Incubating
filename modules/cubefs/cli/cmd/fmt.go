@@ -102,6 +102,20 @@ func formatNodeView(view *proto.NodeView, tableRow bool) string {
 	return sb.String()
 }
 
+var nodeViewTableRowPatternForNodeSet = "%-6v    %-65v    %-8v    %-8v    %-10v    %-10v    %-10v"
+
+func formatNodeViewTableHeaderForNodeSet() string {
+	return fmt.Sprintf(nodeViewTableRowPatternForNodeSet, "ID", "ADDRESS", "WRITABLE", "STATUS", "TOTAL", "USED", "AVAIL")
+}
+
+func formatNodeViewForNodeSet(view *proto.NodeStatView) string {
+	return fmt.Sprintf(nodeViewTableRowPatternForNodeSet, view.ID, formatAddr(view.Addr, view.DomainAddr),
+		formatYesNo(view.IsWritable), formatNodeStatus(view.Status),
+		formatSize(view.Total),
+		formatSize(view.Used),
+		formatSize(view.Avail))
+}
+
 func formatSimpleVolView(svv *proto.SimpleVolView) string {
 
 	var sb = strings.Builder{}
@@ -134,6 +148,7 @@ func formatSimpleVolView(svv *proto.SimpleVolView) string {
 	sb.WriteString(fmt.Sprintf("  Tx conflict retry num           : %v\n", svv.TxConflictRetryNum))
 	sb.WriteString(fmt.Sprintf("  Tx conflict retry interval(ms)  : %v\n", svv.TxConflictRetryInterval))
 	sb.WriteString(fmt.Sprintf("  Tx limit interval(s)            : %v\n", svv.TxOpLimit))
+	sb.WriteString(fmt.Sprintf("  Forbidden                       : %v\n", svv.Forbidden))
 	sb.WriteString(fmt.Sprintf("  Quota                           : %v\n", formatEnabledDisabled(svv.EnableQuota)))
 	if svv.VolType == 1 {
 		sb.WriteString(fmt.Sprintf("  ObjBlockSize         : %v byte\n", svv.ObjBlockSize))
@@ -194,6 +209,12 @@ var (
 func formatUidInfoTableRow(uidInfo *proto.UidSpaceInfo) string {
 	return fmt.Sprintf(volumeUidPattern,
 		uidInfo.Uid, time.Unix(uidInfo.CTime, 0).Format(time.RFC1123), uidInfo.Enabled, uidInfo.Limited, uidInfo.LimitSize, uidInfo.UsedSize)
+}
+
+func formatVerInfoTableRow(verInfo *proto.VolVersionInfo) string {
+	return fmt.Sprintf(volumeVersionPattern,
+		verInfo.Ver, time.UnixMicro(int64(verInfo.Ver)).Local().Format(time.RFC1123), verInfo.Status, "")
+
 }
 
 var (
@@ -404,6 +425,7 @@ func formatDataPartitionInfo(partition *proto.DataPartitionInfo) string {
 	sb.WriteString(fmt.Sprintf("ISRdOnly      : %v\n", partition.RdOnly))
 	sb.WriteString(fmt.Sprintf("IsDiscard     : %v\n", partition.IsDiscard))
 	sb.WriteString(fmt.Sprintf("ReplicaNum    : %v\n", partition.ReplicaNum))
+	sb.WriteString(fmt.Sprintf("Forbidden     : %v\n", partition.Forbidden))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("Replicas : \n"))
 	sb.WriteString(fmt.Sprintf("%v\n", formatDataReplicaTableHeader()))
@@ -463,6 +485,7 @@ func formatMetaPartitionInfo(partition *proto.MetaPartitionInfo) string {
 	sb.WriteString(fmt.Sprintf("Start         : %v\n", partition.Start))
 	sb.WriteString(fmt.Sprintf("End           : %v\n", partition.End))
 	sb.WriteString(fmt.Sprintf("MaxInodeID    : %v\n", partition.MaxInodeID))
+	sb.WriteString(fmt.Sprintf("Forbidden     : %v\n", partition.Forbidden))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("Replicas : \n"))
 	sb.WriteString(fmt.Sprintf("%v\n", formatMetaReplicaTableHeader()))
@@ -529,11 +552,13 @@ func formatUserInfoTableRow(userInfo *proto.UserInfo) string {
 
 func formatDataPartitionStatus(status int8) string {
 	switch status {
-	case 1:
-		return "Read only"
-	case 2:
-		return "Writable"
-	case -1:
+	case proto.Recovering:
+		return "Recovering"
+	case proto.ReadOnly:
+		return "ReadOnly"
+	case proto.ReadWrite:
+		return "ReadWrite"
+	case proto.Unavailable:
 		return "Unavailable"
 	default:
 		return "Unknown"
@@ -721,7 +746,6 @@ func formatDataNodeDetail(dn *proto.DataNodeInfo, rowTable bool) string {
 	var sb = strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID                  : %v\n", dn.ID))
 	sb.WriteString(fmt.Sprintf("  Address             : %v\n", formatAddr(dn.Addr, dn.DomainAddr)))
-	sb.WriteString(fmt.Sprintf("  Carry               : %v\n", dn.Carry))
 	sb.WriteString(fmt.Sprintf("  Allocated ratio     : %v\n", dn.UsageRatio))
 	sb.WriteString(fmt.Sprintf("  Allocated           : %v\n", formatSize(dn.Used)))
 	sb.WriteString(fmt.Sprintf("  Available           : %v\n", formatSize(dn.AvailableSpace)))
@@ -732,6 +756,11 @@ func formatDataNodeDetail(dn *proto.DataNodeInfo, rowTable bool) string {
 	sb.WriteString(fmt.Sprintf("  Partition count     : %v\n", dn.DataPartitionCount))
 	sb.WriteString(fmt.Sprintf("  Bad disks           : %v\n", dn.BadDisks))
 	sb.WriteString(fmt.Sprintf("  Persist partitions  : %v\n", dn.PersistenceDataPartitions))
+	sb.WriteString(fmt.Sprintf("  CpuUtil             : %.1f\n", dn.CpuUtil))
+	sb.WriteString("  IoUtils              :\n")
+	for device, used := range dn.IoUtils {
+		sb.WriteString(fmt.Sprintf("                       %v:%.1f\n", device, used))
+	}
 	return sb.String()
 }
 
@@ -749,7 +778,6 @@ func formatMetaNodeDetail(mn *proto.MetaNodeInfo, rowTable bool) string {
 	var sb = strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID                  : %v\n", mn.ID))
 	sb.WriteString(fmt.Sprintf("  Address             : %v\n", formatAddr(mn.Addr, mn.DomainAddr)))
-	sb.WriteString(fmt.Sprintf("  Carry               : %v\n", mn.Carry))
 	sb.WriteString(fmt.Sprintf("  Threshold           : %v\n", mn.Threshold))
 	sb.WriteString(fmt.Sprintf("  MaxMemAvailWeight   : %v\n", formatSize(mn.MaxMemAvailWeight)))
 	sb.WriteString(fmt.Sprintf("  Allocated           : %v\n", formatSize(mn.Used)))
@@ -759,13 +787,56 @@ func formatMetaNodeDetail(mn *proto.MetaNodeInfo, rowTable bool) string {
 	sb.WriteString(fmt.Sprintf("  Report time         : %v\n", formatTimeToString(mn.ReportTime)))
 	sb.WriteString(fmt.Sprintf("  Partition count     : %v\n", mn.MetaPartitionCount))
 	sb.WriteString(fmt.Sprintf("  Persist partitions  : %v\n", mn.PersistenceMetaPartitions))
+	sb.WriteString(fmt.Sprintf("  CpuUtil             : %.1f%%\n", mn.CpuUtil))
+	return sb.String()
+}
+
+func formatNodeSetView(ns *proto.NodeSetStatInfo) string {
+	var sb = strings.Builder{}
+	sb.WriteString(fmt.Sprintf("NodeSet ID:       %v\n", ns.ID))
+	sb.WriteString(fmt.Sprintf("Capacity:         %v\n", ns.Capacity))
+	sb.WriteString(fmt.Sprintf("Zone:             %v\n", ns.Zone))
+	sb.WriteString(fmt.Sprintf("DataNodeSelector: %v\n", ns.DataNodeSelector))
+	sb.WriteString(fmt.Sprintf("MetaNodeSelector: %v\n", ns.MetaNodeSelector))
+	var dataTotal, dataUsed, dataAvail, metaTotal, metaUsed, metaAvail uint64
+	for _, dn := range ns.DataNodes {
+		dataTotal += dn.Total
+		dataUsed += dn.Used
+		dataAvail += dn.Avail
+	}
+	for _, mn := range ns.MetaNodes {
+		metaTotal += mn.Total
+		metaUsed += mn.Used
+		metaAvail += mn.Avail
+	}
+	sb.WriteString(fmt.Sprintf("DataTotal:     %v\n", formatSize(dataTotal)))
+	sb.WriteString(fmt.Sprintf("DataUsed:      %v\n", formatSize(dataUsed)))
+	sb.WriteString(fmt.Sprintf("DataAvail:     %v\n", formatSize(dataAvail)))
+	sb.WriteString(fmt.Sprintf("MetaTotal:     %v\n", formatSize(metaTotal)))
+	sb.WriteString(fmt.Sprintf("MetaUsed:      %v\n", formatSize(metaUsed)))
+	sb.WriteString(fmt.Sprintf("MetaAvail:     %v\n", formatSize(metaAvail)))
+	sb.WriteString(fmt.Sprintf("\n"))
+	sb.WriteString(fmt.Sprintf("DataNodes[%v]:\n", len(ns.DataNodes)))
+	sb.WriteString(fmt.Sprintf("  %v\n", formatNodeViewTableHeaderForNodeSet()))
+	for _, dn := range ns.DataNodes {
+		sb.WriteString(fmt.Sprintf("  %v\n", formatNodeViewForNodeSet(dn)))
+	}
+	sb.WriteString(fmt.Sprintf("\n"))
+	sb.WriteString(fmt.Sprintf("MetaNodes[%v]:\n", len(ns.MetaNodes)))
+	sb.WriteString(fmt.Sprintf("  %v\n", formatNodeViewTableHeaderForNodeSet()))
+	for _, mn := range ns.MetaNodes {
+		sb.WriteString(fmt.Sprintf("  %v\n", formatNodeViewForNodeSet(mn)))
+	}
 	return sb.String()
 }
 
 func formatZoneView(zv *proto.ZoneView) string {
 	var sb = strings.Builder{}
-	sb.WriteString(fmt.Sprintf("Zone Name:   %v\n", zv.Name))
-	sb.WriteString(fmt.Sprintf("Status:      %v\n", zv.Status))
+	sb.WriteString(fmt.Sprintf("Zone Name:        %v\n", zv.Name))
+	sb.WriteString(fmt.Sprintf("Status:           %v\n", zv.Status))
+	sb.WriteString("Nodeset Selector:\n")
+	sb.WriteString(fmt.Sprintf("       Data:%v\n", zv.DataNodesetSelector))
+	sb.WriteString(fmt.Sprintf("       Meta:%v\n", zv.MetaNodesetSelector))
 	sb.WriteString(fmt.Sprintf("\n"))
 	for index, ns := range zv.NodeSet {
 		sb.WriteString(fmt.Sprintf("NodeSet-%v:\n", index))

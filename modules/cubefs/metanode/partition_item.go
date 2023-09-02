@@ -33,7 +33,7 @@ import (
 
 // MetaItem defines the structure of the metadata operations.
 type MetaItem struct {
-	Op uint32 `json:"op"`
+	Op uint32 `json:"Op"`
 	K  []byte `json:"k"`
 	V  []byte `json:"v"`
 }
@@ -219,6 +219,9 @@ func newMetaItemIterator(mp *metaPartition) (si *MetaItemIterator, err error) {
 			filenames = append(filenames, fileInfo.Name())
 		}
 		if !fileInfo.IsDir() && strings.HasPrefix(fileInfo.Name(), prefixDelExtentV2) {
+			filenames = append(filenames, fileInfo.Name())
+		}
+		if !fileInfo.IsDir() && strings.HasPrefix(fileInfo.Name(), prefixMultiVer) {
 			filenames = append(filenames, fileInfo.Name())
 		}
 	}

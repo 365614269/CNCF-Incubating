@@ -106,10 +106,14 @@ type ExtentHandler struct {
 
 	// Signaled in receiver ONLY to exit *sender*.
 	doneSender chan struct{}
+
+	// ver update need alloc new extent
+	verUpdate chan uint64
 }
 
 // NewExtentHandler returns a new extent handler.
 func NewExtentHandler(stream *Streamer, offset int, storeMode int, size int) *ExtentHandler {
+	//	log.LogDebugf("NewExtentHandler stack(%v)", string(debug.Stack()))
 	eh := &ExtentHandler{
 		stream:       stream,
 		id:           GetExtentHandlerID(),
@@ -122,6 +126,7 @@ func NewExtentHandler(stream *Streamer, offset int, storeMode int, size int) *Ex
 		reply:        make(chan *Packet, 1024),
 		doneSender:   make(chan struct{}),
 		doneReceiver: make(chan struct{}),
+		verUpdate:    make(chan uint64),
 	}
 
 	go eh.receiver()
@@ -204,6 +209,10 @@ func (eh *ExtentHandler) sender() {
 
 	for {
 		select {
+		case <-eh.verUpdate:
+			eh.dp = nil
+			eh.key = nil
+			log.LogInfof("action[ExtentHandler] ver update in sender process and set dp and key as nil")
 		//		case <-t.C:
 		//			log.LogDebugf("sender alive: eh(%v) inflight(%v)", eh, atomic.LoadInt32(&eh.inflight))
 		case packet := <-eh.request:
@@ -258,9 +267,6 @@ func (eh *ExtentHandler) sender() {
 				eh.setRecovery()
 			}
 			eh.reply <- packet
-
-			log.LogDebugf("ExtentHandler sender: sent to the reply channel, eh(%v) packet(%v)", eh, packet)
-
 		case <-eh.doneSender:
 			eh.setClosed()
 			log.LogDebugf("sender: done, eh(%v) size(%v) ek(%v)", eh, eh.size, eh.key)
@@ -295,8 +301,6 @@ func (eh *ExtentHandler) processReply(packet *Packet) {
 		}
 	}()
 
-	//log.LogDebugf("processReply enter: eh(%v) packet(%v)", eh, packet.GetUniqueLogId())
-
 	status := eh.getStatus()
 	if status >= ExtentStatusError {
 		eh.discardPacket(packet)
@@ -312,18 +316,21 @@ func (eh *ExtentHandler) processReply(packet *Packet) {
 	}
 
 	reply := NewReply(packet.ReqID, packet.PartitionID, packet.ExtentID)
-	err := reply.ReadFromConn(eh.conn, proto.ReadDeadlineTime)
+	err := reply.ReadFromConnWithVer(eh.conn, proto.ReadDeadlineTime)
 	if err != nil {
 		eh.processReplyError(packet, err.Error())
 		return
 	}
 
-	log.LogDebugf("processReply: get reply, eh(%v) packet(%v) reply(%v)", eh, packet, reply)
-
 	if reply.ResultCode != proto.OpOk {
-		errmsg := fmt.Sprintf("reply NOK: reply(%v)", reply)
-		eh.processReplyError(packet, errmsg)
-		return
+		if reply.ResultCode != proto.ErrCodeVersionOpError {
+			errmsg := fmt.Sprintf("reply NOK: reply(%v)", reply)
+			eh.processReplyError(packet, errmsg)
+			return
+		}
+		// todo(leonchang) need check safety
+		log.LogWarnf("processReply: get reply, eh(%v) packet(%v) reply(%v)", eh, packet, reply)
+		eh.stream.GetExtents()
 	}
 
 	if !packet.isValidWriteReply(reply) {
@@ -359,6 +366,9 @@ func (eh *ExtentHandler) processReply(packet *Packet) {
 			ExtentId:     extID,
 			ExtentOffset: extOffset,
 			Size:         packet.Size,
+			SnapInfo: &proto.ExtSnapInfo{
+				VerSeq: eh.stream.verSeq,
+			},
 		}
 	} else {
 		eh.key.Size += packet.Size
@@ -376,15 +386,12 @@ func (eh *ExtentHandler) processReplyError(packet *Packet, errmsg string) {
 	if err := eh.recoverPacket(packet); err != nil {
 		eh.discardPacket(packet)
 		log.LogErrorf("processReplyError discard packet: eh(%v) packet(%v) err(%v) errmsg(%v)", eh, packet, err, errmsg)
-	} else {
-		log.LogWarnf("processReplyError recover packet: from eh(%v) to recoverHandler(%v) packet(%v) errmsg(%v)", eh, eh.recoverHandler, packet, errmsg)
 	}
 }
 
 func (eh *ExtentHandler) flush() (err error) {
 	eh.flushPacket()
 	eh.waitForFlush()
-
 	err = eh.appendExtentKey()
 	if err != nil {
 		return
@@ -508,7 +515,7 @@ func (eh *ExtentHandler) allocateExtent() (err error) {
 		extID int
 	)
 
-	//log.LogDebugf("ExtentHandler allocateExtent enter: eh(%v)", eh)
+	log.LogDebugf("ExtentHandler allocateExtent enter: eh(%v)", eh)
 
 	exclude := make(map[string]struct{})
 
@@ -604,7 +611,7 @@ func (eh *ExtentHandler) createExtent(dp *wrapper.DataPartition) (extID int, err
 		return extID, errors.Trace(err, "createExtent: failed to WriteToConn, packet(%v) datapartionHosts(%v)", p, dp.Hosts[0])
 	}
 
-	if err = p.ReadFromConn(conn, proto.ReadDeadlineTime*2); err != nil {
+	if err = p.ReadFromConnWithVer(conn, proto.ReadDeadlineTime*2); err != nil {
 		return extID, errors.Trace(err, "createExtent: failed to ReadFromConn, packet(%v) datapartionHosts(%v)", p, dp.Hosts[0])
 	}
 
@@ -642,14 +649,17 @@ func (eh *ExtentHandler) getStatus() int32 {
 }
 
 func (eh *ExtentHandler) setClosed() bool {
+	//	log.LogDebugf("action[ExtentHandler.setClosed] stack (%v)", string(debug.Stack()))
 	return atomic.CompareAndSwapInt32(&eh.status, ExtentStatusOpen, ExtentStatusClosed)
 }
 
 func (eh *ExtentHandler) setRecovery() bool {
+	//	log.LogDebugf("action[ExtentHandler.setRecovery] stack (%v)", string(debug.Stack()))
 	return atomic.CompareAndSwapInt32(&eh.status, ExtentStatusClosed, ExtentStatusRecovery)
 }
 
 func (eh *ExtentHandler) setError() bool {
+	//	log.LogDebugf("action[ExtentHandler.setError] stack (%v)", string(debug.Stack()))
 	if proto.IsHot(eh.stream.client.volumeType) {
 		atomic.StoreInt32(&eh.stream.status, StreamerError)
 	}

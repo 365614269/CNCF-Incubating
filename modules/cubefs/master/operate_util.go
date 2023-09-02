@@ -31,7 +31,7 @@ import (
 
 func newCreateDataPartitionRequest(volName string, ID uint64, replicaNum int, members []proto.Peer,
 	dataPartitionSize, leaderSize int, hosts []string, createType int, partitionType int,
-	decommissionedDisks []string) (req *proto.CreateDataPartitionRequest) {
+	decommissionedDisks []string, verSeq uint64) (req *proto.CreateDataPartitionRequest) {
 	req = &proto.CreateDataPartitionRequest{
 		PartitionTyp:        partitionType,
 		PartitionId:         ID,
@@ -43,6 +43,7 @@ func newCreateDataPartitionRequest(volName string, ID uint64, replicaNum int, me
 		CreateType:          createType,
 		LeaderSize:          leaderSize,
 		DecommissionedDisks: decommissionedDisks,
+		VerSeq:              verSeq,
 	}
 	return
 }
@@ -77,6 +78,14 @@ func newLoadDataPartitionMetricRequest(ID uint64) (req *proto.LoadDataPartitionR
 	return
 }
 
+func newStopDataPartitionRepairRequest(ID uint64, stop bool) (req *proto.StopDataPartitionRepairRequest) {
+	req = &proto.StopDataPartitionRepairRequest{
+		PartitionId: ID,
+		Stop:        stop,
+	}
+	return
+}
+
 func unmarshalTaskResponse(task *proto.AdminTask) (err error) {
 	bytes, err := json.Marshal(task.Response)
 	if err != nil {
@@ -100,6 +109,15 @@ func unmarshalTaskResponse(task *proto.AdminTask) (err error) {
 		response = &proto.UpdateMetaPartitionResponse{}
 	case proto.OpDecommissionMetaPartition:
 		response = &proto.MetaPartitionDecommissionResponse{}
+	case proto.OpVersionOperation:
+		response = &proto.MultiVersionOpResponse{}
+	case proto.OpLcNodeHeartbeat:
+		response = &proto.LcNodeHeartbeatResponse{}
+	case proto.OpLcNodeScan:
+		response = &proto.LcNodeRuleTaskResponse{}
+	case proto.OpLcNodeSnapshotVerDel:
+		response = &proto.SnapshotVerDelTaskResponse{}
+
 	default:
 		log.LogError(fmt.Sprintf("unknown operate code(%v)", task.OpCode))
 	}
@@ -214,12 +232,20 @@ func zoneNotFound(name string) (err error) {
 	return notFoundMsg(fmt.Sprintf("zone[%v]", name))
 }
 
+func nodeSetNotFound(id uint64) (err error) {
+	return notFoundMsg(fmt.Sprintf("node set[%v]", id))
+}
+
 func dataNodeNotFound(addr string) (err error) {
 	return notFoundMsg(fmt.Sprintf("data node[%v]", addr))
 }
 
 func metaNodeNotFound(addr string) (err error) {
 	return notFoundMsg(fmt.Sprintf("meta node[%v]", addr))
+}
+
+func lcNodeNotFound(addr string) (err error) {
+	return notFoundMsg(fmt.Sprintf("lc node[%v]", addr))
 }
 
 func volNotFound(name string) (err error) {

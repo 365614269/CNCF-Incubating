@@ -17,12 +17,12 @@ package metanode
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cubefs/cubefs/util/log"
 	"sync/atomic"
 	"time"
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util/errors"
+	"github.com/cubefs/cubefs/util/log"
 )
 
 func (mp *metaPartition) TxCreateDentry(req *proto.TxCreateDentryRequest, p *Packet) (err error) {
@@ -99,10 +99,11 @@ func (mp *metaPartition) CreateDentry(req *CreateDentryReq, p *Packet) (err erro
 	}
 
 	dentry := &Dentry{
-		ParentId: req.ParentID,
-		Name:     req.Name,
-		Inode:    req.Inode,
-		Type:     req.Mode,
+		ParentId:  req.ParentID,
+		Name:      req.Name,
+		Inode:     req.Inode,
+		Type:      req.Mode,
+		multiSnap: NewDentrySnap(mp.GetVerSeq()),
 	}
 	val, err := dentry.Marshal()
 	if err != nil {
@@ -153,6 +154,8 @@ func (mp *metaPartition) QuotaCreateDentry(req *proto.QuotaCreateDentryRequest, 
 		Inode:    req.Inode,
 		Type:     req.Mode,
 	}
+	dentry.setVerSeq(mp.verSeq)
+	log.LogDebugf("action[CreateDentry] mp[%v] with seq %v,dentry [%v]", mp.config.PartitionId, mp.verSeq, dentry)
 	val, err := dentry.Marshal()
 	if err != nil {
 		return
@@ -205,6 +208,13 @@ func (mp *metaPartition) TxDeleteDentry(req *proto.TxDeleteDentryRequest, p *Pac
 		p.PacketErrorWithBody(proto.OpExistErr, []byte(err.Error()))
 		return
 	}
+	parIno := NewInode(req.ParentID, 0)
+	inoResp := mp.getInode(parIno, false)
+	if inoResp.Status != proto.OpOk {
+		err = fmt.Errorf("parIno[%v] not exists", parIno.Inode)
+		p.PacketErrorWithBody(inoResp.Status, []byte(err.Error()))
+		return
+	}
 
 	txDentry := &TxDentry{
 		//ParInode: inoResp.Msg,
@@ -239,16 +249,24 @@ func (mp *metaPartition) DeleteDentry(req *DeleteDentryReq, p *Packet) (err erro
 			return
 		}
 	}
-
 	dentry := &Dentry{
 		ParentId: req.ParentID,
 		Name:     req.Name,
 	}
+	dentry.setVerSeq(req.Verseq)
+	log.LogDebugf("action[DeleteDentry] den param(%v)", dentry)
+
 	val, err := dentry.Marshal()
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
 		return
 	}
+	if mp.verSeq == 0 && dentry.getSeqFiled() > 0 {
+		err = fmt.Errorf("snapshot not enabled")
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
+	log.LogDebugf("action[DeleteDentry] submit!")
 	r, err := mp.submit(opFSMDeleteDentry, val)
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpAgain, []byte(err.Error()))
@@ -270,7 +288,6 @@ func (mp *metaPartition) DeleteDentry(req *DeleteDentryReq, p *Packet) (err erro
 
 // DeleteDentry deletes a dentry.
 func (mp *metaPartition) DeleteDentryBatch(req *BatchDeleteDentryReq, p *Packet) (err error) {
-
 	db := make(DentryBatch, 0, len(req.Dens))
 
 	for _, d := range req.Dens {
@@ -409,6 +426,7 @@ func (mp *metaPartition) UpdateDentry(req *UpdateDentryReq, p *Packet) (err erro
 		Name:     req.Name,
 		Inode:    req.Inode,
 	}
+	dentry.setVerSeq(mp.verSeq)
 	val, err := dentry.Marshal()
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
@@ -456,6 +474,7 @@ func (mp *metaPartition) ReadDir(req *ReadDirReq, p *Packet) (err error) {
 }
 
 func (mp *metaPartition) ReadDirLimit(req *ReadDirLimitReq, p *Packet) (err error) {
+	log.LogInfof("action[ReadDirLimit] read seq %v, request[%v]", req.VerSeq, req)
 	resp := mp.readDirLimit(req)
 	reply, err := json.Marshal(resp)
 	if err != nil {
@@ -472,12 +491,30 @@ func (mp *metaPartition) Lookup(req *LookupReq, p *Packet) (err error) {
 		ParentId: req.ParentID,
 		Name:     req.Name,
 	}
+	dentry.setVerSeq(req.VerSeq)
+	var denList []proto.DetryInfo
+	if req.VerAll {
+		denList = mp.getDentryList(dentry)
+	}
 	dentry, status := mp.getDentry(dentry)
+
 	var reply []byte
-	if status == proto.OpOk {
-		resp := &LookupResp{
-			Inode: dentry.Inode,
-			Mode:  dentry.Type,
+	if status == proto.OpOk || req.VerAll {
+		var resp *LookupResp
+		if status == proto.OpOk {
+			resp = &LookupResp{
+				Inode:  dentry.Inode,
+				Mode:   dentry.Type,
+				VerSeq: dentry.getSeqFiled(),
+				LayAll: denList,
+			}
+		} else {
+			resp = &LookupResp{
+				Inode:  0,
+				Mode:   0,
+				VerSeq: 0,
+				LayAll: denList,
+			}
 		}
 		reply, err = json.Marshal(resp)
 		if err != nil {
@@ -485,6 +522,7 @@ func (mp *metaPartition) Lookup(req *LookupReq, p *Packet) (err error) {
 			reply = []byte(err.Error())
 		}
 	}
+
 	p.PacketErrorWithBody(status, reply)
 	return
 }

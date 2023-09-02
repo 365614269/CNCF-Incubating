@@ -102,6 +102,60 @@ func (api *AdminAPI) ListZones() (zoneViews []*proto.ZoneView, err error) {
 	}
 	return
 }
+func (api *AdminAPI) ListNodeSets(zoneName string) (nodeSetStats []*proto.NodeSetStat, err error) {
+	var request = newAPIRequest(http.MethodGet, proto.GetAllNodeSets)
+	if zoneName != "" {
+		request.addParam("zoneName", zoneName)
+	}
+	var buf []byte
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	nodeSetStats = make([]*proto.NodeSetStat, 0)
+	if err = json.Unmarshal(buf, &nodeSetStats); err != nil {
+		return
+	}
+	return
+}
+func (api *AdminAPI) GetNodeSet(nodeSetId string) (nodeSetStatInfo *proto.NodeSetStatInfo, err error) {
+	var request = newAPIRequest(http.MethodGet, proto.GetNodeSet)
+	request.addParam("nodesetId", nodeSetId)
+	var buf []byte
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	nodeSetStatInfo = &proto.NodeSetStatInfo{}
+	if err = json.Unmarshal(buf, &nodeSetStatInfo); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) UpdateNodeSet(nodeSetId string, dataNodeSelector string, metaNodeSelector string) (err error) {
+	var request = newAPIRequest(http.MethodGet, proto.UpdateNodeSet)
+	request.addParam("nodesetId", nodeSetId)
+	request.addParam("dataNodeSelector", dataNodeSelector)
+	request.addParam("metaNodeSelector", metaNodeSelector)
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (api *AdminAPI) UpdateZone(name string, enable bool, dataNodesetSelector string, metaNodesetSelector string, dataNodeSelector string, metaNodeSelector string) (err error) {
+	var request = newAPIRequest(http.MethodPost, proto.UpdateZone)
+	request.params["name"] = name
+	request.params["enable"] = strconv.FormatBool(enable)
+	request.params["dataNodesetSelector"] = dataNodesetSelector
+	request.params["metaNodesetSelector"] = metaNodesetSelector
+	request.params["dataNodeSelector"] = dataNodeSelector
+	request.params["metaNodeSelector"] = metaNodeSelector
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (api *AdminAPI) Topo() (topo *proto.TopologyView, err error) {
 	var buf []byte
 	var request = newAPIRequest(http.MethodGet, proto.GetTopologyView)
@@ -452,6 +506,26 @@ func (api *AdminAPI) GetVolumeSimpleInfo(volName string) (vv *proto.SimpleVolVie
 	return
 }
 
+func (api *AdminAPI) SetVolumeForbidden(volName string, forbidden bool) (err error) {
+	request := newAPIRequest(http.MethodGet, proto.AdminVolForbidden)
+	request.addParam("name", volName)
+	request.addParam("forbidden", strconv.FormatBool(forbidden))
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) GetMonitorPushAddr() (addr string, err error) {
+	var request = newAPIRequest(http.MethodGet, proto.AdminGetMonitorPushAddr)
+	var buf []byte
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	err = json.Unmarshal(buf, &addr)
+	return
+}
+
 func (api *AdminAPI) UploadFlowInfo(volName string,
 	flowInfo *proto.ClientReportLimitInfo) (vv *proto.LimitRsp2Client, err error) {
 	var request = newAPIRequest(http.MethodGet, proto.QosUpload)
@@ -524,7 +598,22 @@ func (api *AdminAPI) GetClusterInfo() (ci *proto.ClusterInfo, err error) {
 	return
 }
 
+func (api *AdminAPI) GetVerInfo(volName string) (ci *proto.VolumeVerInfo, err error) {
+	var request = newAPIRequest(http.MethodGet, proto.AdminGetVolVer)
+	request.addParam("name", volName)
+	var buf []byte
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	ci = &proto.VolumeVerInfo{}
+	if err = json.Unmarshal(buf, &ci); err != nil {
+		return
+	}
+	return
+}
+
 func (api *AdminAPI) CreateMetaPartition(volName string, inodeStart uint64, clientIDKey string) (err error) {
+
 	var request = newAPIRequest(http.MethodGet, proto.AdminCreateMetaPartition)
 	request.addParam("name", volName)
 	request.addParam("start", strconv.FormatUint(inodeStart, 10))
@@ -578,8 +667,8 @@ func (api *AdminAPI) SetMetaNodeThreshold(threshold float64, clientIDKey string)
 	return
 }
 
-func (api *AdminAPI) SetClusterParas(batchCount, markDeleteRate, deleteWorkerSleepMs, autoRepairRate,
-	loadFactor, maxDpCntLimit, clientIDKey string) (err error) {
+func (api *AdminAPI) SetClusterParas(batchCount, markDeleteRate, deleteWorkerSleepMs, autoRepairRate, loadFactor, maxDpCntLimit, clientIDKey string,
+	dataNodesetSelector, metaNodesetSelector, dataNodeSelector, metaNodeSelector string) (err error) {
 	var request = newAPIRequest(http.MethodGet, proto.AdminSetNodeInfo)
 	request.addParam("batchCount", batchCount)
 	request.addParam("markDeleteRate", markDeleteRate)
@@ -589,6 +678,10 @@ func (api *AdminAPI) SetClusterParas(batchCount, markDeleteRate, deleteWorkerSle
 	request.addParam("maxDpCntLimit", maxDpCntLimit)
 	request.addParam("clientIDKey", clientIDKey)
 
+	request.addParam("dataNodesetSelector", dataNodesetSelector)
+	request.addParam("metaNodesetSelector", metaNodesetSelector)
+	request.addParam("dataNodeSelector", dataNodeSelector)
+	request.addParam("metaNodeSelector", metaNodeSelector)
 	if _, err = api.mc.serveRequest(request); err != nil {
 		return
 	}
@@ -753,6 +846,118 @@ func (api *AdminAPI) GetDiscardDataPartition() (DiscardDpInfos *proto.DiscardDat
 	}
 	DiscardDpInfos = &proto.DiscardDataPartitionInfos{}
 	if err = json.Unmarshal(buf, &DiscardDpInfos); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) DeleteVersion(volName string, verSeq string) (err error) {
+	var request = newAPIRequest(http.MethodGet, proto.AdminDelVersion)
+	request.addParam("name", volName)
+	request.addParam("verSeq", verSeq)
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) SetStrategy(volName string, periodic string, count string, enable string, force string) (err error) {
+
+	var request = newAPIRequest(http.MethodGet, proto.AdminSetVerStrategy)
+	request.addParam("name", volName)
+	request.addParam("periodic", periodic)
+	request.addParam("count", count)
+	request.addParam("enable", enable)
+	request.addParam("force", force)
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) CreateVersion(volName string) (ver *proto.VolVersionInfo, err error) {
+	var buf []byte
+	var request = newAPIRequest(http.MethodGet, proto.AdminCreateVersion)
+	request.addParam("name", volName)
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	ver = &proto.VolVersionInfo{}
+	if err = json.Unmarshal(buf, ver); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) GetLatestVer(volName string) (ver *proto.VolVersionInfo, err error) {
+	var buf []byte
+	var request = newAPIRequest(http.MethodGet, proto.AdminGetVersionInfo)
+	request.addParam("name", volName)
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	ver = &proto.VolVersionInfo{}
+	if err = json.Unmarshal(buf, ver); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) GetVerList(volName string) (verList *proto.VolVersionInfoList, err error) {
+	var buf []byte
+	var request = newAPIRequest(http.MethodGet, proto.AdminGetAllVersionInfo)
+	request.addParam("name", volName)
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	verList = &proto.VolVersionInfoList{}
+	if err = json.Unmarshal(buf, verList); err != nil {
+		return
+	}
+	log.LogDebugf("GetVerList. vol %v verList %v", volName, verList)
+	for _, info := range verList.VerList {
+		log.LogDebugf("GetVerList. vol %v verList %v", volName, info)
+	}
+	return
+}
+
+func (api *AdminAPI) SetBucketLifecycle(req *proto.LcConfiguration) (err error) {
+	var request = newAPIRequest(http.MethodPost, proto.SetBucketLifecycle)
+	var encoded []byte
+	if encoded, err = json.Marshal(req); err != nil {
+		return
+	}
+	request.addBody(encoded)
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+func (api *AdminAPI) GetBucketLifecycle(volume string) (lcConf *proto.LcConfiguration, err error) {
+	var request = newAPIRequest(http.MethodGet, proto.GetBucketLifecycle)
+	request.addParam("name", volume)
+	var buf []byte
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	lcConf = &proto.LcConfiguration{}
+	if err = json.Unmarshal(buf, &lcConf); err != nil {
+		return
+	}
+	return
+}
+func (api *AdminAPI) DelBucketLifecycle(volume string) (err error) {
+	var request = newAPIRequest(http.MethodGet, proto.DeleteBucketLifecycle)
+	request.addParam("name", volume)
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) GetS3QoSInfo() (data []byte, err error) {
+	var request = newAPIRequest(http.MethodGet, proto.S3QoSGet)
+	if data, err = api.mc.serveRequest(request); err != nil {
 		return
 	}
 	return

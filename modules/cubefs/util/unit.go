@@ -18,6 +18,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"github.com/cubefs/cubefs/depends/tiglabs/raft/util"
 	"net"
 	"regexp"
 	"strings"
@@ -37,14 +38,21 @@ const (
 )
 
 const (
-	BlockCount         = 1024
-	BlockSize          = 65536 * 2
-	ReadBlockSize      = BlockSize
-	PerBlockCrcSize    = 4
-	ExtentSize         = BlockCount * BlockSize
-	PacketHeaderSize   = 57
-	BlockHeaderSize    = 4096
-	SyscallTryMaxTimes = 3
+	BlockCount          = 1024
+	BlockSize           = 65536 * 2
+	ReadBlockSize       = BlockSize
+	PerBlockCrcSize     = 4
+	ExtentSize          = BlockCount * BlockSize
+	PacketHeaderSize    = 57
+	BlockHeaderSize     = 4096
+	SyscallTryMaxTimes  = 3
+	PacketHeaderVerSize = 65
+)
+
+const (
+	PageSize          = 4 * util.KB
+	FallocFLKeepSize  = 1
+	FallocFLPunchHole = 2
 )
 
 const (
@@ -64,6 +72,8 @@ const (
 const (
 	DefaultTinySizeLimit = 1 * MB // TODO explain tiny extent?
 )
+
+type MultiVersionSeq uint64
 
 func Min(a, b int) int {
 	if a > b {

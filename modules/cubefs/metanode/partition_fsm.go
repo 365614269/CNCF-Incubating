@@ -83,6 +83,7 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		if err = ino.Unmarshal(msg.V); err != nil {
 			return
 		}
+
 		status := mp.inodeInTx(ino.Inode)
 		if status != proto.OpOk {
 			resp = &InodeResponse{Status: status}
@@ -90,8 +91,12 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		}
 		resp = mp.fsmUnlinkInode(ino, 0)
 	case opFSMUnlinkInodeOnce:
-		inoOnce := InodeOnceUnmarshal(msg.V)
+		var inoOnce *InodeOnce
+		if inoOnce, err = InodeOnceUnmarshal(msg.V); err != nil {
+			return
+		}
 		ino := NewInode(inoOnce.Inode, 0)
+		ino.setVer(inoOnce.VerSeq)
 		resp = mp.fsmUnlinkInode(ino, inoOnce.UniqID)
 	case opFSMUnlinkInodeBatch:
 		inodes, err := InodeBatchUnmarshal(msg.V)
@@ -117,7 +122,10 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		}
 		resp = mp.fsmCreateLinkInode(ino, 0)
 	case opFSMCreateLinkInodeOnce:
-		inoOnce := InodeOnceUnmarshal(msg.V)
+		var inoOnce *InodeOnce
+		if inoOnce, err = InodeOnceUnmarshal(msg.V); err != nil {
+			return
+		}
 		ino := NewInode(inoOnce.Inode, 0)
 		resp = mp.fsmCreateLinkInode(ino, inoOnce.UniqID)
 	case opFSMEvictInode:
@@ -206,7 +214,13 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		if err = ino.Unmarshal(msg.V); err != nil {
 			return
 		}
-		resp = mp.fsmAppendExtentsWithCheck(ino)
+		resp = mp.fsmAppendExtentsWithCheck(ino, false)
+	case opFSMExtentSplit:
+		ino := NewInode(0, 0)
+		if err = ino.Unmarshal(msg.V); err != nil {
+			return
+		}
+		resp = mp.fsmAppendExtentsWithCheck(ino, true)
 	case opFSMObjExtentsAdd:
 		ino := NewInode(0, 0)
 		if err = ino.Unmarshal(msg.V); err != nil {
@@ -226,9 +240,7 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		}
 		resp = mp.fsmClearInodeCache(ino)
 	case opFSMSentToChan:
-
-		resp = mp.fsmSendToChan(msg.V)
-
+		resp = mp.fsmSendToChan(msg.V, true)
 	case opFSMStoreTick:
 		inodeTree := mp.inodeTree.GetTree()
 		dentryTree := mp.dentryTree.GetTree()
@@ -255,6 +267,7 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 			quotaRebuild:   quotaRebuild,
 			uidRebuild:     uidRebuild,
 			uniqChecker:    uniqChecker,
+			multiVerList:   mp.getVerList(),
 		}
 		log.LogDebugf("opFSMStoreTick: quotaRebuild [%v] uidRebuild [%v]", quotaRebuild, uidRebuild)
 		mp.storeChan <- msg
@@ -302,7 +315,6 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		if cursor > mp.config.Cursor {
 			mp.config.Cursor = cursor
 		}
-
 	case opFSMSyncTxID:
 		var txID uint64
 		txID = binary.BigEndian.Uint64(msg.V)
@@ -429,8 +441,59 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 			return
 		}
 		err = mp.fsmUniqCheckerEvict(req)
+	case opFSMVersionOp:
+		resp = mp.fsmVersionOp(msg.V)
 	}
 
+	return
+}
+
+func (mp *metaPartition) fsmVersionOp(reqData []byte) (err error) {
+	mp.multiVersionList.Lock()
+	defer mp.multiVersionList.Unlock()
+
+	var opData VerOpData
+	if err = json.Unmarshal(reqData, &opData); err != nil {
+		log.LogErrorf("action[fsmVersionOp] unmarshal error %v", err)
+		return
+	}
+
+	log.LogInfof("action[fsmVersionOp] mp[%v] seq %v, op %v", mp.config.PartitionId, opData.VerSeq, opData.Op)
+
+	if opData.Op == proto.CreateVersionCommit {
+		cnt := len(mp.multiVersionList.VerList)
+		if cnt > 0 && mp.multiVersionList.VerList[cnt-1].Ver >= opData.VerSeq {
+			log.LogErrorf("action[MultiVersionOp] reqeust seq %v lessOrEqual last exist snapshot seq %v",
+				mp.multiVersionList.VerList[cnt-1].Ver, opData.VerSeq)
+			mp.verSeq = opData.VerSeq
+			return
+		}
+		newVer := &proto.VolVersionInfo{
+			Status: proto.VersionNormal,
+			Ver:    opData.VerSeq,
+		}
+		mp.verSeq = opData.VerSeq
+		mp.multiVersionList.VerList = append(mp.multiVersionList.VerList, newVer)
+
+		log.LogInfof("action[fsmVersionOp] mp[%v] seq %v, op %v, seqArray size %v", mp.config.PartitionId, opData.VerSeq, opData.Op, len(mp.multiVersionList.VerList))
+	} else if opData.Op == proto.DeleteVersion {
+		for i, ver := range mp.multiVersionList.VerList {
+			if i == len(mp.multiVersionList.VerList)-1 {
+				log.LogWarnf("action[fsmVersionOp] mp[%v] seq %v, op %v, seqArray size %v newest ver %v reque ver %v",
+					mp.config.PartitionId, opData.VerSeq, opData.Op, len(mp.multiVersionList.VerList), ver.Ver, opData.VerSeq)
+				break
+			}
+			if ver.Ver == opData.VerSeq {
+				log.LogInfof("action[fsmVersionOp] mp[%v] seq %v, op %v, seqArray size %v", mp.config.PartitionId, opData.VerSeq, opData.Op, len(mp.multiVersionList.VerList))
+				// mp.multiVersionList = append(mp.multiVersionList[:i], mp.multiVersionList[i+1:]...)
+				mp.multiVersionList.VerList = append(mp.multiVersionList.VerList[:i], mp.multiVersionList.VerList[i+1:]...)
+				break
+			}
+		}
+	} else {
+		log.LogErrorf("action[fsmVersionOp] mp %v with seq %v process op type %v seq %v not found",
+			mp.config.PartitionId, mp.verSeq, opData.Op, opData.VerSeq)
+	}
 	return
 }
 
@@ -480,7 +543,7 @@ func (mp *metaPartition) Snapshot() (snap raftproto.Snapshot, err error) {
 	return
 }
 
-// ApplySnapshot applies the given snapshots.
+// ApplySnapshot applies the given multiSnap.multiVersions.
 func (mp *metaPartition) ApplySnapshot(peers []raftproto.Peer, iter raftproto.SnapIterator) (err error) {
 	var (
 		data           []byte
@@ -567,6 +630,7 @@ func (mp *metaPartition) ApplySnapshot(peers []raftproto.Peer, iter raftproto.Sn
 				txRbInodeTree:  mp.txProcessor.txResource.txRbInodeTree.GetTree(),
 				txRbDentryTree: mp.txProcessor.txResource.txRbDentryTree.GetTree(),
 				uniqChecker:    uniqChecker.clone(),
+				multiVerList:   mp.getVerList(),
 			}
 			select {
 			case mp.extReset <- struct{}{}:
@@ -780,6 +844,7 @@ func (mp *metaPartition) HandleLeaderChange(leader uint64) {
 
 // Put puts the given key-value pair (operation key and operation request) into the raft store.
 func (mp *metaPartition) submit(op uint32, data []byte) (resp interface{}, err error) {
+	log.LogDebugf("submit. op %v", op)
 	snap := NewMetaItem(0, nil, nil)
 	snap.Op = op
 	if data != nil {
@@ -792,6 +857,7 @@ func (mp *metaPartition) submit(op uint32, data []byte) (resp interface{}, err e
 
 	// submit to the raft store
 	resp, err = mp.raftPartition.Submit(cmd)
+	log.LogDebugf("submit. op %v done", op)
 	return
 }
 
@@ -801,4 +867,9 @@ func (mp *metaPartition) uploadApplyID(applyId uint64) {
 
 func (mp *metaPartition) getApplyID() (applyId uint64) {
 	return atomic.LoadUint64(&mp.applyID)
+}
+
+func (mp *metaPartition) getCommittedID() (committedId uint64) {
+	status := mp.raftPartition.Status()
+	return status.Commit
 }

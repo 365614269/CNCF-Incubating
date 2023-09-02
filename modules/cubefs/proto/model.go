@@ -15,6 +15,7 @@
 package proto
 
 import (
+	"sync"
 	"time"
 )
 
@@ -35,13 +36,13 @@ type MetaNodeInfo struct {
 	Used                      uint64 `json:"UsedWeight"`
 	Ratio                     float64
 	SelectCount               uint64
-	Carry                     float64
 	Threshold                 float32
 	ReportTime                time.Time
 	MetaPartitionCount        int
 	NodeSetID                 uint64
 	PersistenceMetaPartitions []uint64
 	RdOnly                    bool
+	CpuUtil                   float64 `json:"cpuUtil"`
 }
 
 // DataNode stores all the information about a data node
@@ -58,14 +59,15 @@ type DataNodeInfo struct {
 	IsWriteAble               bool
 	UsageRatio                float64 // used / total space
 	SelectedTimes             uint64  // number times that this datanode has been selected as the location for a data partition.
-	Carry                     float64 // carry is a factor used in cacluate the node's weight
-	DataPartitionReports      []*PartitionReport
+	DataPartitionReports      []*DataPartitionReport
 	DataPartitionCount        uint32
 	NodeSetID                 uint64
 	PersistenceDataPartitions []uint64
 	BadDisks                  []string
 	RdOnly                    bool
-	MaxDpCntLimit             uint32 `json:"maxDpCntLimit"`
+	MaxDpCntLimit             uint32             `json:"maxDpCntLimit"`
+	CpuUtil                   float64            `json:"cpuUtil"`
+	IoUtils                   map[string]float64 `json:"ioUtil"`
 }
 
 // MetaPartition defines the structure of a meta partition
@@ -88,6 +90,7 @@ type MetaPartitionInfo struct {
 	OfflinePeerID uint64
 	MissNodes     map[string]int64
 	LoadResponse  []*MetaPartitionLoadResponse
+	Forbidden     bool
 }
 
 // MetaReplica defines the replica of a meta partition
@@ -154,6 +157,16 @@ type NodeView struct {
 	IsWritable bool
 }
 
+type DpRepairInfo struct {
+	PartitionID                uint64
+	DecommissionRepairProgress float64
+}
+
+type BadPartitionRepairView struct {
+	Path           string
+	PartitionInfos []DpRepairInfo
+}
+
 type BadPartitionView struct {
 	Path         string
 	PartitionIDs []uint64
@@ -176,6 +189,35 @@ type ZoneNodesStat struct {
 	UsedRatio     float64
 	TotalNodes    int
 	WritableNodes int
+}
+
+type NodeSetStat struct {
+	ID          uint64
+	Capacity    int
+	Zone        string
+	MetaNodeNum int
+	DataNodeNum int
+}
+
+type NodeSetStatInfo struct {
+	ID               uint64
+	Capacity         int
+	Zone             string
+	MetaNodes        []*NodeStatView
+	DataNodes        []*NodeStatView
+	DataNodeSelector string
+	MetaNodeSelector string
+}
+
+type NodeStatView struct {
+	Addr       string
+	Status     bool
+	DomainAddr string
+	ID         uint64
+	IsWritable bool
+	Total      uint64
+	Used       uint64
+	Avail      uint64
 }
 
 type NodeStatInfo struct {
@@ -222,10 +264,11 @@ type DataPartitionInfo struct {
 	FileInCoreMap            map[string]*FileInCore
 	IsRecover                bool
 	FilesWithMissingReplica  map[string]int64 // key: file name, value: last time when a missing replica is found
-	SingleDecommissionStatus uint8
+	SingleDecommissionStatus uint32
 	SingleDecommissionAddr   string
 	RdOnly                   bool
 	IsDiscard                bool
+	Forbidden                bool
 }
 
 // FileInCore define file in data partition
@@ -240,21 +283,23 @@ type FileMetadata struct {
 	Crc     uint32
 	LocAddr string
 	Size    uint32
+	ApplyID uint64
 }
 
 // DataReplica represents the replica of a data partition
 type DataReplica struct {
-	Addr            string
-	DomainAddr      string
-	ReportTime      int64
-	FileCount       uint32
-	Status          int8
-	HasLoadResponse bool   // if there is any response when loading
-	Total           uint64 `json:"TotalSize"`
-	Used            uint64 `json:"UsedSize"`
-	IsLeader        bool
-	NeedsToCompare  bool
-	DiskPath        string
+	Addr                       string
+	DomainAddr                 string
+	ReportTime                 int64
+	FileCount                  uint32
+	Status                     int8
+	HasLoadResponse            bool   // if there is any response when loading
+	Total                      uint64 `json:"TotalSize"`
+	Used                       uint64 `json:"UsedSize"`
+	IsLeader                   bool
+	NeedsToCompare             bool
+	DiskPath                   string
+	DecommissionRepairProgress float64
 }
 
 // data partition diagnosis represents the inactive data nodes, corrupt data partitions, and data partitions lack of replicas
@@ -262,11 +307,12 @@ type DataPartitionDiagnosis struct {
 	InactiveDataNodes           []string
 	CorruptDataPartitionIDs     []uint64
 	LackReplicaDataPartitionIDs []uint64
-	BadDataPartitionIDs         []BadPartitionView
-	BadReplicaDataPartitionIDs  []uint64
 	RepFileCountDifferDpIDs     []uint64
 	RepUsedSizeDifferDpIDs      []uint64
 	ExcessReplicaDpIDs          []uint64
+	//BadDataPartitionIDs         []BadPartitionView
+	BadDataPartitionInfos      []BadPartitionRepairView
+	BadReplicaDataPartitionIDs []uint64
 }
 
 // meta partition diagnosis represents the inactive meta nodes, corrupt meta partitions, and meta partitions lack of replicas
@@ -299,4 +345,42 @@ type BadDiskInfos struct {
 
 type DiscardDataPartitionInfos struct {
 	DiscardDps []DataPartitionInfo
+}
+
+type VolVersionInfo struct {
+	Ver     uint64 // unixMicro of createTime used as version
+	DelTime int64
+	Status  uint8 // building,normal,deleted,abnormal
+}
+
+type VolVersionInfoList struct {
+	VerList  []*VolVersionInfo
+	Strategy VolumeVerStrategy
+	sync.RWMutex
+}
+
+type DecommissionDiskLimitDetail struct {
+	NodeSetId uint64
+	Limit     int
+}
+type DecommissionDiskLimit struct {
+	Details []DecommissionDiskLimitDetail
+}
+
+type DecommissionDiskInfo struct {
+	SrcAddr                  string
+	DiskPath                 string
+	DecommissionStatus       uint32
+	DecommissionRaftForce    bool
+	DecommissionRetry        uint8
+	DecommissionDpTotal      int
+	DecommissionTerm         uint64
+	DecommissionLimit        int
+	Type                     uint32
+	DecommissionCompleteTime int64
+	Progress                 float64
+}
+
+type DecommissionDisksResponse struct {
+	Infos []DecommissionDiskInfo
 }

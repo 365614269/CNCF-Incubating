@@ -28,7 +28,7 @@ func TestInodeOnce(t *testing.T) {
 	}
 
 	val := ino.Marshal()
-	ino2 := InodeOnceUnmarshal(val)
+	ino2, _ := InodeOnceUnmarshal(val)
 	if *ino2 != *ino {
 		t.Fatal("inode once unmarshal failed")
 	}
@@ -36,7 +36,6 @@ func TestInodeOnce(t *testing.T) {
 
 func TestAllocateUniqId(t *testing.T) {
 	mp := metaPartition{config: &MetaPartitionConfig{UniqId: 0}}
-
 	s, e := mp.allocateUniqID(1)
 	if s != 1 || e != 1 {
 		t.Errorf("allocateUniqID failed: %v, %v", s, e)
@@ -53,7 +52,6 @@ func TestDoEvit(t *testing.T) {
 	defer mockCtrl.Finish()
 	mp := mockPartitionRaft(mockCtrl)
 	checker := mp.uniqChecker
-
 	mp.uniqCheckerEvict()
 	if checker.inQue.len() != 0 || len(checker.op) != 0 {
 		t.Errorf("failed, inQue %v, op %v", checker.inQue.len(), len(checker.op))
@@ -140,7 +138,10 @@ func TestDoEvit2(t *testing.T) {
 }
 
 func mockPartitionRaft(ctrl *gomock.Controller) *metaPartition {
-	partition := NewMetaPartition(nil, nil).(*metaPartition)
+	conf := &MetaPartitionConfig{
+		VerSeq: 0,
+	}
+	partition := NewMetaPartition(conf, nil).(*metaPartition)
 	partition.uniqChecker.keepTime = 1
 	partition.uniqChecker.keepOps = 0
 	raft := raftstoremock.NewMockPartition(ctrl)
@@ -148,6 +149,10 @@ func mockPartitionRaft(ctrl *gomock.Controller) *metaPartition {
 	raft.EXPECT().Submit(gomock.Any()).DoAndReturn(func(cmd []byte) (resp interface{}, err error) {
 		idx++
 		return partition.Apply(cmd, idx)
+	}).AnyTimes()
+
+	raft.EXPECT().LeaderTerm().DoAndReturn(func() (uint64, uint64) {
+		return 1, 1
 	}).AnyTimes()
 
 	partition.raftPartition = raft

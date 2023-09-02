@@ -20,6 +20,7 @@ import (
 	"math"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cubefs/cubefs/util"
@@ -47,7 +48,7 @@ type DataPartitionRepairTask struct {
 
 func NewDataPartitionRepairTask(extentFiles []*storage.ExtentInfo, tinyDeleteRecordFileSize int64, source, leaderAddr string) (task *DataPartitionRepairTask) {
 	task = &DataPartitionRepairTask{
-		extents:                        make(map[uint64]*storage.ExtentInfo, len(extentFiles)),
+		extents:                        make(map[uint64]*storage.ExtentInfo),
 		ExtentsToBeCreated:             make([]*storage.ExtentInfo, 0),
 		ExtentsToBeRepaired:            make([]*storage.ExtentInfo, 0),
 		LeaderTinyDeleteRecordFileSize: tinyDeleteRecordFileSize,
@@ -65,18 +66,18 @@ func NewDataPartitionRepairTask(extentFiles []*storage.ExtentInfo, tinyDeleteRec
 // The repair process can be described as follows:
 // There are two types of repairs.
 // The first one is called the normal extent repair, and the second one is called the tiny extent repair.
-// 1. normal extent repair:
-// - the leader collects all the extent information from the followers.
-// - for each extent, we compare all the replicas to find the one with the largest size.
-// - periodically check the size of the local extent, and if it is smaller than the largest size,
-//   add it to the tobeRepaired list, and generate the corresponding tasks.
-// 2. tiny extent repair:
-// - when creating the new partition, add all tiny extents to the toBeRepaired list,
-//   and the repair task will create all the tiny extents first.
-// - The leader of the replicas periodically collects the extent information of each follower
-// - for each extent, we compare all the replicas to find the one with the largest size.
-// - periodically check the size of the local extent, and if it is smaller than the largest size,
-//   add it to the tobeRepaired list, and generate the corresponding tasks.
+//  1. normal extent repair:
+//     - the leader collects all the extent information from the followers.
+//     - for each extent, we compare all the replicas to find the one with the largest size.
+//     - periodically check the size of the local extent, and if it is smaller than the largest size,
+//     add it to the tobeRepaired list, and generate the corresponding tasks.
+//  2. tiny extent repair:
+//     - when creating the new partition, add all tiny extents to the toBeRepaired list,
+//     and the repair task will create all the tiny extents first.
+//     - The leader of the replicas periodically collects the extent information of each follower
+//     - for each extent, we compare all the replicas to find the one with the largest size.
+//     - periodically check the size of the local extent, and if it is smaller than the largest size,
+//     add it to the tobeRepaired list, and generate the corresponding tasks.
 func (dp *DataPartition) repair(extentType uint8) {
 	start := time.Now().UnixNano()
 	log.LogInfof("action[repair] partition(%v) start.", dp.partitionID)
@@ -455,6 +456,8 @@ func (dp *DataPartition) NotifyExtentRepair(members []*DataPartitionRepairTask) 
 	return
 }
 
+//const MaxRepairErrCnt = 1000
+
 // DoStreamExtentFixRepair executes the repair on the followers.
 func (dp *DataPartition) doStreamExtentFixRepair(wg *sync.WaitGroup, remoteExtentInfo *storage.ExtentInfo) {
 	defer wg.Done()
@@ -462,6 +465,14 @@ func (dp *DataPartition) doStreamExtentFixRepair(wg *sync.WaitGroup, remoteExten
 	err := dp.streamRepairExtent(remoteExtentInfo)
 
 	if err != nil {
+		//only decommission repair need to check err cnt
+		if dp.isDecommissionRecovering() {
+			atomic.AddUint64(&dp.recoverErrCnt, 1)
+			if atomic.LoadUint64(&dp.recoverErrCnt) >= dp.dataNode.GetDpMaxRepairErrCnt() {
+				dp.handleDecommissionRecoverFailed()
+				return
+			}
+		}
 		err = errors.Trace(err, "doStreamExtentFixRepair %v", dp.applyRepairKey(int(remoteExtentInfo.FileID)))
 		localExtentInfo, opErr := dp.ExtentStore().Watermark(uint64(remoteExtentInfo.FileID))
 		if opErr != nil {
@@ -533,7 +544,10 @@ func (dp *DataPartition) streamRepairExtent(remoteExtentInfo *storage.ExtentInfo
 	)
 	var loopTimes uint64
 	for currFixOffset < remoteExtentInfo.Size {
-
+		if dp.stopRecover && dp.isDecommissionRecovering() {
+			log.LogWarnf("streamRepairExtent %v [extent %v]receive stop signal", dp.partitionID, remoteExtentInfo.FileID)
+			return
+		}
 		if !dp.Disk().CanWrite() {
 			return fmt.Errorf("disk is full, can't do repair write any more")
 		}
@@ -611,8 +625,7 @@ func (dp *DataPartition) streamRepairExtent(remoteExtentInfo *storage.ExtentInfo
 		} else {
 			dp.disk.allocCheckLimit(proto.FlowWriteType, uint32(reply.Size))
 			dp.disk.allocCheckLimit(proto.IopsWriteType, 1)
-
-			err = store.Write(uint64(localExtentInfo.FileID), int64(currFixOffset), int64(reply.Size), reply.Data, reply.CRC, storage.AppendWriteType, BufferWrite)
+			_, err = store.Write(uint64(localExtentInfo.FileID), int64(currFixOffset), int64(reply.Size), reply.Data, reply.CRC, storage.AppendWriteType, BufferWrite)
 		}
 
 		// write to the local extent file

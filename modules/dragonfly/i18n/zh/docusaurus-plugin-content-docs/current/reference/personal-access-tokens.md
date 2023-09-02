@@ -1,12 +1,13 @@
 ---
 id: personal-access-tokens
-title: 个人访问令牌
+title: Personal Access Tokens 
 ---
 
-在本文中，我们将向您展示如何为 Personal Access Token 创建、使用、修改和删除。
 可以使用 Personal Access Token 来调用 Open API。
 
-## 展示 Personal Access Token
+在本文中，我们将向您展示如何为 Personal Access Token 创建、使用、修改和删除。
+
+## 关于 Personal Access Token
 
 只有具有 `root` 角色的用户才能浏览所有 Personal Access Token 列表。
 
@@ -14,21 +15,23 @@ title: 个人访问令牌
 
 ## 创建 Personal Access Token
 
-点击 `ADD PERSONAL ACCESS TOKENS` 按钮创建 Personal Access Token。
+**步骤 1:** 点击 `ADD PERSONAL ACCESS TOKENS` 按钮创建 Personal Access Token。
 
-**Name**: 为您的令牌指定一个描述性名称。
+**步骤 2:** 在 `Name` 字段中，为您的令牌指定一个描述性名称。
 
-**Description**: 添加说明来描述令牌的用途。
+**步骤 3:** 在 `Description` 字段中，添加说明来描述令牌的用途。
 
-**Expiration**: 为令牌提供过期时间。
+**步骤 4:** 要为令牌提供到期时间，请选择 `Expiration`，然后选择默认选项。
 
-**Scopes**: 选择令牌的访问权限。
+**步骤 5:** 在 `Select scopes` 下，选择令牌的访问权限。
 
-![create-token](../resource/personal-access-tokens/create-token.png)
+**步骤 6:** 点击 `SAVE`。
 
-创建完成后，复制令牌并将其存储在安全位置。为了您的安全，它不会再次显示。
+**步骤 7:** 完成后，复制令牌并将其存储在安全位置。为了您的安全，它不会再次显示。
 
 ![copy-token](../resource/personal-access-tokens/copy-token.png)
+
+![create-token](../resource/personal-access-tokens/create-token.png)
 
 ## 更新 Personal Access Token
 

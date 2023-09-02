@@ -21,10 +21,12 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 
 	"github.com/cubefs/cubefs/proto"
 	authSDK "github.com/cubefs/cubefs/sdk/auth"
+	"github.com/cubefs/cubefs/sdk/data/wrapper"
 	masterSDK "github.com/cubefs/cubefs/sdk/master"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/auth"
@@ -89,8 +91,10 @@ type MetaConfig struct {
 	OnAsyncTaskError AsyncTaskErrorFunc
 	EnableSummary    bool
 	MetaSendTimeout  int64
+
 	//EnableTransaction uint8
 	//EnableTransaction bool
+	VerReadSeq uint64
 }
 
 type MetaWrapper struct {
@@ -143,6 +147,7 @@ type MetaWrapper struct {
 	// Allocated to trigger and throttle instant partition updates
 	forceUpdate             chan struct{}
 	forceUpdateLimit        *rate.Limiter
+	singleflight            singleflight.Group
 	EnableSummary           bool
 	metaSendTimeout         int64
 	DirChildrenNumLimit     uint32
@@ -159,6 +164,10 @@ type MetaWrapper struct {
 	uniqidRangeMutex sync.Mutex
 
 	qc *QuotaCache
+
+	VerReadSeq uint64
+	LastVerSeq uint64
+	Client     wrapper.SimpleClientInfo
 }
 
 type uniqidRange struct {
@@ -212,6 +221,8 @@ func NewMetaWrapper(config *MetaConfig) (*MetaWrapper, error) {
 	//mw.EnableTransaction = config.EnableTransaction
 	mw.uniqidRangeMap = make(map[uint64]*uniqidRange, 0)
 	mw.qc = NewQuotaCache(DefaultQuotaExpiration, MaxQuotaCache)
+	mw.VerReadSeq = config.VerReadSeq
+
 	limit := 0
 
 	for limit < MaxMountRetryLimit {

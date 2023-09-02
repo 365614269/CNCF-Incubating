@@ -72,6 +72,8 @@ type (
 	LookupResp = proto.LookupResponse
 	// Client -> MetaNode
 	InodeGetReq = proto.InodeGetRequest
+	// Tool -> MetaNode
+	InodeGetSplitReq = proto.InodeGetSplitRequest
 	// Client -> MetaNode
 	InodeGetReqBatch = proto.BatchInodeGetRequest
 	// Master -> MetaNode
@@ -176,6 +178,13 @@ const (
 	opFSMUniqCheckerEvict    = 65
 	opFSMUnlinkInodeOnce     = 66
 	opFSMCreateLinkInodeOnce = 67
+
+	opFSMVersionOp   = 68
+	opFSMExtentSplit = 69
+	opFSMDelVer      = 70
+
+	opFSMSentToChanV1 = 71
+	opFSMStoreTickV1  = 72
 )
 
 var (

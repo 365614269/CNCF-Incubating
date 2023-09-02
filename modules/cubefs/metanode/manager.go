@@ -32,13 +32,17 @@ import (
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/raftstore"
 	"github.com/cubefs/cubefs/util"
+	"github.com/cubefs/cubefs/util/atomicutil"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/exporter"
+	"github.com/cubefs/cubefs/util/loadutil"
 	"github.com/cubefs/cubefs/util/log"
 )
 
 const partitionPrefix = "partition_"
 const ExpiredPartitionPrefix = "expired_"
+
+const sampleDuration = 1 * time.Second
 
 // MetadataManager manages all the meta partitions.
 type MetadataManager interface {
@@ -48,6 +52,7 @@ type MetadataManager interface {
 	HandleMetadataOperation(conn net.Conn, p *Packet, remoteAddr string) error
 	GetPartition(id uint64) (MetaPartition, error)
 	GetLeaderPartitions() map[uint64]MetaPartition
+	checkVolVerList() (err error)
 }
 
 // MetadataManagerConfig defines the configures in the metadata manager.
@@ -56,6 +61,14 @@ type MetadataManagerConfig struct {
 	RootDir   string
 	ZoneName  string
 	RaftStore raftstore.RaftStore
+}
+
+type verOp2Phase struct {
+	verSeq     uint64
+	verPrepare uint64
+	status     uint32
+	step       uint32
+	sync.Mutex
 }
 
 type metadataManager struct {
@@ -72,6 +85,9 @@ type metadataManager struct {
 	fileStatsEnable      bool
 	curQuotaGoroutineNum int32
 	maxQuotaGoroutineNum int32
+	cpuUtil              atomicutil.Float64
+	samplerDone          chan struct{}
+	volUpdating          *sync.Map //map[string]*verOp2Phase
 }
 
 func (m *metadataManager) getPacketLabels(p *Packet) (labels map[string]string) {
@@ -264,6 +280,11 @@ func (m *metadataManager) HandleMetadataOperation(conn net.Conn, p *Packet, remo
 		err = m.opQuotaCreateDentry(conn, p, remoteAddr)
 	case proto.OpMetaGetUniqID:
 		err = m.opMetaGetUniqID(conn, p, remoteAddr)
+	// multi version
+	case proto.OpVersionOperation:
+		err = m.opMultiVersionOp(conn, p, remoteAddr)
+	case proto.OpGetExpiredMultipart:
+		err = m.opGetExpiredMultipart(conn, p, remoteAddr)
 	default:
 		err = fmt.Errorf("%s unknown Opcode: %d, reqId: %d", remoteAddr,
 			p.Opcode, p.GetReqID())
@@ -300,10 +321,31 @@ func (m *metadataManager) Stop() {
 	}
 }
 
+func (m *metadataManager) startCpuSample() {
+	// async sample cpu util
+	m.samplerDone = make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-m.samplerDone:
+				return
+			default:
+				used := loadutil.GetCpuUtilPercent(sampleDuration)
+				m.cpuUtil.Store(used)
+			}
+		}
+	}()
+}
+
 // onStart creates the connection pool and loads the partitions.
 func (m *metadataManager) onStart() (err error) {
 	m.connPool = util.NewConnectPool()
 	err = m.loadPartitions()
+	if err != nil {
+		return
+	}
+	// start sampler
+	m.startCpuSample()
 	return
 }
 
@@ -313,6 +355,8 @@ func (m *metadataManager) onStop() {
 		for _, partition := range m.partitions {
 			partition.Stop()
 		}
+		// stop sampler
+		close(m.samplerDone)
 	}
 	return
 }
@@ -490,6 +534,7 @@ func (m *metadataManager) createPartition(request *proto.CreateMetaPartitionRequ
 		NodeId:      m.nodeId,
 		RootDir:     path.Join(m.rootDir, partitionPrefix+partitionId),
 		ConnPool:    m.connPool,
+		VerSeq:      request.VerSeq,
 	}
 	mpc.AfterStop = func() {
 		m.detachPartition(request.PartitionID)
@@ -600,6 +645,7 @@ func NewMetadataManager(conf MetadataManagerConfig, metaNode *MetaNode) Metadata
 		partitions:           make(map[uint64]MetaPartition),
 		metaNode:             metaNode,
 		maxQuotaGoroutineNum: defaultMaxQuotaGoroutine,
+		volUpdating:          new(sync.Map),
 	}
 }
 

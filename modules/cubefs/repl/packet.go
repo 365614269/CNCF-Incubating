@@ -15,10 +15,12 @@
 package repl
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/cubefs/cubefs/util/log"
 	"io"
 	"net"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -77,6 +79,7 @@ func (p *FollowerPacket) identificationErrorResultCode(errLog string, errMsg str
 	if strings.Contains(errLog, ActionReceiveFromFollower) || strings.Contains(errLog, ActionSendToFollowers) ||
 		strings.Contains(errLog, ConnIsNullErr) {
 		p.ResultCode = proto.OpIntraGroupNetErr
+		log.LogErrorf("action[identificationErrorResultCode] error %v, errmsg %v", errLog, errMsg)
 	} else if strings.Contains(errMsg, storage.ParameterMismatchError.Error()) ||
 		strings.Contains(errMsg, ErrorUnknownOp.Error()) {
 		p.ResultCode = proto.OpArgMismatchErr
@@ -94,6 +97,7 @@ func (p *FollowerPacket) identificationErrorResultCode(errLog string, errMsg str
 	} else if strings.Contains(errMsg, raft.ErrStopped.Error()) {
 		p.ResultCode = proto.OpTryOtherAddr
 	} else {
+		log.LogErrorf("action[identificationErrorResultCode] error %v, errmsg %v", errLog, errMsg)
 		p.ResultCode = proto.OpIntraGroupNetErr
 	}
 }
@@ -292,9 +296,11 @@ var (
 )
 
 func (p *Packet) identificationErrorResultCode(errLog string, errMsg string) {
+	log.LogErrorf("action[identificationErrorResultCode] error %v, errmsg %v", errLog, errMsg)
 	if strings.Contains(errLog, ActionReceiveFromFollower) || strings.Contains(errLog, ActionSendToFollowers) ||
 		strings.Contains(errLog, ConnIsNullErr) {
 		p.ResultCode = proto.OpIntraGroupNetErr
+		log.LogErrorf("action[identificationErrorResultCode] error %v, errmsg %v", errLog, errMsg)
 	} else if strings.Contains(errMsg, storage.ParameterMismatchError.Error()) ||
 		strings.Contains(errMsg, ErrorUnknownOp.Error()) {
 		p.ResultCode = proto.OpArgMismatchErr
@@ -311,7 +317,11 @@ func (p *Packet) identificationErrorResultCode(errLog string, errMsg string) {
 		p.ResultCode = proto.OpTryOtherAddr
 	} else if strings.Contains(errMsg, raft.ErrStopped.Error()) {
 		p.ResultCode = proto.OpTryOtherAddr
+	} else if strings.Contains(errMsg, storage.VerNotConsistentError.Error()) {
+		p.ResultCode = proto.ErrCodeVersionOpError
+		log.LogErrorf("action[identificationErrorResultCode] not change ver erro code, (%v)", string(debug.Stack()))
 	} else {
+		log.LogErrorf("action[identificationErrorResultCode] error %v, errmsg %v", errLog, errMsg)
 		p.ResultCode = proto.OpIntraGroupNetErr
 	}
 }
@@ -350,6 +360,14 @@ func (p *Packet) ReadFromConnFromCli(c net.Conn, deadlineTime time.Duration) (er
 	if err = p.UnmarshalHeader(header); err != nil {
 		return
 	}
+	if p.Opcode == proto.OpRandomWriteVer {
+		log.LogInfof("action[ReadFromConnFromCli] option OpRandomWriteVer [%v]", p.Opcode)
+		ver := make([]byte, 8)
+		if _, err = io.ReadFull(c, ver); err != nil {
+			return
+		}
+		p.VerSeq = binary.BigEndian.Uint64(ver)
+	}
 
 	if p.ArgLen > 0 {
 		if err = proto.ReadFull(c, &p.Arg, int(p.ArgLen)); err != nil {
@@ -371,6 +389,7 @@ func (p *Packet) IsMasterCommand() bool {
 	switch p.Opcode {
 	case
 		proto.OpDataNodeHeartbeat,
+		proto.OpVersionOperation,
 		proto.OpLoadDataPartition,
 		proto.OpCreateDataPartition,
 		proto.OpDeleteDataPartition,
@@ -384,18 +403,18 @@ func (p *Packet) IsMasterCommand() bool {
 }
 
 func (p *Packet) IsForwardPacket() bool {
-	r := p.RemainingFollowers > 0 && !p.isSpecialReplicaCnttePacket()
+	r := p.RemainingFollowers > 0 && !p.isSpecialReplicaCntPacket()
 	return r
 }
 
-func (p *Packet) isSpecialReplicaCnttePacket() bool {
+func (p *Packet) isSpecialReplicaCntPacket() bool {
 	r := p.RemainingFollowers == 127
 	return r
 }
 
 // A leader packet is the packet send to the leader and does not require packet forwarding.
 func (p *Packet) IsLeaderPacket() (ok bool) {
-	if (p.IsForwardPkt() || p.isSpecialReplicaCnttePacket()) &&
+	if (p.IsForwardPkt() || p.isSpecialReplicaCntPacket()) &&
 		(p.IsWriteOperation() || p.IsCreateExtentOperation() || p.IsMarkDeleteExtentOperation()) {
 		ok = true
 	}
@@ -411,12 +430,20 @@ func (p *Packet) IsWriteOperation() bool {
 	return p.Opcode == proto.OpWrite || p.Opcode == proto.OpSyncWrite
 }
 
+func (p *Packet) IsSnapshotModWriteAppendOperation() bool {
+	return p.Opcode == proto.OpRandomWriteAppend || p.Opcode == proto.OpSyncRandomWriteAppend
+}
+
 func (p *Packet) IsCreateExtentOperation() bool {
 	return p.Opcode == proto.OpCreateExtent
 }
 
 func (p *Packet) IsMarkDeleteExtentOperation() bool {
-	return p.Opcode == proto.OpMarkDelete
+	return p.Opcode == proto.OpMarkDelete || p.Opcode == proto.OpSplitMarkDelete
+}
+
+func (p *Packet) IsMarkSplitExtentOperation() bool {
+	return p.Opcode == proto.OpSplitMarkDelete
 }
 
 func (p *Packet) IsBatchDeleteExtents() bool {
@@ -434,7 +461,8 @@ func (p *Packet) IsReadOperation() bool {
 }
 
 func (p *Packet) IsRandomWrite() bool {
-	return p.Opcode == proto.OpRandomWrite || p.Opcode == proto.OpSyncRandomWrite
+	return p.Opcode == proto.OpRandomWrite || p.Opcode == proto.OpSyncRandomWrite ||
+		p.Opcode == proto.OpRandomWriteVer || p.Opcode == proto.OpSyncRandomWriteVer
 }
 
 func (p *Packet) IsSyncWrite() bool {

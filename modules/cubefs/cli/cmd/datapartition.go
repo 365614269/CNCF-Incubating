@@ -83,6 +83,7 @@ func newDataPartitionGetCmd(client *master.MasterClient) *cobra.Command {
 
 func newListCorruptDataPartitionCmd(client *master.MasterClient) *cobra.Command {
 	var ignoreDiscardDp bool
+	var diff bool
 
 	var cmd = &cobra.Command{
 		Use:   CliOpCheck,
@@ -156,14 +157,15 @@ The "reset" command will be released in next version`,
 
 			stdout("\n")
 			stdout("%v\n", "[Bad data partitions(decommission not completed)]:")
-			badPartitionTablePattern := "%-8v    %-10v\n"
-			stdout(badPartitionTablePattern, "PATH", "PARTITION ID")
-			for _, bdpv := range diagnosis.BadDataPartitionIDs {
-				sort.SliceStable(bdpv.PartitionIDs, func(i, j int) bool {
-					return bdpv.PartitionIDs[i] < bdpv.PartitionIDs[j]
+			badPartitionTablePattern := "%-8v    %-10v    %-10v\n"
+			stdout(badPartitionTablePattern, "PATH", "PARTITION ID", "REPAIR PROGRESS")
+			for _, bdpv := range diagnosis.BadDataPartitionInfos {
+				sort.SliceStable(bdpv.PartitionInfos, func(i, j int) bool {
+					return bdpv.PartitionInfos[i].PartitionID < bdpv.PartitionInfos[j].PartitionID
 				})
-				for _, pid := range bdpv.PartitionIDs {
-					stdout(badPartitionTablePattern, bdpv.Path, pid)
+				for _, pinfo := range bdpv.PartitionInfos {
+					percent := strconv.FormatFloat(pinfo.DecommissionRepairProgress*100, 'f', 2, 64) + "%"
+					stdout(badPartitionTablePattern, bdpv.Path, pinfo.PartitionID, percent)
 				}
 			}
 
@@ -185,38 +187,48 @@ The "reset" command will be released in next version`,
 				}
 			}
 
-			stdout("\n")
-			stdout("%v\n", "[Partition with replica file count differ significantly]:")
-			stdout("%v\n", RepFileCountDifferInfoTableHeader)
-			sort.SliceStable(diagnosis.RepFileCountDifferDpIDs, func(i, j int) bool {
-				return diagnosis.RepFileCountDifferDpIDs[i] < diagnosis.RepFileCountDifferDpIDs[j]
-			})
-			for _, dpId := range diagnosis.RepFileCountDifferDpIDs {
-				var partition *proto.DataPartitionInfo
-				if partition, err = client.AdminAPI().GetDataPartition("", dpId); err != nil {
-					err = fmt.Errorf("Partition not found, err:[%v] ", err)
-					return
+			if diff {
+				stdout("\n")
+				stdout("%v\n", "[Partition with replica file count differ significantly]:")
+				stdout("%v\n", RepFileCountDifferInfoTableHeader)
+				sort.SliceStable(diagnosis.RepFileCountDifferDpIDs, func(i, j int) bool {
+					return diagnosis.RepFileCountDifferDpIDs[i] < diagnosis.RepFileCountDifferDpIDs[j]
+				})
+				for _, dpId := range diagnosis.RepFileCountDifferDpIDs {
+					var partition *proto.DataPartitionInfo
+					if partition, err = client.AdminAPI().GetDataPartition("", dpId); err != nil {
+						err = fmt.Errorf("Partition not found, err:[%v] ", err)
+						return
+					}
+					if partition != nil {
+						stdout("%v\n", formatReplicaFileCountDiffDpInfoRow(partition))
+					}
 				}
-				if partition != nil {
-					stdout("%v\n", formatReplicaFileCountDiffDpInfoRow(partition))
-				}
-			}
 
-			stdout("\n")
-			stdout("%v\n", "[Partition with replica used size differ significantly]:")
-			stdout("%v\n", RepUsedSizeDifferInfoTableHeader)
-			sort.SliceStable(diagnosis.RepUsedSizeDifferDpIDs, func(i, j int) bool {
-				return diagnosis.RepUsedSizeDifferDpIDs[i] < diagnosis.RepUsedSizeDifferDpIDs[j]
-			})
-			for _, dpId := range diagnosis.RepUsedSizeDifferDpIDs {
-				var partition *proto.DataPartitionInfo
-				if partition, err = client.AdminAPI().GetDataPartition("", dpId); err != nil {
-					err = fmt.Errorf("Partition not found, err:[%v] ", err)
-					return
+				stdout("\n")
+				stdout("%v\n", "[Partition with replica used size differ significantly]:")
+				stdout("%v\n", RepUsedSizeDifferInfoTableHeader)
+				sort.SliceStable(diagnosis.RepUsedSizeDifferDpIDs, func(i, j int) bool {
+					return diagnosis.RepUsedSizeDifferDpIDs[i] < diagnosis.RepUsedSizeDifferDpIDs[j]
+				})
+				for _, dpId := range diagnosis.RepUsedSizeDifferDpIDs {
+					var partition *proto.DataPartitionInfo
+					if partition, err = client.AdminAPI().GetDataPartition("", dpId); err != nil {
+						err = fmt.Errorf("Partition not found, err:[%v] ", err)
+						return
+					}
+					if partition != nil {
+						stdout("%v\n", formatReplicaSizeDiffDpInfoRow(partition))
+					}
 				}
-				if partition != nil {
-					stdout("%v\n", formatReplicaSizeDiffDpInfoRow(partition))
-				}
+			} else {
+				stdout("\n")
+				stdout("%v %v\n", "[Number of Partition with replica file count differ significantly]:",
+					len(diagnosis.RepUsedSizeDifferDpIDs))
+
+				stdout("\n")
+				stdout("%v %v\n", "[Number of Partition with replica used size differ significantly]:",
+					len(diagnosis.RepUsedSizeDifferDpIDs))
 			}
 
 			stdout("\n")
@@ -240,7 +252,8 @@ The "reset" command will be released in next version`,
 		},
 	}
 
-	cmd.Flags().BoolVarP(&ignoreDiscardDp, "ignoreDiscard", "r", false, "true for not display discard dp")
+	cmd.Flags().BoolVarP(&ignoreDiscardDp, "ignoreDiscard", "i", false, "true for not display discard dp")
+	cmd.Flags().BoolVarP(&diff, "diff", "d", false, "true for display dp those replica file count count or size differ significantly")
 	return cmd
 }
 

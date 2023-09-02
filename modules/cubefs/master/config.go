@@ -25,7 +25,7 @@ import (
 	"github.com/cubefs/cubefs/raftstore"
 )
 
-//config key
+// config key
 const (
 	colonSplit = ":"
 	commaSplit = ","
@@ -47,9 +47,11 @@ const (
 	cfgmetaPartitionInodeIdStep         = "metaPartitionInodeIdStep"
 	cfgMaxQuotaNumPerVol                = "maxQuotaNumPerVol"
 	disableAutoCreate                   = "disableAutoCreate"
+	cfgMonitorPushAddr                  = "monitorPushAddr"
+	intervalToScanS3Expiration          = "intervalToScanS3Expiration"
 )
 
-//default value
+// default value
 const (
 	defaultTobeFreedDataPartitionCount         = 1000
 	defaultSecondsToFreeDataPartitionAfterLoad = 5 * 60 // a data partition can only be freed after loading 5 mins
@@ -83,6 +85,11 @@ const (
 	defaultNodeSetGrpStep                              = 1
 	defaultMasterMinQosAccept                          = 20000
 	defaultMaxDpCntLimit                               = 3000
+	defaultIntervalToScanS3Expiration                  = 12 * 3600
+	defaultMaxConcurrentLcNodes                        = 3
+	defaultIntervalToCheckDelVerTaskExpiration         = 3
+	metaPartitionInodeUsageThreshold           float64 = 0.75 // inode usage threshold on a meta partition
+	lowerLimitRWMetaPartition                          = 2    // lower limit of RW meta partition
 )
 
 // AddrDatabase is a map that stores the address of a given host (e.g., the leader)
@@ -110,6 +117,8 @@ type clusterConfig struct {
 	MetaNodeDeleteWorkerSleepMs         uint64 //metaNode delete worker sleep time with millisecond. if 0 for no sleep
 	MaxDpCntLimit                       uint64 //datanode data partition limit
 	DataNodeAutoRepairLimitRate         uint64 //datanode autorepair limit rate
+	DpMaxRepairErrCnt                   uint64
+	DpRepairTimeOut                     uint64
 	peers                               []raftstore.PeerAddress
 	peerAddrs                           []string
 	heartbeatPort                       int64
@@ -125,6 +134,9 @@ type clusterConfig struct {
 	MetaPartitionInodeIdStep            uint64
 	MaxQuotaNumPerVol                   int
 	DisableAutoCreate                   bool
+	MonitorPushAddr                     string
+	IntervalToScanS3Expiration          int64
+	MaxConcurrentLcNodes                uint64
 }
 
 func newClusterConfig() (cfg *clusterConfig) {
@@ -151,6 +163,8 @@ func newClusterConfig() (cfg *clusterConfig) {
 	cfg.DirChildrenNumLimit = pt.DefaultDirChildrenNumLimit
 	cfg.MetaPartitionInodeIdStep = defaultMetaPartitionInodeIDStep
 	cfg.MaxQuotaNumPerVol = defaultMaxQuotaNumPerVol
+	cfg.IntervalToScanS3Expiration = defaultIntervalToScanS3Expiration
+	cfg.MaxConcurrentLcNodes = defaultMaxConcurrentLcNodes
 	return
 }
 

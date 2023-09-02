@@ -95,6 +95,10 @@ const (
 	CliFlagLoadFactor          = "loadFactor"
 	CliFlagMarkDelRate         = "markDeleteRate"
 	CliFlagMaxDpCntLimit       = "maxDpCntLimit"
+	CliFlagDataNodeSelector    = "dataNodeSelector"
+	CliFlagMetaNodeSelector    = "metaNodeSelector"
+	CliFlagDataNodesetSelector = "dataNodesetSelector"
+	CliFlagMetaNodesetSelector = "metaNodesetSelector"
 	CliFlagCrossZone           = "crossZone"
 	CliNormalZonesFirst        = "normalZonesFirst"
 	CliFlagCount               = "count"
@@ -123,6 +127,11 @@ const (
 
 	//Usages
 	CliUsageClientIDKey = "needed if cluster authentication is on"
+	//version op
+	CliFlagVersionCreate      = "verCreate"
+	CliFlagVersionList        = "verList"
+	CliFlagVersionDel         = "verDel"
+	CliFlagVersionSetStrategy = "verSetStrategy"
 )
 
 type MasterOp int

@@ -214,7 +214,7 @@ func (d *TxRollbackDentry) Copy() btree.Item {
 }
 
 func (d *TxRollbackDentry) Marshal() (result []byte, err error) {
-	buff := bytes.NewBuffer(make([]byte, 0, 256))
+	buff := bytes.NewBuffer(make([]byte, 0, 512))
 	bs, err := d.dentry.Marshal()
 	if err != nil {
 		return nil, err
@@ -226,6 +226,9 @@ func (d *TxRollbackDentry) Marshal() (result []byte, err error) {
 		return nil, err
 	}
 
+	log.LogDebugf("TxRollbackDentry Marshal dentry %v", d.dentry)
+
+	log.LogDebugf("TxRollbackDentry Marshal txDentryInfo %v", d.ToString())
 	bs, err = d.txDentryInfo.Marshal()
 	if err != nil {
 		return nil, err
@@ -248,6 +251,7 @@ func (d *TxRollbackDentry) Unmarshal(raw []byte) (err error) {
 	if err = binary.Read(buff, binary.BigEndian, &dataLen); err != nil {
 		return
 	}
+	log.LogDebugf("TxRollbackDentry Unmarshal len %v", dataLen)
 	data := make([]byte, int(dataLen))
 	if _, err = buff.Read(data); err != nil {
 		return
@@ -257,6 +261,9 @@ func (d *TxRollbackDentry) Unmarshal(raw []byte) (err error) {
 	if err = dentry.Unmarshal(data); err != nil {
 		return
 	}
+
+	log.LogDebugf("TxRollbackDentry Unmarshal dentry %v", dentry)
+
 	d.dentry = dentry
 
 	if err = binary.Read(buff, binary.BigEndian, &dataLen); err != nil {
@@ -1375,11 +1382,15 @@ func (tr *TransactionResource) rollbackInodeInternal(rbInode *TxRollbackInode) (
 			}
 			mp.inodeTree.ReplaceOrInsert(rbInode.inode, true)
 		} else {
-			ino.IncNLink()
+			ino.IncNLink(mp.verSeq)
 		}
 
 	case TxDelete:
-		if rsp := tr.txProcessor.mp.getInode(rbInode.inode); rsp.Status == proto.OpOk {
+		if rsp := tr.txProcessor.mp.getInode(rbInode.inode, false); rsp.Status == proto.OpOk {
+			if tr.txProcessor.mp.uidManager != nil {
+				tr.txProcessor.mp.uidManager.doMinusUidSpace(rbInode.inode.Uid, rbInode.inode.Inode, rbInode.inode.Size)
+			}
+
 			if tr.txProcessor.mp.mqMgr != nil && len(rbInode.quotaIds) > 0 {
 				for _, quotaId := range rbInode.quotaIds {
 					tr.txProcessor.mp.mqMgr.updateUsedInfo(-1*int64(rbInode.inode.Size), -1, quotaId)

@@ -41,6 +41,12 @@ const (
 	cacheRuleKey          = "cacheRuleKey"
 	emptyCacheRuleKey     = "emptyCacheRule"
 
+	dataNodesetSelectorKey = "dataNodesetSelector"
+	metaNodesetSelectorKey = "metaNodesetSelector"
+	dataNodeSelectorKey    = "dataNodeSelector"
+	metaNodeSelectorKey    = "metaNodeSelector"
+	forbiddenKey           = "forbidden"
+
 	forceDelVolKey             = "forceDelVol"
 	ebsBlkSizeKey              = "ebsBlkSize"
 	cacheCapacity              = "cacheCap"
@@ -69,6 +75,8 @@ const (
 	nodeMarkDeleteRateKey      = "markDeleteRate"
 	nodeDeleteWorkerSleepMs    = "deleteWorkerSleepMs"
 	nodeAutoRepairRateKey      = "autoRepairRate"
+	nodeDpRepairTimeOutKey     = "dpRepairTimeOut"
+	nodeDpMaxRepairErrCntKey   = "dpMaxRepairErrCnt"
 	clusterLoadFactorKey       = "loadFactor"
 	maxDpCntLimitKey           = "maxDpCntLimit"
 	clusterCreateTimeKey       = "clusterCreateTime"
@@ -119,6 +127,17 @@ const (
 	dpDiscardKey               = "dpDiscard"
 	ignoreDiscardKey           = "ignoreDiscard"
 	ClientIDKey                = "clientIDKey"
+	verSeqKey                  = "verSeq"
+	Periodic                   = "periodic"
+	DecommissionType           = "decommissionType"
+	decommissionDiskFactor     = "decommissionDiskFactor"
+)
+
+const (
+	MetricRoleMaster     = "master"
+	MetricRoleMetaNode   = "metaNode"
+	MetricRoleDataNode   = "dataNode"
+	MetricRoleObjectNode = "objectNode"
 )
 
 const (
@@ -249,55 +268,81 @@ const (
 	DecommissionDiskAcronym = "dd"
 	DecommissionDiskPrefix  = keySeparator + DecommissionDiskAcronym + keySeparator
 
-	opSyncAcl uint32 = 0x36
-	opSyncUid uint32 = 0x37
+	opSyncAddLcNode    uint32 = 0x30
+	opSyncDeleteLcNode uint32 = 0x31
+	opSyncUpdateLcNode uint32 = 0x32
+	opSyncAddLcConf    uint32 = 0x33
+	opSyncDeleteLcConf uint32 = 0x34
+	opSyncUpdateLcConf uint32 = 0x35
+	opSyncAcl          uint32 = 0x36
+	opSyncUid          uint32 = 0x37
 
 	opSyncAllocQuotaID uint32 = 0x40
 	opSyncSetQuota     uint32 = 0x41
 	opSyncDeleteQuota  uint32 = 0x42
+	opSyncMulitVersion uint32 = 0x53
+
+	opSyncS3QosSet    uint32 = 0x60
+	opSyncS3QosDelete uint32 = 0x61
 )
 
 const (
-	keySeparator          = "#"
-	idSeparator           = "$" // To seperate ID of server that submits raft changes
-	metaNodeAcronym       = "mn"
-	dataNodeAcronym       = "dn"
-	dataPartitionAcronym  = "dp"
-	metaPartitionAcronym  = "mp"
-	volAcronym            = "vol"
-	clusterAcronym        = "c"
-	nodeSetAcronym        = "s"
-	nodeSetGrpAcronym     = "g"
-	zoneAcronym           = "zone"
-	domainAcronym         = "zoneDomain"
-	apiLimiterAcronym     = "al"
-	maxDataPartitionIDKey = keySeparator + "max_dp_id"
-	maxMetaPartitionIDKey = keySeparator + "max_mp_id"
-	maxCommonIDKey        = keySeparator + "max_common_id"
-	maxClientIDKey        = keySeparator + "client_id"
-	maxQuotaIDKey         = keySeparator + "quota_id"
-	metaNodePrefix        = keySeparator + metaNodeAcronym + keySeparator
-	dataNodePrefix        = keySeparator + dataNodeAcronym + keySeparator
-	dataPartitionPrefix   = keySeparator + dataPartitionAcronym + keySeparator
-	volPrefix             = keySeparator + volAcronym + keySeparator
-	metaPartitionPrefix   = keySeparator + metaPartitionAcronym + keySeparator
-	clusterPrefix         = keySeparator + clusterAcronym + keySeparator
-	nodeSetPrefix         = keySeparator + nodeSetAcronym + keySeparator
-	nodeSetGrpPrefix      = keySeparator + nodeSetGrpAcronym + keySeparator
-	DomainPrefix          = keySeparator + domainAcronym + keySeparator
-	zonePrefix            = keySeparator + zoneAcronym + keySeparator
-	apiLimiterPrefix      = keySeparator + apiLimiterAcronym + keySeparator
-	MultiVerPrefix        = keySeparator + "multiVer" + keySeparator
-	AclPrefix             = keySeparator + "acl" + keySeparator
-	UidPrefix             = keySeparator + "uid" + keySeparator
-	akAcronym             = "ak"
-	userAcronym           = "user"
-	volUserAcronym        = "voluser"
-	volNameAcronym        = "volname"
-	akPrefix              = keySeparator + akAcronym + keySeparator
-	userPrefix            = keySeparator + userAcronym + keySeparator
-	volUserPrefix         = keySeparator + volUserAcronym + keySeparator
-	volWarnUsedRatio      = 0.9
-	volCachePrefix        = keySeparator + volNameAcronym + keySeparator
-	quotaPrefix           = keySeparator + "quota" + keySeparator
+	keySeparator           = "#"
+	idSeparator            = "$" // To seperate ID of server that submits raft changes
+	metaNodeAcronym        = "mn"
+	dataNodeAcronym        = "dn"
+	lcNodeAcronym          = "ln"
+	dataPartitionAcronym   = "dp"
+	metaPartitionAcronym   = "mp"
+	volAcronym             = "vol"
+	clusterAcronym         = "c"
+	nodeSetAcronym         = "s"
+	nodeSetGrpAcronym      = "g"
+	zoneAcronym            = "zone"
+	domainAcronym          = "zoneDomain"
+	apiLimiterAcronym      = "al"
+	lcConfigurationAcronym = "lc"
+	S3QoS                  = "s3qos"
+	maxDataPartitionIDKey  = keySeparator + "max_dp_id"
+	maxMetaPartitionIDKey  = keySeparator + "max_mp_id"
+	maxCommonIDKey         = keySeparator + "max_common_id"
+	maxClientIDKey         = keySeparator + "client_id"
+	maxQuotaIDKey          = keySeparator + "quota_id"
+	metaNodePrefix         = keySeparator + metaNodeAcronym + keySeparator
+	dataNodePrefix         = keySeparator + dataNodeAcronym + keySeparator
+	dataPartitionPrefix    = keySeparator + dataPartitionAcronym + keySeparator
+	volPrefix              = keySeparator + volAcronym + keySeparator
+	metaPartitionPrefix    = keySeparator + metaPartitionAcronym + keySeparator
+	clusterPrefix          = keySeparator + clusterAcronym + keySeparator
+	nodeSetPrefix          = keySeparator + nodeSetAcronym + keySeparator
+	nodeSetGrpPrefix       = keySeparator + nodeSetGrpAcronym + keySeparator
+	DomainPrefix           = keySeparator + domainAcronym + keySeparator
+	zonePrefix             = keySeparator + zoneAcronym + keySeparator
+
+	apiLimiterPrefix = keySeparator + apiLimiterAcronym + keySeparator
+	MultiVerPrefix   = keySeparator + "multiVer" + keySeparator
+	AclPrefix        = keySeparator + "acl" + keySeparator
+	UidPrefix        = keySeparator + "uid" + keySeparator
+
+	akAcronym        = "ak"
+	userAcronym      = "user"
+	volUserAcronym   = "voluser"
+	volNameAcronym   = "volname"
+	akPrefix         = keySeparator + akAcronym + keySeparator
+	userPrefix       = keySeparator + userAcronym + keySeparator
+	volUserPrefix    = keySeparator + volUserAcronym + keySeparator
+	volWarnUsedRatio = 0.9
+	volCachePrefix   = keySeparator + volNameAcronym + keySeparator
+	quotaPrefix      = keySeparator + "quota" + keySeparator
+	lcNodePrefix     = keySeparator + lcNodeAcronym + keySeparator
+	lcConfPrefix     = keySeparator + lcConfigurationAcronym + keySeparator
+	S3QoSPrefix      = keySeparator + S3QoS + keySeparator
+)
+
+// selector enum
+type NodeType int
+
+const (
+	DataNodeType = NodeType(0)
+	MetaNodeType = NodeType(iota)
 )

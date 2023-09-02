@@ -42,6 +42,7 @@ import (
 	"github.com/cubefs/cubefs/authnode"
 	"github.com/cubefs/cubefs/cmd/common"
 	"github.com/cubefs/cubefs/datanode"
+	"github.com/cubefs/cubefs/lcnode"
 	"github.com/cubefs/cubefs/master"
 	"github.com/cubefs/cubefs/metanode"
 	"github.com/cubefs/cubefs/util/config"
@@ -60,21 +61,23 @@ const (
 )
 
 const (
-	RoleMaster  = "master"
-	RoleMeta    = "metanode"
-	RoleData    = "datanode"
-	RoleAuth    = "authnode"
-	RoleObject  = "objectnode"
-	RoleConsole = "console"
+	RoleMaster    = "master"
+	RoleMeta      = "metanode"
+	RoleData      = "datanode"
+	RoleAuth      = "authnode"
+	RoleObject    = "objectnode"
+	RoleConsole   = "console"
+	RoleLifeCycle = "lcnode"
 )
 
 const (
-	ModuleMaster  = "master"
-	ModuleMeta    = "metaNode"
-	ModuleData    = "dataNode"
-	ModuleAuth    = "authNode"
-	ModuleObject  = "objectNode"
-	ModuleConsole = "console"
+	ModuleMaster    = "master"
+	ModuleMeta      = "metaNode"
+	ModuleData      = "dataNode"
+	ModuleAuth      = "authNode"
+	ModuleObject    = "objectNode"
+	ModuleConsole   = "console"
+	ModuleLifeCycle = "lcnode"
 )
 
 const (
@@ -191,6 +194,9 @@ func main() {
 	case RoleConsole:
 		server = console.NewServer()
 		module = ModuleConsole
+	case RoleLifeCycle:
+		server = lcnode.NewServer()
+		module = ModuleLifeCycle
 	default:
 		err = errors.NewErrorf("Fatal: role mismatch: %s", role)
 		fmt.Println(err)
@@ -248,6 +254,12 @@ func main() {
 			daemonize.SignalOutcome(err)
 			os.Exit(1)
 		}
+		if err = sysutil.RedirectFD(int(outputFile.Fd()), int(os.Stderr.Fd())); err != nil {
+			err = errors.NewErrorf("Fatal: failed to redirect fd - %v", err)
+			syslog.Println(err)
+			daemonize.SignalOutcome(err)
+			os.Exit(1)
+		}
 	}
 
 	if buffersTotalLimit < 0 {
@@ -256,9 +268,7 @@ func main() {
 	}
 
 	proto.InitBufferPool(buffersTotalLimit)
-
 	syslog.Printf("Hello, CubeFS Storage\n%s\n", Version)
-
 	err = modifyOpenFiles()
 	if err != nil {
 		err = errors.NewErrorf("Fatal: failed to modify open files - %v", err)
@@ -302,7 +312,7 @@ func main() {
 	}
 
 	syslog.Printf("server start success, pid %d, role %s", os.Getpid(), role)
-
+	log.LogDisableStderrOutput()
 	err = log.OutputPid(logDir, role)
 	if err != nil {
 		log.LogFlush()

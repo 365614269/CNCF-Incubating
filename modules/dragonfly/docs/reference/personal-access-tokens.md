@@ -3,32 +3,35 @@ id: personal-access-tokens
 title: Personal Access Tokens
 ---
 
-In this article, we will show you how to create, use, modify and delete personal access token.
 You can use a personal access token to call open API.
 
-## Show personal access tokens
+In this article, we will show you how to create, use, modify and delete personal access token.
 
-Only users with `root` role can get all of the personal access tokens.
+## About personal access tokens
+
+Only users with `root` role can browse all personal access token lists.
 
 ![tokens](../resource/personal-access-tokens/tokens.png)
 
 ## Create personal access token
 
-Click the `ADD PERSONAL ACCESS TOKENS` button to create personal access token.
+**Step 1:** Click the `ADD PERSONAL ACCESS TOKENS` button to create personal access token.
 
-**Name**: Set your token a descriptive name.
+**Step 2:** In the `Name` field, give your token a descriptive name.
 
-**Description**: Set a description for token.
+**Step 3:** In the `Description` field, add a description describing what the token is for.
 
-**Expiration**: Set your token an expiration。
+**Step 4:** To give your token an expiration, select `Expiration`, Then choose the default option.
 
-**Scopes**: select the access permissions for the token。
+**Step 5:** Under `Select scopes`, select the access permissions for the token.
 
-![create-token](../resource/personal-access-tokens/create-token.png)
+**Step 6:** Click `SAVE`.
 
-When you're done, copy the token and store it. For your security, it doesn't display again.
+**Step 7:** When you're done, copy the token and store it in a secure location. For your security, it doesn't display again.
 
 ![copy-token](../resource/personal-access-tokens/copy-token.png)
+
+![create-token](../resource/personal-access-tokens/create-token.png)
 
 ## Update personal access token
 

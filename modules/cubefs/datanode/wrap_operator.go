@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"hash/crc32"
@@ -35,6 +36,10 @@ import (
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/log"
+)
+
+var (
+	ErrForbiddenDataPartition = errors.New("the data partition is forbidden")
 )
 
 func (s *DataNode) getPacketTpLabels(p *repl.Packet) map[string]string {
@@ -109,7 +114,11 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 			case proto.OpStreamRead, proto.OpRead, proto.OpExtentRepairRead, proto.OpStreamFollowerRead:
 			case proto.OpReadTinyDeleteRecord:
 				log.LogRead(logContent)
-			case proto.OpWrite, proto.OpRandomWrite, proto.OpSyncRandomWrite, proto.OpSyncWrite, proto.OpMarkDelete:
+			case proto.OpWrite, proto.OpRandomWrite,
+				proto.OpRandomWriteVer, proto.OpSyncRandomWriteVer,
+				proto.OpRandomWriteAppend, proto.OpSyncRandomWriteAppend,
+				proto.OpTryWriteAppend, proto.OpSyncTryWriteAppend,
+				proto.OpSyncRandomWrite, proto.OpSyncWrite, proto.OpMarkDelete, proto.OpSplitMarkDelete:
 				log.LogWrite(logContent)
 			default:
 				log.LogInfo(logContent)
@@ -133,11 +142,14 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 		s.handleExtentRepairReadPacket(p, c, RepairRead)
 	case proto.OpTinyExtentRepairRead:
 		s.handleTinyExtentRepairReadPacket(p, c)
-	case proto.OpMarkDelete:
+	case proto.OpMarkDelete, proto.OpSplitMarkDelete:
 		s.handleMarkDeletePacket(p, c)
 	case proto.OpBatchDeleteExtent:
 		s.handleBatchMarkDeletePacket(p, c)
-	case proto.OpRandomWrite, proto.OpSyncRandomWrite:
+	case proto.OpRandomWrite, proto.OpSyncRandomWrite,
+		proto.OpRandomWriteAppend, proto.OpSyncRandomWriteAppend,
+		proto.OpTryWriteAppend, proto.OpSyncTryWriteAppend,
+		proto.OpRandomWriteVer, proto.OpSyncRandomWriteVer:
 		s.handleRandomWritePacket(p)
 	case proto.OpNotifyReplicasToRepair:
 		s.handlePacketToNotifyExtentRepair(p)
@@ -169,6 +181,10 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 		s.handlePacketToReadTinyDeleteRecordFile(p, c)
 	case proto.OpBroadcastMinAppliedID:
 		s.handleBroadcastMinAppliedID(p)
+	case proto.OpVersionOperation:
+		s.handleUpdateVerPacket(p)
+	case proto.OpStopDataPartitionRepair:
+		s.handlePacketToStopDataPartitionRepair(p)
 	default:
 		p.PackErrorBody(repl.ErrorUnknownOp.Error(), repl.ErrorUnknownOp.Error()+strconv.Itoa(int(p.Opcode)))
 	}
@@ -251,6 +267,206 @@ func (s *DataNode) handlePacketToCreateDataPartition(p *repl.Packet) {
 	return
 }
 
+func (s *DataNode) commitCreateVersion(volumeID string, verSeq uint64) (err error) {
+
+	for _, dp := range s.space.partitions {
+		if dp.volumeID != volumeID {
+			continue
+		}
+		dp.UpdateVersion(verSeq)
+	}
+	log.LogInfof("action[commitCreateVersion] handle master version reqeust seq %v", verSeq)
+
+	if value, ok := s.volUpdating.Load(volumeID); ok {
+		ver2Phase := value.(*verOp2Phase)
+		log.LogWarnf("action[commitCreateVersion] try commit volume %v prepare seq %v with commit seq %v",
+			volumeID, ver2Phase.verPrepare, verSeq)
+		if verSeq < ver2Phase.verSeq {
+			err = fmt.Errorf("vol %v seq %v create less than loal %v", volumeID, verSeq, ver2Phase.verSeq)
+			log.LogErrorf("action[commitCreateVersion] err %v", err)
+			return
+		}
+		if ver2Phase.step != proto.CreateVersionPrepare {
+			err = fmt.Errorf("vol %v seq %v step not prepare", volumeID, ver2Phase.step)
+			log.LogErrorf("action[commitCreateVersion] err %v", err)
+			return
+		}
+		ver2Phase.verSeq = verSeq
+		ver2Phase.step = proto.CreateVersionCommit
+		ver2Phase.status = proto.VersionWorkingFinished
+		log.LogWarnf("action[commitCreateVersion] commit volume %v prepare seq %v with commit seq %v",
+			volumeID, ver2Phase.verPrepare, verSeq)
+		return
+	}
+
+	err = fmt.Errorf("vol %v not found", volumeID)
+	log.LogErrorf("action[commitCreateVersion] err %v", err)
+	return
+}
+
+func (s *DataNode) prepareCreateVersion(req *proto.MultiVersionOpRequest) (err error, opAagin bool) {
+	var (
+		ver2Phase *verOp2Phase
+	)
+	if value, ok := s.volUpdating.Load(req.VolumeID); ok {
+		ver2Phase = value.(*verOp2Phase)
+		if req.VerSeq < ver2Phase.verSeq {
+			err = fmt.Errorf("seq %v create less than loal %v", req.VerSeq, ver2Phase.verSeq)
+			log.LogInfof("action[prepareCreateVersion] volume %v update to ver %v step %v", req.VolumeID, req.VerSeq, ver2Phase.step)
+			return
+		} else if req.VerSeq == ver2Phase.verPrepare {
+			if ver2Phase.step == proto.VersionWorking {
+				opAagin = true
+				return
+			}
+		}
+	}
+	ver2Phase = &verOp2Phase{}
+	ver2Phase.step = uint32(req.Op)
+	ver2Phase.status = proto.VersionWorking
+	ver2Phase.verPrepare = req.VerSeq
+
+	s.volUpdating.Store(req.VolumeID, ver2Phase)
+
+	log.LogWarnf("action[prepareCreateVersion] volume %v update to step %v step %v",
+		req.VolumeID, req.VerSeq, ver2Phase.step)
+	return
+}
+
+func (s *DataNode) checkMultiVersionStatus(volName string) (err error) {
+	log.LogDebugf("action[checkMultiVersionStatus] volumeName %v", volName)
+	var info *proto.VolumeVerInfo
+	if value, ok := s.volUpdating.Load(volName); ok {
+		ver2Phase := value.(*verOp2Phase)
+
+		if atomic.LoadUint32(&ver2Phase.status) != proto.VersionWorkingAbnormal &&
+			atomic.LoadUint32(&ver2Phase.step) == proto.CreateVersionPrepare {
+
+			ver2Phase.Lock() // here trylock may be better after go1.18 adapted to compile
+			defer ver2Phase.Unlock()
+
+			// check again in case of sth already happened by other goroutine during be blocked by lock
+			if atomic.LoadUint32(&ver2Phase.status) == proto.VersionWorkingAbnormal ||
+				atomic.LoadUint32(&ver2Phase.step) != proto.CreateVersionPrepare {
+
+				log.LogWarnf("action[checkMultiVersionStatus] volumeName %v status %v step %v",
+					volName, atomic.LoadUint32(&ver2Phase.status), atomic.LoadUint32(&ver2Phase.step))
+				return
+			}
+
+			if info, err = MasterClient.AdminAPI().GetVerInfo(volName); err != nil {
+				log.LogErrorf("action[checkMultiVersionStatus] volumeName %v status %v step %v err %v",
+					volName, atomic.LoadUint32(&ver2Phase.status), atomic.LoadUint32(&ver2Phase.step), err)
+				return
+			}
+
+			log.LogDebugf("action[checkMultiVersionStatus] vol %v info %v", volName, info)
+
+			if info.VerSeqPrepare != ver2Phase.verPrepare {
+				atomic.StoreUint32(&ver2Phase.status, proto.VersionWorkingAbnormal)
+				err = fmt.Errorf("volumeName %v status %v step %v",
+					volName, atomic.LoadUint32(&ver2Phase.status), atomic.LoadUint32(&ver2Phase.step))
+				log.LogErrorf("action[checkMultiVersionStatus] err %v", err)
+				return
+			}
+			if info.VerPrepareStatus == proto.VersionNormal {
+				if err = s.commitCreateVersion(info.Name, info.VerSeq); err != nil {
+					log.LogErrorf("action[checkMultiVersionStatus] err %v", err)
+					return
+				}
+			}
+		}
+	} else {
+		log.LogDebugf("action[checkMultiVersionStatus] volumeName %v not found", volName)
+	}
+	return
+}
+
+// Handle OpHeartbeat packet.
+func (s *DataNode) handleUpdateVerPacket(p *repl.Packet) {
+	log.LogWarnf("action[handleUpdateVerPacket] enter in p %v", p)
+	var err error
+	defer func() {
+		if err != nil {
+			p.PackErrorBody(ActionUpdateVersion, err.Error())
+		} else {
+			p.PacketOkReply()
+		}
+	}()
+
+	task := &proto.AdminTask{}
+	err = json.Unmarshal(p.Data, task)
+	if err != nil {
+		log.LogErrorf("action[handleUpdateVerPacket] handle master version reqeust err %v", err)
+		return
+	}
+
+	log.LogWarnf("action[handleUpdateVerPacket] task %v", task)
+
+	go func() {
+		request := &proto.MultiVersionOpRequest{}
+		response := &proto.MultiVersionOpResponse{}
+		response.Op = task.OpCode
+		response.Status = proto.TaskSucceeds
+
+		if task.OpCode == proto.OpVersionOperation {
+			marshaled, _ := json.Marshal(task.Request)
+			if err = json.Unmarshal(marshaled, request); err != nil {
+				log.LogErrorf("action[handleUpdateVerPacket] handle master version reqeust err %v", err)
+				response.Status = proto.TaskFailed
+				goto end
+			}
+
+			if request.Op == proto.CreateVersionPrepare {
+				if err, _ = s.prepareCreateVersion(request); err != nil {
+					log.LogErrorf("action[handleUpdateVerPacket] handle master version reqeust err %v", err)
+					goto end
+				}
+			} else if request.Op == proto.CreateVersionCommit {
+				if err = s.commitCreateVersion(request.VolumeID, request.VerSeq); err != nil {
+					log.LogErrorf("action[handleUpdateVerPacket] handle master version reqeust err %v", err)
+					goto end
+				}
+			}
+
+			response.VerSeq = request.VerSeq
+			response.Op = request.Op
+			response.Addr = request.Addr
+			response.VolumeID = request.VolumeID
+
+		} else {
+			err = fmt.Errorf("illegal opcode")
+			log.LogErrorf("action[handleUpdateVerPacket] handle master version reqeust err %v", err)
+			goto end
+		}
+	end:
+		if err != nil {
+			response.Result = err.Error()
+		}
+		task.Response = response
+		log.LogInfof("action[handleUpdateVerPacket] rsp to client,req vol %v, verseq %v, op %v", request.VolumeID, request.VerSeq, request.Op)
+		if err = MasterClient.NodeAPI().ResponseDataNodeTask(task); err != nil {
+			err = errors.Trace(err, "handleUpdateVerPacket to master failed.")
+			log.LogErrorf(err.Error())
+			return
+		}
+	}()
+
+}
+
+func (s *DataNode) checkVolumeForbidden(volNames []string) {
+	s.space.RangePartitions(func(partition *DataPartition) bool {
+		for _, volName := range volNames {
+			if volName == partition.volumeID {
+				partition.SetForbidden(true)
+				return true
+			}
+		}
+		partition.SetForbidden(false)
+		return true
+	})
+}
+
 // Handle OpHeartbeat packet.
 func (s *DataNode) handleHeartbeatPacket(p *repl.Packet) {
 	var err error
@@ -281,6 +497,10 @@ func (s *DataNode) handleHeartbeatPacket(p *repl.Packet) {
 					request.EnableDiskQos,
 					s.diskQosEnable)
 			}
+
+			// set volume forbidden
+			s.checkVolumeForbidden(request.ForbiddenVols)
+
 			s.diskQosEnableFromMaster = request.EnableDiskQos
 
 			var needUpdate bool
@@ -300,6 +520,10 @@ func (s *DataNode) handleHeartbeatPacket(p *repl.Packet) {
 				s.diskIopsReadLimit = request.QosIopsReadLimit
 				needUpdate = true
 			}
+
+			// set cpu util and io used in here
+			response.CpuUtil = s.cpuUtil.Load()
+			response.IoUtils = s.space.GetDiskUtils()
 
 			if needUpdate {
 				log.LogWarnf("action[handleHeartbeatPacket] master change disk qos limit to [flowWrite %v, flowRead %v, iopsWrite %v, iopsRead %v]",
@@ -422,8 +646,13 @@ func (s *DataNode) handleMarkDeletePacket(p *repl.Packet, c net.Conn) {
 			p.PacketOkReply()
 		}
 	}()
+
 	partition := p.Object.(*DataPartition)
-	if p.ExtentType == proto.TinyExtentType {
+	// NOTE: we cannot prevent mark delete
+	// even the partition is forbidden, because
+	// the inode already be deleted in meta partition
+	// if we prevent it, we will get "orphan extents"
+	if p.ExtentType == proto.TinyExtentType || p.Opcode == proto.OpSplitMarkDelete {
 		ext := new(proto.TinyExtentDeleteRecord)
 		err = json.Unmarshal(p.Data, ext)
 		if err == nil {
@@ -456,6 +685,10 @@ func (s *DataNode) handleBatchMarkDeletePacket(p *repl.Packet, c net.Conn) {
 		}
 	}()
 	partition := p.Object.(*DataPartition)
+	// NOTE: we cannot prevent mark delete
+	// even the partition is forbidden, because
+	// the inode already be deleted in meta partition
+	// if we prevent it, we will get "orphan extents"
 	var exts []*proto.ExtentKey
 	err = json.Unmarshal(p.Data, &exts)
 	store := partition.ExtentStore()
@@ -478,8 +711,7 @@ func (s *DataNode) handleBatchMarkDeletePacket(p *repl.Packet, c net.Conn) {
 // Handle OpWrite packet.
 func (s *DataNode) handleWritePacket(p *repl.Packet) {
 	var (
-		err error
-
+		err                     error
 		metricPartitionIOLabels map[string]string
 		partitionIOMetric       *exporter.TimePointCount
 	)
@@ -491,6 +723,10 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 		}
 	}()
 	partition := p.Object.(*DataPartition)
+	if partition.IsForbidden() {
+		err = ErrForbiddenDataPartition
+		return
+	}
 	shallDegrade := p.ShallDegrade()
 	if !shallDegrade {
 		metricPartitionIOLabels = GetIoMetricLabels(partition, "write")
@@ -508,7 +744,10 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 			partitionIOMetric = exporter.NewTPCnt(MetricPartitionIOName)
 		}
 
-		err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite())
+		partition.disk.allocCheckLimit(proto.FlowWriteType, uint32(p.Size))
+		partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
+
+		_, err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite())
 		if !shallDegrade {
 			s.metrics.MetricIOBytes.AddWithLabels(int64(p.Size), metricPartitionIOLabels)
 			partitionIOMetric.SetWithLabels(err, metricPartitionIOLabels)
@@ -522,7 +761,10 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 			partitionIOMetric = exporter.NewTPCnt(MetricPartitionIOName)
 		}
 
-		err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite())
+		partition.disk.allocCheckLimit(proto.FlowWriteType, uint32(p.Size))
+		partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
+
+		_, err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite())
 		if !shallDegrade {
 			s.metrics.MetricIOBytes.AddWithLabels(int64(p.Size), metricPartitionIOLabels)
 			partitionIOMetric.SetWithLabels(err, metricPartitionIOLabels)
@@ -542,7 +784,10 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 				partitionIOMetric = exporter.NewTPCnt(MetricPartitionIOName)
 			}
 
-			err = store.Write(p.ExtentID, p.ExtentOffset+int64(offset), int64(currSize), data, crc, storage.AppendWriteType, p.IsSyncWrite())
+			partition.disk.allocCheckLimit(proto.FlowWriteType, uint32(currSize))
+			partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
+
+			_, err = store.Write(p.ExtentID, p.ExtentOffset+int64(offset), int64(currSize), data, crc, storage.AppendWriteType, p.IsSyncWrite())
 			if !shallDegrade {
 				s.metrics.MetricIOBytes.AddWithLabels(int64(p.Size), metricPartitionIOLabels)
 				partitionIOMetric.SetWithLabels(err, metricPartitionIOLabels)
@@ -566,15 +811,33 @@ func (s *DataNode) handleRandomWritePacket(p *repl.Packet) {
 		metricPartitionIOLabels map[string]string
 		partitionIOMetric       *exporter.TimePointCount
 	)
+
 	defer func() {
+		log.LogDebugf("action[handleRandomWritePacket opcod %v seq %v dpid %v resultCode %v extid %v err %v",
+			p.Opcode, p.VerSeq, p.PartitionID, p.ResultCode, p.ExtentID, err)
 		if err != nil {
 			p.PackErrorBody(ActionWrite, err.Error())
 		} else {
+			// avoid rsp pack ver info into package which client need do more work to read buffer
+			if p.Opcode == proto.OpRandomWriteVer || p.Opcode == proto.OpSyncRandomWriteVer {
+				p.Opcode = proto.OpSyncRandomWriteVerRsp
+			}
+			if p.Opcode == proto.OpTryWriteAppend && p.ResultCode == proto.OpTryOtherExtent {
+				p.PackErrorBody(ActionWrite, storage.SnapshotNeedNewExtentError.Error())
+				p.ResultCode = proto.OpTryOtherExtent
+				log.LogDebugf("action[handleRandomWritePacket opcod %v seq %v dpid %v resultCode %v extid %v", p.Opcode, p.VerSeq, p.PartitionID, p.ResultCode, p.ExtentID)
+				return
+			}
 			p.PacketOkReply()
 		}
 	}()
-	partition := p.Object.(*DataPartition)
 
+	partition := p.Object.(*DataPartition)
+	if partition.IsForbidden() {
+		err = ErrForbiddenDataPartition
+		return
+	}
+	log.LogDebugf("action[handleRandomWritePacket opcod %v seq %v dpid %v dpseq %v extid %v", p.Opcode, p.VerSeq, p.PartitionID, partition.verSeq, p.ExtentID)
 	// cache or preload partition not support raft and repair.
 	if !partition.isNormalType() {
 		err = raft.ErrStopped
@@ -591,21 +854,47 @@ func (s *DataNode) handleRandomWritePacket(p *repl.Packet) {
 		metricPartitionIOLabels = GetIoMetricLabels(partition, "randwrite")
 		partitionIOMetric = exporter.NewTPCnt(MetricPartitionIOName)
 	}
+
+	if partition.verSeq > 0 {
+		log.LogDebugf("action[handleRandomWritePacket] opcod %v seq %v dpid %v dpseq %v extid %v", p.Opcode, p.VerSeq, p.PartitionID, partition.verSeq, p.ExtentID)
+		if p.Opcode == proto.OpSyncRandomWrite || p.Opcode == proto.OpRandomWrite {
+			err = fmt.Errorf("volume enable mulit version")
+			log.LogErrorf("action[handleRandomWritePacket] error %v", err)
+			return
+		}
+		if p.VerSeq < partition.verSeq && (p.Opcode == proto.OpRandomWriteVer || p.Opcode == proto.OpSyncRandomWriteVer) {
+			p.ExtentType |= proto.MultiVersionFlag
+			err = storage.VerNotConsistentError
+			log.LogErrorf("action[handleRandomWritePacket] dp %v client verSeq[%v] small than dataPartiton ver[%v]",
+				partition.config.PartitionID, p.VerSeq, partition.verSeq)
+			p.VerSeq = partition.verSeq
+			return
+		} else if p.VerSeq > partition.verSeq {
+			log.LogDebugf("action[handleRandomWritePacket] dp %v client verSeq[%v] and update dp Seq[%v]", partition.config.PartitionID, p.VerSeq, partition.verSeq)
+			partition.verSeq = p.VerSeq
+		}
+	}
+
 	err = partition.RandomWriteSubmit(p)
 	if !shallDegrade {
 		s.metrics.MetricIOBytes.AddWithLabels(int64(p.Size), metricPartitionIOLabels)
 		partitionIOMetric.SetWithLabels(err, metricPartitionIOLabels)
 	}
+
 	if err != nil && strings.Contains(err.Error(), raft.ErrNotLeader.Error()) {
 		err = raft.ErrNotLeader
+		log.LogErrorf("action[handleRandomWritePacket] opcod %v seq %v dpid %v dpseq %v extid %v err %v", p.Opcode, p.VerSeq, p.PartitionID, partition.verSeq, p.ExtentID, err)
 		return
 	}
 
-	if err == nil && p.ResultCode != proto.OpOk {
+	if err == nil && p.ResultCode != proto.OpOk && p.ResultCode != proto.OpTryOtherExtent {
+		log.LogErrorf("action[handleRandomWritePacket] opcod %v seq %v dpid %v dpseq %v extid %v ResultCode %v",
+			p.Opcode, p.VerSeq, p.PartitionID, partition.verSeq, p.ExtentID, p.ResultCode)
 		err = storage.TryAgainError
 		return
 	}
-
+	log.LogDebugf("action[handleRandomWritePacket] opcod %v seq %v dpid %v dpseq %v after raft submit err %v resultCode %v",
+		p.Opcode, p.VerSeq, p.PartitionID, partition.verSeq, err, p.ResultCode)
 }
 
 func (s *DataNode) handleStreamReadPacket(p *repl.Packet, connect net.Conn, isRepairRead bool) {
@@ -638,7 +927,7 @@ func (s *DataNode) handleExtentRepairReadPacket(p *repl.Packet, connect net.Conn
 	var (
 		err error
 	)
-
+	log.LogDebugf("handleExtentRepairReadPacket %v", p)
 	defer func() {
 		if err != nil {
 			p.PackErrorBody(ActionStreamRead, err.Error())
@@ -681,6 +970,7 @@ func (s *DataNode) extentRepairReadPacket(p *repl.Packet, connect net.Conn, isRe
 	if !shallDegrade {
 		metricPartitionIOLabels = GetIoMetricLabels(partition, "read")
 	}
+	log.LogDebugf("extentRepairReadPacket dp %v offset %v needSize %v", partition.partitionID, offset, needReplySize)
 	for {
 		if needReplySize <= 0 {
 			break
@@ -1260,9 +1550,46 @@ func (s *DataNode) forwardToRaftLeader(dp *DataPartition, p *repl.Packet, force 
 	if err != nil {
 		return
 	}
-	if err = p.ReadFromConn(conn, proto.NoReadDeadlineTime); err != nil {
+	if err = p.ReadFromConnWithVer(conn, proto.NoReadDeadlineTime); err != nil {
 		return
 	}
 
 	return
+}
+
+func (s *DataNode) handlePacketToStopDataPartitionRepair(p *repl.Packet) {
+	task := &proto.AdminTask{}
+	err := json.Unmarshal(p.Data, task)
+	defer func() {
+		if err != nil {
+			p.PackErrorBody(ActionStopDataPartitionRepair, err.Error())
+		} else {
+			p.PacketOkReply()
+		}
+	}()
+	if err != nil {
+		return
+	}
+	request := &proto.StopDataPartitionRepairRequest{}
+	if task.OpCode != proto.OpStopDataPartitionRepair {
+		err = fmt.Errorf("action[handlePacketToStopDataPartitionRepair] illegal opcode ")
+		log.LogWarnf("action[handlePacketToStopDataPartitionRepair] illegal opcode ")
+		return
+	}
+
+	bytes, _ := json.Marshal(task.Request)
+	p.AddMesgLog(string(bytes))
+	err = json.Unmarshal(bytes, request)
+	if err != nil {
+		return
+	}
+	log.LogDebugf("action[handlePacketToStopDataPartitionRepair] try stop %v", request.PartitionId)
+	dp := s.space.Partition(request.PartitionId)
+	if dp == nil {
+		err = proto.ErrDataPartitionNotExists
+		log.LogWarnf("action[handlePacketToStopDataPartitionRepair] cannot find dp %v", request.PartitionId)
+		return
+	}
+	dp.StopDecommissionRecover(request.Stop)
+	log.LogInfof("action[handlePacketToStopDataPartitionRepair] %v stop %v success", request.PartitionId, request.Stop)
 }

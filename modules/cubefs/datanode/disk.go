@@ -32,7 +32,9 @@ import (
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util/exporter"
+	"github.com/cubefs/cubefs/util/loadutil"
 	"github.com/cubefs/cubefs/util/log"
+	"github.com/shirou/gopsutil/disk"
 )
 
 var (
@@ -73,6 +75,9 @@ type Disk struct {
 	dataNode                                  *DataNode
 
 	limitFactor map[uint32]*rate.Limiter
+
+	// diskPartition info
+	diskPartition *disk.PartitionStat
 }
 
 const (
@@ -100,6 +105,13 @@ func NewDisk(path string, reservedSpace, diskRdonlySpace uint64, maxErrCnt int, 
 	if err != nil {
 		return nil, err
 	}
+	// get disk partition info
+	d.diskPartition, err = loadutil.GetMatchParation(d.Path)
+	if err != nil {
+		// log but let execution continue
+		log.LogErrorf("get partition info error, path is %v error message %v", d.Path, err.Error())
+		err = nil
+	}
 	d.startScheduleToUpdateSpaceInfo()
 
 	d.limitFactor = make(map[uint32]*rate.Limiter, 0)
@@ -107,8 +119,11 @@ func NewDisk(path string, reservedSpace, diskRdonlySpace uint64, maxErrCnt int, 
 	d.limitFactor[proto.FlowWriteType] = rate.NewLimiter(rate.Limit(proto.QosDefaultDiskMaxFLowLimit), proto.QosDefaultBurst)
 	d.limitFactor[proto.IopsReadType] = rate.NewLimiter(rate.Limit(proto.QosDefaultDiskMaxIoLimit), defaultIOLimitBurst)
 	d.limitFactor[proto.IopsWriteType] = rate.NewLimiter(rate.Limit(proto.QosDefaultDiskMaxIoLimit), defaultIOLimitBurst)
-
 	return
+}
+
+func (d *Disk) GetDiskPartition() *disk.PartitionStat {
+	return d.diskPartition
 }
 
 func (d *Disk) updateQosLimiter() {
@@ -171,6 +186,7 @@ func (d *Disk) computeUsage() (err error) {
 	fs := syscall.Statfs_t{}
 	err = syscall.Statfs(d.Path, &fs)
 	if err != nil {
+		log.LogErrorf("computeUsage. err %v", err)
 		return
 	}
 
@@ -203,6 +219,10 @@ func (d *Disk) computeUsage() (err error) {
 	for _, dp := range d.partitionMap {
 		allocatedSize += int64(dp.Size())
 	}
+
+	log.LogDebugf("computeUsage. fs info [%v,%v,%v,%v] total %v available %v DiskRdonlySpace %v ReservedSpace %v allocatedSize %v",
+		fs.Blocks, fs.Bsize, fs.Bavail, fs.Bfree, d.Total, d.Available, d.DiskRdonlySpace, d.ReservedSpace, allocatedSize)
+
 	atomic.StoreUint64(&d.Allocated, uint64(allocatedSize))
 	//  unallocated = math.Max(0, total - allocatedSize)
 	unallocated := total - allocatedSize

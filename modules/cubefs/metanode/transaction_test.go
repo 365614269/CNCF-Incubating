@@ -30,7 +30,6 @@ var mp1 *metaPartition
 var mp2 *metaPartition
 var mp3 *metaPartition
 
-//var DirModeType uint32 = 2147484141
 const FileModeType uint32 = 420
 
 const (
@@ -187,6 +186,9 @@ func TestRollbackDentrySerialization(t *testing.T) {
 
 	txRbDentry := NewTxRollbackDentry(nil, nil, 0)
 	txRbDentry.Unmarshal(data)
+
+	assert.True(t, reflect.DeepEqual(rbDentry.dentry, txRbDentry.dentry))
+	assert.True(t, reflect.DeepEqual(rbDentry.txDentryInfo, txRbDentry.txDentryInfo))
 	assert.True(t, reflect.DeepEqual(rbDentry, txRbDentry))
 
 	txDentryInfo.MpMembers = "tttt"

@@ -1,3 +1,17 @@
+// Copyright 2023 The CubeFS Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+// implied. See the License for the specific language governing
+// permissions and limitations under the License.
+
 package master
 
 import (
@@ -227,6 +241,37 @@ func parseVolName(r *http.Request) (name string, err error) {
 	if name, err = extractName(r); err != nil {
 		return
 	}
+	return
+}
+
+func parseVolVerStrategy(r *http.Request) (strategy proto.VolumeVerStrategy, isForce bool, err error) {
+	var value string
+	if value = r.FormValue(enableKey); value == "" {
+		strategy.Enable = true
+	} else {
+		if strategy.Enable, err = strconv.ParseBool(value); err != nil {
+			log.LogErrorf("parseVolVerStrategy. strategy.Enable %v strategy %v", strategy.Enable, strategy)
+			return
+		}
+	}
+
+	strategy.KeepVerCnt, err = parseUintParam(r, countKey)
+	if strategy.Enable && err != nil {
+		log.LogErrorf("parseVolVerStrategy. strategy.Enable %v strategy %v", strategy.Enable, strategy)
+		return
+	}
+	strategy.Periodic, err = parseUintParam(r, Periodic)
+	if strategy.Enable && err != nil {
+		log.LogErrorf("parseVolVerStrategy. strategy.Enable %v strategy %v", strategy.Enable, strategy)
+		return
+	}
+
+	if value = r.FormValue(forceKey); value != "" {
+		isForce = true
+		strategy.ForceUpdate, _ = strconv.ParseBool(value)
+	}
+
+	log.LogDebugf("parseVolVerStrategy. strategy %v", strategy)
 	return
 }
 
@@ -817,6 +862,18 @@ func parseRequestToCreateDataPartition(r *http.Request) (count int, name string,
 	return
 }
 
+func parseRequestToGetConcurrentLcNode(r *http.Request) (count uint64, err error) {
+	if err = r.ParseForm(); err != nil {
+		return
+	}
+	if count, err = extractUint64(r, countKey); err != nil || count == 0 {
+		err = unmatchedKey(countKey)
+		return
+	}
+
+	return
+}
+
 func parseRequestToGetDataPartition(r *http.Request) (ID uint64, volName string, err error) {
 	if err = r.ParseForm(); err != nil {
 		return
@@ -923,6 +980,11 @@ func extractNodeID(r *http.Request) (ID uint64, err error) {
 	return strconv.ParseUint(value, 10, 64)
 }
 
+func extractNodesetID(r *http.Request) (ID uint64, err error) {
+	// nodeset id use same form key with node id
+	return extractNodeID(r)
+}
+
 func extractDiskPath(r *http.Request) (diskPath string, err error) {
 	if diskPath = r.FormValue(diskPathKey); diskPath == "" {
 		err = keyNotFound(diskPathKey)
@@ -934,7 +996,7 @@ func extractDiskPath(r *http.Request) (diskPath string, err error) {
 func extractDiskDisable(r *http.Request) (diskDisable bool, err error) {
 	var value string
 	if value = r.FormValue(DiskDisableKey); value == "" {
-		diskDisable = false
+		diskDisable = true
 		return
 	}
 	return strconv.ParseBool(value)
@@ -962,6 +1024,13 @@ func parseAndExtractStatus(r *http.Request) (status bool, err error) {
 	return extractStatus(r)
 }
 
+func parseAndExtractForbidden(r *http.Request) (forbidden bool, err error) {
+	if err = r.ParseForm(); err != nil {
+		return
+	}
+	return extractForbidden(r)
+}
+
 func extractStatus(r *http.Request) (status bool, err error) {
 	var value string
 	if value = r.FormValue(enableKey); value == "" {
@@ -972,6 +1041,34 @@ func extractStatus(r *http.Request) (status bool, err error) {
 		return
 	}
 	return
+}
+
+func extractForbidden(r *http.Request) (forbidden bool, err error) {
+	var value string
+	if value = r.FormValue(forbiddenKey); value == "" {
+		err = keyNotFound(forbiddenKey)
+		return
+	}
+	if forbidden, err = strconv.ParseBool(value); err != nil {
+		return
+	}
+	return
+}
+
+func extractDataNodesetSelector(r *http.Request) string {
+	return r.FormValue(dataNodesetSelectorKey)
+}
+
+func extractMetaNodesetSelector(r *http.Request) string {
+	return r.FormValue(metaNodesetSelectorKey)
+}
+
+func extractDataNodeSelector(r *http.Request) string {
+	return r.FormValue(dataNodeSelectorKey)
+}
+
+func extractMetaNodeSelector(r *http.Request) string {
+	return r.FormValue(metaNodeSelectorKey)
 }
 
 func extractFollowerRead(r *http.Request) (followerRead bool, exist bool, err error) {
@@ -1077,6 +1174,7 @@ func parseAndExtractSetNodeSetInfoParams(r *http.Request) (params map[string]int
 		nodesetId, err = strconv.ParseUint(value, 10, 64)
 		if err != nil {
 			err = unmatchedKey(idKey)
+			err = unmatchedKey(idKey)
 			return
 		}
 		params[idKey] = nodesetId
@@ -1161,9 +1259,51 @@ func parseAndExtractSetNodeInfoParams(r *http.Request) (params map[string]interf
 		params[maxDpCntLimitKey] = val
 	}
 
+	if value = r.FormValue(nodeDpRepairTimeOutKey); value != "" {
+		noParams = false
+		var val = uint64(0)
+		val, err = strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			err = unmatchedKey(nodeDpRepairTimeOutKey)
+			return
+		}
+		params[nodeDpRepairTimeOutKey] = val
+	}
+
+	if value = r.FormValue(nodeDpMaxRepairErrCntKey); value != "" {
+		noParams = false
+		var val = uint64(0)
+		val, err = strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			err = unmatchedKey(nodeDpMaxRepairErrCntKey)
+			return
+		}
+		params[nodeDpMaxRepairErrCntKey] = val
+	}
+
 	if value = r.FormValue(clusterCreateTimeKey); value != "" {
 		noParams = false
 		params[clusterCreateTimeKey] = value
+	}
+
+	if value = extractDataNodesetSelector(r); value != "" {
+		noParams = false
+		params[dataNodesetSelectorKey] = value
+	}
+
+	if value = extractMetaNodesetSelector(r); value != "" {
+		noParams = false
+		params[metaNodesetSelectorKey] = value
+	}
+
+	if value = extractDataNodeSelector(r); value != "" {
+		noParams = false
+		params[dataNodeSelectorKey] = value
+	}
+
+	if value = extractMetaNodeSelector(r); value != "" {
+		noParams = false
+		params[metaNodeSelectorKey] = value
 	}
 
 	if noParams {
@@ -1542,10 +1682,10 @@ func parseRequestToUpdateDecommissionLimit(r *http.Request) (limit uint64, err e
 }
 
 func parseSetConfigParam(r *http.Request) (key string, value string, err error) {
+
 	if err = r.ParseForm(); err != nil {
 		return
 	}
-
 	if value = r.FormValue(cfgmetaPartitionInodeIdStep); value == "" {
 		err = keyNotFound("config")
 		return
@@ -1676,4 +1816,31 @@ func extractInodeId(r *http.Request) (inode uint64, err error) {
 		return
 	}
 	return strconv.ParseUint(value, 10, 64)
+}
+
+func parseRequestToUpdateDecommissionDiskFactor(r *http.Request) (factor float64, err error) {
+	if err = r.ParseForm(); err != nil {
+		return
+	}
+
+	var value string
+	if value = r.FormValue(decommissionDiskFactor); value == "" {
+		err = keyNotFound(decommissionDiskFactor)
+		return
+	}
+	return strconv.ParseFloat(value, 64)
+}
+
+func parseS3QosReq(r *http.Request, req *proto.S3QosRequest) (err error) {
+	var body []byte
+	if body, err = ioutil.ReadAll(r.Body); err != nil {
+		return
+	}
+
+	if err = json.Unmarshal(body, &req); err != nil {
+		return
+	}
+
+	log.LogInfo("parseS3QosReq success.")
+	return
 }

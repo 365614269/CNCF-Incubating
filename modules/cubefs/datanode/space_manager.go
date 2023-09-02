@@ -24,7 +24,10 @@ import (
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/raftstore"
+	"github.com/cubefs/cubefs/util/atomicutil"
+	"github.com/cubefs/cubefs/util/loadutil"
 	"github.com/cubefs/cubefs/util/log"
+	"github.com/shirou/gopsutil/disk"
 )
 
 // SpaceManager manages the disk space.
@@ -42,19 +45,22 @@ type SpaceManager struct {
 	diskList             []string
 	dataNode             *DataNode
 	createPartitionMutex sync.RWMutex
+	diskUtils            map[string]*atomicutil.Float64
+	samplerDone          chan struct{}
 }
+
+const diskSampleDuration = 1 * time.Second
 
 // NewSpaceManager creates a new space manager.
 func NewSpaceManager(dataNode *DataNode) *SpaceManager {
-	var space *SpaceManager
-	space = &SpaceManager{}
+	space := &SpaceManager{}
 	space.disks = make(map[string]*Disk)
 	space.diskList = make([]string, 0)
 	space.partitions = make(map[uint64]*DataPartition)
 	space.stats = NewStats(dataNode.zoneName)
 	space.stopC = make(chan bool, 0)
 	space.dataNode = dataNode
-
+	space.diskUtils = make(map[string]*atomicutil.Float64)
 	go space.statUpdateScheduler()
 
 	return space
@@ -65,6 +71,8 @@ func (manager *SpaceManager) Stop() {
 		recover()
 	}()
 	close(manager.stopC)
+	// stop sampler
+	close(manager.samplerDone)
 	// Parallel stop data partitions.
 	const maxParallelism = 128
 	var parallelism = int(math.Min(float64(maxParallelism), float64(len(manager.partitions))))
@@ -99,6 +107,60 @@ func (manager *SpaceManager) Stop() {
 		}(partitionC)
 	}
 	wg.Wait()
+}
+
+func (manager *SpaceManager) GetAllDiskPartitions() []*disk.PartitionStat {
+	manager.diskMutex.RLock()
+	defer manager.diskMutex.RUnlock()
+	partitions := make([]*disk.PartitionStat, 0, len(manager.disks))
+	for _, disk := range manager.disks {
+		partition := disk.GetDiskPartition()
+		if partition != nil {
+			partitions = append(partitions, partition)
+		}
+	}
+	return partitions
+}
+
+func (manager *SpaceManager) FillIoUtils(samples map[string]loadutil.DiskIoSample) {
+	manager.diskMutex.RLock()
+	defer manager.diskMutex.RUnlock()
+	for _, sample := range samples {
+		util := manager.diskUtils[sample.GetPartition().Device]
+		if util != nil {
+			util.Store(sample.GetIoUtilPercent())
+		}
+	}
+}
+
+func (manager *SpaceManager) StartDiskSample() {
+	manager.samplerDone = make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-manager.samplerDone:
+				return
+			default:
+				partitions := manager.GetAllDiskPartitions()
+				samples, err := loadutil.GetDisksIoSample(partitions, diskSampleDuration)
+				if err != nil {
+					log.LogErrorf("failed to sample disk %v\n", err.Error())
+					return
+				}
+				manager.FillIoUtils(samples)
+			}
+		}
+	}()
+}
+
+func (manager *SpaceManager) GetDiskUtils() map[string]float64 {
+	useds := make(map[string]float64)
+	manager.diskMutex.RLock()
+	defer manager.diskMutex.RUnlock()
+	for device, used := range manager.diskUtils {
+		useds[device] = used.Load()
+	}
+	return useds
 }
 
 func (manager *SpaceManager) SetNodeID(nodeID uint64) {
@@ -210,6 +272,10 @@ func (manager *SpaceManager) putDisk(d *Disk) {
 	manager.diskMutex.Lock()
 	manager.disks[d.Path] = d
 	manager.diskList = append(manager.diskList, d.Path)
+	if d.GetDiskPartition() != nil {
+		manager.diskUtils[d.GetDiskPartition().Device] = &atomicutil.Float64{}
+		manager.diskUtils[d.GetDiskPartition().Device].Store(0)
+	}
 	manager.diskMutex.Unlock()
 }
 
@@ -298,7 +364,6 @@ func (manager *SpaceManager) Partition(partitionID uint64) (dp *DataPartition) {
 	manager.partitionMutex.RLock()
 	defer manager.partitionMutex.RUnlock()
 	dp = manager.partitions[partitionID]
-
 	return
 }
 
@@ -329,7 +394,12 @@ func (manager *SpaceManager) CreatePartition(request *proto.CreateDataPartitionR
 		PartitionSize: request.PartitionSize,
 		PartitionType: int(request.PartitionTyp),
 		ReplicaNum:    request.ReplicaNum,
+		VerSeq:        request.VerSeq,
+		CreateType:    request.CreateType,
+		Forbidden:     false,
 	}
+	log.LogInfof("action[CreatePartition] dp %v dpCfg.Peers %v request.Members %v",
+		dpCfg.PartitionID, dpCfg.Peers, request.Members)
 	dp = manager.partitions[dpCfg.PartitionID]
 	if dp != nil {
 		if err = dp.IsEquareCreateDataPartitionRequst(request); err != nil {
@@ -345,7 +415,6 @@ func (manager *SpaceManager) CreatePartition(request *proto.CreateDataPartitionR
 		return
 	}
 	manager.partitions[dp.partitionID] = dp
-
 	return
 }
 
@@ -384,20 +453,21 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 	stat.Unlock()
 
 	response.ZoneName = s.zoneName
-	response.PartitionReports = make([]*proto.PartitionReport, 0)
+	response.PartitionReports = make([]*proto.DataPartitionReport, 0)
 	space := s.space
 	space.RangePartitions(func(partition *DataPartition) bool {
 		leaderAddr, isLeader := partition.IsRaftLeader()
-		vr := &proto.PartitionReport{
-			VolName:         partition.volumeID,
-			PartitionID:     uint64(partition.partitionID),
-			PartitionStatus: partition.Status(),
-			Total:           uint64(partition.Size()),
-			Used:            uint64(partition.Used()),
-			DiskPath:        partition.Disk().Path,
-			IsLeader:        isLeader,
-			ExtentCount:     partition.GetExtentCount(),
-			NeedCompare:     true,
+		vr := &proto.DataPartitionReport{
+			VolName:                    partition.volumeID,
+			PartitionID:                uint64(partition.partitionID),
+			PartitionStatus:            partition.Status(),
+			Total:                      uint64(partition.Size()),
+			Used:                       uint64(partition.Used()),
+			DiskPath:                   partition.Disk().Path,
+			IsLeader:                   isLeader,
+			ExtentCount:                partition.GetExtentCount(),
+			NeedCompare:                true,
+			DecommissionRepairProgress: partition.decommissionRepairProgress,
 		}
 		log.LogDebugf("action[Heartbeats] dpid(%v), status(%v) total(%v) used(%v) leader(%v) isLeader(%v).", vr.PartitionID, vr.PartitionStatus, vr.Total, vr.Used, leaderAddr, vr.IsLeader)
 		response.PartitionReports = append(response.PartitionReports, vr)
@@ -410,4 +480,12 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 			response.BadDisks = append(response.BadDisks, d.Path)
 		}
 	}
+}
+
+func (manager *SpaceManager) getPartitionIds() []uint64 {
+	res := make([]uint64, 0)
+	for id := range manager.partitions {
+		res = append(res, id)
+	}
+	return res
 }
