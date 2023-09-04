@@ -63,8 +63,8 @@ importers:
         specifier: ^5.2.2
         version: 5.2.2
       wireit:
-        specifier: ^0.11.0
-        version: 0.11.0
+        specifier: ^0.13.0
+        version: 0.13.0
 
   apps/account-ui:
     dependencies:
@@ -105,8 +105,8 @@ importers:
         specifier: ^7.45.4
         version: 7.45.4(react@18.2.0)
       react-i18next:
-        specifier: ^13.2.1
-        version: 13.2.1(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^13.2.2
+        version: 13.2.2(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom:
         specifier: ^6.15.0
         version: 6.15.0(react-dom@18.2.0)(react@18.2.0)
@@ -121,8 +121,8 @@ importers:
         specifier: ^1.37.1
         version: 1.37.1
       '@types/lodash-es':
-        specifier: ^4.17.8
-        version: 4.17.8
+        specifier: ^4.17.9
+        version: 4.17.9
       '@types/react':
         specifier: ^18.2.21
         version: 18.2.21
@@ -208,8 +208,8 @@ importers:
         specifier: ^7.45.4
         version: 7.45.4(react@18.2.0)
       react-i18next:
-        specifier: ^13.2.1
-        version: 13.2.1(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^13.2.2
+        version: 13.2.2(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom:
         specifier: ^6.15.0
         version: 6.15.0(react-dom@18.2.0)(react@18.2.0)
@@ -245,8 +245,8 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2
       '@types/lodash-es':
-        specifier: ^4.17.8
-        version: 4.17.8
+        specifier: ^4.17.9
+        version: 4.17.9
       '@types/react':
         specifier: ^18.2.21
         version: 18.2.21
@@ -263,8 +263,8 @@ importers:
         specifier: ^13.1.0
         version: 13.1.0
       cypress-axe:
-        specifier: ^1.4.0
-        version: 1.4.0(axe-core@4.7.2)(cypress@13.1.0)
+        specifier: ^1.5.0
+        version: 1.5.0(axe-core@4.7.2)(cypress@13.1.0)
       jsdom:
         specifier: ^22.1.0
         version: 22.1.0
@@ -330,8 +330,8 @@ importers:
         specifier: ^4.3.5
         version: 4.3.5
       '@types/lodash-es':
-        specifier: ^4.17.8
-        version: 4.17.8
+        specifier: ^4.17.9
+        version: 4.17.9
       '@types/mocha':
         specifier: ^10.0.1
         version: 10.0.1
@@ -1864,8 +1864,8 @@ packages:
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
     dev: true
 
-  /@types/lodash-es@4.17.8:
-    resolution: {integrity: sha512-euY3XQcZmIzSy7YH5+Unb3b2X12Wtk54YWINBvvGQ5SmMvwb11JQskGsfkH/5HXK77Kr8GF0wkVDIxzAisWtog==}
+  /@types/lodash-es@4.17.9:
+    resolution: {integrity: sha512-ZTcmhiI3NNU7dEvWLZJkzG6ao49zOIjEgIE0RgV7wbPxU0f2xT3VSAHw2gmst8swH6V0YkLRGp4qPlX/6I90MQ==}
     dependencies:
       '@types/lodash': 4.14.197
     dev: true
@@ -2889,12 +2889,12 @@ packages:
   /csstype@3.1.2:
     resolution: {integrity: sha512-I7K1Uu0MBPzaFKg4nI5Q7Vs2t+3gWWW648spaF+Rg7pI9ds18Ugn+lvg4SHczUdKlHI5LWBXyqfS8+DufyBsgQ==}
 
-  /cypress-axe@1.4.0(axe-core@4.7.2)(cypress@13.1.0):
-    resolution: {integrity: sha512-Ut7NKfzjyKm0BEbt2WxuKtLkIXmx6FD2j0RwdvO/Ykl7GmB/qRQkwbKLk3VP35+83hiIr8GKD04PDdrTK5BnyA==}
+  /cypress-axe@1.5.0(axe-core@4.7.2)(cypress@13.1.0):
+    resolution: {integrity: sha512-Hy/owCjfj+25KMsecvDgo4fC/781ccL+e8p+UUYoadGVM2ogZF9XIKbiM6KI8Y3cEaSreymdD6ZzccbI2bY0lQ==}
     engines: {node: '>=10'}
     peerDependencies:
       axe-core: ^3 || ^4
-      cypress: ^10 || ^11 || ^12
+      cypress: ^10 || ^11 || ^12 || ^13
     dependencies:
       axe-core: 4.7.2
       cypress: 13.1.0
@@ -5681,8 +5681,8 @@ packages:
       react: 18.2.0
     dev: false
 
-  /react-i18next@13.2.1(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-XhMsnGgJnytWfi2Q70HMYfm+zysPUu1Pz+It6I87WwaeclGY+W8W1c11uENEMNg+Xb+mNrGuo8GEDuQDOgO+oQ==}
+  /react-i18next@13.2.2(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-+nFUkbRByFwnrfDcYqvzBuaeZb+nACHx+fAWN/pZMddWOCJH5hoc21+Sa/N/Lqi6ne6/9wC/qRGOoQhJa6IkEQ==}
     peerDependencies:
       i18next: '>= 23.2.3'
       react: '>= 16.8.0'
@@ -7062,8 +7062,8 @@ packages:
       stackback: 0.0.2
     dev: true
 
-  /wireit@0.11.0:
-    resolution: {integrity: sha512-s0/bgBZ6y65BfxpCm7YA/x6QokPTQrA4mAN110FCxvvp4MotAupY8f/RH8f6tGfz74zfJafxEqHo/NyoMc0pNQ==}
+  /wireit@0.13.0:
+    resolution: {integrity: sha512-J8+/kWDBLyDTM2isjEFf9nQZxhuXkgICVt6Nntl9ZyZSAjo/P+nxocwKX6D1jUFfT3TDPStUftsV6OYpx149Ow==}
     engines: {node: '>=14.14.0'}
     hasBin: true
     dependencies:
@@ -7257,7 +7257,7 @@ packages:
       react-dropzone: 14.2.3(react@18.2.0)
       react-error-boundary: 3.1.4(react@18.2.0)
       react-hook-form: 7.45.4(react@18.2.0)
-      react-i18next: 13.2.1(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0)
+      react-i18next: 13.2.2(i18next@23.4.6)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom: 6.15.0(react-dom@18.2.0)(react@18.2.0)
       reactflow: 11.8.3(@types/react@18.2.21)(react-dom@18.2.0)(react@18.2.0)
       ui-shared: link:libs/ui-shared
