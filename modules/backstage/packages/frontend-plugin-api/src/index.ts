@@ -24,6 +24,7 @@ export {
   createSchemaFromZod,
   type PortableSchema,
 } from './createSchemaFromZod';
+export * from './components';
 export * from './extensions';
 export {
   coreExtensionData,

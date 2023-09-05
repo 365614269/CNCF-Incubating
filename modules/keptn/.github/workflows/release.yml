@@ -14,7 +14,7 @@ defaults:
 env:
   GO_VERSION: "~1.20"
   # renovate: datasource=github-releases depName=kubernetes-sigs/controller-tools
-  CONTROLLER_TOOLS_VERSION: "v0.12.1"
+  CONTROLLER_TOOLS_VERSION: "v0.13.0"
   SCHEDULER_COMPATIBLE_K8S_VERSION: "v0.24.3"
   PUBLISHABLE_ITEMS: '[".", "lifecycle-operator", "metrics-operator", "klt-cert-manager", "runtimes/deno-runtime", "runtimes/python-runtime"]'
 
@@ -156,7 +156,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Cosign
-        uses: sigstore/cosign-installer@v3.1.1
+        uses: sigstore/cosign-installer@11086d25041f77fe8fe7b9ea4e48e3b9192b8f19 # v3.1.2
 
       - name: Clean up image tag
         id: clean-image-tag

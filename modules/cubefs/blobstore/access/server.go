@@ -226,6 +226,7 @@ func (s *Service) Limit(c *rpc.Context) {
 		name = limitNameDelete
 	case "/sign":
 		name = limitNameSign
+	default:
 	}
 	if name == "" {
 		return
@@ -254,7 +255,6 @@ func (s *Service) Put(c *rpc.Context) {
 
 	span.Debugf("accept /put request args:%+v", args)
 	if !args.IsValid() {
-		span.Debugf("invalid args:%+v", args)
 		c.RespondError(errcode.ErrIllegalArguments)
 		return
 	}
@@ -305,7 +305,6 @@ func (s *Service) PutAt(c *rpc.Context) {
 
 	span.Debugf("accept /putat request args:%+v", args)
 	if !args.IsValid() {
-		span.Debugf("invalid args:%+v", args)
 		c.RespondError(errcode.ErrIllegalArguments)
 		return
 	}
@@ -361,7 +360,6 @@ func (s *Service) Alloc(c *rpc.Context) {
 
 	span.Debugf("accept /alloc request args:%+v", args)
 	if !args.IsValid() {
-		span.Debugf("invalid args:%+v", args)
 		c.RespondError(errcode.ErrIllegalArguments)
 		return
 	}
@@ -400,7 +398,6 @@ func (s *Service) Get(c *rpc.Context) {
 
 	span.Debugf("accept /get request args:%+v", args)
 	if !args.IsValid() || !verifyCrc(&args.Location) {
-		span.Debugf("invalid args:%+v", args)
 		c.RespondError(errcode.ErrIllegalArguments)
 		return
 	}
@@ -558,7 +555,6 @@ func (s *Service) DeleteBlob(c *rpc.Context) {
 
 	span.Debugf("accept /deleteblob request args:%+v", args)
 	if !args.IsValid() {
-		span.Debugf("invalid args:%+v", args)
 		c.RespondError(errcode.ErrIllegalArguments)
 		return
 	}
@@ -635,13 +631,13 @@ func httpError(err error) error {
 }
 
 // genTokens generate tokens
-// 1. Returns 0 token if has no blobs.
-// 2. Returns 1 token if file size less than blobsize.
-// 3. Returns len(blobs) tokens if size divided by blobsize.
-// 4. Otherwise returns len(blobs)+1 tokens, the last token
-//    will be used by the last blob, even if the last slice blobs' size
-//    less than blobsize.
-// 5. Each segment blob has its specified token include the last blob.
+//  1. Returns 0 token if has no blobs.
+//  2. Returns 1 token if file size less than blobsize.
+//  3. Returns len(blobs) tokens if size divided by blobsize.
+//  4. Otherwise returns len(blobs)+1 tokens, the last token
+//     will be used by the last blob, even if the last slice blobs' size
+//     less than blobsize.
+//  5. Each segment blob has its specified token include the last blob.
 func genTokens(location *access.Location) []string {
 	tokens := make([]string, 0, len(location.Blobs)+1)
 
