@@ -25,6 +25,7 @@ import (
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util/concurrent"
 	"github.com/cubefs/cubefs/util/flowctrl"
+	"github.com/cubefs/cubefs/util/log"
 	"github.com/cubefs/cubefs/util/ratelimit"
 )
 
@@ -35,11 +36,11 @@ const (
 )
 
 var putApi = map[string]string{
-	PUT_OBJECT:       PUT,
-	COPY_OBJECT:      PUT,
-	POST_OBJECT:      PUT,
-	UPLOAD_PART:      PUT,
-	UPLOAD_PART_COPY: PUT,
+	strings.ToLower(PUT_OBJECT):       PUT,
+	strings.ToLower(COPY_OBJECT):      PUT,
+	strings.ToLower(POST_OBJECT):      PUT,
+	strings.ToLower(UPLOAD_PART):      PUT,
+	strings.ToLower(UPLOAD_PART_COPY): PUT,
 }
 
 var listApi = map[string]string{
@@ -196,6 +197,7 @@ func (r *UserRateMgr) QPSLimitAllowed(uid string) (bool, time.Duration) {
 	if qpsQuota == 0 {
 		return true, 0
 	}
+	log.LogDebugf("QPSLimit: defaultQPSLimit[%d] usrQPSLimit[%d] uid[%s]", defaultQPSLimit, usrQPSLimit, uid)
 	qpsLimit := r.QPSLimit.Acquire(uid, qpsQuota)
 	defer r.QPSLimit.Release(uid)
 
@@ -211,6 +213,7 @@ func (r *UserRateMgr) ConcurrentLimitAcquire(uid string) error {
 	if concurrentQuota == 0 {
 		return nil
 	}
+	log.LogDebugf("ConcurrentLimit: defaultConcurrentLimit[%d] usrConcurrentLimit[%d] uid[%s]", defaultConcurrentLimit, usrConcurrentLimit, uid)
 	return r.ConcurrentLimit.Acquire(uid, int64(concurrentQuota))
 
 }
@@ -228,6 +231,7 @@ func (r *UserRateMgr) GetResponseWriter(uid string, w io.Writer) io.Writer {
 	if bandWidthQuota == 0 {
 		return w
 	}
+	log.LogDebugf("WriterFlowCtrl: defaultBandWidthLimit[%d] usrBandWidthLimit[%d] uid[%s]", defaultBandWidthLimit, usrBandWidthLimit, uid)
 	rate, _ := convertUint64ToInt(bandWidthQuota)
 	flowCtrl := r.BandWidthLimit.Acquire(uid, rate)
 	defer r.BandWidthLimit.Release(uid)
@@ -246,6 +250,7 @@ func (r *UserRateMgr) GetReader(uid string, reader io.Reader) io.Reader {
 	if bandWidthQuota == 0 {
 		return reader
 	}
+	log.LogDebugf("ReaderFlowCtrl: defaultBandWidthLimit[%d] usrBandWidthLimit[%d] uid[%s]", defaultBandWidthLimit, usrBandWidthLimit, uid)
 	rate, _ := convertUint64ToInt(bandWidthQuota)
 	flowCtrl := r.BandWidthLimit.Acquire(uid, rate)
 	defer r.BandWidthLimit.Release(uid)

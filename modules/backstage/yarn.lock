@@ -3869,7 +3869,7 @@ __metadata:
     rollup-plugin-esbuild: ^4.7.2
     rollup-plugin-postcss: ^4.0.0
     rollup-pluginutils: ^2.8.2
-    run-script-webpack-plugin: ^0.1.0
+    run-script-webpack-plugin: ^0.2.0
     semver: ^7.5.3
     style-loader: ^3.3.1
     sucrase: ^3.20.2
@@ -4162,7 +4162,7 @@ __metadata:
     pluralize: ^8.0.0
     prop-types: ^15.7.2
     qs: ^6.9.4
-    rc-progress: 3.4.2
+    rc-progress: 3.5.1
     react-helmet: 6.1.0
     react-hook-form: ^7.12.2
     react-markdown: ^8.0.0
@@ -4316,6 +4316,7 @@ __metadata:
   dependencies:
     "@backstage/cli": "workspace:^"
     "@backstage/config": "workspace:^"
+    "@backstage/core-plugin-api": "workspace:^"
     "@backstage/frontend-plugin-api": "workspace:^"
     "@backstage/plugin-graphiql": "workspace:^"
     "@backstage/types": "workspace:^"
@@ -4342,6 +4343,7 @@ __metadata:
     zod-to-json-schema: ^3.21.4
   peerDependencies:
     react: ^16.13.1 || ^17.0.0
+    react-router-dom: 6.0.0-beta.0 || ^6.3.0
   languageName: unknown
   linkType: soft
 
@@ -6276,7 +6278,7 @@ __metadata:
     "@testing-library/user-event": ^14.0.0
     "@types/react": ^16.13.1 || ^17.0.0
     msw: ^1.0.0
-    rc-progress: 3.4.2
+    rc-progress: 3.5.1
     react-use: ^17.2.4
   peerDependencies:
     react: ^16.13.1 || ^17.0.0
@@ -8164,6 +8166,20 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@backstage/plugin-permission-backend-module-allow-all-policy@workspace:^, @backstage/plugin-permission-backend-module-allow-all-policy@workspace:plugins/permission-backend-module-policy-allow-all":
+  version: 0.0.0-use.local
+  resolution: "@backstage/plugin-permission-backend-module-allow-all-policy@workspace:plugins/permission-backend-module-policy-allow-all"
+  dependencies:
+    "@backstage/backend-common": "workspace:^"
+    "@backstage/backend-plugin-api": "workspace:^"
+    "@backstage/backend-test-utils": "workspace:^"
+    "@backstage/cli": "workspace:^"
+    "@backstage/plugin-auth-node": "workspace:^"
+    "@backstage/plugin-permission-common": "workspace:^"
+    "@backstage/plugin-permission-node": "workspace:^"
+  languageName: unknown
+  linkType: soft
+
 "@backstage/plugin-permission-backend@workspace:^, @backstage/plugin-permission-backend@workspace:plugins/permission-backend":
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-permission-backend@workspace:plugins/permission-backend"
@@ -9207,7 +9223,7 @@ __metadata:
     cross-fetch: ^3.1.5
     luxon: ^3.0.0
     msw: ^1.0.0
-    rc-progress: 3.4.2
+    rc-progress: 3.5.1
     react-use: ^17.2.4
   peerDependencies:
     react: ^16.13.1 || ^17.0.0
@@ -17037,11 +17053,11 @@ __metadata:
   linkType: hard
 
 "@types/codemirror@npm:^5.0.0":
-  version: 5.60.9
-  resolution: "@types/codemirror@npm:5.60.9"
+  version: 5.60.10
+  resolution: "@types/codemirror@npm:5.60.10"
   dependencies:
     "@types/tern": "*"
-  checksum: 89da80a8d5c904f573289769098ad7721a4b58e056c1d08168b967bcfb63e30433d9d0bee0c43ff4b6679b0b7b87cfe942cc3f250ca0365ee244c9fb68ac9a70
+  checksum: c5977db03939f2a208f0ec7958be70b4fb205dd3f3122b2175ff28287a5424da95f9030b2838c61d37e6278ec53795861dec12439967c1e1da885b2b2a65b299
   languageName: node
   linkType: hard
 
@@ -17062,11 +17078,11 @@ __metadata:
   linkType: hard
 
 "@types/color@npm:^3.0.1":
-  version: 3.0.3
-  resolution: "@types/color@npm:3.0.3"
+  version: 3.0.4
+  resolution: "@types/color@npm:3.0.4"
   dependencies:
     "@types/color-convert": "*"
-  checksum: 4a54a6eca687b1f19d393c6c44e292009e913fa2377b5b815d1cd04470131087d7a799718d9e66a970f43e6ba16e7056a5b40b49d2d0d1d0f1530aff23864528
+  checksum: 46935626ddeb8ae8877488b1f8f2f71b17a529c113673301a1dd7a64d917cb7a748545ac34ed30c188d66a2cd09c33abc24c87bd5b3a80d520cf1f35aaa2e476
   languageName: node
   linkType: hard
 
@@ -25768,6 +25784,7 @@ __metadata:
     "@backstage/plugin-lighthouse-backend": "workspace:^"
     "@backstage/plugin-linguist-backend": "workspace:^"
     "@backstage/plugin-permission-backend": "workspace:^"
+    "@backstage/plugin-permission-backend-module-allow-all-policy": "workspace:^"
     "@backstage/plugin-permission-common": "workspace:^"
     "@backstage/plugin-permission-node": "workspace:^"
     "@backstage/plugin-proxy-backend": "workspace:^"
@@ -30303,9 +30320,9 @@ __metadata:
   linkType: hard
 
 "jose@npm:^4.14.4, jose@npm:^4.6.0":
-  version: 4.14.5
-  resolution: "jose@npm:4.14.5"
-  checksum: 6fd42cd8c56efe28326549b05fc385f484b93424738a430c0ff776e80846b35a6e1af9648a5c1958eaefa8636b989e71cb6687155f1751721c0a9d17fc281a6f
+  version: 4.14.6
+  resolution: "jose@npm:4.14.6"
+  checksum: eae81a234e7bf1446b1bd80722b3462b014e3835b155c3a7799c1c5043163a53a0dc28d347004151b031e6b7b863403aabf8814d9cc217ce21f8c2f3ebd4b335
   languageName: node
   linkType: hard
 
@@ -36874,6 +36891,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"rc-progress@npm:3.5.1":
+  version: 3.5.1
+  resolution: "rc-progress@npm:3.5.1"
+  dependencies:
+    "@babel/runtime": ^7.10.1
+    classnames: ^2.2.6
+    rc-util: ^5.16.1
+  peerDependencies:
+    react: ">=16.9.0"
+    react-dom: ">=16.9.0"
+  checksum: b0722a696396f985267e35e26f49c1c1bd6a17b4918eb93318fc36a7a5ffae9806932d4982a7da0d83349648ca85325b792003ec40240820fd6e00e0bc6f3c1d
+  languageName: node
+  linkType: hard
+
 "rc-util@npm:^5.16.1":
   version: 5.16.1
   resolution: "rc-util@npm:5.16.1"
@@ -38689,10 +38720,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"run-script-webpack-plugin@npm:^0.1.0":
-  version: 0.1.1
-  resolution: "run-script-webpack-plugin@npm:0.1.1"
-  checksum: 7c2ca7310438e7e84d1b5b43d040bc1dc8d0c731bac0312605b68fac321e41aa268cd5545c1afce9d65165f5ef6dc8a822e58fbd154c95015fb9c960946e605e
+"run-script-webpack-plugin@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "run-script-webpack-plugin@npm:0.2.0"
+  checksum: 1f5df65b726e098d602b4cc27472d9e2cd88841862f7ca2112f702b01f3c4fc1cd89b54fa63780691d988c9ab36cc9adc08a6fa056cdb9c7b85b027b21ba6cdd
   languageName: node
   linkType: hard
 
