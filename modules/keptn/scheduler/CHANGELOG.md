@@ -1,12 +1,13 @@
 # Changelog
 
-## [0.8.2](https://github.com/keptn/lifecycle-toolkit/compare/scheduler-v0.8.1...scheduler-v0.8.2) (2023-09-05)
+## [0.8.2](https://github.com/keptn/lifecycle-toolkit/compare/scheduler-v0.8.1...scheduler-v0.8.2) (2023-09-06)
 
 
 ### Other
 
 * fix minor security issues ([#1728](https://github.com/keptn/lifecycle-toolkit/issues/1728)) ([ea73cd9](https://github.com/keptn/lifecycle-toolkit/commit/ea73cd983102632fb162e1b4c8ae56687b288b25))
 * **main:** release lifecycle-operator-and-scheduler libraries ([#1979](https://github.com/keptn/lifecycle-toolkit/issues/1979)) ([12d0f40](https://github.com/keptn/lifecycle-toolkit/commit/12d0f40725e466825c4a0d483fa344e5888b03ae))
+* release scheduler 0.8.2 ([#2032](https://github.com/keptn/lifecycle-toolkit/issues/2032)) ([cb4d2b1](https://github.com/keptn/lifecycle-toolkit/commit/cb4d2b14a7a772572b505fa844db6f08a45db291))
 
 
 ### Docs
