@@ -936,17 +936,17 @@ func (i *Inode) mergeExtentArr(extentKeysLeft []proto.ExtentKey, extentKeysRight
 	sortMergedExts := make([]proto.ExtentKey, 0, lCnt+rCnt)
 	lPos, rPos := 0, 0
 
-	doWork := func(keyArr *[]proto.ExtentKey) {
+	doWork := func(keyArr *[]proto.ExtentKey, pos int) {
 		mLen := len(sortMergedExts)
-		if mLen > 0 && sortMergedExts[mLen-1].IsSequence(&(*keyArr)[lPos]) {
-			sortMergedExts[mLen-1].Size += (*keyArr)[lPos].Size
-			log.LogDebugf("mergeExtentArr. ek left %v right %v", sortMergedExts[mLen-1], (*keyArr)[lPos])
-			if !sortMergedExts[mLen-1].IsSplit() || !(*keyArr)[lPos].IsSplit() {
-				log.LogErrorf("ino %v ek merge left %v right %v not all split", i.Inode, sortMergedExts[mLen-1], (*keyArr)[lPos])
+		if mLen > 0 && sortMergedExts[mLen-1].IsSequence(&(*keyArr)[pos]) {
+			sortMergedExts[mLen-1].Size += (*keyArr)[pos].Size
+			log.LogDebugf("mergeExtentArr. ek left %v right %v", sortMergedExts[mLen-1], (*keyArr)[pos])
+			if !sortMergedExts[mLen-1].IsSplit() || !(*keyArr)[pos].IsSplit() {
+				log.LogErrorf("ino %v ek merge left %v right %v not all split", i.Inode, sortMergedExts[mLen-1], (*keyArr)[pos])
 			}
-			i.DecSplitEk(&(*keyArr)[lPos])
+			i.DecSplitEk(&(*keyArr)[pos])
 		} else {
-			sortMergedExts = append(sortMergedExts, (*keyArr)[lPos])
+			sortMergedExts = append(sortMergedExts, (*keyArr)[pos])
 		}
 	}
 
@@ -961,10 +961,10 @@ func (i *Inode) mergeExtentArr(extentKeysLeft []proto.ExtentKey, extentKeysRight
 		}
 
 		if extentKeysLeft[lPos].FileOffset < extentKeysRight[rPos].FileOffset {
-			doWork(&extentKeysLeft)
+			doWork(&extentKeysLeft, lPos)
 			lPos++
 		} else {
-			doWork(&extentKeysRight)
+			doWork(&extentKeysRight, rPos)
 			rPos++
 		}
 	}
@@ -1065,9 +1065,6 @@ func (inode *Inode) unlinkTopLayer(ino *Inode, mpVer uint64, verlist *proto.VolV
 
 	log.LogDebugf("action[unlinkTopLayer] need create version.ino %v withSeq %v not equal mp seq %v, verlist %v", ino, inode.getVer(), mpVer, verlist)
 	if proto.IsDir(inode.Type) { // dir is whole info but inode is partition,which is quit different
-		verlist.RLock()
-		defer verlist.RUnlock()
-
 		_, err := inode.getNextOlderVer(mpVer, verlist)
 		if err == nil {
 			log.LogDebugf("action[unlinkTopLayer] inode %v cann't get next older ver %v err %v", inode.Inode, mpVer, err)
@@ -1077,9 +1074,6 @@ func (inode *Inode) unlinkTopLayer(ino *Inode, mpVer uint64, verlist *proto.VolV
 		log.LogDebugf("action[unlinkTopLayer] inode %v be unlinked, Dir create ver 1st layer", ino.Inode)
 		doMore = true
 	} else {
-		verlist.RLock()
-		defer verlist.RUnlock()
-
 		ver, err := inode.getNextOlderVer(mpVer, verlist)
 		if err != nil {
 			if err.Error() == "not found" {
