@@ -2371,6 +2371,8 @@ const (
 	VirtioFS SupportContainerType = "virtiofs"
 	// SideCar is the container resources for a side car
 	SideCar SupportContainerType = "sidecar"
+	// VMExport is the container resources for a vm exporter pod
+	VMExport SupportContainerType = "vmexport"
 )
 
 // SupportContainerResources are used to specify the cpu/memory request and limits for the containers that support various features of Virtual Machines. These containers are usually idle and don't require a lot of memory or cpu.
@@ -2555,9 +2557,7 @@ type PciHostDevice struct {
 	PCIVendorSelector string `json:"pciVendorSelector"`
 	// The name of the resource that is representing the device. Exposed by
 	// a device plugin and requested by VMs. Typically of the form
-	// vendor.com/product_nameThe name of the resource that is representing
-	// the device. Exposed by a device plugin and requested by VMs.
-	// Typically of the form vendor.com/product_name
+	// vendor.com/product_name
 	ResourceName string `json:"resourceName"`
 	// If true, KubeVirt will leave the allocation and monitoring to an
 	// external device plugin
