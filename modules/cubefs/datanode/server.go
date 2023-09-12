@@ -16,9 +16,11 @@ package datanode
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -26,11 +28,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
-
-	"errors"
-	"os"
 	"syscall"
+	"time"
 
 	"github.com/cubefs/cubefs/cmd/common"
 	"github.com/cubefs/cubefs/proto"
@@ -55,7 +54,7 @@ var (
 
 	LocalIP, serverPort string
 	gConnPool           = util.NewConnectPool()
-	//MasterClient        = masterSDK.NewMasterClient(nil, false)
+	// MasterClient        = masterSDK.NewMasterClient(nil, false)
 	MasterClient *masterSDK.MasterCLientWithResolver
 )
 
@@ -99,15 +98,15 @@ const (
 
 	CfgDiskRdonlySpace = "diskRdonlySpace" // int
 	// smux Config
-	ConfigKeyEnableSmuxClient  = "enableSmuxConnPool" //bool
-	ConfigKeySmuxPortShift     = "smuxPortShift"      //int
-	ConfigKeySmuxMaxConn       = "smuxMaxConn"        //int
-	ConfigKeySmuxStreamPerConn = "smuxStreamPerConn"  //int
-	ConfigKeySmuxMaxBuffer     = "smuxMaxBuffer"      //int
-	ConfigKeySmuxTotalStream   = "sumxTotalStream"    //int
+	ConfigKeyEnableSmuxClient  = "enableSmuxConnPool" // bool
+	ConfigKeySmuxPortShift     = "smuxPortShift"      // int
+	ConfigKeySmuxMaxConn       = "smuxMaxConn"        // int
+	ConfigKeySmuxStreamPerConn = "smuxStreamPerConn"  // int
+	ConfigKeySmuxMaxBuffer     = "smuxMaxBuffer"      // int
+	ConfigKeySmuxTotalStream   = "sumxTotalStream"    // int
 
-	//rate limit control enable
-	ConfigDiskQosEnable = "diskQosEnable" //bool
+	// rate limit control enable
+	ConfigDiskQosEnable = "diskQosEnable" // bool
 
 	ConfigServiceIDKey = "serviceIDKey"
 )
@@ -148,7 +147,7 @@ type DataNode struct {
 	metrics        *DataNodeMetrics
 	metricsDegrade int64
 	metricsCnt     uint64
-	volUpdating    sync.Map //map[string]*verOp2Phase
+	volUpdating    sync.Map // map[string]*verOp2Phase
 
 	control common.Control
 
@@ -202,7 +201,7 @@ func doStart(server common.Server, cfg *config.Config) (err error) {
 		return errors.New("Invalid node Type!")
 	}
 
-	s.stopC = make(chan bool, 0)
+	s.stopC = make(chan bool)
 
 	// parse the config file
 	if err = s.parseConfig(cfg); err != nil {
@@ -213,11 +212,11 @@ func doStart(server common.Server, cfg *config.Config) (err error) {
 	s.registerMetrics()
 	s.register(cfg)
 
-	//parse the smux config
+	// parse the smux config
 	if err = s.parseSmuxConfig(cfg); err != nil {
 		return
 	}
-	//connection pool must be created before initSpaceManager
+	// connection pool must be created before initSpaceManager
 	s.initConnPool()
 
 	// init limit
@@ -245,7 +244,7 @@ func doStart(server common.Server, cfg *config.Config) (err error) {
 		return
 	}
 
-	//smux listening & smux connection pool
+	// smux listening & smux connection pool
 	if err = s.startSmuxService(cfg); err != nil {
 		return
 	}
@@ -289,7 +288,7 @@ func (s *DataNode) parseConfig(cfg *config.Config) (err error) {
 	port = cfg.GetString(proto.ListenPort)
 	s.bindIp = cfg.GetBool(proto.BindIpKey)
 	serverPort = port
-	if regexpPort, err = regexp.Compile("^(\\d)+$"); err != nil {
+	if regexpPort, err = regexp.Compile(`^(\d)+$`); err != nil {
 		return fmt.Errorf("Err:no port")
 	}
 	if !regexpPort.MatchString(port) {
@@ -349,6 +348,7 @@ func (s *DataNode) updateQosLimit() {
 		disk.updateQosLimiter()
 	}
 }
+
 func (s *DataNode) startSpaceManager(cfg *config.Config) (err error) {
 	s.startTime = time.Now().Unix()
 	s.space = NewSpaceManager(s)
@@ -404,12 +404,12 @@ func (s *DataNode) startSpaceManager(cfg *config.Config) (err error) {
 		if s.clusterUuidEnable {
 			if err = config.CheckOrStoreClusterUuid(path, s.clusterUuid, false); err != nil {
 				log.LogErrorf("CheckOrStoreClusterUuid failed: %v", err)
-				return errors.New(fmt.Sprintf("CheckOrStoreClusterUuid failed: %v", err.Error()))
+				return fmt.Errorf("CheckOrStoreClusterUuid failed: %v", err.Error())
 			}
 		}
 		reservedSpace, err := strconv.ParseUint(arr[1], 10, 64)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Invalid disk reserved space. Error: %s", err.Error()))
+			return fmt.Errorf("Invalid disk reserved space. Error: %s", err.Error())
 		}
 
 		if reservedSpace < DefaultDiskRetainMin {
@@ -464,9 +464,7 @@ func parseDiskPath(pathStr string) (disks []string, err error) {
 // registers the data node on the master to report the information such as IsIPV4 address.
 // The startup of a data node will be blocked until the registration succeeds.
 func (s *DataNode) register(cfg *config.Config) {
-	var (
-		err error
-	)
+	var err error
 
 	timer := time.NewTimer(0)
 
@@ -522,7 +520,7 @@ type DataNodeInfo struct {
 }
 
 func (s *DataNode) checkLocalPartitionMatchWithMaster() (lackPartitions []uint64, err error) {
-	var convert = func(node *proto.DataNodeInfo) *DataNodeInfo {
+	convert := func(node *proto.DataNodeInfo) *DataNodeInfo {
 		result := &DataNodeInfo{}
 		result.Addr = node.Addr
 		result.PersistenceDataPartitions = node.PersistenceDataPartitions
@@ -717,7 +715,6 @@ func (s *DataNode) serveSmuxConn(conn net.Conn) {
 		}
 		go s.serveSmuxStream(stream)
 	}
-	return
 }
 
 func (s *DataNode) serveSmuxStream(stream *smux.Stream) {
@@ -770,7 +767,7 @@ func (s *DataNode) parseSmuxConfig(cfg *config.Config) error {
 		}
 	}
 
-	//smux conn pool config
+	// smux conn pool config
 	if s.enableSmuxConnPool {
 		s.smuxConnPoolConfig = util.DefaultSmuxConnPoolConfig()
 		if maxBuffer > 0 {
@@ -825,10 +822,8 @@ func (s *DataNode) initConnPool() {
 		s.putRepairConnFunc = func(conn net.Conn, forceClose bool) {
 			log.LogDebugf("[dataNode.putRepairConnFunc] put tcp conn, addr(%v), forceClose(%v)", conn.RemoteAddr().String(), forceClose)
 			gConnPool.PutConnect(conn.(*net.TCPConn), forceClose)
-			return
 		}
 	}
-	return
 }
 
 func (s *DataNode) closeSmuxConnPool() {
@@ -836,7 +831,6 @@ func (s *DataNode) closeSmuxConnPool() {
 		s.smuxConnPool.Close()
 		log.LogDebugf("action[stopSmuxService] stop smux conn pool")
 	}
-	return
 }
 
 func (s *DataNode) shallDegrade() bool {
@@ -848,10 +842,7 @@ func (s *DataNode) shallDegrade() bool {
 		return false
 	}
 	cnt := atomic.LoadUint64(&s.metricsCnt)
-	if cnt%uint64(level) == 0 {
-		return false
-	}
-	return true
+	return cnt%uint64(level) != 0
 }
 
 func (s *DataNode) scheduleTask() {
@@ -878,9 +869,7 @@ func (s *DataNode) startCpuSample() {
 func (s *DataNode) scheduleToCheckLackPartitions() {
 	go func() {
 		for {
-			var err error
-			lackPartitionsInMem := make([]uint64, 0)
-			lackPartitionsInMem, err = s.checkLocalPartitionMatchWithMaster()
+			lackPartitionsInMem, err := s.checkLocalPartitionMatchWithMaster()
 			if err != nil {
 				log.LogError(err)
 			}
@@ -891,8 +880,7 @@ func (s *DataNode) scheduleToCheckLackPartitions() {
 			}
 			s.space.stats.updateMetricLackPartitionsInMem(uint64(len(lackPartitionsInMem)))
 
-			lackPartitionsInDisk := make([]uint64, 0)
-			lackPartitionsInDisk = s.checkPartitionInMemoryMatchWithInDisk()
+			lackPartitionsInDisk := s.checkPartitionInMemoryMatchWithInDisk()
 			if len(lackPartitionsInDisk) > 0 {
 				err = fmt.Errorf("action[scheduleToLackDataPartitions] lackPartitions %v in datanode %v disk",
 					lackPartitionsInDisk, s.localServerAddr)
@@ -906,10 +894,7 @@ func (s *DataNode) scheduleToCheckLackPartitions() {
 }
 
 func IsDiskErr(errMsg string) bool {
-	if strings.Contains(errMsg, syscall.EIO.Error()) || strings.Contains(errMsg, syscall.EROFS.Error()) ||
-		strings.Contains(errMsg, syscall.EACCES.Error()) {
-		return true
-	}
-
-	return false
+	return strings.Contains(errMsg, syscall.EIO.Error()) ||
+		strings.Contains(errMsg, syscall.EROFS.Error()) ||
+		strings.Contains(errMsg, syscall.EACCES.Error())
 }

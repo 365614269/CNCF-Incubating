@@ -19,14 +19,15 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"net"
+	"strings"
+
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/repl"
 	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/log"
-	"net"
-	"strings"
 )
 
 type RaftCmdItem struct {
@@ -159,14 +160,6 @@ func UnmarshalOldVersionRandWriteOpItem(raw []byte) (result *rndWrtOpItem, err e
 	return
 }
 
-func (dp *DataPartition) checkWriteErrs(errMsg string) (ignore bool) {
-	// file has been deleted when applying the raft log
-	if strings.Contains(errMsg, storage.ExtentHasBeenDeletedError.Error()) || strings.Contains(errMsg, storage.ExtentNotFoundError.Error()) {
-		return true
-	}
-	return false
-}
-
 // CheckLeader checks if itself is the leader during read
 func (dp *DataPartition) CheckLeader(request *repl.Packet, connect net.Conn) (err error) {
 	//  and use another getRaftLeaderAddr() to return the actual address
@@ -187,7 +180,6 @@ type ItemIterator struct {
 
 // NewItemIterator creates a new item iterator.
 func NewItemIterator(applyID uint64) *ItemIterator {
-
 	si := new(ItemIterator)
 	si.applyID = applyID
 	return si
@@ -200,7 +192,6 @@ func (si *ItemIterator) ApplyIndex() uint64 {
 
 // Close Closes the iterator.
 func (si *ItemIterator) Close() {
-	return
 }
 
 // Next returns the next item in the iterator.
@@ -299,9 +290,7 @@ func (dp *DataPartition) RandomWriteSubmit(pkg *repl.Packet) (err error) {
 		log.LogErrorf("action[RandomWriteSubmit] [%v] marshal error %v", dp.partitionID, err)
 		return
 	}
-	var (
-		resp interface{}
-	)
+	var resp interface{}
 	resp, err = dp.Put(nil, val)
 	pkg.ResultCode, _ = resp.(uint8)
 	if err != nil {

@@ -17,7 +17,6 @@ package datanode
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/cubefs/cubefs/util/config"
 	"net/http"
 	"os"
 	"path"
@@ -27,11 +26,10 @@ import (
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/storage"
+	"github.com/cubefs/cubefs/util/config"
 )
 
-var (
-	AutoRepairStatus = true
-)
+var AutoRepairStatus = true
 
 func (s *DataNode) getDiskAPI(w http.ResponseWriter, r *http.Request) {
 	disks := make([]interface{}, 0)
@@ -248,7 +246,6 @@ func (s *DataNode) getExtentAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.buildSuccessResp(w, extentInfo)
-	return
 }
 
 func (s *DataNode) getBlockCrcAPI(w http.ResponseWriter, r *http.Request) {
@@ -281,7 +278,6 @@ func (s *DataNode) getBlockCrcAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.buildSuccessResp(w, blocks)
-	return
 }
 
 func (s *DataNode) getTinyDeleted(w http.ResponseWriter, r *http.Request) {
@@ -309,7 +305,6 @@ func (s *DataNode) getTinyDeleted(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.buildSuccessResp(w, extentInfo)
-	return
 }
 
 func (s *DataNode) getNormalDeleted(w http.ResponseWriter, r *http.Request) {
@@ -337,7 +332,6 @@ func (s *DataNode) getNormalDeleted(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.buildSuccessResp(w, extentInfo)
-	return
 }
 
 func (s *DataNode) setQosEnable() func(http.ResponseWriter, *http.Request) {
@@ -371,7 +365,6 @@ func (s *DataNode) getSmuxPoolStat() func(http.ResponseWriter, *http.Request) {
 		}
 		stat := s.smuxConnPool.GetStat()
 		s.buildSuccessResp(w, stat)
-		return
 	}
 }
 
@@ -417,7 +410,6 @@ func (s *DataNode) genClusterVersionFile(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	s.buildSuccessResp(w, "Generate cluster version file success")
-	return
 }
 
 func (s *DataNode) buildSuccessResp(w http.ResponseWriter, data interface{}) {

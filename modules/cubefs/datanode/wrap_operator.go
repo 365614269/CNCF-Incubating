@@ -19,13 +19,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"net"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
-
-	"hash/crc32"
-	"strings"
 
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	raftProto "github.com/cubefs/cubefs/depends/tiglabs/raft/proto"
@@ -38,9 +37,7 @@ import (
 	"github.com/cubefs/cubefs/util/log"
 )
 
-var (
-	ErrForbiddenDataPartition = errors.New("the data partition is forbidden")
-)
+var ErrForbiddenDataPartition = errors.New("the data partition is forbidden")
 
 func (s *DataNode) getPacketTpLabels(p *repl.Packet) map[string]string {
 	labels := make(map[string]string)
@@ -220,8 +217,6 @@ func (s *DataNode) handlePacketToCreateExtent(p *repl.Packet) {
 	partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
 
 	err = partition.ExtentStore().Create(p.ExtentID)
-
-	return
 }
 
 // Handle OpCreateDataPartition packet.
@@ -263,12 +258,9 @@ func (s *DataNode) handlePacketToCreateDataPartition(p *repl.Packet) {
 		return
 	}
 	p.PacketOkWithBody([]byte(dp.Disk().Path))
-
-	return
 }
 
 func (s *DataNode) commitCreateVersion(volumeID string, verSeq uint64) (err error) {
-
 	for _, dp := range s.space.partitions {
 		if dp.volumeID != volumeID {
 			continue
@@ -305,9 +297,7 @@ func (s *DataNode) commitCreateVersion(volumeID string, verSeq uint64) (err erro
 }
 
 func (s *DataNode) prepareCreateVersion(req *proto.MultiVersionOpRequest) (err error, opAagin bool) {
-	var (
-		ver2Phase *verOp2Phase
-	)
+	var ver2Phase *verOp2Phase
 	if value, ok := s.volUpdating.Load(req.VolumeID); ok {
 		ver2Phase = value.(*verOp2Phase)
 		if req.VerSeq < ver2Phase.verSeq {
@@ -451,7 +441,6 @@ func (s *DataNode) handleUpdateVerPacket(p *repl.Packet) {
 			return
 		}
 	}()
-
 }
 
 func (s *DataNode) checkVolumeForbidden(volNames []string) {
@@ -545,7 +534,6 @@ func (s *DataNode) handleHeartbeatPacket(p *repl.Packet) {
 			return
 		}
 	}()
-
 }
 
 // Handle OpDeleteDataPartition packet.
@@ -580,15 +568,12 @@ func (s *DataNode) handlePacketToDeleteDataPartition(p *repl.Packet) {
 		log.LogErrorf("action[handlePacketToDeleteDataPartition] err(%v).", err)
 	}
 	log.LogInfof(fmt.Sprintf("action[handlePacketToDeleteDataPartition] %v error(%v)", request.PartitionId, err))
-
 }
 
 // Handle OpLoadDataPartition packet.
 func (s *DataNode) handlePacketToLoadDataPartition(p *repl.Packet) {
 	task := &proto.AdminTask{}
-	var (
-		err error
-	)
+	var err error
 	defer func() {
 		if err != nil {
 			p.PackErrorBody(ActionLoadDataPartition, err.Error())
@@ -602,9 +587,7 @@ func (s *DataNode) handlePacketToLoadDataPartition(p *repl.Packet) {
 }
 
 func (s *DataNode) asyncLoadDataPartition(task *proto.AdminTask) {
-	var (
-		err error
-	)
+	var err error
 	request := &proto.LoadDataPartitionRequest{}
 	response := &proto.LoadDataPartitionResponse{}
 	if task.OpCode == proto.OpLoadDataPartition {
@@ -636,9 +619,7 @@ func (s *DataNode) asyncLoadDataPartition(task *proto.AdminTask) {
 
 // Handle OpMarkDelete packet.
 func (s *DataNode) handleMarkDeletePacket(p *repl.Packet, c net.Conn) {
-	var (
-		err error
-	)
+	var err error
 	defer func() {
 		if err != nil {
 			p.PackErrorBody(ActionBatchMarkDelete, err.Error())
@@ -667,15 +648,11 @@ func (s *DataNode) handleMarkDeletePacket(p *repl.Packet, c net.Conn) {
 		partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
 		partition.ExtentStore().MarkDelete(p.ExtentID, 0, 0)
 	}
-
-	return
 }
 
 // Handle OpMarkDelete packet.
 func (s *DataNode) handleBatchMarkDeletePacket(p *repl.Packet, c net.Conn) {
-	var (
-		err error
-	)
+	var err error
 	defer func() {
 		if err != nil {
 			log.LogErrorf(fmt.Sprintf("(%v) error(%v).", p.GetUniqueLogId(), err))
@@ -704,8 +681,6 @@ func (s *DataNode) handleBatchMarkDeletePacket(p *repl.Packet, c net.Conn) {
 			}
 		}
 	}
-
-	return
 }
 
 // Handle OpWrite packet.
@@ -801,7 +776,6 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 		}
 	}
 	s.incDiskErrCnt(p.PartitionID, err, WriteFlag)
-	return
 }
 
 func (s *DataNode) handleRandomWritePacket(p *repl.Packet) {
@@ -898,9 +872,7 @@ func (s *DataNode) handleRandomWritePacket(p *repl.Packet) {
 }
 
 func (s *DataNode) handleStreamReadPacket(p *repl.Packet, connect net.Conn, isRepairRead bool) {
-	var (
-		err error
-	)
+	var err error
 	defer func() {
 		if err != nil {
 			p.PackErrorBody(ActionStreamRead, err.Error())
@@ -919,14 +891,10 @@ func (s *DataNode) handleStreamReadPacket(p *repl.Packet, connect net.Conn, isRe
 		return
 	}
 	s.extentRepairReadPacket(p, connect, isRepairRead)
-
-	return
 }
 
 func (s *DataNode) handleExtentRepairReadPacket(p *repl.Packet, connect net.Conn, isRepairRead bool) {
-	var (
-		err error
-	)
+	var err error
 	log.LogDebugf("handleExtentRepairReadPacket %v", p)
 	defer func() {
 		if err != nil {
@@ -1023,8 +991,6 @@ func (s *DataNode) extentRepairReadPacket(p *repl.Packet, connect net.Conn, isRe
 		log.LogReadf(logContent)
 	}
 	p.PacketOkReply()
-
-	return
 }
 
 func (s *DataNode) handlePacketToGetAllWatermarks(p *repl.Packet) {
@@ -1048,9 +1014,12 @@ func (s *DataNode) handlePacketToGetAllWatermarks(p *repl.Packet) {
 		p.PackErrorBody(ActionGetAllExtentWatermarks, err.Error())
 	} else {
 		buf, err = json.Marshal(fInfoList)
-		p.PacketOkWithByte(buf)
+		if err != nil {
+			p.PackErrorBody(ActionGetAllExtentWatermarks, err.Error())
+		} else {
+			p.PacketOkWithByte(buf)
+		}
 	}
-	return
 }
 
 func (s *DataNode) writeEmptyPacketOnTinyExtentRepairRead(reply *repl.Packet, newOffset, currentOffset int64, connect net.Conn) (replySize int64, err error) {
@@ -1107,9 +1076,7 @@ func (s *DataNode) tinyExtentRepairRead(request *repl.Packet, connect net.Conn) 
 	}
 	avaliReplySize := uint64(needReplySize)
 
-	var (
-		newOffset, newEnd int64
-	)
+	var newOffset, newEnd int64
 	for {
 		if needReplySize <= 0 {
 			break
@@ -1123,9 +1090,7 @@ func (s *DataNode) tinyExtentRepairRead(request *repl.Packet, connect net.Conn) 
 			return
 		}
 		if newOffset > offset {
-			var (
-				replySize int64
-			)
+			var replySize int64
 			if replySize, err = s.writeEmptyPacketOnTinyExtentRepairRead(reply, newOffset, offset, connect); err != nil {
 				return
 			}
@@ -1162,13 +1127,10 @@ func (s *DataNode) tinyExtentRepairRead(request *repl.Packet, connect net.Conn) 
 	}
 
 	request.PacketOkReply()
-	return
 }
 
 func (s *DataNode) handlePacketToReadTinyDeleteRecordFile(p *repl.Packet, connect net.Conn) {
-	var (
-		err error
-	)
+	var err error
 	defer func() {
 		if err != nil {
 			p.PackErrorBody(ActionStreamReadTinyDeleteRecord, err.Error())
@@ -1208,15 +1170,11 @@ func (s *DataNode) handlePacketToReadTinyDeleteRecordFile(p *repl.Packet, connec
 		offset += int64(currReadSize)
 	}
 	p.PacketOkReply()
-
-	return
 }
 
 // Handle OpNotifyReplicasToRepair packet.
 func (s *DataNode) handlePacketToNotifyExtentRepair(p *repl.Packet) {
-	var (
-		err error
-	)
+	var err error
 	partition := p.Object.(*DataPartition)
 	mf := new(DataPartitionRepairTask)
 	err = json.Unmarshal(p.Data, mf)
@@ -1226,7 +1184,6 @@ func (s *DataNode) handlePacketToNotifyExtentRepair(p *repl.Packet) {
 	}
 	partition.DoExtentStoreRepair(mf)
 	p.PacketOkReply()
-	return
 }
 
 // Handle OpBroadcastMinAppliedID
@@ -1238,7 +1195,6 @@ func (s *DataNode) handleBroadcastMinAppliedID(p *repl.Packet) {
 	}
 	log.LogDebugf("[handleBroadcastMinAppliedID] partition(%v) minAppliedID(%v)", partition.partitionID, minAppliedID)
 	p.PacketOkReply()
-	return
 }
 
 // Handle handlePacketToGetAppliedID packet.
@@ -1249,7 +1205,6 @@ func (s *DataNode) handlePacketToGetAppliedID(p *repl.Packet) {
 	binary.BigEndian.PutUint64(buf, appliedID)
 	p.PacketOkWithBody(buf)
 	p.AddMesgLog(fmt.Sprintf("_AppliedID(%v)", appliedID))
-	return
 }
 
 func (s *DataNode) handlePacketToGetPartitionSize(p *repl.Packet) {
@@ -1259,8 +1214,6 @@ func (s *DataNode) handlePacketToGetPartitionSize(p *repl.Packet) {
 	binary.BigEndian.PutUint64(buf, uint64(usedSize))
 	p.AddMesgLog(fmt.Sprintf("partitionSize_(%v)", usedSize))
 	p.PacketOkWithBody(buf)
-
-	return
 }
 
 func (s *DataNode) handlePacketToGetMaxExtentIDAndPartitionSize(p *repl.Packet) {
@@ -1271,8 +1224,6 @@ func (s *DataNode) handlePacketToGetMaxExtentIDAndPartitionSize(p *repl.Packet) 
 	binary.BigEndian.PutUint64(buf[0:8], uint64(maxExtentID))
 	binary.BigEndian.PutUint64(buf[8:16], totalPartitionSize)
 	p.PacketOkWithBody(buf)
-
-	return
 }
 
 func (s *DataNode) handlePacketToDecommissionDataPartition(p *repl.Packet) {
@@ -1332,7 +1283,6 @@ func (s *DataNode) handlePacketToDecommissionDataPartition(p *repl.Packet) {
 	if err != nil {
 		return
 	}
-	return
 }
 
 func (s *DataNode) handlePacketToAddDataPartitionRaftMember(p *repl.Packet) {
@@ -1393,8 +1343,6 @@ func (s *DataNode) handlePacketToAddDataPartitionRaftMember(p *repl.Packet) {
 		}
 	}
 	log.LogInfof("action[handlePacketToAddDataPartitionRaftMember] after ChangeRaftMember %v, partition id %v", req.AddPeer, &req.PartitionId)
-
-	return
 }
 
 func (s *DataNode) handlePacketToRemoveDataPartitionRaftMember(p *repl.Packet) {
@@ -1481,13 +1429,10 @@ func (s *DataNode) handlePacketToRemoveDataPartitionRaftMember(p *repl.Packet) {
 	}
 	log.LogDebugf("action[handlePacketToRemoveDataPartitionRaftMember] CanRemoveRaftMember complete "+
 		"req %v dp %v ", p.GetReqID(), dp.partitionID)
-	return
 }
 
 func (s *DataNode) handlePacketToDataPartitionTryToLeader(p *repl.Packet) {
-	var (
-		err error
-	)
+	var err error
 
 	defer func() {
 		if err != nil {
@@ -1515,7 +1460,6 @@ func (s *DataNode) handlePacketToDataPartitionTryToLeader(p *repl.Packet) {
 		return
 	}
 	err = dp.raftPartition.TryToLeader(dp.partitionID)
-	return
 }
 
 func (s *DataNode) forwardToRaftLeader(dp *DataPartition, p *repl.Packet, force bool) (ok bool, err error) {
