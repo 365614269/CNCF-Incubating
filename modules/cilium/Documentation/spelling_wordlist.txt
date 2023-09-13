@@ -218,6 +218,7 @@ configSources
 configmap
 configs
 conntrack
+conntrackGCInterval
 containerd
 contrib
 coord
@@ -346,6 +347,7 @@ hugepages
 hv
 icmp
 ie
+ifindex
 impactful
 ingressing
 init

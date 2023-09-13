@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set initial commit status
-        uses: myrotvorets/set-commit-status-action@243b4f7e597f62335408d58001edf8a02cf3e1fd # v1.1.7
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
         with:
           sha: ${{ inputs.SHA || github.sha }}
 
@@ -260,7 +260,7 @@ jobs:
             ./cilium-cli connectivity test --include-conn-disrupt-test --conn-disrupt-test-setup
 
       - name: Upgrade Cilium & Test (${{ matrix.name }})
-        uses: cilium/cilium/.github/actions/conn-disrupt-test@ccaaa85a6599c0781b376b2f870bcad243a9eee3
+        uses: cilium/cilium/.github/actions/conn-disrupt-test@6180087941f77eb069fabb9da5b926821cf0f4df
         with:
           job-name: ipsec-upgrade-${{ matrix.name }}
           # Disable no-missed-tail-calls due to https://github.com/cilium/cilium/issues/26739
@@ -277,7 +277,7 @@ jobs:
             kubectl -n kube-system exec daemonset/cilium -- cilium status
 
       - name: Downgrade Cilium to ${{ steps.vars.outputs.downgrade_version }} & Test (${{ matrix.name }})
-        uses: cilium/cilium/.github/actions/conn-disrupt-test@ccaaa85a6599c0781b376b2f870bcad243a9eee3
+        uses: cilium/cilium/.github/actions/conn-disrupt-test@6180087941f77eb069fabb9da5b926821cf0f4df
         with:
           job-name: ipsec-downgrade-${{ matrix.name }}
           # Disable no-missed-tail-calls due to https://github.com/cilium/cilium/issues/26739
@@ -336,7 +336,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set final commit status
-        uses: myrotvorets/set-commit-status-action@243b4f7e597f62335408d58001edf8a02cf3e1fd # v1.1.7
+        uses: myrotvorets/set-commit-status-action@38f3f27c7d52fb381273e95542f07f0fba301307 # v2.0.0
         with:
           sha: ${{ inputs.SHA || github.sha }}
           status: ${{ needs.setup-and-test.result }}

@@ -260,8 +260,8 @@ disable the following two metrics as they generate too much data:
 
 You can then configure the agent with ``--metrics="-cilium_node_connectivity_status -cilium_node_connectivity_latency_seconds"``.
 
-Exported Metrics by Default
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Exported Metrics
+^^^^^^^^^^^^^^^^
 
 Endpoint
 ~~~~~~~~
@@ -270,10 +270,19 @@ Endpoint
 Name                                         Labels                                             Default    Description
 ============================================ ================================================== ========== ========================================================
 ``endpoint``                                                                                    Enabled    Number of endpoints managed by this agent
+``endpoint_max_ifindex``                                                                        Disabled   Maximum interface index observed for existing endpoints
 ``endpoint_regenerations_total``             ``outcome``                                        Enabled    Count of all endpoint regenerations that have completed
 ``endpoint_regeneration_time_stats_seconds`` ``scope``                                          Enabled    Endpoint regeneration time stats
 ``endpoint_state``                           ``state``                                          Enabled    Count of all endpoints
 ============================================ ================================================== ========== ========================================================
+
+The default enabled status of ``endpoint_max_ifindex`` is dynamic. On earlier
+kernels (typically with version lower than 5.10), Cilium must store the
+interface index for each endpoint in the conntrack map, which reserves 16 bits
+for this field. If Cilium is running on such a kernel, this metric will be
+enabled by default. It can be used to implement an alert if the ifindex is
+approaching the limit of 65535. This may be the case in instances of
+significant Endpoint churn.
 
 Services
 ~~~~~~~~
