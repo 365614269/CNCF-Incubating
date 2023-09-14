@@ -1859,6 +1859,10 @@
     "StatusCode": 200,
     "LastSeen": "2023-06-30T09:25:15.885907-04:00"
   },
+  "https://github.com/brettmc/": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T10:33:56.166498179Z"
+  },
   "https://github.com/bufbuild/connect-opentelemetry-go": {
     "StatusCode": 200,
     "LastSeen": "2023-06-30T08:32:38.100673-04:00"
@@ -1874,6 +1878,10 @@
   "https://github.com/census-instrumentation/opencensus-specs": {
     "StatusCode": 200,
     "LastSeen": "2023-06-30T08:39:40.494545-04:00"
+  },
+  "https://github.com/cerbos/cerbos-sdk-javascript/": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-13T14:29:23.953529+02:00"
   },
   "https://github.com/cloudflare/cfssl": {
     "StatusCode": 200,
@@ -2034,6 +2042,10 @@
   "https://github.com/jack-berg/newrelic-opentelemetry-examples/commit/2681bf25518c02f4e5830f89254c736e0959d306": {
     "StatusCode": 200,
     "LastSeen": "2023-06-30T09:25:33.752011-04:00"
+  },
+  "https://github.com/jaegertracing/jaeger-client-java#via-http-headers": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-13T20:22:01.799413+02:00"
   },
   "https://github.com/jaegertracing/vertx-create-span": {
     "StatusCode": 200,
@@ -2887,9 +2899,33 @@
     "StatusCode": 200,
     "LastSeen": "2023-06-30T08:48:00.348194-04:00"
   },
+  "https://github.com/open-telemetry/opentelemetry-php-contrib": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T10:34:00.748754957Z"
+  },
+  "https://github.com/open-telemetry/opentelemetry-php-contrib/": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T17:21:56.853351123Z"
+  },
   "https://github.com/open-telemetry/opentelemetry-php-instrumentation": {
     "StatusCode": 200,
     "LastSeen": "2023-06-30T08:36:07.002918-04:00"
+  },
+  "https://github.com/open-telemetry/opentelemetry-php-instrumentation/": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T17:21:58.240075768Z"
+  },
+  "https://github.com/open-telemetry/opentelemetry-php/": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T17:21:57.859077407Z"
+  },
+  "https://github.com/open-telemetry/opentelemetry-php/issues": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T10:34:00.300283393Z"
+  },
+  "https://github.com/open-telemetry/opentelemetry-php/issues/": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T17:21:57.410272057Z"
   },
   "https://github.com/open-telemetry/opentelemetry-php/releases": {
     "StatusCode": 200,
@@ -3138,6 +3174,10 @@
   "https://github.com/open-telemetry/semantic-conventions": {
     "StatusCode": 200,
     "LastSeen": "2023-06-30T11:43:23.38558-04:00"
+  },
+  "https://github.com/open-telemetry/semantic-conventions-java/releases": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-13T09:15:50.916636+02:00"
   },
   "https://github.com/open-telemetry/semantic-conventions/issues/new": {
     "StatusCode": 200,
@@ -4171,6 +4211,10 @@
     "StatusCode": 206,
     "LastSeen": "2023-06-30T11:44:48.796197-04:00"
   },
+  "https://pecl.php.net/package/opentelemetry": {
+    "StatusCode": 200,
+    "LastSeen": "2023-09-12T10:33:59.774290104Z"
+  },
   "https://pip.pypa.io/en/stable/reference/pip_install/#editable-installs": {
     "StatusCode": 200,
     "LastSeen": "2023-06-29T18:45:36.801594-04:00"
@@ -4910,6 +4954,14 @@
   "https://www.elastic.co/guide/en/ecs/master/ecs-reference.html": {
     "StatusCode": 206,
     "LastSeen": "2023-06-30T09:33:47.364453-04:00"
+  },
+  "https://www.elastic.co/guide/en/elasticsearch/client/java-api-client/current/index.html": {
+    "StatusCode": 206,
+    "LastSeen": "2023-09-13T08:18:13.777841+02:00"
+  },
+  "https://www.elastic.co/guide/en/elasticsearch/client/java-api-client/current/opentelemetry.html": {
+    "StatusCode": 206,
+    "LastSeen": "2023-09-13T08:18:14.600801+02:00"
   },
   "https://www.elastic.co/guide/en/elasticsearch/reference/current/search.html": {
     "StatusCode": 206,

@@ -395,16 +395,16 @@ Name                                       Labels                               
 ``policy_implementation_delay``            ``source``                                         Enabled    Time in seconds between a policy change and it being fully deployed into the datapath, labeled by the policy's source
 ========================================== ================================================== ========== ========================================================
 
-Policy L7 (HTTP/Kafka)
-~~~~~~~~~~~~~~~~~~~~~~
+Policy L7 (HTTP/Kafka/FQDN)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ======================================== ================================================== ========== ========================================================
 Name                                     Labels                                             Default    Description
 ======================================== ================================================== ========== ========================================================
 ``proxy_redirects``                      ``protocol``                                       Enabled    Number of redirects installed for endpoints
-``proxy_upstream_reply_seconds``                                                            Enabled    Seconds waited for upstream server to reply to a request
+``proxy_upstream_reply_seconds``         ``error``, ``protocol_l7``, ``scope``              Enabled    Seconds waited for upstream server to reply to a request
 ``proxy_datapath_update_timeout_total``                                                     Disabled   Number of total datapath update timeouts due to FQDN IP updates
-``policy_l7_total``                      ``type``                                           Enabled    Number of total L7 requests/responses
+``policy_l7_total``                      ``rule``, ``proxy_type``                           Enabled    Number of total L7 requests/responses
 ======================================== ================================================== ========== ========================================================
 
 Identity
