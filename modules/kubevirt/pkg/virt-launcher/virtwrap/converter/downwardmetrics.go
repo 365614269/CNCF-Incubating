@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Backstage Authors
+ * This file is part of the kubevirt project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,14 +12,30 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Copyright 2023 Red Hat, Inc.
+ *
  */
 
-export * from './AksKubernetesAuthTranslator';
-export * from './AwsIamKubernetesAuthTranslator';
-export * from './AzureIdentityKubernetesAuthTranslator';
-export * from './GoogleKubernetesAuthTranslator';
-export * from './GoogleServiceAccountAuthProvider';
-export * from './DispatchingKubernetesAuthTranslator';
-export * from './NoopKubernetesAuthTranslator';
-export * from './OidcKubernetesAuthTranslator';
-export * from './types';
+package converter
+
+import (
+	v1 "kubevirt.io/api/core/v1"
+
+	"kubevirt.io/kubevirt/pkg/downwardmetrics"
+	"kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/api"
+)
+
+func convertDownwardMetricsChannel() api.Channel {
+	return api.Channel{
+		Type: "unix",
+		Source: &api.ChannelSource{
+			Mode: "bind",
+			Path: downwardmetrics.DownwardMetricsChannelSocket,
+		},
+		Target: &api.ChannelTarget{
+			Type: v1.VirtIO,
+			Name: downwardmetrics.DownwardMetricsSerialDeviceName,
+		},
+	}
+}

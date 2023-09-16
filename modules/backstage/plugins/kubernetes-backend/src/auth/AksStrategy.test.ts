@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Backstage Authors
+ * Copyright 2023 The Backstage Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,17 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { AksStrategy } from './AksStrategy';
 
-import { ClusterDetails } from '../types/types';
-import { KubernetesRequestAuth } from '@backstage/plugin-kubernetes-common';
+describe('AksStrategy', () => {
+  it('uses auth.aks value as bearer token', async () => {
+    const strategy = new AksStrategy();
 
-/**
- *
- * @public
- */
-export interface KubernetesAuthTranslator {
-  decorateClusterDetailsWithAuth(
-    clusterDetails: ClusterDetails,
-    authConfig: KubernetesRequestAuth,
-  ): Promise<ClusterDetails>;
-}
+    const credential = await strategy.getCredential(
+      { name: '', url: '', authMetadata: {} },
+      { aks: 'aksToken' },
+    );
+
+    expect(credential).toStrictEqual({
+      type: 'bearer token',
+      token: 'aksToken',
+    });
+  });
+});
