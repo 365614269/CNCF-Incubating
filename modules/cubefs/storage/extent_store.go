@@ -38,6 +38,12 @@ import (
 	"github.com/cubefs/cubefs/util/log"
 )
 
+//TODO: remove this later.
+//go:generate go vet ./...
+//go:generate gofumpt -l -w .
+//go:generate git diff --exit-code
+//go:generate golangci-lint run --issues-exit-code=1 -D errcheck -E bodyclose ./...
+
 const (
 	ExtCrcHeaderFileName     = "EXTENT_CRC"
 	ExtBaseExtentIDFileName  = "EXTENT_META"
@@ -213,7 +219,7 @@ func NewExtentStore(dataDir string, partitionID uint64, storeSize, dpType int, i
 		return
 	}
 
-	s.extentInfoMap = make(map[uint64]*ExtentInfo, 0)
+	s.extentInfoMap = make(map[uint64]*ExtentInfo)
 	s.cache = NewExtentCache(100)
 	if err = s.initBaseFileID(); err != nil {
 		err = fmt.Errorf("init base field ID: %v", err)
@@ -404,19 +410,14 @@ func (s *ExtentStore) checkOffsetAndSize(extentID uint64, offset, size int64, wr
 	}
 	if writeType == AppendRandomWriteType {
 		if offset < util.ExtentSize {
-			return NewParameterMismatchErr(fmt.Sprintf("writeType=%v offset=%v size=%v", writeType, offset, size))
+			return newParameterError("writeType=%d offset=%d size=%d", writeType, offset, size)
 		}
 		return nil
 	}
-	if offset+size > util.BlockSize*util.BlockCount {
-		return NewParameterMismatchErr(fmt.Sprintf("offset=%v size=%v", offset, size))
-	}
-	if offset >= util.BlockCount*util.BlockSize || size == 0 {
-		return NewParameterMismatchErr(fmt.Sprintf("offset=%v size=%v", offset, size))
-	}
-
-	if size > util.BlockSize {
-		return NewParameterMismatchErr(fmt.Sprintf("offset=%v size=%v", offset, size))
+	if size == 0 || size > util.BlockSize ||
+		offset >= util.BlockCount*util.BlockSize ||
+		offset+size > util.BlockCount*util.BlockSize {
+		return newParameterError("offset=%d size=%d", offset, size)
 	}
 	return nil
 }
