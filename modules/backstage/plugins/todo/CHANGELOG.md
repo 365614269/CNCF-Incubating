@@ -1,6 +1,6 @@
 # @backstage/plugin-todo
 
-## 0.2.26
+## 0.2.27
 
 ### Patch Changes
 
@@ -14,6 +14,10 @@
   - @backstage/core-plugin-api@1.6.0
   - @backstage/errors@1.2.2
   - @backstage/theme@0.4.2
+
+## 0.2.26
+
+Skipped due to publishing issues.
 
 ## 0.2.26-next.3
 

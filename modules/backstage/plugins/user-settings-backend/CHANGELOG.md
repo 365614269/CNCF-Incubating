@@ -1,6 +1,6 @@
 # @backstage/plugin-user-settings-backend
 
-## 0.2.0
+## 0.2.1
 
 ### Minor Changes
 
@@ -29,6 +29,10 @@
   - @backstage/errors@1.2.2
   - @backstage/types@1.1.1
   - @backstage/backend-plugin-api@0.6.3
+
+## 0.2.0
+
+Skipped due to publishing issues.
 
 ## 0.2.0-next.3
 

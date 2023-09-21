@@ -1,6 +1,6 @@
 # @backstage/plugin-user-settings
 
-## 0.7.9
+## 0.7.10
 
 ### Patch Changes
 
@@ -17,6 +17,10 @@
   - @backstage/errors@1.2.2
   - @backstage/theme@0.4.2
   - @backstage/types@1.1.1
+
+## 0.7.9
+
+Skipped due to publishing issues.
 
 ## 0.7.9-next.3
 

@@ -1,6 +1,6 @@
 # @backstage/plugin-todo-backend
 
-## 0.3.0
+## 0.3.1
 
 ### Minor Changes
 
@@ -32,6 +32,10 @@
   - @backstage/backend-plugin-api@0.6.3
   - @backstage/plugin-catalog-node@1.4.4
   - @backstage/backend-openapi-utils@0.0.4
+
+## 0.3.0
+
+Skipped due to publishing issues.
 
 ## 0.3.0-next.3
 

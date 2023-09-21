@@ -1,6 +1,6 @@
 # @backstage/plugin-techdocs-react
 
-## 1.1.10
+## 1.1.11
 
 ### Patch Changes
 
@@ -11,6 +11,10 @@
   - @backstage/catalog-model@1.4.2
   - @backstage/core-plugin-api@1.6.0
   - @backstage/version-bridge@1.0.5
+
+## 1.1.10
+
+Skipped due to publishing issues.
 
 ## 1.1.10-next.3
 
