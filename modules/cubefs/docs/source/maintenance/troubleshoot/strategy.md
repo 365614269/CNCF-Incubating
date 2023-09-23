@@ -132,15 +132,15 @@ Access and Proxy are stateless nodes and do not involve data migration. Here, we
 #### Node Failure
 The cluster is available, and the number of nodes that have crashed does not exceed the majority of the cluster.
 - Enable the clustermgr service on a new node and add the member information of the current node to the configuration of the new service;
-- Call the [member removal interface](admin-api/blobstore/cm.md) to remove the crashed node;
-- Call the [member addition interface](admin-api/blobstore/cm.md) to add the newly started Clustermgr node to the cluster;
+- Call the [member removal interface](../admin-api/blobstore/cm.md) to remove the crashed node;
+- Call the [member addition interface](../admin-api/blobstore/cm.md) to add the newly started Clustermgr node to the cluster;
 - Wait for data to be automatically synchronized.
 
 ### BlobNode
 
 #### Disk Failure
 
-Call the clusterMgr interface to set the bad disk and go through the bad disk repair process. For details, refer to [Disk Management](admin-api/blobstore/cm.md).
+Call the clusterMgr interface to set the bad disk and go through the bad disk repair process. For details, refer to [Disk Management](../admin-api/blobstore/cm.md).
 
 ```bash
 curl -X POST --header 'Content-Type: application/json' -d '{"disk_id":2,"status":2}' "http://127.0.0.1:9998/disk/set"
