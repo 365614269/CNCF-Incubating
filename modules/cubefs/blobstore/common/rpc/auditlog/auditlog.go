@@ -165,17 +165,23 @@ func (j *jsonAuditlog) Handler(w http.ResponseWriter, req *http.Request, f func(
 	)
 	startTime := time.Now().UnixNano()
 
-	span, ctx := trace.StartSpanFromHTTPHeaderSafe(req, j.module)
-	defer span.Finish()
+	ctx := req.Context()
+	span := trace.SpanFromContext(ctx)
+	if span == nil {
+		span, ctx = trace.StartSpanFromHTTPHeaderSafe(req, "")
+		defer span.Finish()
+		req = req.WithContext(ctx)
+	}
+
 	_w := &responseWriter{
 		module:         j.module,
 		body:           j.bodyPool.Get().([]byte),
 		bodyLimit:      j.cfg.BodyLimit,
+		no2xxBody:      j.cfg.No2xxBody,
 		span:           span,
 		startTime:      time.Now(),
 		ResponseWriter: w,
 	}
-	req = req.WithContext(ctx)
 
 	// parse request to decodeRep
 	decodeReq := j.decoder.DecodeReq(req)
@@ -272,4 +278,14 @@ func defaultLogFilter(r *http.Request, words []string) bool {
 		}
 	}
 	return false
+}
+
+// ExtraHeader provides extra response header writes to the ResponseWriter.
+func ExtraHeader(w http.ResponseWriter) http.Header {
+	h := make(http.Header)
+	if eh, ok := w.(ResponseExtraHeader); ok {
+		h = eh.ExtraHeader()
+	}
+
+	return h
 }
