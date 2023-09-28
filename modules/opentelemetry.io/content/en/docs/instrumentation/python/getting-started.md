@@ -2,14 +2,14 @@
 title: Getting Started
 description: Get telemetry for your app in less than 5 minutes!
 # prettier-ignore
-cSpell:ignore: diceroller distro loggingexporter loglevel randint rolldice rollspan venv
+cSpell:ignore: debugexporter diceroller distro loglevel randint rolldice rollspan venv
 weight: 10
 ---
 
 This page will show you how to get started with OpenTelemetry in Python.
 
 You will learn how you can instrument a simple application automatically, in
-such a way that [traces][], [metrics][] and [logs][] are emitted to the console.
+such a way that [traces][] and [metrics][] are emitted to the console.
 
 ## Prerequisites
 
@@ -102,7 +102,6 @@ it print to the console for now:
 opentelemetry-instrument \
     --traces_exporter console \
     --metrics_exporter console \
-    --logs_exporter console \
     flask run -p 8080
 ```
 
@@ -553,19 +552,19 @@ receivers:
     protocols:
       grpc:
 exporters:
-  logging:
-    loglevel: debug
+  debug:
+    verbosity: detailed
 processors:
   batch:
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [logging]
+      exporters: [debug]
       processors: [batch]
     metrics:
       receivers: [otlp]
-      exporters: [logging]
+      exporters: [debug]
       processors: [batch]
 ```
 
@@ -614,7 +613,7 @@ process instead of the flask process, which should look something like this:
 <summary>View example output</summary>
 
 ```text
-2022-06-09T20:43:39.915Z        DEBUG   loggingexporter/logging_exporter.go:51  ResourceSpans #0
+2022-06-09T20:43:39.915Z        DEBUG   debugexporter/debug_exporter.go:51  ResourceSpans #0
 Resource labels:
      -> telemetry.sdk.language: STRING(python)
      -> telemetry.sdk.name: STRING(opentelemetry)
@@ -661,8 +660,8 @@ Attributes:
      -> http.route: STRING(/rolldice)
      -> http.status_code: INT(200)
 
-2022-06-09T20:43:40.025Z        INFO    loggingexporter/logging_exporter.go:56  MetricsExporter {"#metrics": 1}
-2022-06-09T20:43:40.025Z        DEBUG   loggingexporter/logging_exporter.go:66  ResourceMetrics #0
+2022-06-09T20:43:40.025Z        INFO    debugexporter/debug_exporter.go:56  MetricsExporter {"#metrics": 1}
+2022-06-09T20:43:40.025Z        DEBUG   debugexporter/debug_exporter.go:66  ResourceMetrics #0
 Resource labels:
      -> telemetry.sdk.language: STRING(python)
      -> telemetry.sdk.name: STRING(opentelemetry)
@@ -710,4 +709,3 @@ If you'd like to explore a more complex example, take a look at the
 
 [traces]: /docs/concepts/signals/traces/
 [metrics]: /docs/concepts/signals/metrics/
-[logs]: /docs/concepts/signals/logs/
