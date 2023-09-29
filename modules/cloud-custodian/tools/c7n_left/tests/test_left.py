@@ -481,6 +481,29 @@ resource "aws_cloudwatch_log_stream" "foo" {
     assert results[0].resource["name"] == "Yada"
 
 
+def test_graph_merge_unknown_variable_relative_path(policy_env, monkeypatch):
+    policy_env.write_tf(
+        """
+        variable component {
+           type = string
+        }
+        resource "aws_cloudwatch_log_group" "yada" {
+           name = "Yada"
+           tags = merge(
+              {"Env" = "Public"},
+              {"Component" = var.component}
+           )
+        }
+        """
+    )
+
+    monkeypatch.chdir(policy_env.policy_dir)
+    graph = policy_env.get_graph(Path("."))
+    resource_types = list(graph.get_resources_by_type("aws_cloudwatch_log_group"))
+    log_group = resource_types.pop()[-1][0]
+    assert log_group["tags"] == {"Env": "Public", "Component": ""}
+
+
 def test_graph_merge_unknown_variable(policy_env):
     policy_env.write_tf(
         """
@@ -716,6 +739,22 @@ resource "aws_alb" "positive1" {
 #    assert resources[0][1][0]['load_balancer_type'] == 'network'
 
 
+def test_graph_var_file_abs_rel_source(tmp_path, monkeypatch, var_tf_setup):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "vars.tfvars").write_text('balancer_type = "network"')
+    graph = TerraformProvider().parse(Path("tf"), (tmp_path / "vars.tfvars",))
+    resources = list(graph.get_resources_by_type("aws_alb"))
+    assert resources[0][1][0]["load_balancer_type"] == "network"
+
+
+def test_graph_var_file_rel_abs_source(tmp_path, monkeypatch, var_tf_setup):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "vars.tfvars").write_text('balancer_type = "network"')
+    graph = TerraformProvider().parse(tmp_path / "tf", ("vars.tfvars",))
+    resources = list(graph.get_resources_by_type("aws_alb"))
+    assert resources[0][1][0]["load_balancer_type"] == "network"
+
+
 def test_graph_non_root_var_file(tmp_path, var_tf_setup):
     (tmp_path / "vars.tfvars").write_text('balancer_type = "network"')
     graph = TerraformProvider().parse(tmp_path / "tf", (tmp_path / "vars.tfvars",))
@@ -792,6 +831,8 @@ def test_cli_dump(policy_env, test, debug_cli_runner):
             str(policy_env.policy_dir),
             "--var-file",
             policy_env.policy_dir / "vars.tfvars",
+            "--output-query",
+            "input_vars",
             # "--var-file",
             # policy_env.policy_dir / "vars2.tfvars",
             "--output-file",
@@ -800,8 +841,7 @@ def test_cli_dump(policy_env, test, debug_cli_runner):
     )
     assert result.exit_code == 0
     data = json.loads((policy_env.policy_dir / "output.json").read_text())
-    assert data["graph"]["aws_cloudwatch_log_group"][0]["name"] == "riddle--logs"
-    assert data["input_vars"] == {
+    assert data == {
         "environment": {"repo": "cloud-custodian/cloud-custodian"},
         "uninitialized": {"env": ""},
         "user:vars.tfvars": {"app": "riddle"},
