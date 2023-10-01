@@ -47,4 +47,6 @@ var (
 	RequiresTwoSchedulableNodes  = []interface{}{Label("requires-two-schedulable-nodes")}
 	VMLiveUpdateFeaturesGate     = []interface{}{Label("VMLiveUpdateFeaturesGate")}
 	RequiresRWXFilesystemStorage = []interface{}{Label("rwxfs")}
+	USB                          = []interface{}{Label("USB")}
+	AutoResourceLimitsGate       = []interface{}{Label("AutoResourceLimitsGate")}
 )
