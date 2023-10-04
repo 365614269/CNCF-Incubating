@@ -79,8 +79,6 @@ func (a *Operator) syncOperatorGroups(obj interface{}) error {
 		"namespace":     op.GetNamespace(),
 	})
 
-	logger.Infof("syncing OperatorGroup %s/%s", op.GetNamespace(), op.GetName())
-
 	// Query OG in this namespace
 	groups, err := a.lister.OperatorsV1().OperatorGroupLister().OperatorGroups(op.GetNamespace()).List(labels.Everything())
 	if err != nil {
@@ -489,7 +487,6 @@ func (a *Operator) ensureRBACInTargetNamespace(csv *v1alpha1.ClusterServiceVersi
 	if !ok {
 		return fmt.Errorf("could not cast install strategy as type %T", strategyDetailsDeployment)
 	}
-	ruleChecker := install.NewCSVRuleChecker(a.lister.RbacV1().RoleLister(), a.lister.RbacV1().RoleBindingLister(), a.lister.RbacV1().ClusterRoleLister(), a.lister.RbacV1().ClusterRoleBindingLister(), csv)
 
 	logger := a.logger.WithField("opgroup", operatorGroup.GetName()).WithField("csv", csv.GetName())
 
@@ -500,7 +497,7 @@ func (a *Operator) ensureRBACInTargetNamespace(csv *v1alpha1.ClusterServiceVersi
 		// synthesize cluster permissions to verify rbac
 		strategyDetailsDeployment.ClusterPermissions = append(strategyDetailsDeployment.ClusterPermissions, strategyDetailsDeployment.Permissions...)
 		strategyDetailsDeployment.Permissions = nil
-		permMet, _, err := a.permissionStatus(strategyDetailsDeployment, ruleChecker, corev1.NamespaceAll, csv)
+		permMet, _, err := a.permissionStatus(strategyDetailsDeployment, corev1.NamespaceAll, csv)
 		if err != nil {
 			return err
 		}
@@ -655,6 +652,7 @@ func (a *Operator) ensureTenantRBAC(operatorNamespace, targetNamespace string, c
 			return err
 		}
 		targetRole.SetLabels(utillabels.AddLabel(targetRole.GetLabels(), v1alpha1.CopiedLabelKey, operatorNamespace))
+		targetRole.Labels[install.OLMManagedLabelKey] = install.OLMManagedLabelValue
 		if _, err := a.opClient.CreateRole(targetRole); err != nil {
 			return err
 		}
@@ -699,6 +697,7 @@ func (a *Operator) ensureTenantRBAC(operatorNamespace, targetNamespace string, c
 			return err
 		}
 		ownedRoleBinding.SetLabels(utillabels.AddLabel(ownedRoleBinding.GetLabels(), v1alpha1.CopiedLabelKey, operatorNamespace))
+		ownedRoleBinding.Labels[install.OLMManagedLabelKey] = install.OLMManagedLabelValue
 		if _, err := a.opClient.CreateRoleBinding(ownedRoleBinding); err != nil {
 			return err
 		}
@@ -713,8 +712,6 @@ func (a *Operator) ensureCSVsInNamespaces(csv *v1alpha1.ClusterServiceVersion, o
 	}
 
 	strategyDetailsDeployment := &csv.Spec.InstallStrategy.StrategySpec
-	ruleChecker := install.NewCSVRuleChecker(a.lister.RbacV1().RoleLister(), a.lister.RbacV1().RoleBindingLister(), a.lister.RbacV1().ClusterRoleLister(), a.lister.RbacV1().ClusterRoleBindingLister(), csv)
-
 	logger := a.logger.WithField("opgroup", operatorGroup.GetName()).WithField("csv", csv.GetName())
 
 	targetCSVs := make(map[string]*v1alpha1.ClusterServiceVersion)
@@ -730,20 +727,20 @@ func (a *Operator) ensureCSVsInNamespaces(csv *v1alpha1.ClusterServiceVersion, o
 		if targets.Contains(ns.GetName()) {
 			var targetCSV *v1alpha1.ClusterServiceVersion
 			if targetCSV, err = a.copyToNamespace(&copyPrototype, csv.GetNamespace(), ns.GetName(), nonstatus, status); err != nil {
-				a.logger.WithError(err).Debug("error copying to target")
+				logger.WithError(err).Debug("error copying to target")
 				continue
 			}
 			targetCSVs[ns.GetName()] = targetCSV
 		} else {
 			if err := a.pruneFromNamespace(operatorGroup.GetName(), ns.GetName()); err != nil {
-				a.logger.WithError(err).Debug("error pruning from old target")
+				logger.WithError(err).Debug("error pruning from old target")
 			}
 		}
 	}
 
 	targetNamespaces := operatorGroup.Status.Namespaces
 	if targetNamespaces == nil {
-		a.logger.Errorf("operatorgroup '%v' should have non-nil status", operatorGroup.GetName())
+		logger.Errorf("operatorgroup '%v' should have non-nil status", operatorGroup.GetName())
 		return nil
 	}
 	if len(targetNamespaces) == 1 && targetNamespaces[0] == corev1.NamespaceAll {
@@ -752,7 +749,7 @@ func (a *Operator) ensureCSVsInNamespaces(csv *v1alpha1.ClusterServiceVersion, o
 	}
 	for _, ns := range targetNamespaces {
 		// create roles/rolebindings for each target namespace
-		permMet, _, err := a.permissionStatus(strategyDetailsDeployment, ruleChecker, ns, csv)
+		permMet, _, err := a.permissionStatus(strategyDetailsDeployment, ns, csv)
 		if err != nil {
 			logger.WithError(err).Debug("permission status")
 			return err
@@ -1053,6 +1050,7 @@ func (a *Operator) ensureOpGroupClusterRole(op *operatorsv1.OperatorGroup, suffi
 	if err := ownerutil.AddOwnerLabels(clusterRole, op); err != nil {
 		return err
 	}
+	clusterRole.Labels[install.OLMManagedLabelKey] = install.OLMManagedLabelValue
 
 	a.logger.Infof("creating cluster role: %s owned by operator group: %s/%s", clusterRole.GetName(), op.GetNamespace(), op.GetName())
 	_, err = a.opClient.KubernetesInterface().RbacV1().ClusterRoles().Create(context.TODO(), clusterRole, metav1.CreateOptions{})

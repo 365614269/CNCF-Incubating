@@ -50,7 +50,7 @@ import (
 )
 
 const (
-	pollInterval = 1 * time.Second
+	pollInterval = 100 * time.Millisecond
 	pollDuration = 5 * time.Minute
 
 	olmConfigMap = "olm-operators" // No-longer used, how long do we keep this around?
@@ -94,13 +94,25 @@ func objectRefToNamespacedName(ip *corev1.ObjectReference) types.NamespacedName 
 // adding the "operatorframework.io/bundle-unpack-timeout" annotation to an OperatorGroup
 // resource.
 func addBundleUnpackTimeoutOGAnnotation(ctx context.Context, c k8scontrollerclient.Client, ogNN types.NamespacedName, timeout string) {
+	setOGAnnotation(ctx, c, ogNN, bundle.BundleUnpackTimeoutAnnotationKey, timeout)
+}
+
+func setBundleUnpackRetryMinimumIntervalAnnotation(ctx context.Context, c k8scontrollerclient.Client, ogNN types.NamespacedName, interval string) {
+	setOGAnnotation(ctx, c, ogNN, bundle.BundleUnpackRetryMinimumIntervalAnnotationKey, interval)
+}
+
+func setOGAnnotation(ctx context.Context, c k8scontrollerclient.Client, ogNN types.NamespacedName, key, value string) {
 	Eventually(func() error {
 		og := &operatorsv1.OperatorGroup{}
 		if err := c.Get(ctx, ogNN, og); err != nil {
 			return err
 		}
 		annotations := og.GetAnnotations()
-		annotations[bundle.BundleUnpackTimeoutAnnotationKey] = timeout
+		if len(value) == 0 {
+			delete(annotations, key)
+		} else {
+			annotations[key] = value
+		}
 		og.SetAnnotations(annotations)
 
 		return c.Update(ctx, og)
