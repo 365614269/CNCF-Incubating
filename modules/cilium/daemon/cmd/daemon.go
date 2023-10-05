@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -177,7 +178,7 @@ type Daemon struct {
 	healthEndpointRouting *linuxrouting.RoutingInfo
 
 	linkCache      *link.LinkCache
-	hubbleObserver *observer.LocalObserverServer
+	hubbleObserver atomic.Pointer[observer.LocalObserverServer]
 
 	// endpointCreations is a map of all currently ongoing endpoint
 	// creation events
@@ -647,9 +648,9 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	if option.Config.BGPAnnounceLBIP || option.Config.BGPAnnouncePodCIDR {
 		switch option.Config.IPAMMode() {
 		case ipamOption.IPAMKubernetes:
-			d.k8sWatcher.RegisterNodeSubscriber(d.bgpSpeaker)
+			d.bgpSpeaker.SubscribeToLocalNodeResource(ctx, params.Resources.LocalNode)
 		case ipamOption.IPAMClusterPool:
-			d.k8sWatcher.RegisterCiliumNodeSubscriber(d.bgpSpeaker)
+			d.bgpSpeaker.SubscribeToLocalCiliumNodeResource(ctx, params.Resources.LocalCiliumNode)
 		}
 	}
 	if option.Config.EnableServiceTopology {
@@ -1052,7 +1053,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	// Start IPAM
-	d.startIPAM()
+	d.startIPAM(params.Resources.LocalCiliumNode)
 	// After the IPAM is started, in particular IPAM modes (CRD, ENI, Alibaba)
 	// which use the VPC CIDR as the pod CIDR, we must attempt restoring the
 	// router IPs from the K8s resources if we weren't able to restore them
