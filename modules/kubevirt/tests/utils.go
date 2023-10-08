@@ -46,6 +46,8 @@ import (
 
 	v12 "k8s.io/api/apps/v1"
 
+	k6tpointer "kubevirt.io/kubevirt/pkg/pointer"
+
 	expect "github.com/google/goexpect"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -102,16 +104,14 @@ import (
 )
 
 const (
-	BinBash                     = "/bin/bash"
-	StartingVMInstance          = "Starting a VirtualMachineInstance"
-	WaitingVMInstanceStart      = "Waiting until the VirtualMachineInstance will start"
-	EchoLastReturnValue         = "echo $?\n"
-	CustomHostPath              = "custom-host-path"
-	DiskAlpineHostPath          = "disk-alpine-host-path"
-	DiskWindowsSysprep          = "disk-windows-sysprep"
-	DiskCustomHostPath          = "disk-custom-host-path"
-	defaultDiskSize             = "1Gi"
-	ContainerCompletionWaitTime = 60
+	BinBash                = "/bin/bash"
+	waitingVMInstanceStart = "Waiting until the VirtualMachineInstance will start"
+	EchoLastReturnValue    = "echo $?\n"
+	CustomHostPath         = "custom-host-path"
+	DiskAlpineHostPath     = "disk-alpine-host-path"
+	DiskWindowsSysprep     = "disk-windows-sysprep"
+	DiskCustomHostPath     = "disk-custom-host-path"
+	defaultDiskSize        = "1Gi"
 )
 
 func TestCleanup() {
@@ -245,7 +245,7 @@ func DeleteSecret(name, namespace string) {
 	}
 }
 func RunVMI(vmi *v1.VirtualMachineInstance, timeout int) *v1.VirtualMachineInstance {
-	By(StartingVMInstance)
+	By("Starting a VirtualMachineInstance")
 	virtCli := kubevirt.Client()
 
 	var obj *v1.VirtualMachineInstance
@@ -259,7 +259,7 @@ func RunVMI(vmi *v1.VirtualMachineInstance, timeout int) *v1.VirtualMachineInsta
 
 func RunVMIAndExpectLaunch(vmi *v1.VirtualMachineInstance, timeout int) *v1.VirtualMachineInstance {
 	vmi = RunVMI(vmi, timeout)
-	By(WaitingVMInstanceStart)
+	By(waitingVMInstanceStart)
 	return libwait.WaitForVMIPhase(vmi,
 		[]v1.VirtualMachineInstancePhase{v1.Running},
 		libwait.WithTimeout(timeout),
@@ -270,7 +270,7 @@ func RunVMIAndExpectLaunchWithDataVolume(vmi *v1.VirtualMachineInstance, dv *cdi
 	vmi = RunVMI(vmi, timeout)
 	By("Waiting until the DataVolume is ready")
 	libstorage.EventuallyDV(dv, timeout, HaveSucceeded())
-	By(WaitingVMInstanceStart)
+	By(waitingVMInstanceStart)
 	warningsIgnoreList := []string{"didn't find PVC", "unable to find datavolume"}
 	return libwait.WaitForVMIPhase(vmi,
 		[]v1.VirtualMachineInstancePhase{v1.Running},
@@ -281,7 +281,7 @@ func RunVMIAndExpectLaunchWithDataVolume(vmi *v1.VirtualMachineInstance, dv *cdi
 
 func RunVMIAndExpectLaunchIgnoreWarnings(vmi *v1.VirtualMachineInstance, timeout int) *v1.VirtualMachineInstance {
 	obj := RunVMI(vmi, timeout)
-	By(WaitingVMInstanceStart)
+	By(waitingVMInstanceStart)
 	return libwait.WaitForSuccessfulVMIStart(obj,
 		libwait.WithFailOnWarnings(false),
 		libwait.WithTimeout(timeout),
@@ -1562,11 +1562,12 @@ func NewRandomVirtualMachine(vmi *v1.VirtualMachineInstance, running bool) *v1.V
 func StopVirtualMachineWithTimeout(vm *v1.VirtualMachine, timeout time.Duration) *v1.VirtualMachine {
 	By("Stopping the VirtualMachineInstance")
 	virtClient := kubevirt.Client()
-	running := false
+
 	Eventually(func() error {
 		updatedVM, err := virtClient.VirtualMachine(vm.Namespace).Get(context.Background(), vm.Name, &metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		updatedVM.Spec.Running = &running
+		updatedVM.Spec.Running = k6tpointer.P(false)
+		updatedVM.Spec.RunStrategy = nil
 		_, err = virtClient.VirtualMachine(updatedVM.Namespace).Update(context.Background(), updatedVM)
 		return err
 	}, timeout, 1*time.Second).ShouldNot(HaveOccurred())
@@ -1596,11 +1597,12 @@ func StopVirtualMachine(vm *v1.VirtualMachine) *v1.VirtualMachine {
 func StartVirtualMachine(vm *v1.VirtualMachine) *v1.VirtualMachine {
 	By("Starting the VirtualMachineInstance")
 	virtClient := kubevirt.Client()
-	running := true
+
 	Eventually(func() error {
 		updatedVM, err := virtClient.VirtualMachine(vm.Namespace).Get(context.Background(), vm.Name, &metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		updatedVM.Spec.Running = &running
+		updatedVM.Spec.Running = k6tpointer.P(true)
+		updatedVM.Spec.RunStrategy = nil
 		_, err = virtClient.VirtualMachine(updatedVM.Namespace).Update(context.Background(), updatedVM)
 		return err
 	}, 300*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
