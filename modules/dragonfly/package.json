@@ -20,7 +20,7 @@
   "dependencies": {
     "@docusaurus/core": "^2.0.0",
     "@docusaurus/preset-classic": "^2.0.0",
-    "@docusaurus/plugin-content-docs": "2.4.1",
+    "@docusaurus/plugin-content-docs": "2.4.3",
     "@mdx-js/react": "^1.6.21",
     "acorn": "^8.7.1",
     "clsx": "^2.0.0",
@@ -31,7 +31,7 @@
     "react-dom": "^17.0.1",
     "react-github-btn": "^1.2.1",
     "react-youtube": "^10.1.0",
-    "three": "^0.156.0"
+    "three": "^0.157.0"
   },
   "devDependencies": {
     "@commitlint/config-conventional": "^17.1.0",
