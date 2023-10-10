@@ -26,7 +26,7 @@ var mp *metaPartition
 //PartitionType int                 `json:"partition_type"`
 var metaConf = &MetaPartitionConfig{
 	PartitionId:   10001,
-	VolName:       "testVol",
+	VolName:       VolNameForTest,
 	PartitionType: proto.VolumeTypeHot,
 }
 
@@ -1225,28 +1225,25 @@ func mockPartitionRaftForTest(ctrl *gomock.Controller) *metaPartition {
 }
 
 func TestCheckVerList(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-	mp = mockPartitionRaftForTest(mockCtrl)
-	mp.verUpdateChan = make(chan []byte, 100)
-	mp.multiVersionList = &proto.VolVersionInfoList{
-		VerList: []*proto.VolVersionInfo{
+	newMpWithMock(t)
+	mp.multiVersionList.VerList = append(mp.multiVersionList.VerList,
+		[]*proto.VolVersionInfo{
 			{Ver: 20, Status: proto.VersionNormal},
 			{Ver: 30, Status: proto.VersionNormal},
-			{Ver: 40, Status: proto.VersionNormal}},
-	}
+			{Ver: 40, Status: proto.VersionNormal}}...)
+
 	masterList := &proto.VolVersionInfoList{
 		VerList: []*proto.VolVersionInfo{
+			{Ver: 0, Status: proto.VersionNormal},
 			{Ver: 20, Status: proto.VersionNormal},
 			{Ver: 30, Status: proto.VersionNormal},
 			{Ver: 40, Status: proto.VersionNormal},
 			{Ver: 50, Status: proto.VersionNormal}},
 	}
-
+	var verData []byte
 	mp.checkVerList(masterList, false)
-	verData := <-mp.verUpdateChan
+	verData = <-mp.verUpdateChan
 	mp.submit(opFSMVersionOp, verData)
-
 	assert.True(t, mp.verSeq == 50)
 	assert.True(t, mp.multiVersionList.VerList[len(mp.multiVersionList.VerList)-1].Ver == 50)
 
@@ -1256,12 +1253,11 @@ func TestCheckVerList(t *testing.T) {
 			{Ver: 40, Status: proto.VersionNormal}},
 	}
 
-	mp.checkVerList(masterList, false)
-	verData = <-mp.verUpdateChan
-	mp.submit(opFSMVersionOp, verData)
+	needUpdate, _ := mp.checkVerList(masterList, false)
+	assert.True(t, needUpdate == false)
 
-	assert.True(t, mp.verSeq == 40)
-	assert.True(t, len(mp.multiVersionList.VerList) == 2)
+	assert.True(t, mp.verSeq == 50)
+	assert.True(t, len(mp.multiVersionList.VerList) == 5)
 	mp.stop()
 }
 
@@ -1284,6 +1280,23 @@ func managerVersionPrepare(req *proto.MultiVersionOpRequest) (err error) {
 		return
 	}
 	return manager.commitCreateVersion(req.VolumeID, req.VerSeq, req.Op, true)
+}
+
+func newMpWithMock(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mp = mockPartitionRaftForTest(mockCtrl)
+
+	mp.verUpdateChan = make(chan []byte, 100)
+	mp.config = metaConf
+	mp.config.Cursor = 0
+	mp.config.End = 100000
+	mp.uidManager = NewUidMgr(metaConf.VolName, metaConf.PartitionId)
+	mp.mqMgr = NewQuotaManager(metaConf.VolName, metaConf.PartitionId)
+	mp.multiVersionList.VerList = append(mp.multiVersionList.VerList, &proto.VolVersionInfo{
+		Ver: 0,
+	})
+	mp.multiVersionList.TemporaryVerMap = make(map[uint64]*proto.VolVersionInfo)
 }
 
 func TestOpCommitVersion(t *testing.T) {
@@ -1388,9 +1401,7 @@ func TestExtendSerialization(t *testing.T) {
 }
 
 func TestXAttrOperation(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-	mp = mockPartitionRaftForTest(mockCtrl)
+	newMpWithMock(t)
 
 	mp.SetXAttr(&proto.SetXAttrRequest{Key: "test", Value: "value"}, &Packet{})
 	mp.SetXAttr(&proto.SetXAttrRequest{Key: "test1", Value: "value1"}, &Packet{})
@@ -1430,19 +1441,7 @@ func TestXAttrOperation(t *testing.T) {
 }
 
 func TestUpdateDenty(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-	mp = mockPartitionRaftForTest(mockCtrl)
-
-	mp.config = metaConf
-	mp.config.Cursor = 0
-	mp.config.End = 100000
-	mp.uidManager = NewUidMgr(metaConf.VolName, metaConf.PartitionId)
-	mp.mqMgr = NewQuotaManager(metaConf.VolName, metaConf.PartitionId)
-	mp.multiVersionList.VerList = append(mp.multiVersionList.VerList, &proto.VolVersionInfo{
-		Ver: 0,
-	})
-
+	newMpWithMock(t)
 	testCreateInode(nil, DirModeType)
 	err := mp.CreateDentry(&CreateDentryReq{Name: "testfile", ParentID: 1, VerSeq: 0, Inode: 1000}, &Packet{})
 	assert.True(t, err == nil)
@@ -1459,4 +1458,71 @@ func TestCheckEkEqual(t *testing.T) {
 	ek1 := &proto.ExtentKey{FileOffset: 10, SnapInfo: &proto.ExtSnapInfo{VerSeq: 10, IsSplit: true}}
 	ek2 := &proto.ExtentKey{FileOffset: 10, SnapInfo: &proto.ExtSnapInfo{VerSeq: 10, IsSplit: true}}
 	assert.True(t, ek1.Equals(ek2))
+}
+
+func TestDelPartitionVersion(t *testing.T) {
+	manager = &metadataManager{partitions: make(map[uint64]MetaPartition), volUpdating: new(sync.Map)}
+	newMpWithMock(t)
+	mp.config.PartitionId = metaConf.PartitionId
+	mp.manager = manager
+	mp.manager.partitions[mp.config.PartitionId] = mp
+	mp.config.NodeId = 1
+
+	err := managerVersionPrepare(&proto.MultiVersionOpRequest{VolumeID: VolNameForTest, Op: proto.CreateVersionPrepare, VerSeq: 10})
+	assert.True(t, err == nil)
+
+	ino := testCreateInode(t, FileModeType)
+	assert.True(t, ino.getVer() == 10)
+	mp.SetXAttr(&proto.SetXAttrRequest{Inode: ino.Inode, Key: "key1", Value: "0000"}, &Packet{})
+	mp.CreateDentry(&CreateDentryReq{Inode: ino.Inode, Name: "dentryName"}, &Packet{})
+
+	err = managerVersionPrepare(&proto.MultiVersionOpRequest{VolumeID: VolNameForTest, Op: proto.CreateVersionPrepare, VerSeq: 25})
+	mp.SetXAttr(&proto.SetXAttrRequest{Inode: ino.Inode, Key: "key1", Value: "1111"}, &Packet{})
+
+	assert.True(t, err == nil)
+
+	extend := mp.extendTree.Get(NewExtend(ino.Inode)).(*Extend)
+	assert.True(t, len(extend.multiVers) == 1)
+
+	masterList := &proto.VolVersionInfoList{
+		VerList: []*proto.VolVersionInfo{
+			{Ver: 20, Status: proto.VersionNormal},
+			{Ver: 30, Status: proto.VersionNormal},
+			{Ver: 40, Status: proto.VersionNormal},
+			{Ver: 50, Status: proto.VersionNormal}},
+	}
+	mp.checkByMasterVerlist(mp.multiVersionList, masterList)
+	mp.checkVerList(masterList, true)
+	assert.True(t, len(mp.multiVersionList.TemporaryVerMap) == 3)
+
+	mp.SetXAttr(&proto.SetXAttrRequest{Inode: ino.Inode, Key: "key1", Value: "2222"}, &Packet{})
+
+	go mp.multiVersionTTLWork(time.Millisecond * 10)
+
+	cnt := 30
+	for cnt > 0 {
+		if len(mp.multiVersionList.TemporaryVerMap) != 0 {
+			time.Sleep(time.Millisecond * 100)
+			cnt--
+			continue
+		}
+		break
+	}
+	inoNew := mp.getInode(&Inode{Inode: ino.Inode}, false).Msg
+	assert.True(t, inoNew.getVer() == 20)
+	extend = mp.extendTree.Get(NewExtend(ino.Inode)).(*Extend)
+	t.Logf("extent verseq %v, multivers %v", extend.verSeq, extend.multiVers)
+	assert.True(t, extend.verSeq == 50)
+	assert.True(t, len(extend.multiVers) == 2)
+	assert.True(t, extend.multiVers[0].verSeq == 30)
+	assert.True(t, extend.multiVers[1].verSeq == 20)
+	t.Logf("extent key1 in multiVers[0] %v, in multiVers[1] %v",
+		string(extend.multiVers[0].dataMap["key1"]), string(extend.multiVers[1].dataMap["key1"]))
+	assert.True(t, string(extend.multiVers[0].dataMap["key1"]) == "1111")
+	assert.True(t, string(extend.multiVers[1].dataMap["key1"]) == "0000")
+
+	err = extend.checkSequence()
+	t.Logf("extent checkSequence err %v", err)
+	assert.True(t, err == nil)
+	assert.True(t, len(mp.multiVersionList.TemporaryVerMap) == 0)
 }
