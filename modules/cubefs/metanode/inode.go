@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	syslog "log"
 	"math"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -117,7 +119,7 @@ func NewMultiSnap(seq uint64) *InodeMultiSnap {
 	}
 }
 
-func (i *Inode) setVer(seq uint64) {
+func (i *Inode) setVerDoWork(seq uint64) {
 	if seq == 0 && i.multiSnap == nil {
 		return
 	}
@@ -126,6 +128,18 @@ func (i *Inode) setVer(seq uint64) {
 	} else {
 		i.multiSnap.verSeq = seq
 	}
+}
+
+func (i *Inode) setVerNoCheck(seq uint64) {
+	i.setVerDoWork(seq)
+}
+
+func (i *Inode) setVer(seq uint64) {
+	if i.getVer() > seq {
+		syslog.Println(fmt.Sprintf("inode %v old seq %v cann't use seq %v", i.getVer(), seq, string(debug.Stack())))
+		log.LogFatalf("inode %v old seq %v cann't use seq %v", i.getVer(), seq, string(debug.Stack()))
+	}
+	i.setVerDoWork(seq)
 }
 
 func (i *Inode) insertEkRefMap(mpId uint64, ek *proto.ExtentKey) {
@@ -685,17 +699,18 @@ func (i *Inode) MarshalValue() (val []byte) {
 	var err error
 	buff := bytes.NewBuffer(make([]byte, 0, 128))
 	buff.Grow(64)
-	i.RLock()
 
-	//	log.LogInfof("action[MarshalValue] inode %v current verseq %v, hist len (%v)", i.Inode, i.verSeq, i.getLayerLen())
+	i.RLock()
 	i.MarshalInodeValue(buff)
+	if i.getLayerLen() > 0 && i.getVer() == 0 {
+		log.LogFatalf("action[MarshalValue] inode %v current verseq %v, hist len (%v) stack(%v)", i.Inode, i.getVer(), i.getLayerLen(), string(debug.Stack()))
+	}
 	if err = binary.Write(buff, binary.BigEndian, int32(i.getLayerLen())); err != nil {
 		panic(err)
 	}
 
 	if i.multiSnap != nil {
 		for _, ino := range i.multiSnap.multiVersions {
-			//	log.LogInfof("action[MarshalValue] inode %v current verseq %v", ino.Inode, ino.verSeq)
 			ino.MarshalInodeValue(buff)
 		}
 	}
@@ -1039,10 +1054,10 @@ func (inode *Inode) unlinkTopLayer(mpId uint64, ino *Inode, mpVer uint64, verlis
 		var dIno *Inode
 		if ext2Del, dIno = inode.getAndDelVer(mpId, ino.getVer(), mpVer, verlist); dIno == nil {
 			status = proto.OpNotExistErr
-			log.LogDebugf("action[unlinkTopLayer] ino %v", ino)
+			log.LogDebugf("action[unlinkTopLayer] mp %v iino %v", mpId, ino)
 			return true
 		}
-		log.LogDebugf("action[unlinkTopLayer] inode %v be unlinked, File restore, multiSnap.ekRefMap %v", ino.Inode, inode.multiSnap.ekRefMap)
+		log.LogDebugf("action[unlinkTopLayer] mp %v inode %v be unlinked", mpId, ino.Inode)
 		dIno.DecNLink() // dIno should be inode
 		doMore = true
 		return
@@ -1062,8 +1077,8 @@ func (inode *Inode) unlinkTopLayer(mpId uint64, ino *Inode, mpVer uint64, verlis
 			return
 		}
 
-		log.LogDebugf("action[unlinkTopLayer] need restore.ino %v withSeq %v equal mp seq, verlist %v multiSnap.ekRefMap %v",
-			ino, inode.getVer(), verlist, inode.multiSnap.ekRefMap)
+		log.LogDebugf("action[unlinkTopLayer] need restore.ino %v withSeq %v equal mp seq, verlist %v",
+			ino, inode.getVer(), verlist)
 		// need restore
 		if !proto.IsDir(inode.Type) {
 			delFunc()
@@ -1104,7 +1119,6 @@ func (inode *Inode) unlinkTopLayer(mpId uint64, ino *Inode, mpVer uint64, verlis
 		log.LogDebugf("action[unlinkTopLayer] inode %v be unlinked, File create ver 1st layer", ino.Inode)
 	}
 	return
-
 }
 
 func (inode *Inode) dirUnlinkVerInlist(ino *Inode, mpVer uint64, verlist *proto.VolVersionInfoList) (ext2Del []proto.ExtentKey, doMore bool, status uint8) {

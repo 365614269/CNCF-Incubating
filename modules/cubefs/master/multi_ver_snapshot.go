@@ -55,8 +55,8 @@ type VolVersionManager struct {
 	sync.RWMutex
 }
 
-func newVersionMgr(vol *Vol) *VolVersionManager {
-	return &VolVersionManager{
+func newVersionMgr(vol *Vol) (mgr *VolVersionManager) {
+	mgr = &VolVersionManager{
 		vol:    vol,
 		wait:   make(chan error, 1),
 		cancel: make(chan bool, 1),
@@ -65,6 +65,7 @@ func newVersionMgr(vol *Vol) *VolVersionManager {
 			metaNodeArray: new(sync.Map),
 		},
 	}
+	return
 }
 func (verMgr *VolVersionManager) String() string {
 	return fmt.Sprintf("mgr:{vol[%v],status[%v] verSeq [%v], prepareinfo [%v]}",
@@ -108,6 +109,11 @@ func (verMgr *VolVersionManager) CommitVer() (ver *proto.VolVersionInfo) {
 		}
 		verMgr.multiVersionList = append(verMgr.multiVersionList, commitVer)
 		verMgr.verSeq = ver.Ver
+		log.LogInfof("action[CommitVer] vol %v verseq %v exit", verMgr.vol.Name, verMgr.verSeq)
+		if err := verMgr.Persist(); err != nil {
+			log.LogErrorf("action[createVer2PhaseTask] vol %v err %v", verMgr.vol.Name, err)
+			return
+		}
 		log.LogDebugf("action[CommitVer] vol %v ask mgr do commit in next step version %v", verMgr.vol.Name, ver)
 		verMgr.wait <- nil
 	} else if verMgr.prepareCommit.op == proto.DeleteVersion {
@@ -122,7 +128,6 @@ func (verMgr *VolVersionManager) CommitVer() (ver *proto.VolVersionInfo) {
 	} else {
 		log.LogErrorf("action[CommitVer] vol %v with seq %v wrong step", verMgr.vol.Name, verMgr.prepareCommit.prepareInfo.Ver)
 	}
-	log.LogInfof("action[CommitVer] vol %v verseq %v exit", verMgr.vol.Name, verMgr.verSeq)
 	return
 }
 

@@ -57,6 +57,7 @@ import {
   ApiFactoryRegistry,
   ApiProvider,
   ApiResolver,
+  AppRouteBinder,
   AppThemeSelector,
 } from '@backstage/core-app-api';
 
@@ -76,6 +77,12 @@ import { overrideBaseUrlConfigs } from '../../../core-app-api/src/app/overrideBa
 // eslint-disable-next-line @backstage/no-relative-monorepo-imports
 import { RoutingProvider } from '../../../core-app-api/src/routing/RoutingProvider';
 // eslint-disable-next-line @backstage/no-relative-monorepo-imports
+import { resolveRouteBindings } from '../../../core-app-api/src/app/resolveRouteBindings';
+// eslint-disable-next-line @backstage/no-relative-monorepo-imports
+import { AppLanguageSelector } from '../../../core-app-api/src/apis/implementations/AppLanguageApi/AppLanguageSelector';
+// eslint-disable-next-line @backstage/no-relative-monorepo-imports
+import { I18nextTranslationApi } from '../../../core-app-api/src/apis/implementations/TranslationApi/I18nextTranslationApi';
+// eslint-disable-next-line @backstage/no-relative-monorepo-imports
 import {
   apis as defaultApis,
   components as defaultComponents,
@@ -86,6 +93,10 @@ import { SidebarItem } from '@backstage/core-components';
 import { DarkTheme, LightTheme } from '../extensions/themes';
 import { extractRouteInfoFromInstanceTree } from '../routing/extractRouteInfoFromInstanceTree';
 import { getOrCreateGlobalSingleton } from '@backstage/version-bridge';
+import {
+  appLanguageApiRef,
+  translationApiRef,
+} from '@backstage/core-plugin-api/alpha';
 
 /** @public */
 export interface ExtensionTreeNode {
@@ -250,19 +261,18 @@ export function createInstances(options: {
     return newInstance;
   }
 
-  const rootConfigs = attachmentMap.get('root')?.get('default') ?? [];
-
-  const rootInstances = rootConfigs.map(instanceParams =>
-    createInstance(instanceParams),
+  const coreInstance = createInstance(
+    extensionParams.find(p => p.extension.id === 'core')!,
   );
 
-  return { instances, rootInstances };
+  return { coreInstance, instances };
 }
 
 /** @public */
 export function createApp(options: {
   features?: (BackstagePlugin | ExtensionOverrides)[];
   configLoader?: () => Promise<ConfigApi>;
+  bindRoutes?(context: { bind: AppRouteBinder }): void;
   featureLoader?: (ctx: {
     config: ConfigApi;
   }) => Promise<(BackstagePlugin | ExtensionOverrides)[]>;
@@ -286,19 +296,10 @@ export function createApp(options: {
       ]),
     );
 
-    const { rootInstances } = createInstances({
+    const { coreInstance } = createInstances({
       features: allFeatures,
       config,
     });
-
-    const routeInfo = extractRouteInfoFromInstanceTree(rootInstances);
-
-    const coreInstance = rootInstances.find(({ id }) => id === 'core');
-    if (!coreInstance) {
-      throw Error('Unable to find core extension instance');
-    }
-
-    const apiHolder = createApiHolder(coreInstance, config);
 
     const appContext = createLegacyAppContext(
       allFeatures.filter(
@@ -306,21 +307,18 @@ export function createApp(options: {
       ),
     );
 
-    const rootElements = rootInstances
-      .map(e => (
-        <React.Fragment key={e.id}>
-          {e.getData(coreExtensionData.reactElement)}
-        </React.Fragment>
-      ))
-      .filter((x): x is JSX.Element => !!x);
-
     const App = () => (
-      <ApiProvider apis={apiHolder}>
+      <ApiProvider apis={createApiHolder(coreInstance, config)}>
         <AppContextProvider appContext={appContext}>
           <AppThemeProvider>
-            <RoutingProvider {...routeInfo} routeBindings={new Map(/* TODO */)}>
+            <RoutingProvider
+              {...extractRouteInfoFromInstanceTree(coreInstance)}
+              routeBindings={resolveRouteBindings(options.bindRoutes)}
+            >
               {/* TODO: set base path using the logic from AppRouter */}
-              <BrowserRouter>{rootElements}</BrowserRouter>
+              <BrowserRouter>
+                {coreInstance.getData(coreExtensionData.reactElement)}
+              </BrowserRouter>
             </RoutingProvider>
           </AppThemeProvider>
         </AppContextProvider>
@@ -472,6 +470,21 @@ function createApiHolder(
     api: configApiRef,
     deps: {},
     factory: () => configApi,
+  });
+
+  factoryRegistry.register('static', {
+    api: appLanguageApiRef,
+    deps: {},
+    factory: () => AppLanguageSelector.createWithStorage(),
+  });
+
+  factoryRegistry.register('default', {
+    api: translationApiRef,
+    deps: { languageApi: appLanguageApiRef },
+    factory: ({ languageApi }) =>
+      I18nextTranslationApi.create({
+        languageApi,
+      }),
   });
 
   // TODO: ship these as default extensions instead

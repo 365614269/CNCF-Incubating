@@ -118,7 +118,6 @@ jobs:
         run: |
           echo sha=${{ steps.default_vars.outputs.sha }} >> $GITHUB_OUTPUT
           
-          # Enable HTTPRouteRequestMultipleMirrors again once https://github.com/cilium/cilium/issues/28374 is fixed
           SUPPORTED_FEATURES="ReferenceGrant,HTTPRoute,TLSRoute,HTTPRouteQueryParamMatching,HTTPRouteMethodMatching,GatewayClassObservedGenerationBump,HTTPRouteHostRewrite,HTTPRoutePathRewrite,HTTPRouteSchemeRedirect,HTTPRoutePathRedirect,HTTPRoutePortRedirect,HTTPRouteRequestMirror"
           if [ ${{ matrix.crd-channel }} == "experimental" ]; then
             SUPPORTED_FEATURES+=",HTTPResponseHeaderModification,RouteDestinationPortMatching"
@@ -151,7 +150,7 @@ jobs:
         uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.21.1
+          go-version: 1.21.3
 
       - name: Wait for images to be available
         timeout-minutes: 30

@@ -652,7 +652,7 @@ func testDelDirSnapshotVersion(t *testing.T, verSeq uint64, dirIno *Inode, dirDe
 	//testPrintAllDentry(t)
 
 	rDirIno := dirIno.Copy().(*Inode)
-	rDirIno.setVer(verSeq)
+	rDirIno.setVerNoCheck(verSeq)
 
 	rspDelIno := mp.fsmUnlinkInode(rDirIno, 0)
 
@@ -1525,4 +1525,14 @@ func TestDelPartitionVersion(t *testing.T) {
 	t.Logf("extent checkSequence err %v", err)
 	assert.True(t, err == nil)
 	assert.True(t, len(mp.multiVersionList.TemporaryVerMap) == 0)
+}
+
+func TestMpMultiVerStore(t *testing.T) {
+	initMp(t)
+	filePath := "/tmp/"
+	crc, _ := mp.storeMultiVersion(filePath, &storeMsg{
+		multiVerList: []*proto.VolVersionInfo{{Ver: 20, Status: proto.VersionNormal}, {Ver: 30, Status: proto.VersionNormal}},
+	})
+	err := mp.loadMultiVer(filePath, crc)
+	assert.True(t, err == nil)
 }

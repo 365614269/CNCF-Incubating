@@ -112,8 +112,11 @@ contributors across the globe, there is almost always someone available to help.
 | bgp.announce.loadbalancerIP | bool | `false` | Enable allocation and announcement of service LoadBalancer IPs |
 | bgp.announce.podCIDR | bool | `false` | Enable announcement of node pod CIDR |
 | bgp.enabled | bool | `false` | Enable BGP support inside Cilium; embeds a new ConfigMap for BGP inside cilium-agent and cilium-operator |
-| bgpControlPlane | object | `{"enabled":false}` | This feature set enables virtual BGP routers to be created via CiliumBGPPeeringPolicy CRDs. |
+| bgpControlPlane | object | `{"enabled":false,"secretsNamespace":{"create":true,"name":"cilium-bgp-secrets"}}` | This feature set enables virtual BGP routers to be created via CiliumBGPPeeringPolicy CRDs. |
 | bgpControlPlane.enabled | bool | `false` | Enables the BGP control plane. |
+| bgpControlPlane.secretsNamespace | object | `{"create":true,"name":"cilium-bgp-secrets"}` | SecretsNamespace is the namespace which BGP support will retrieve secrets from. |
+| bgpControlPlane.secretsNamespace.create | bool | `true` | Create secrets namespace for BGP secrets. |
+| bgpControlPlane.secretsNamespace.name | string | `"cilium-bgp-secrets"` | The name of the secret namespace to which Cilium agents are given read access |
 | bpf.authMapMax | int | `524288` | Configure the maximum number of entries in auth map. |
 | bpf.autoMount.enabled | bool | `true` | Enable automatic mount of BPF filesystem When `autoMount` is enabled, the BPF filesystem is mounted at `bpf.root` path on the underlying host and inside the cilium agent pod. If users disable `autoMount`, it's expected that users have mounted bpffs filesystem at the specified `bpf.root` volume, and then the volume will be mounted inside the cilium agent pod at the same path. |
 | bpf.ctAnyMax | int | `262144` | Configure the maximum number of entries for the non-TCP connection tracking table. |
@@ -324,7 +327,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:960e1521210c0545265d1ae7230fac5fe68383fab9df127a3946274721ddf13b","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.0-8b22115c7fcef233c4c36aea18dd122ef8eabc3e","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:22dd1cf6d6e28bde9cc5460d8ca278424bbbe8b341e7941e98cdaac2d594907e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.0-05c54001182b4227978add18304a4fe90722d82d","useDigest":true}` | Envoy container image. |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
 | envoy.log.format | string | `"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"` | The format string to use for laying out the log message metadata of Envoy. |
