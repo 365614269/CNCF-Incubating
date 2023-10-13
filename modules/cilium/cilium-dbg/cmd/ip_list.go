@@ -72,6 +72,16 @@ func printIPcacheEntries(entries []*models.IPListEntry) {
 	w.Flush()
 }
 
+func getLabels(ni identity.NumericIdentity) []string {
+	params := ipApi.NewGetIdentityIDParams().WithID(ni.StringID()).WithTimeout(api.ClientTimeout)
+	id, err := client.Policy.GetIdentityID(params)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot get identity for ID %s: %s\n", ni.StringID(), err)
+		return []string{ni.String()}
+	}
+	return labels.NewLabelsFromModel(id.Payload.Labels).GetPrintableModel()
+}
+
 func printEntry(w *tabwriter.Writer, entry *models.IPListEntry) {
 	var src string
 	if entry.Metadata != nil {
@@ -80,36 +90,23 @@ func printEntry(w *tabwriter.Writer, entry *models.IPListEntry) {
 
 	ni := identity.NumericIdentity(*entry.Identity)
 	identityNumeric := ni.StringID()
-	var identities []string
+	var labels []string
 	if numeric {
-		identities = append(identities, identityNumeric)
+		labels = append(labels, identityNumeric)
 	} else {
-		identity := ni.String()
-		if identity != identityNumeric {
-			identities = append(identities, identity)
-		} else {
-			params := ipApi.NewGetIdentityIDParams().WithID(identity).WithTimeout(api.ClientTimeout)
-			id, err := client.Policy.GetIdentityID(params)
-			if err != nil {
-				Fatalf("Cannot get identity for given ID %s: %s\n", id, err)
-			}
-			lbls := labels.NewLabelsFromModel(id.Payload.Labels)
-			for _, lbl := range lbls {
-				identities = append(identities, lbl.String())
-			}
-		}
+		labels = append(labels, getLabels(ni)...)
 	}
 	first := true
-	for _, identity := range identities {
+	for _, lbl := range labels {
 		if first {
 			if verbose {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", *entry.Cidr, identity, src, entry.HostIP, entry.EncryptKey)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", *entry.Cidr, lbl, src, entry.HostIP, entry.EncryptKey)
 			} else {
-				fmt.Fprintf(w, "%s\t%s\t%s\n", *entry.Cidr, identity, src)
+				fmt.Fprintf(w, "%s\t%s\t%s\n", *entry.Cidr, lbl, src)
 			}
 			first = false
 		} else {
-			fmt.Fprintf(w, "\t%s\t\n", identity)
+			fmt.Fprintf(w, "\t%s\t\n", lbl)
 		}
 	}
 }
