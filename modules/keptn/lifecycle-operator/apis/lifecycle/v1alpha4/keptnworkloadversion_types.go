@@ -58,13 +58,13 @@ type KeptnWorkloadVersionStatus struct {
 	// +kubebuilder:default:=Pending
 	PostDeploymentStatus common.KeptnState `json:"postDeploymentStatus,omitempty"`
 	// PreDeploymentTaskStatus indicates the current state of each preDeploymentTask of the KeptnWorkloadVersion.
-	PreDeploymentTaskStatus []ItemStatus `json:"preDeploymentTaskStatus,omitempty"`
+	PreDeploymentTaskStatus []v1alpha3.ItemStatus `json:"preDeploymentTaskStatus,omitempty"`
 	// PostDeploymentTaskStatus indicates the current state of each postDeploymentTask of the KeptnWorkloadVersion.
-	PostDeploymentTaskStatus []ItemStatus `json:"postDeploymentTaskStatus,omitempty"`
+	PostDeploymentTaskStatus []v1alpha3.ItemStatus `json:"postDeploymentTaskStatus,omitempty"`
 	// PreDeploymentEvaluationTaskStatus indicates the current state of each preDeploymentEvaluation of the KeptnWorkloadVersion.
-	PreDeploymentEvaluationTaskStatus []ItemStatus `json:"preDeploymentEvaluationTaskStatus,omitempty"`
+	PreDeploymentEvaluationTaskStatus []v1alpha3.ItemStatus `json:"preDeploymentEvaluationTaskStatus,omitempty"`
 	// PostDeploymentEvaluationTaskStatus indicates the current state of each postDeploymentEvaluation of the KeptnWorkloadVersion.
-	PostDeploymentEvaluationTaskStatus []ItemStatus `json:"postDeploymentEvaluationTaskStatus,omitempty"`
+	PostDeploymentEvaluationTaskStatus []v1alpha3.ItemStatus `json:"postDeploymentEvaluationTaskStatus,omitempty"`
 	// StartTime represents the time at which the deployment of the KeptnWorkloadVersion started.
 	StartTime metav1.Time `json:"startTime,omitempty"`
 	// EndTime represents the time at which the deployment of the KeptnWorkloadVersion finished.
@@ -81,19 +81,6 @@ type KeptnWorkloadVersionStatus struct {
 	// Status represents the overall status of the KeptnWorkloadVersion.
 	// +kubebuilder:default:=Pending
 	Status common.KeptnState `json:"status,omitempty"`
-}
-
-type ItemStatus struct {
-	// DefinitionName is the name of the EvaluationDefinition/TaskDefinition
-	DefinitionName string `json:"definitionName,omitempty"`
-	// +kubebuilder:default:=Pending
-	Status common.KeptnState `json:"status,omitempty"`
-	// Name is the name of the Evaluation/Task
-	Name string `json:"name,omitempty"`
-	// StartTime represents the time at which the Item (Evaluation/Task) started.
-	StartTime metav1.Time `json:"startTime,omitempty"`
-	// EndTime represents the time at which the Item (Evaluation/Task) started.
-	EndTime metav1.Time `json:"endTime,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -234,18 +221,6 @@ func (w *KeptnWorkloadVersion) Complete() {
 	w.SetEndTime()
 }
 
-func (e *ItemStatus) SetStartTime() {
-	if e.StartTime.IsZero() {
-		e.StartTime = metav1.NewTime(time.Now().UTC())
-	}
-}
-
-func (e *ItemStatus) SetEndTime() {
-	if e.EndTime.IsZero() {
-		e.EndTime = metav1.NewTime(time.Now().UTC())
-	}
-}
-
 func (w KeptnWorkloadVersion) GetActiveMetricsAttributes() []attribute.KeyValue {
 	return []attribute.KeyValue{
 		common.AppName.String(w.Spec.AppName),
@@ -286,11 +261,11 @@ func (w KeptnWorkloadVersion) GetPostDeploymentTasks() []string {
 	return w.Spec.PostDeploymentTasks
 }
 
-func (w KeptnWorkloadVersion) GetPreDeploymentTaskStatus() []ItemStatus {
+func (w KeptnWorkloadVersion) GetPreDeploymentTaskStatus() []v1alpha3.ItemStatus {
 	return w.Status.PreDeploymentTaskStatus
 }
 
-func (w KeptnWorkloadVersion) GetPostDeploymentTaskStatus() []ItemStatus {
+func (w KeptnWorkloadVersion) GetPostDeploymentTaskStatus() []v1alpha3.ItemStatus {
 	return w.Status.PostDeploymentTaskStatus
 }
 
@@ -302,11 +277,11 @@ func (w KeptnWorkloadVersion) GetPostDeploymentEvaluations() []string {
 	return w.Spec.PostDeploymentEvaluations
 }
 
-func (w KeptnWorkloadVersion) GetPreDeploymentEvaluationTaskStatus() []ItemStatus {
+func (w KeptnWorkloadVersion) GetPreDeploymentEvaluationTaskStatus() []v1alpha3.ItemStatus {
 	return w.Status.PreDeploymentEvaluationTaskStatus
 }
 
-func (w KeptnWorkloadVersion) GetPostDeploymentEvaluationTaskStatus() []ItemStatus {
+func (w KeptnWorkloadVersion) GetPostDeploymentEvaluationTaskStatus() []v1alpha3.ItemStatus {
 	return w.Status.PostDeploymentEvaluationTaskStatus
 }
 
