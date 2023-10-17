@@ -29,7 +29,7 @@ concurrency:
 
 env:
   # renovate: datasource=github-releases depName=cilium/cilium-cli
-  cilium_cli_version: v0.15.9
+  cilium_cli_version: v0.15.10
   # renovate: datasource=github-releases depName=kubernetes/kops
   kops_version: v1.28.0
   # renovate: datasource=golang-version depName=go
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout context ref (trusted)
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
@@ -87,7 +87,7 @@ jobs:
           go-version: ${{ env.go_version }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@e718cf78ef55d95cfa0a5a0a935d6a224d567e1d # v0.15.6
+        uses: cilium/cilium-cli@43678f6c7289bafa8850b9234d99581e0c5f8f09 # v0.15.10
         with:
           release-version: ${{ env.cilium_cli_version }}
 
@@ -111,7 +111,7 @@ jobs:
           version: "405.0.0"
       
       - name: Clone ClusterLoader2
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4.0.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           repository: learnitall/perf-tests
           ref: d7a97a6b7b9efc29ccb496f3ff54f42588006e96 # tinker/learnitall/100-node-scale-test
