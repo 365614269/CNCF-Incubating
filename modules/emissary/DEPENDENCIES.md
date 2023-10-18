@@ -3,7 +3,7 @@ following Free and Open Source software:
 
     Name                                                                              Version                                        License(s)
     ----                                                                              -------                                        ----------
-    the Go language standard library ("std")                                          v1.20.9                                        3-clause BSD license
+    the Go language standard library ("std")                                          v1.20.10                                       3-clause BSD license
     dario.cat/mergo                                                                   v1.0.0                                         3-clause BSD license
     github.com/Azure/go-ansiterm                                                      v0.0.0-20210617225240-d185dfc1b5a1             MIT license
     github.com/MakeNowJust/heredoc                                                    v1.0.0                                         MIT license
@@ -51,7 +51,7 @@ following Free and Open Source software:
     github.com/google/btree                                                           v1.0.1                                         Apache License 2.0
     github.com/google/cel-go                                                          v0.18.0                                        Apache License 2.0
     github.com/google/gnostic-models                                                  v0.6.8                                         Apache License 2.0
-    github.com/google/go-cmp                                                          v0.5.9                                         3-clause BSD license
+    github.com/google/go-cmp                                                          v0.6.0                                         3-clause BSD license
     github.com/google/gofuzz                                                          v1.2.0                                         Apache License 2.0
     github.com/google/shlex                                                           v0.0.0-20191202100458-e7afc7fbc510             Apache License 2.0
     github.com/google/uuid                                                            v1.3.1                                         3-clause BSD license
@@ -112,7 +112,7 @@ following Free and Open Source software:
     golang.org/x/crypto                                                               v0.14.0                                        3-clause BSD license
     golang.org/x/exp                                                                  v0.0.0-20231006140011-7918f672742d             3-clause BSD license
     golang.org/x/mod                                                                  v0.13.0                                        3-clause BSD license
-    golang.org/x/net                                                                  v0.16.0                                        3-clause BSD license
+    golang.org/x/net                                                                  v0.17.0                                        3-clause BSD license
     golang.org/x/oauth2                                                               v0.12.0                                        3-clause BSD license
     golang.org/x/sync                                                                 v0.4.0                                         3-clause BSD license
     golang.org/x/sys                                                                  v0.13.0                                        3-clause BSD license
@@ -121,10 +121,10 @@ following Free and Open Source software:
     golang.org/x/time                                                                 v0.3.0                                         3-clause BSD license
     golang.org/x/tools                                                                v0.14.0                                        3-clause BSD license
     google.golang.org/appengine                                                       v1.6.8                                         Apache License 2.0
-    google.golang.org/genproto                                                        v0.0.0-20230920204549-e6e6cdab5c13             Apache License 2.0
-    google.golang.org/genproto/googleapis/api                                         v0.0.0-20230913181813-007df8e322eb             Apache License 2.0
-    google.golang.org/genproto/googleapis/rpc                                         v0.0.0-20231002182017-d307bd883b97             Apache License 2.0
-    google.golang.org/grpc                                                            v1.58.2                                        Apache License 2.0
+    google.golang.org/genproto                                                        v0.0.0-20231012201019-e917dd12ba7a             Apache License 2.0
+    google.golang.org/genproto/googleapis/api                                         v0.0.0-20231002182017-d307bd883b97             Apache License 2.0
+    google.golang.org/genproto/googleapis/rpc                                         v0.0.0-20231016165738-49dd2c1f3d0b             Apache License 2.0
+    google.golang.org/grpc                                                            v1.58.3                                        Apache License 2.0
     google.golang.org/grpc/cmd/protoc-gen-go-grpc                                     v1.3.0                                         Apache License 2.0
     google.golang.org/protobuf                                                        v1.31.0                                        3-clause BSD license
     gopkg.in/inf.v0                                                                   v0.9.1                                         3-clause BSD license
@@ -175,7 +175,7 @@ libraries:
     dpath               2.1.6      MIT license
     durationpy          0.5        MIT license
     expiringdict        1.2.2      Apache License 2.0
-    google-auth         2.23.2     Apache License 2.0
+    google-auth         2.23.3     Apache License 2.0
     gunicorn            21.2.0     MIT license
     idna                3.4        3-clause BSD license
     itsdangerous        2.1.2      3-clause BSD license
@@ -183,7 +183,7 @@ libraries:
     jsonpointer         2.4        3-clause BSD license
     kubernetes          28.1.0     Apache License 2.0
     oauthlib            3.2.2      3-clause BSD license
-    orjson              3.9.7      Apache License 2.0, MIT license
+    orjson              3.9.9      Apache License 2.0, MIT license
     packaging           23.2       2-clause BSD license, Apache License 2.0
     pip-tools           7.3.0      3-clause BSD license
     prometheus-client   0.17.1     Apache License 2.0
