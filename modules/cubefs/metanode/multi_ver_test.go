@@ -1,7 +1,28 @@
+// Copyright 2023 The CubeFS Authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+// implied. See the License for the specific language governing
+// permissions and limitations under the License.
+
 package metanode
 
 import (
 	"fmt"
+	"math"
+	"os"
+	"reflect"
+	"sync"
+	"testing"
+	"time"
+
 	raftstoremock "github.com/cubefs/cubefs/metanode/mocktest/raftstore"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util"
@@ -9,21 +30,15 @@ import (
 	"github.com/cubefs/cubefs/util/log"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"math"
-	"os"
-	"reflect"
-	"sync"
-	"testing"
-	"time"
 )
 
 var partitionId uint64 = 10
 var manager = &metadataManager{partitions: make(map[uint64]MetaPartition), volUpdating: new(sync.Map)}
 var mp *metaPartition
 
-//PartitionId   uint64              `json:"partition_id"`
-//VolName       string              `json:"vol_name"`
-//PartitionType int                 `json:"partition_type"`
+// PartitionId   uint64              `json:"partition_id"`
+// VolName       string              `json:"vol_name"`
+// PartitionType int                 `json:"partition_type"`
 var metaConf = &MetaPartitionConfig{
 	PartitionId:   10001,
 	VolName:       VolNameForTest,
@@ -1443,10 +1458,10 @@ func TestXAttrOperation(t *testing.T) {
 func TestUpdateDenty(t *testing.T) {
 	newMpWithMock(t)
 	testCreateInode(nil, DirModeType)
-	err := mp.CreateDentry(&CreateDentryReq{Name: "testfile", ParentID: 1, VerSeq: 0, Inode: 1000}, &Packet{})
+	err := mp.CreateDentry(&CreateDentryReq{Name: "testfile", ParentID: 1, VerSeq: 0, Inode: 1000}, &Packet{}, localAddrForAudit)
 	assert.True(t, err == nil)
 	testCreateVer()
-	mp.UpdateDentry(&UpdateDentryReq{Name: "testfile", ParentID: 1, Inode: 2000}, &Packet{})
+	mp.UpdateDentry(&UpdateDentryReq{Name: "testfile", ParentID: 1, Inode: 2000}, &Packet{}, localAddrForAudit)
 	den := &Dentry{Name: "testfile", ParentId: 1}
 	den.setVerSeq(math.MaxUint64)
 	denRsp, status := mp.getDentry(den)
@@ -1474,7 +1489,7 @@ func TestDelPartitionVersion(t *testing.T) {
 	ino := testCreateInode(t, FileModeType)
 	assert.True(t, ino.getVer() == 10)
 	mp.SetXAttr(&proto.SetXAttrRequest{Inode: ino.Inode, Key: "key1", Value: "0000"}, &Packet{})
-	mp.CreateDentry(&CreateDentryReq{Inode: ino.Inode, Name: "dentryName"}, &Packet{})
+	mp.CreateDentry(&CreateDentryReq{Inode: ino.Inode, Name: "dentryName"}, &Packet{}, "/dentryName")
 
 	err = managerVersionPrepare(&proto.MultiVersionOpRequest{VolumeID: VolNameForTest, Op: proto.CreateVersionPrepare, VerSeq: 25})
 	mp.SetXAttr(&proto.SetXAttrRequest{Inode: ino.Inode, Key: "key1", Value: "1111"}, &Packet{})
