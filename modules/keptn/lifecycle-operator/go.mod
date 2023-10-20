@@ -9,7 +9,7 @@ require (
 	github.com/cloudevents/sdk-go/v2 v2.14.0
 	github.com/go-logr/logr v1.2.4
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/keptn/lifecycle-toolkit/klt-cert-manager v0.0.0-20231018075927-066be3e70bad
+	github.com/keptn/lifecycle-toolkit/klt-cert-manager v0.0.0-20231019072853-f2f8dfec6e47
 	github.com/magiconair/properties v1.8.7
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.28.0
@@ -26,11 +26,11 @@ require (
 	go.opentelemetry.io/otel/trace v1.19.0
 	golang.org/x/net v0.17.0
 	google.golang.org/grpc v1.58.3
-	k8s.io/api v0.28.2
-	k8s.io/apiextensions-apiserver v0.28.2
-	k8s.io/apimachinery v0.28.2
-	k8s.io/apiserver v0.28.2
-	k8s.io/client-go v0.28.2
+	k8s.io/api v0.28.3
+	k8s.io/apiextensions-apiserver v0.28.3
+	k8s.io/apimachinery v0.28.3
+	k8s.io/apiserver v0.28.3
+	k8s.io/client-go v0.28.3
 	sigs.k8s.io/controller-runtime v0.16.2
 )
 
@@ -91,7 +91,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/component-base v0.28.2 // indirect
+	k8s.io/component-base v0.28.3 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9 // indirect
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect

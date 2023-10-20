@@ -1702,12 +1702,11 @@ enableIPv4BIGTCP: false
 # -- Enables IPv6 BIG TCP support which increases maximum IPv6 GSO/GRO limits for nodes and pods
 enableIPv6BIGTCP: false
 
-# -- Enables egress gateway to redirect and SNAT the traffic that leaves the
-# cluster.
 egressGateway:
+  # -- Enables egress gateway to redirect and SNAT the traffic that leaves the
+  # cluster.
   enabled: false
-  # -- Install egress gateway IP rules and routes in order to properly steer
-  # egress gateway traffic to the correct ENI interface
+  # -- Deprecated without a replacement necessary.
   installRoutes: false
   # -- Time between triggers of egress gateway state reconciliations
   reconciliationTriggerInterval: 1s

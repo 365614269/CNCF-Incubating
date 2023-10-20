@@ -860,12 +860,12 @@
      - The maximum time the DNS proxy holds an allowed DNS response before sending it along. Responses are sent as soon as the datapath is updated with the new IP information.
      - string
      - ``"100ms"``
-   * - :spelling:ignore:`egressGateway`
+   * - :spelling:ignore:`egressGateway.enabled`
      - Enables egress gateway to redirect and SNAT the traffic that leaves the cluster.
-     - object
-     - ``{"enabled":false,"installRoutes":false,"reconciliationTriggerInterval":"1s"}``
+     - bool
+     - ``false``
    * - :spelling:ignore:`egressGateway.installRoutes`
-     - Install egress gateway IP rules and routes in order to properly steer egress gateway traffic to the correct ENI interface
+     - Deprecated without a replacement necessary.
      - bool
      - ``false``
    * - :spelling:ignore:`egressGateway.reconciliationTriggerInterval`
