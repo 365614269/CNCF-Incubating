@@ -492,6 +492,7 @@ func TestAppendList(t *testing.T) {
 			verSeq: splitSeq,
 		},
 	}
+	mp.verSeq = iTmp.getVer()
 	mp.fsmAppendExtentsWithCheck(iTmp, true)
 	t.Logf("in split at begin")
 	assert.True(t, ino.multiSnap.multiVersions[0].Extents.eks[0].GetSeq() == ino.getLayerVer(3))
@@ -1458,7 +1459,7 @@ func TestXAttrOperation(t *testing.T) {
 func TestUpdateDenty(t *testing.T) {
 	newMpWithMock(t)
 	testCreateInode(nil, DirModeType)
-	err := mp.CreateDentry(&CreateDentryReq{Name: "testfile", ParentID: 1, VerSeq: 0, Inode: 1000}, &Packet{}, localAddrForAudit)
+	err := mp.CreateDentry(&CreateDentryReq{Name: "testfile", ParentID: 1, Inode: 1000}, &Packet{}, localAddrForAudit)
 	assert.True(t, err == nil)
 	testCreateVer()
 	mp.UpdateDentry(&UpdateDentryReq{Name: "testfile", ParentID: 1, Inode: 2000}, &Packet{}, localAddrForAudit)

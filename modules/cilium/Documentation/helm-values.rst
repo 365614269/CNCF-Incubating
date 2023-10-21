@@ -1944,6 +1944,10 @@
      - Default secret namespace for ingresses without .spec.tls[].secretName set.
      - string
      - ``nil``
+   * - :spelling:ignore:`ingressController.enableProxyProtocol`
+     - Enable proxy protocol for all Ingress listeners. Note that *only* Proxy protocol traffic will be accepted once this is enabled.
+     - bool
+     - ``false``
    * - :spelling:ignore:`ingressController.enabled`
      - Enable cilium ingress controller This will automatically set enable-envoy-config as well.
      - bool
