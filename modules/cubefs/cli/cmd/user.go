@@ -29,7 +29,7 @@ const (
 )
 
 func newUserCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdUserUse,
 		Short: cmdUserShort,
 		Args:  cobra.MinimumNArgs(0),
@@ -57,21 +57,19 @@ func newUserCreateCmd(client *master.MasterClient) *cobra.Command {
 	var optUserType string
 	var clientIDKey string
 	var optYes bool
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdUserCreateUse,
 		Short: cmdUserCreateShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var userID = args[0]
-			var password = optPassword
-			var accessKey = optAccessKey
-			var secretKey = optSecretKey
-			var userType = proto.UserTypeFromString(optUserType)
+			userID := args[0]
+			password := optPassword
+			accessKey := optAccessKey
+			secretKey := optSecretKey
+			userType := proto.UserTypeFromString(optUserType)
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if !userType.Valid() {
 				err = fmt.Errorf("Invalid user type. ")
@@ -81,19 +79,19 @@ func newUserCreateCmd(client *master.MasterClient) *cobra.Command {
 			// ask user for confirm
 			if !optYes {
 				// display information before create
-				var displayPassword = "[default]"
+				displayPassword := "[default]"
 				if optPassword != "" {
 					displayPassword = optPassword
 				}
-				var displayAccessKey = "[auto generate]"
-				var displaySecretKey = "[auto generate]"
+				displayAccessKey := "[auto generate]"
+				displaySecretKey := "[auto generate]"
 				if optAccessKey != "" {
 					displayAccessKey = optAccessKey
 				}
 				if optSecretKey != "" {
 					displaySecretKey = optSecretKey
 				}
-				var displayUserType = userType.String()
+				displayUserType := userType.String()
 				fmt.Printf("Create a new CubeFS cluster user\n")
 				stdout("  User ID   : %v\n", userID)
 				stdout("  Password  : %v\n", displayPassword)
@@ -109,7 +107,7 @@ func newUserCreateCmd(client *master.MasterClient) *cobra.Command {
 				}
 			}
 
-			var param = proto.UserCreateParam{
+			param := proto.UserCreateParam{
 				ID:        userID,
 				Password:  password,
 				AccessKey: accessKey,
@@ -125,7 +123,6 @@ func newUserCreateCmd(client *master.MasterClient) *cobra.Command {
 			// display operation result
 			stdout("Create user success:\n")
 			printUserInfo(userInfo)
-			return
 		},
 	}
 	cmd.Flags().StringVar(&optPassword, "password", "", "Specify user password")
@@ -148,20 +145,18 @@ func newUserUpdateCmd(client *master.MasterClient) *cobra.Command {
 	var optUserType string
 	var clientIDKey string
 	var optYes bool
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdUserUpdateUse,
 		Short: cmdUserUpdateShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var userID = args[0]
-			var accessKey = optAccessKey
-			var secretKey = optSecretKey
+			userID := args[0]
+			accessKey := optAccessKey
+			secretKey := optSecretKey
 			var userType proto.UserType
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if optUserType != "" {
 				userType = proto.UserTypeFromString(optUserType)
@@ -172,15 +167,15 @@ func newUserUpdateCmd(client *master.MasterClient) *cobra.Command {
 			}
 
 			if !optYes {
-				var displayAccessKey = "[no change]"
+				displayAccessKey := "[no change]"
 				if optAccessKey != "" {
 					displayAccessKey = optAccessKey
 				}
-				var displaySecretKey = "[no change]"
+				displaySecretKey := "[no change]"
 				if optSecretKey != "" {
 					displaySecretKey = optSecretKey
 				}
-				var displayUserType = "[no change]"
+				displayUserType := "[no change]"
 				if optUserType != "" {
 					displayUserType = optUserType
 				}
@@ -201,7 +196,7 @@ func newUserUpdateCmd(client *master.MasterClient) *cobra.Command {
 				err = fmt.Errorf("no update")
 				return
 			}
-			var param = proto.UserUpdateParam{
+			param := proto.UserUpdateParam{
 				UserID:    userID,
 				AccessKey: accessKey,
 				SecretKey: secretKey,
@@ -214,7 +209,6 @@ func newUserUpdateCmd(client *master.MasterClient) *cobra.Command {
 
 			stdout("Update user success:\n")
 			printUserInfo(userInfo)
-			return
 		},
 	}
 	cmd.Flags().StringVar(&optAccessKey, "access-key", "", "Update user access key")
@@ -232,19 +226,17 @@ const (
 
 func newUserDeleteCmd(client *master.MasterClient) *cobra.Command {
 	var optYes bool
-	//var optForce bool
+	// var optForce bool
 	var clientIDKey string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdUserDeleteUse,
 		Short: cmdUserDeleteShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var userID = args[0]
+			userID := args[0]
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if !optYes {
 				stdout("Delete user [%v] (yes/no)[no]:", userID)
@@ -261,7 +253,6 @@ func newUserDeleteCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("Delete user success.\n")
-			return
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -272,7 +263,7 @@ func newUserDeleteCmd(client *master.MasterClient) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&optYes, "yes", "y", false, "Answer yes for all questions")
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
-	//cmd.Flags().BoolVarP(&optForce, "force", "f", false, "Force to delete user")
+	// cmd.Flags().BoolVarP(&optForce, "force", "f", false, "Force to delete user")
 	return cmd
 }
 
@@ -282,18 +273,16 @@ const (
 )
 
 func newUserInfoCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdUserInfoUse,
 		Short: cmdUserInfoShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var userID = args[0]
+			userID := args[0]
 			var userInfo *proto.UserInfo
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if userInfo, err = client.UserAPI().GetUserInfo(userID); err != nil {
 				err = fmt.Errorf("Get user info failed: %v\n", err)
@@ -320,19 +309,17 @@ const (
 func newUserPermCmd(client *master.MasterClient) *cobra.Command {
 	var subdir string
 	var clientIDKey string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdUserPermUse,
 		Short: cmdUserPermShort,
 		Args:  cobra.MinimumNArgs(3),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var userID = args[0]
-			var volume = args[1]
+			userID := args[0]
+			volume := args[1]
 			var perm proto.Permission
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 
 			perm = proto.BuiltinPermissionPrefix
@@ -366,7 +353,7 @@ func newUserPermCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			var userInfo *proto.UserInfo
-			if userInfo, err = client.UserAPI().GetUserInfo(userID); err != nil {
+			if _, err = client.UserAPI().GetUserInfo(userID); err != nil {
 				return
 			}
 			if perm.IsNone() {
@@ -400,7 +387,7 @@ const (
 
 func newUserListCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliOpList,
 		Short:   cmdUserListShort,
 		Aliases: []string{"ls"},
@@ -408,9 +395,7 @@ func newUserListCmd(client *master.MasterClient) *cobra.Command {
 			var users []*proto.UserInfo
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if users, err = client.UserAPI().ListUsers(optKeyword); err != nil {
 				return

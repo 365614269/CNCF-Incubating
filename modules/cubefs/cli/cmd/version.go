@@ -16,7 +16,7 @@ const (
 )
 
 func newVersionCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     cmdVersionUse,
 		Short:   cmdVersionShort,
 		Args:    cobra.MinimumNArgs(0),
@@ -33,7 +33,7 @@ func newVersionCmd(client *master.MasterClient) *cobra.Command {
 
 func newVersionCreateCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliFlagVersionCreate,
 		Short:   cmdVersionCreateShort,
 		Aliases: []string{"create"},
@@ -43,12 +43,10 @@ func newVersionCreateCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			var verList *proto.VolVersionInfoList
-			var volumeName = args[0]
+			volumeName := args[0]
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v", err)
-				}
+				errout(err)
 			}()
 			if _, err = client.AdminAPI().CreateVersion(volumeName); err != nil {
 				return
@@ -64,7 +62,6 @@ func newVersionCreateCmd(client *master.MasterClient) *cobra.Command {
 				}
 				stdout("%v\n", formatVerInfoTableRow(ver))
 			}
-
 		},
 	}
 	cmd.Flags().StringVar(&optKeyword, "keyword", "", "Specify keyword of volume name to filter")
@@ -73,7 +70,7 @@ func newVersionCreateCmd(client *master.MasterClient) *cobra.Command {
 
 func newVersionListCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliFlagVersionList,
 		Short:   cmdVersionListShort,
 		Aliases: []string{"create"},
@@ -88,9 +85,7 @@ func newVersionListCmd(client *master.MasterClient) *cobra.Command {
 				err        error
 			)
 			defer func() {
-				if err != nil {
-					errout("Error: %v", err)
-				}
+				errout(err)
 			}()
 			if verList, err = client.AdminAPI().GetVerList(volumeName); err != nil {
 				return
@@ -110,7 +105,7 @@ func newVersionListCmd(client *master.MasterClient) *cobra.Command {
 
 func newVersionDelCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliFlagVersionDel,
 		Short:   cmdVersionDelShort,
 		Aliases: []string{"create"},
@@ -122,9 +117,7 @@ func newVersionDelCmd(client *master.MasterClient) *cobra.Command {
 
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v", err)
-				}
+				errout(err)
 			}()
 			if err = client.AdminAPI().DeleteVersion(args[0], args[1]); err != nil {
 				return
@@ -137,7 +130,7 @@ func newVersionDelCmd(client *master.MasterClient) *cobra.Command {
 
 func newVersionStrategyCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliFlagVersionSetStrategy,
 		Short:   cmdVersionSetStrategyShort,
 		Aliases: []string{"create"},
@@ -149,9 +142,7 @@ func newVersionStrategyCmd(client *master.MasterClient) *cobra.Command {
 
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v", err)
-				}
+				errout(err)
 			}()
 			if err = client.AdminAPI().SetStrategy(args[0], args[1], args[2], args[3], args[4]); err != nil {
 				return

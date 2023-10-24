@@ -34,7 +34,7 @@ func formatAddr(ipAddr string, domainAddr string) (addr string) {
 }
 
 func formatClusterView(cv *proto.ClusterView, cn *proto.ClusterNodeInfo, cp *proto.ClusterIP) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  Cluster name       : %v\n", cv.Name))
 	sb.WriteString(fmt.Sprintf("  Master leader      : %v\n", cv.LeaderAddr))
 	for _, master := range cv.MasterNodes {
@@ -64,17 +64,17 @@ var (
 )
 
 func formatClusterStat(cs *proto.ClusterStatInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("DataNode Status:\n"))
+	sb.WriteString("DataNode Status:\n")
 	sb.WriteString(statInfoTableHeader)
 	sb.WriteString(fmt.Sprintf(statInfoTablePattern, cs.DataNodeStatInfo.TotalGB, cs.DataNodeStatInfo.UsedGB, cs.DataNodeStatInfo.IncreasedGB, cs.DataNodeStatInfo.UsedRatio))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("MetaNode Status:\n"))
+	sb.WriteString("MetaNode Status:\n")
 	sb.WriteString(statInfoTableHeader)
 	sb.WriteString(fmt.Sprintf(statInfoTablePattern, cs.MetaNodeStatInfo.TotalGB, cs.MetaNodeStatInfo.UsedGB, cs.MetaNodeStatInfo.IncreasedGB, cs.MetaNodeStatInfo.UsedRatio))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Zone List:\n"))
+	sb.WriteString("Zone List:\n")
 	sb.WriteString(zoneStatInfoTableHeader)
 	for zoneName, zoneStat := range cs.ZoneStatInfo {
 		sb.WriteString(fmt.Sprintf(zoneStatInfoTablePattern, zoneName, "DATANODE", zoneStat.DataNodeStat.Total, zoneStat.DataNodeStat.Used, zoneStat.DataNodeStat.Avail, zoneStat.DataNodeStat.UsedRatio, zoneStat.DataNodeStat.TotalNodes, zoneStat.DataNodeStat.WritableNodes))
@@ -94,7 +94,7 @@ func formatNodeView(view *proto.NodeView, tableRow bool) string {
 		return fmt.Sprintf(nodeViewTableRowPattern, view.ID, formatAddr(view.Addr, view.DomainAddr),
 			formatYesNo(view.IsWritable), formatNodeStatus(view.Status))
 	}
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID      : %v\n", view.ID))
 	sb.WriteString(fmt.Sprintf("  Address : %v\n", formatAddr(view.Addr, view.DomainAddr)))
 	sb.WriteString(fmt.Sprintf("  Writable: %v\n", formatYesNo(view.IsWritable)))
@@ -117,8 +117,7 @@ func formatNodeViewForNodeSet(view *proto.NodeStatView) string {
 }
 
 func formatSimpleVolView(svv *proto.SimpleVolView) string {
-
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID                              : %v\n", svv.ID))
 	sb.WriteString(fmt.Sprintf("  Name                            : %v\n", svv.Name))
 	sb.WriteString(fmt.Sprintf("  Owner                           : %v\n", svv.Owner))
@@ -214,7 +213,6 @@ func formatUidInfoTableRow(uidInfo *proto.UidSpaceInfo) string {
 func formatVerInfoTableRow(verInfo *proto.VolVersionInfo) string {
 	return fmt.Sprintf(volumeVersionPattern,
 		verInfo.Ver, time.UnixMicro(int64(verInfo.Ver)).Local().Format(time.RFC1123), verInfo.Status, "")
-
 }
 
 var (
@@ -263,9 +261,9 @@ func formatDataPartitionInfoRow(partition *proto.DataPartitionInfo) string {
 }
 
 func formatBadReplicaDpInfoRow(partition *proto.DataPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("[")
-	var firstItem = true
+	firstItem := true
 	for _, replica := range partition.Replicas {
 		if replica.Status == proto.Unavailable {
 			if !firstItem {
@@ -282,9 +280,9 @@ func formatBadReplicaDpInfoRow(partition *proto.DataPartitionInfo) string {
 }
 
 func formatReplicaFileCountDiffDpInfoRow(partition *proto.DataPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("[")
-	var firstItem = true
+	firstItem := true
 	for _, replica := range partition.Replicas {
 		if !firstItem {
 			sb.WriteString(",")
@@ -303,9 +301,9 @@ func formatReplicaFileCountDiffDpInfoRow(partition *proto.DataPartitionInfo) str
 }
 
 func formatReplicaSizeDiffDpInfoRow(partition *proto.DataPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("[")
-	var firstItem = true
+	firstItem := true
 	for _, replica := range partition.Replicas {
 		if !firstItem {
 			sb.WriteString(",")
@@ -324,9 +322,9 @@ func formatReplicaSizeDiffDpInfoRow(partition *proto.DataPartitionInfo) string {
 }
 
 func formatMetaPartitionReplicaInodeNotEqualInfoRow(partition *proto.MetaPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("[")
-	var firstItem = true
+	firstItem := true
 	for _, replica := range partition.Replicas {
 		if !firstItem {
 			sb.WriteString(",")
@@ -342,35 +340,12 @@ func formatMetaPartitionReplicaInodeNotEqualInfoRow(partition *proto.MetaPartiti
 	sb.WriteString("]")
 	return fmt.Sprintf(inodeCountNotEqualInfoTablePattern, partition.PartitionID, partition.VolName, partition.ReplicaNum,
 		formatDataPartitionStatus(partition.Status), sb.String())
-
-}
-
-func formatMetaPartitionReplicaMaxInodeNotEqualInfoRow(partition *proto.MetaPartitionInfo) string {
-	var sb = strings.Builder{}
-	sb.WriteString("[")
-	var firstItem = true
-	for _, replica := range partition.Replicas {
-		if !firstItem {
-			sb.WriteString(",")
-		}
-
-		if replica.IsLeader {
-			sb.WriteString(fmt.Sprintf("%v(%v isLeader)", replica.Addr, replica.MaxInode))
-		} else {
-			sb.WriteString(fmt.Sprintf("%v(%v)", replica.Addr, replica.MaxInode))
-		}
-		firstItem = false
-	}
-	sb.WriteString("]")
-	return fmt.Sprintf(inodeCountNotEqualInfoTablePattern, partition.PartitionID, partition.VolName, partition.ReplicaNum,
-		formatDataPartitionStatus(partition.Status), sb.String())
-
 }
 
 func formatMetaPartitionReplicaDentryNotEqualInfoRow(partition *proto.MetaPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("[")
-	var firstItem = true
+	firstItem := true
 	for _, replica := range partition.Replicas {
 		if !firstItem {
 			sb.WriteString(",")
@@ -386,7 +361,6 @@ func formatMetaPartitionReplicaDentryNotEqualInfoRow(partition *proto.MetaPartit
 	sb.WriteString("]")
 	return fmt.Sprintf(dentryCountNotEqualInfoTablePattern, partition.PartitionID, partition.VolName, partition.ReplicaNum,
 		formatDataPartitionStatus(partition.Status), sb.String())
-
 }
 
 func formatMetaPartitionInfoRow(partition *proto.MetaPartitionInfo) string {
@@ -395,9 +369,9 @@ func formatMetaPartitionInfoRow(partition *proto.MetaPartitionInfo) string {
 }
 
 func formatBadReplicaMpInfoRow(partition *proto.MetaPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("[")
-	var firstItem = true
+	firstItem := true
 	for _, replica := range partition.Replicas {
 		if replica.Status == proto.Unavailable {
 			if !firstItem {
@@ -409,12 +383,15 @@ func formatBadReplicaMpInfoRow(partition *proto.MetaPartitionInfo) string {
 		}
 	}
 	sb.WriteString("]")
+	if sb.String() == "[]" {
+		return ""
+	}
 	return fmt.Sprintf(badReplicaPartitionInfoTablePattern, partition.PartitionID, partition.VolName, partition.ReplicaNum,
 		formatDataPartitionStatus(partition.Status), "["+strings.Join(partition.Hosts, ", ")+"]", sb.String())
 }
 
 func formatDataPartitionInfo(partition *proto.DataPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("volume name   : %v\n", partition.VolName))
 	sb.WriteString(fmt.Sprintf("volume ID     : %v\n", partition.VolID))
@@ -427,48 +404,48 @@ func formatDataPartitionInfo(partition *proto.DataPartitionInfo) string {
 	sb.WriteString(fmt.Sprintf("ReplicaNum    : %v\n", partition.ReplicaNum))
 	sb.WriteString(fmt.Sprintf("Forbidden     : %v\n", partition.Forbidden))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Replicas : \n"))
+	sb.WriteString("Replicas : \n")
 	sb.WriteString(fmt.Sprintf("%v\n", formatDataReplicaTableHeader()))
 	for _, replica := range partition.Replicas {
 		sb.WriteString(fmt.Sprintf("%v\n", formatDataReplica("", replica, true)))
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("FileInCoreMap : \n"))
+	sb.WriteString("FileInCoreMap : \n")
 	sb.WriteString(fmt.Sprintf("%v\n", formatDataFileInCoreTableHeader()))
 	sb.WriteString(fmt.Sprintf("%v\n", formatDataFileMetadateTableHeader()))
 	for id, fileCore := range partition.FileInCoreMap {
-		sb.WriteString(fmt.Sprintf(formatDataFileInCoreMap(id, "", fileCore, true)))
+		sb.WriteString(formatDataFileInCoreMap(id, "", fileCore, true))
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Peers :\n"))
+	sb.WriteString("Peers :\n")
 	sb.WriteString(fmt.Sprintf("%v\n", formatPeerTableHeader()))
 	for _, peer := range partition.Peers {
 		sb.WriteString(fmt.Sprintf("%v\n", formatPeer(peer)))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Hosts :\n"))
+	sb.WriteString("Hosts :\n")
 	for _, host := range partition.Hosts {
 		sb.WriteString(fmt.Sprintf("  [%v]", host))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Zones :\n"))
+	sb.WriteString("Zones :\n")
 	for _, zone := range partition.Zones {
 		sb.WriteString(fmt.Sprintf("  [%v]", zone))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("NodeSets :\n"))
+	sb.WriteString("NodeSets :\n")
 	for _, nodeSet := range partition.NodeSets {
 		sb.WriteString(fmt.Sprintf("  [%v]", nodeSet))
 	}
 	sb.WriteString("\n")
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("MissingNodes :\n"))
+	sb.WriteString("MissingNodes :\n")
 	for partitionHost, id := range partition.MissingNodes {
 		sb.WriteString(fmt.Sprintf("  [%v, %v]\n", partitionHost, id))
 	}
-	sb.WriteString(fmt.Sprintf("FilesWithMissingReplica : \n"))
+	sb.WriteString("FilesWithMissingReplica : \n")
 	for file, id := range partition.FilesWithMissingReplica {
 		sb.WriteString(fmt.Sprintf("  [%v, %v]\n", file, id))
 	}
@@ -476,7 +453,7 @@ func formatDataPartitionInfo(partition *proto.DataPartitionInfo) string {
 }
 
 func formatMetaPartitionInfo(partition *proto.MetaPartitionInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("volume name   : %v\n", partition.VolName))
 	sb.WriteString(fmt.Sprintf("PartitionID   : %v\n", partition.PartitionID))
@@ -487,34 +464,34 @@ func formatMetaPartitionInfo(partition *proto.MetaPartitionInfo) string {
 	sb.WriteString(fmt.Sprintf("MaxInodeID    : %v\n", partition.MaxInodeID))
 	sb.WriteString(fmt.Sprintf("Forbidden     : %v\n", partition.Forbidden))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Replicas : \n"))
+	sb.WriteString("Replicas : \n")
 	sb.WriteString(fmt.Sprintf("%v\n", formatMetaReplicaTableHeader()))
 	for _, replica := range partition.Replicas {
 		sb.WriteString(fmt.Sprintf("%v\n", formatMetaReplica("", replica, true)))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Peers :\n"))
+	sb.WriteString("Peers :\n")
 	for _, peer := range partition.Peers {
 		sb.WriteString(fmt.Sprintf("%v\n", formatPeer(peer)))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Hosts :\n"))
+	sb.WriteString("Hosts :\n")
 	for _, host := range partition.Hosts {
 		sb.WriteString(fmt.Sprintf("  [%v]", host))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("Zones :\n"))
+	sb.WriteString("Zones :\n")
 	for _, zone := range partition.Zones {
 		sb.WriteString(fmt.Sprintf("  [%v]", zone))
 	}
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("NodeSets :\n"))
+	sb.WriteString("NodeSets :\n")
 	for _, nodeSet := range partition.NodeSets {
 		sb.WriteString(fmt.Sprintf("  [%v]", nodeSet))
 	}
 	sb.WriteString("\n")
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("MissingNodes :\n"))
+	sb.WriteString("MissingNodes :\n")
 	for partitionHost, id := range partition.MissNodes {
 		sb.WriteString(fmt.Sprintf("  [%v, %v]\n", partitionHost, id))
 	}
@@ -528,7 +505,7 @@ var (
 )
 
 func formatMetaPartitionTableRow(view *proto.MetaPartitionView) string {
-	var rangeToString = func(num uint64) string {
+	rangeToString := func(num uint64) string {
 		if num >= math.MaxInt64 {
 			return "unlimited"
 		}
@@ -621,8 +598,10 @@ func formatNodeStatus(status bool) string {
 	return "Inactive"
 }
 
-var units = []string{"B", "KB", "MB", "GB", "TB", "PB"}
-var step float64 = 1024
+var (
+	units         = []string{"B", "KB", "MB", "GB", "TB", "PB"}
+	step  float64 = 1024
+)
 
 func fixUnit(curSize float64, curUnitIndex int) (newSize float64, newUnitIndex int) {
 	if curSize >= step && curUnitIndex < len(units)-1 {
@@ -663,7 +642,7 @@ func formatDataFileMetadateTableHeader() string {
 }
 
 func formatDataFileInCoreMap(id string, indentation string, fileCore *proto.FileInCore, rowTable bool) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	if rowTable {
 		sb.WriteString(fmt.Sprintf(dataFileInCoreTableRowPattern, id, fileCore.Name, fileCore.LastModify, ""))
 		for _, v := range fileCore.MetadataArray {
@@ -689,7 +668,7 @@ func formatDataReplica(indentation string, replica *proto.DataReplica, rowTable 
 			replica.HasLoadResponse, replica.NeedsToCompare, formatDataPartitionStatus(replica.Status),
 			replica.DiskPath, formatTime(replica.ReportTime))
 	}
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("%v- Addr           : %v\n", indentation, formatAddr(replica.Addr, replica.DomainAddr)))
 	sb.WriteString(fmt.Sprintf("%v  Allocated      : %v\n", indentation, formatSize(replica.Used)))
 	sb.WriteString(fmt.Sprintf("%v  Total          : %v\n", indentation, formatSize(replica.Total)))
@@ -714,7 +693,7 @@ func formatMetaReplica(indentation string, replica *proto.MetaReplicaInfo, rowTa
 		return fmt.Sprintf(metaReplicaTableRowPattern, formatAddr(replica.Addr, replica.DomainAddr), replica.MaxInodeID,
 			replica.IsLeader, formatMetaPartitionStatus(replica.Status), formatTime(replica.ReportTime))
 	}
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("%v- Addr           : %v\n", indentation, formatAddr(replica.Addr, replica.DomainAddr)))
 	sb.WriteString(fmt.Sprintf("%v- MaxInodeID     : %v\n", indentation, replica.MaxInodeID))
 	sb.WriteString(fmt.Sprintf("%v  Status         : %v\n", indentation, formatMetaPartitionStatus(replica.Status)))
@@ -728,6 +707,7 @@ var peerTableRowPattern = "%-6v    %-18v"
 func formatPeerTableHeader() string {
 	return fmt.Sprintf(peerTableRowPattern, "ID", "PEER")
 }
+
 func formatPeer(peer proto.Peer) string {
 	return fmt.Sprintf(peerTableRowPattern, peer.ID, peer.Addr)
 }
@@ -743,7 +723,7 @@ func formatDataNodeDetail(dn *proto.DataNodeInfo, rowTable bool) string {
 		return fmt.Sprintf(dataNodeDetailTableRowPattern, dn.ID, dn.ZoneName, formatAddr(dn.Addr, dn.DomainAddr),
 			formatSize(dn.Used), formatSize(dn.Total), formatNodeStatus(dn.IsActive), formatTimeToString(dn.ReportTime))
 	}
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID                  : %v\n", dn.ID))
 	sb.WriteString(fmt.Sprintf("  Address             : %v\n", formatAddr(dn.Addr, dn.DomainAddr)))
 	sb.WriteString(fmt.Sprintf("  Allocated ratio     : %v\n", dn.UsageRatio))
@@ -775,7 +755,7 @@ func formatMetaNodeDetail(mn *proto.MetaNodeInfo, rowTable bool) string {
 		return fmt.Sprintf(metaNodeDetailTableRowPattern, mn.ID, mn.ZoneName, formatAddr(mn.Addr, mn.DomainAddr),
 			mn.Used, mn.Total, mn.IsActive, formatTimeToString(mn.ReportTime))
 	}
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID                  : %v\n", mn.ID))
 	sb.WriteString(fmt.Sprintf("  Address             : %v\n", formatAddr(mn.Addr, mn.DomainAddr)))
 	sb.WriteString(fmt.Sprintf("  Threshold           : %v\n", mn.Threshold))
@@ -792,7 +772,7 @@ func formatMetaNodeDetail(mn *proto.MetaNodeInfo, rowTable bool) string {
 }
 
 func formatNodeSetView(ns *proto.NodeSetStatInfo) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("NodeSet ID:       %v\n", ns.ID))
 	sb.WriteString(fmt.Sprintf("Capacity:         %v\n", ns.Capacity))
 	sb.WriteString(fmt.Sprintf("Zone:             %v\n", ns.Zone))
@@ -815,13 +795,13 @@ func formatNodeSetView(ns *proto.NodeSetStatInfo) string {
 	sb.WriteString(fmt.Sprintf("MetaTotal:     %v\n", formatSize(metaTotal)))
 	sb.WriteString(fmt.Sprintf("MetaUsed:      %v\n", formatSize(metaUsed)))
 	sb.WriteString(fmt.Sprintf("MetaAvail:     %v\n", formatSize(metaAvail)))
-	sb.WriteString(fmt.Sprintf("\n"))
+	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("DataNodes[%v]:\n", len(ns.DataNodes)))
 	sb.WriteString(fmt.Sprintf("  %v\n", formatNodeViewTableHeaderForNodeSet()))
 	for _, dn := range ns.DataNodes {
 		sb.WriteString(fmt.Sprintf("  %v\n", formatNodeViewForNodeSet(dn)))
 	}
-	sb.WriteString(fmt.Sprintf("\n"))
+	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("MetaNodes[%v]:\n", len(ns.MetaNodes)))
 	sb.WriteString(fmt.Sprintf("  %v\n", formatNodeViewTableHeaderForNodeSet()))
 	for _, mn := range ns.MetaNodes {
@@ -831,13 +811,13 @@ func formatNodeSetView(ns *proto.NodeSetStatInfo) string {
 }
 
 func formatZoneView(zv *proto.ZoneView) string {
-	var sb = strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("Zone Name:        %v\n", zv.Name))
 	sb.WriteString(fmt.Sprintf("Status:           %v\n", zv.Status))
 	sb.WriteString("Nodeset Selector:\n")
 	sb.WriteString(fmt.Sprintf("       Data:%v\n", zv.DataNodesetSelector))
 	sb.WriteString(fmt.Sprintf("       Meta:%v\n", zv.MetaNodesetSelector))
-	sb.WriteString(fmt.Sprintf("\n"))
+	sb.WriteString("\n")
 	for index, ns := range zv.NodeSet {
 		sb.WriteString(fmt.Sprintf("NodeSet-%v:\n", index))
 		sb.WriteString(fmt.Sprintf("  DataNodes[%v]:\n", ns.DataNodeLen))
@@ -845,7 +825,7 @@ func formatZoneView(zv *proto.ZoneView) string {
 		for _, nv := range ns.DataNodes {
 			sb.WriteString(fmt.Sprintf("    %v\n", formatNodeView(&nv, true)))
 		}
-		sb.WriteString(fmt.Sprintf("\n"))
+		sb.WriteString("\n")
 		sb.WriteString(fmt.Sprintf("  MetaNodes[%v]:\n", ns.MetaNodeLen))
 		sb.WriteString(fmt.Sprintf("    %v\n", formatNodeViewTableHeader()))
 		for _, nv := range ns.MetaNodes {

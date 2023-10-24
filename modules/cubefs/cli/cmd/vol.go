@@ -20,10 +20,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cubefs/cubefs/util"
-
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/master"
+	"github.com/cubefs/cubefs/util"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +32,7 @@ const (
 )
 
 func newVolCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     cmdVolUse,
 		Short:   cmdVolShort,
 		Args:    cobra.MinimumNArgs(0),
@@ -60,7 +59,7 @@ const (
 
 func newVolListCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliOpList,
 		Short:   cmdVolListShort,
 		Aliases: []string{"ls"},
@@ -68,9 +67,7 @@ func newVolListCmd(client *master.MasterClient) *cobra.Command {
 			var vols []*proto.VolInfo
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if vols, err = client.AdminAPI().ListVols(optKeyword); err != nil {
 				return
@@ -91,15 +88,10 @@ const (
 	cmdVolDefaultMPCount               = 3
 	cmdVolDefaultDPSize                = 120
 	cmdVolDefaultCapacity              = 10 // 100GB
-	cmdVolDefaultReplicas              = 3
-	cmdVolDefaultFollowerReader        = true
 	cmdVolDefaultZoneName              = ""
 	cmdVolDefaultCrossZone             = "false"
 	cmdVolDefaultBusiness              = ""
-	cmdVolDefaultReplicaNum            = 3
-	cmdVolDefaultSize                  = 120
 	cmdVolDefaultVolType               = 0
-	cmdVolDefaultFollowerRead          = "false"
 	cmdVolDefaultCacheRuleKey          = ""
 	cmdVolDefaultEbsBlkSize            = 8 * 1024 * 1024
 	cmdVolDefaultCacheCapacity         = 0
@@ -141,18 +133,16 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 	var optDeleteLockTime int64
 	var clientIDKey string
 	var optYes bool
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdVolCreateUse,
 		Short: cmdVolCreateShort,
 		Args:  cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var volumeName = args[0]
-			var userID = args[1]
+			volumeName := args[0]
+			userID := args[1]
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			crossZone, _ := strconv.ParseBool(optCrossZone)
 			followerRead, _ := strconv.ParseBool(optFollowerRead)
@@ -225,7 +215,6 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("Create volume success.\n")
-			return
 		},
 	}
 	cmd.Flags().Uint64Var(&optCapacity, CliFlagCapacity, cmdVolDefaultCapacity, "Specify volume capacity")
@@ -262,7 +251,6 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 }
 
 const (
-	cmdVolSetShort    = "Set configuration of the volume"
 	cmdVolUpdateShort = "Update configuration of the volume"
 )
 
@@ -293,20 +281,18 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	var optReplicaNum string
 	var optDeleteLockTime int64
 	var optEnableQuota string
-	var confirmString = strings.Builder{}
+	confirmString := strings.Builder{}
 	var vv *proto.SimpleVolView
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpUpdate + " [VOLUME NAME]",
 		Short: cmdVolUpdateShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var volumeName = args[0]
-			var isChange = false
+			volumeName := args[0]
+			isChange := false
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if vv, err = client.AdminAPI().GetVolumeSimpleInfo(volumeName); err != nil {
 				return
@@ -320,14 +306,14 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 			} else {
 				confirmString.WriteString(fmt.Sprintf("  Description         : %v \n", vv.Description))
 			}
-			if vv.CrossZone == false && "" != optZoneName {
+			if !vv.CrossZone && "" != optZoneName {
 				isChange = true
 				confirmString.WriteString(fmt.Sprintf("  ZoneName            : %v -> %v\n", vv.ZoneName, optZoneName))
 				vv.ZoneName = optZoneName
 			} else {
 				confirmString.WriteString(fmt.Sprintf("  ZoneName            : %v\n", vv.ZoneName))
 			}
-			if vv.CrossZone == true && "" != optZoneName {
+			if vv.CrossZone && "" != optZoneName {
 				err = fmt.Errorf("Can not set zone name of the volume that cross zone\n")
 			}
 			if optCapacity > 0 {
@@ -413,7 +399,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  DeleteLockTime            : %v h\n", vv.DeleteLockTime))
 			}
 
-			//var maskStr string
+			// var maskStr string
 			if optTxMask != "" {
 				var oldMask, newMask proto.TxOpMask
 				oldMask, err = proto.GetMaskFromString(vv.EnableTransaction)
@@ -432,7 +418,6 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 						isChange = true
 						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v  -> %v \n", vv.EnableTransaction, optTxMask))
 					}
-
 				} else {
 					if proto.MaskContains(oldMask, newMask) {
 						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v \n", vv.EnableTransaction))
@@ -604,8 +589,6 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("Volume configuration has been update successfully.\n")
-			return
-
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -641,7 +624,6 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
 
 	return cmd
-
 }
 
 const (
@@ -655,18 +637,16 @@ func newVolInfoCmd(client *master.MasterClient) *cobra.Command {
 		optDataDetail bool
 	)
 
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdVolInfoUse,
 		Short: cmdVolInfoShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var volumeName = args[0]
+			volumeName := args[0]
 			var svv *proto.SimpleVolView
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if svv, err = client.AdminAPI().GetVolumeSimpleInfo(volumeName); err != nil {
 				err = fmt.Errorf("Get volume info failed:\n%v\n", err)
@@ -708,7 +688,6 @@ func newVolInfoCmd(client *master.MasterClient) *cobra.Command {
 					stdout("%v\n", formatDataPartitionTableRow(dp))
 				}
 			}
-			return
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -732,17 +711,15 @@ func newVolDeleteCmd(client *master.MasterClient) *cobra.Command {
 		optYes      bool
 		clientIDKey string
 	)
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdVolDeleteUse,
 		Short: cmdVolDeleteShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var volumeName = args[0]
+			volumeName := args[0]
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			// ask user for confirm
 			if !optYes {
@@ -788,20 +765,18 @@ func newVolTransferCmd(client *master.MasterClient) *cobra.Command {
 	var optYes bool
 	var optForce bool
 	var clientIDKey string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     cmdVolTransferUse,
 		Short:   cmdVolTransferShort,
 		Aliases: []string{"trans"},
 		Args:    cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
-			var volume = args[0]
-			var userID = args[1]
+			volume := args[0]
+			userID := args[1]
 
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 
 			// ask user for confirm
@@ -828,7 +803,7 @@ func newVolTransferCmd(client *master.MasterClient) *cobra.Command {
 			if userInfo, err = client.UserAPI().GetUserInfo(userID); err != nil {
 				return
 			}
-			var param = proto.UserTransferVolParam{
+			param := proto.UserTransferVolParam{
 				Volume:  volume,
 				UserSrc: volSimpleView.Owner,
 				UserDst: userInfo.UserID,
@@ -853,18 +828,16 @@ const (
 
 func newVolAddDPCmd(client *master.MasterClient) *cobra.Command {
 	var clientIDKey string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdVolAddDPCmdUse,
 		Short: cmdVolAddDPCmdShort,
 		Args:  cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			var volume = args[0]
-			var number = args[1]
+			volume := args[0]
+			number := args[1]
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			var count int64
 			if count, err = strconv.ParseInt(number, 10, 64); err != nil {
@@ -878,7 +851,6 @@ func newVolAddDPCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("Add dp successfully.\n")
-			return
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -908,18 +880,16 @@ func newVolShrinkCmd(client *master.MasterClient) *cobra.Command {
 
 func newVolSetCapacityCmd(use, short string, r clientHandler) *cobra.Command {
 	var clientIDKey string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   use + " [VOLUME] [CAPACITY]",
 		Short: short,
 		Args:  cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			var name = args[0]
-			var capacityStr = args[1]
+			name := args[0]
+			capacityStr := args[1]
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			volume := r.(*volumeClient)
 			if volume.capacity, err = strconv.ParseUint(capacityStr, 10, 64); err != nil {
@@ -931,7 +901,6 @@ func newVolSetCapacityCmd(use, short string, r clientHandler) *cobra.Command {
 				return
 			}
 			stdout("Volume capacity has been set successfully.\n")
-			return
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -951,18 +920,16 @@ var (
 )
 
 func newVolSetForbiddenCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdVolSetForbiddenUse,
 		Short: cmdVolSetForbiddenShort,
 		Args:  cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			var name = args[0]
-			var settingStr = args[1]
+			name := args[0]
+			settingStr := args[1]
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			forbidden, err := strconv.ParseBool(settingStr)
 			if err != nil {
@@ -972,7 +939,6 @@ func newVolSetForbiddenCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("Volume forbidden property has been set successfully, please wait few minutes for the settings to take effect.\n")
-			return
 		},
 	}
 	return cmd

@@ -15,18 +15,18 @@ const (
 	cmdUidListShort  = "list volume uid info list"
 	cmdUidCheckShort = "check volume uid"
 
-	//uid op
+	// uid op
 	CliUidAdd       = "add"
 	cliUidListShort = "list"
 	CliUidDel       = "del"
 	CliUidCheck     = "check"
 
-	//param
+	// param
 	uidAll = "all"
 )
 
 func newUidCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     cmdUidUse,
 		Short:   cmdUidShort,
 		Args:    cobra.MinimumNArgs(0),
@@ -43,7 +43,7 @@ func newUidCmd(client *master.MasterClient) *cobra.Command {
 
 func newUidAddCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliUidAdd,
 		Short:   cmdUidAddShort,
 		Aliases: []string{"add"},
@@ -54,9 +54,7 @@ func newUidAddCmd(client *master.MasterClient) *cobra.Command {
 			}
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			var uidInfo *proto.UidSpaceRsp
 			if uidInfo, err = client.UserAPI().UidOperation(args[0], args[1], util.UidAddLimit, args[2]); err != nil || !uidInfo.OK {
@@ -74,7 +72,7 @@ func newUidListCmd(client *master.MasterClient) *cobra.Command {
 		optKeyword string
 		uidListAll bool
 	)
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     cliUidListShort,
 		Short:   cmdUidListShort,
 		Aliases: []string{"list"},
@@ -88,12 +86,10 @@ func newUidListCmd(client *master.MasterClient) *cobra.Command {
 					uidListAll = true
 				}
 			}
-			var volumeName = args[0]
+			volumeName := args[0]
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			var uidInfo *proto.UidSpaceRsp
 			if uidInfo, err = client.UserAPI().UidOperation(volumeName, "", util.UidLimitList, ""); err != nil || !uidInfo.OK {
@@ -102,7 +98,7 @@ func newUidListCmd(client *master.MasterClient) *cobra.Command {
 			}
 			stdout("%v\n", volumeUidTableHeader)
 			for _, info := range uidInfo.UidSpaceArr {
-				if !uidListAll && info.Enabled == false {
+				if !uidListAll && !info.Enabled {
 					continue
 				}
 				stdout("%v\n", formatUidInfoTableRow(info))
@@ -115,7 +111,7 @@ func newUidListCmd(client *master.MasterClient) *cobra.Command {
 
 func newUidDelCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliUidDel,
 		Short:   cmdUidDelShort,
 		Aliases: []string{"del"},
@@ -127,9 +123,7 @@ func newUidDelCmd(client *master.MasterClient) *cobra.Command {
 
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			var uidInfo *proto.UidSpaceRsp
 			if uidInfo, err = client.UserAPI().UidOperation(args[0], args[1], util.UidDel, ""); err != nil || !uidInfo.OK {
@@ -144,7 +138,7 @@ func newUidDelCmd(client *master.MasterClient) *cobra.Command {
 
 func newUidCheckCmd(client *master.MasterClient) *cobra.Command {
 	var optKeyword string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliUidCheck,
 		Short:   cmdUidCheckShort,
 		Aliases: []string{"check"},
@@ -156,9 +150,7 @@ func newUidCheckCmd(client *master.MasterClient) *cobra.Command {
 
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			var uidInfo *proto.UidSpaceRsp
 			if uidInfo, err = client.UserAPI().UidOperation(args[0], args[1], util.UidGetLimit, ""); err != nil || !uidInfo.OK {

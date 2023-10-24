@@ -26,7 +26,7 @@ const (
 )
 
 func newNodeSetCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   cmdNodeSetUse,
 		Short: cmdNodeSetShort,
 		Args:  cobra.MinimumNArgs(0),
@@ -47,16 +47,14 @@ const (
 
 func newNodeSetListCmd(client *master.MasterClient) *cobra.Command {
 	var zoneName string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpList,
 		Short: cmdNodeSetListShort,
 		Run: func(cmd *cobra.Command, args []string) {
 			var nodeSetStats []*proto.NodeSetStat
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			if nodeSetStats, err = client.AdminAPI().ListNodeSets(zoneName); err != nil {
 				return
@@ -67,17 +65,15 @@ func newNodeSetListCmd(client *master.MasterClient) *cobra.Command {
 			for _, nodeSet := range nodeSetStats {
 				stdout(zoneDataPattern, nodeSet.ID, nodeSet.Capacity, nodeSet.Zone, nodeSet.MetaNodeNum, nodeSet.DataNodeNum)
 			}
-			return
 		},
 	}
 
 	cmd.Flags().StringVar(&zoneName, CliFlagZoneName, "", "List nodeSets in the specified zone")
-
 	return cmd
 }
 
 func newNodeSetInfoCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpInfo,
 		Short: cmdGetNodeSetShort,
 		Args:  cobra.MinimumNArgs(1),
@@ -85,9 +81,7 @@ func newNodeSetInfoCmd(client *master.MasterClient) *cobra.Command {
 			var nodeSetStatInfo *proto.NodeSetStatInfo
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 
 			nodeSetId := args[0]
@@ -96,7 +90,6 @@ func newNodeSetInfoCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("%v", formatNodeSetView(nodeSetStatInfo))
-			return
 		},
 	}
 	return cmd
@@ -105,16 +98,14 @@ func newNodeSetInfoCmd(client *master.MasterClient) *cobra.Command {
 func newNodeSetUpdateCmd(client *master.MasterClient) *cobra.Command {
 	dataNodeSelector := ""
 	metaNodeSelector := ""
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpUpdate,
 		Short: cmdUpdateNodeSetShort,
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 
 			nodeSetId := args[0]
@@ -122,7 +113,6 @@ func newNodeSetUpdateCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("success to update nodeset %v\n", nodeSetId)
-			return
 		},
 	}
 	cmd.Flags().StringVar(&dataNodeSelector, "dataNodeSelector", "", "Set the node select policy(datanode) for specify nodeset")

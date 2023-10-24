@@ -16,7 +16,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
@@ -53,7 +52,7 @@ type Config struct {
 }
 
 func newConfigCmd() *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliResourceConfig,
 		Short: cmdConfigShort,
 	}
@@ -70,20 +69,18 @@ const (
 func newConfigSetCmd() *cobra.Command {
 	var optMasterHosts string
 	var optTimeout string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpSet,
 		Short: cmdConfigSetShort,
 		Long:  `Set the config file`,
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			tmp, _ := strconv.Atoi(optTimeout)
 			if tmp > math.MaxUint16 {
-				stdout(fmt.Sprintf("Please reset timeout. Input less than math.MaxUint16\n"))
+				stdoutln("Please reset timeout. Input less than math.MaxUint16")
 				return
 			}
 			timeOut := uint16(tmp)
@@ -108,18 +105,16 @@ func newConfigSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&optTimeout, "timeout", "60", "Specify timeout for requests [Unit: s]")
 	return cmd
 }
+
 func newConfigInfoCmd() *cobra.Command {
 	var optFilterStatus string
 	var optFilterWritable string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpInfo,
 		Short: cmdConfigInfoShort,
 		Run: func(cmd *cobra.Command, args []string) {
 			config, err := LoadConfig()
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				OsExitWithLogFlush()
-			}
+			errout(err)
 			printConfigInfo(config)
 		},
 	}
@@ -150,7 +145,7 @@ func setConfig(masterHosts string, timeout uint16) (err error) {
 	if configData, err = json.Marshal(config); err != nil {
 		return
 	}
-	if err = ioutil.WriteFile(defaultConfigPath, configData, 0600); err != nil {
+	if err = ioutil.WriteFile(defaultConfigPath, configData, 0o600); err != nil {
 		return
 	}
 	return nil
@@ -163,12 +158,12 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	if os.IsNotExist(err) {
-		if err = ioutil.WriteFile(defaultConfigPath, defaultConfigData, 0600); err != nil {
+		if err = ioutil.WriteFile(defaultConfigPath, defaultConfigData, 0o600); err != nil {
 			return nil, err
 		}
 		configData = defaultConfigData
 	}
-	var config = &Config{}
+	config := &Config{}
 	if err = json.Unmarshal(configData, config); err != nil {
 		return nil, err
 	}

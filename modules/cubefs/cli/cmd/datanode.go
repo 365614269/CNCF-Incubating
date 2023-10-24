@@ -30,7 +30,7 @@ const (
 )
 
 func newDataNodeCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliResourceDataNode,
 		Short: cmdDataNodeShort,
 	}
@@ -52,16 +52,14 @@ const (
 func newDataNodeListCmd(client *master.MasterClient) *cobra.Command {
 	var optFilterStatus string
 	var optFilterWritable string
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     CliOpList,
 		Short:   cmdDataNodeListShort,
 		Aliases: []string{"ls"},
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			var view *proto.ClusterView
 			if view, err = client.AdminAPI().GetCluster(); err != nil {
@@ -70,8 +68,8 @@ func newDataNodeListCmd(client *master.MasterClient) *cobra.Command {
 			sort.SliceStable(view.DataNodes, func(i, j int) bool {
 				return view.DataNodes[i].ID < view.DataNodes[j].ID
 			})
-			stdout("[Data nodes]\n")
-			stdout("%v\n", formatNodeViewTableHeader())
+			stdoutln("[Data nodes]")
+			stdoutln(formatNodeViewTableHeader())
 			for _, node := range view.DataNodes {
 				if optFilterStatus != "" &&
 					!strings.Contains(formatNodeStatus(node.Status), optFilterStatus) {
@@ -81,7 +79,7 @@ func newDataNodeListCmd(client *master.MasterClient) *cobra.Command {
 					!strings.Contains(formatYesNo(node.IsWritable), optFilterWritable) {
 					continue
 				}
-				stdout("%v\n", formatNodeView(&node, true))
+				stdoutln(formatNodeView(&node, true))
 			}
 		},
 	}
@@ -91,7 +89,7 @@ func newDataNodeListCmd(client *master.MasterClient) *cobra.Command {
 }
 
 func newDataNodeInfoCmd(client *master.MasterClient) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpInfo + " [{HOST}:{PORT}]",
 		Short: cmdDataNodeInfoShort,
 		Args:  cobra.MinimumNArgs(1),
@@ -100,17 +98,14 @@ func newDataNodeInfoCmd(client *master.MasterClient) *cobra.Command {
 			var nodeAddr string
 			var datanodeInfo *proto.DataNodeInfo
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			nodeAddr = args[0]
 			if datanodeInfo, err = client.NodeAPI().GetDataNode(nodeAddr); err != nil {
 				return
 			}
-			stdout("[Data node info]\n")
-			stdout("%v", formatDataNodeDetail(datanodeInfo, false))
-
+			stdoutln("[Data node info]")
+			stdoutln(formatDataNodeDetail(datanodeInfo, false))
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -127,7 +122,7 @@ func newDataNodeDecommissionCmd(client *master.MasterClient) *cobra.Command {
 		optCount    int
 		clientIDKey string
 	)
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpDecommission + " [{HOST}:{PORT}]",
 		Short: cmdDataNodeDecommissionInfoShort,
 		Args:  cobra.MinimumNArgs(1),
@@ -135,20 +130,17 @@ func newDataNodeDecommissionCmd(client *master.MasterClient) *cobra.Command {
 			var err error
 			var nodeAddr string
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			nodeAddr = args[0]
 			if optCount < 0 {
-				stdout("Migrate dp count should >= 0\n")
+				stdoutln("Migrate dp count should >= 0")
 				return
 			}
 			if err = client.NodeAPI().DataNodeDecommission(nodeAddr, optCount, clientIDKey); err != nil {
 				return
 			}
-			stdout("Decommission data node successfully\n")
-
+			stdoutln("Decommission data node successfully")
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -165,7 +157,7 @@ func newDataNodeDecommissionCmd(client *master.MasterClient) *cobra.Command {
 func newDataNodeMigrateCmd(client *master.MasterClient) *cobra.Command {
 	var clientIDKey string
 	var optCount int
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   CliOpMigrate + " src[{HOST}:{PORT}] dst[{HOST}:{PORT}]",
 		Short: cmdDataNodeMigrateInfoShort,
 		Args:  cobra.MinimumNArgs(2),
@@ -173,22 +165,19 @@ func newDataNodeMigrateCmd(client *master.MasterClient) *cobra.Command {
 			var err error
 			var src, dst string
 			defer func() {
-				if err != nil {
-					errout("Error: %v\n", err)
-				}
+				errout(err)
 			}()
 			src = args[0]
 			dst = args[1]
 			if optCount > dpMigrateMax || optCount <= 0 {
-				stdout("Migrate dp count should between [1-50]\n")
+				stdoutln("Migrate dp count should between [1-50]")
 				return
 			}
 
 			if err = client.NodeAPI().DataNodeMigrate(src, dst, optCount, clientIDKey); err != nil {
 				return
 			}
-			stdout("Migrate data node successfully\n")
-
+			stdoutln("Migrate data node successfully")
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
