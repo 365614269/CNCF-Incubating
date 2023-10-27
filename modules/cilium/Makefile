@@ -457,6 +457,10 @@ microk8s: check-microk8s ## Build cilium-dev docker image and import to microk8s
 kind: ## Create a kind cluster for Cilium development.
 	$(QUIET)SED=$(SED) ./contrib/scripts/kind.sh
 
+kind-egressgw: ## Create a kind cluster for egress gateway Cilium development.
+	$(QUIET)SED=$(SED) WORKERS=3 ./contrib/scripts/kind.sh
+	kubectl patch node kind-worker3 --type=json -p='[{"op":"add","path":"/metadata/labels/cilium.io~1no-schedule","value":"true"}]'
+
 kind-down: ## Destroy a kind cluster for Cilium development.
 	$(QUIET)./contrib/scripts/kind-down.sh
 
@@ -719,6 +723,25 @@ kind-install-cilium: kind-ready ## Install a local Cilium version into the clust
 	$(CILIUM_CLI) install \
 		--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
 		$(KIND_VALUES_FILES) \
+		--version= \
+		>/dev/null 2>&1 &
+
+
+.PHONY: kind-egressgw-install-cilium
+kind-egressgw-install-cilium: kind-ready ## Install a local Cilium version into the cluster.
+	@echo "  INSTALL cilium"
+	# cilium-cli doesn't support idempotent installs, so we uninstall and
+	# reinstall here. https://github.com/cilium/cilium-cli/issues/205
+	-@$(CILIUM_CLI) uninstall >/dev/null 2>&1 || true
+
+	# cilium-cli's --wait flag doesn't work, so we just force it to run
+	# in the background instead and wait for the resources to be available.
+	# https://github.com/cilium/cilium-cli/issues/1070
+	$(CILIUM_CLI) install \
+		--chart-directory=$(ROOT_DIR)/install/kubernetes/cilium \
+		$(KIND_VALUES_FILES) \
+		--helm-values=$(ROOT_DIR)/contrib/testing/kind-egressgw-values.yaml \
+		--nodes-without-cilium=kind-worker3 \
 		--version= \
 		>/dev/null 2>&1 &
 

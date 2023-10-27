@@ -169,12 +169,14 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/${{ matrix.crd-channel }}/gateway.networking.k8s.io_referencegrants.yaml
           ## TLSRoute is only available in experimental channel in v0.7.0
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/experimental/gateway.networking.k8s.io_grpcroutes.yaml
 
           # To make sure that Gateway API CRs are available
           kubectl wait --for condition=Established crd/gatewayclasses.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/gateways.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/httproutes.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/tlsroutes.gateway.networking.k8s.io --timeout=${{ env.timeout }}
+          kubectl wait --for condition=Established crd/grpcroutes.gateway.networking.k8s.io --timeout=${{ env.timeout }}
           kubectl wait --for condition=Established crd/referencegrants.gateway.networking.k8s.io --timeout=${{ env.timeout }}
 
       - name: Install Cilium
@@ -213,18 +215,27 @@ jobs:
             --values metallb_values.yaml \
             --wait
 
+      - name: Run simple Gateway API GRPCRoute test (temporary till upstream conformance tests)
+        timeout-minutes: 10
+        run: |
+          kubectl apply -f examples/kubernetes/gateway/grpc-route.yaml
+          # Install grpcurl binary
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
+          
+          # Wait for the deployment
+          kubectl wait --for=condition=Available --all deployment --timeout=${{ env.timeout }}
+          lb=$(kubectl get services cilium-gateway-grpc -o json | jq '.status.loadBalancer.ingress[0].ip' | jq -r .)
+          grpcurl -plaintext -authority=my-grpc-service.foo.com $lb:80 yages.Echo/Ping
+          curl -s -v --fail $lb/yages.Echo/Ping \
+            -XPOST \
+            -H 'Host: my-grpc-service.foo.com' \
+            -H 'Content-Type: application/grpc-web-text' \
+            -H 'Accept: application/grpc-web-text' \
+            -d'AAAAAAA='
+
       - name: Run Gateway API conformance test
         timeout-minutes: 30
         run: |
-          cat << EOF | kubectl apply -f -
-          apiVersion: gateway.networking.k8s.io/v1
-          kind: GatewayClass
-          metadata:
-            name: cilium
-          spec:
-            controllerName: io.cilium/gateway-controller
-          EOF
-          
           if [ ${{ matrix.conformance-profile }} == "true" ]; then
             GATEWAY_API_CONFORMANCE_TESTS=1 go test \
               -p 4 \
