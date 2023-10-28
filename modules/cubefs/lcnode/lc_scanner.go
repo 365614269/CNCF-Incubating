@@ -529,8 +529,8 @@ func (s *LcScanner) checkScanning() {
 					response.ErrorSkippedNum = s.currentStat.ErrorSkippedNum
 
 					s.lcnode.scannerMutex.Lock()
-					delete(s.lcnode.lcScanners, s.ID)
 					s.Stop()
+					delete(s.lcnode.lcScanners, s.ID)
 					s.lcnode.scannerMutex.Unlock()
 
 					s.lcnode.respondToMaster(s.adminTask)
@@ -555,5 +555,6 @@ func (s *LcScanner) Stop() {
 	s.dirRPoll.WaitAndClose()
 	close(s.dirChan.In)
 	close(s.fileChan.In)
+	s.mw.Close()
 	log.LogInfof("scanner(%v) stopped", s.ID)
 }
