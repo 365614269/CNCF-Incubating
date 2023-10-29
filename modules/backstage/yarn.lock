@@ -19519,11 +19519,11 @@ __metadata:
   linkType: hard
 
 "@types/react-virtualized-auto-sizer@npm:^1.0.1":
-  version: 1.0.1
-  resolution: "@types/react-virtualized-auto-sizer@npm:1.0.1"
+  version: 1.0.2
+  resolution: "@types/react-virtualized-auto-sizer@npm:1.0.2"
   dependencies:
     "@types/react": "*"
-  checksum: 67eff0670a1991c2b16992274ada5f0b3f9d5c2d6209ef38e8f8ae2c0218211a3292882f5b7dd6f09519000dc20847629f049c9acc267e000626b7141e5927a6
+  checksum: b94702678431df4efd0accc30c4657745a65f1128a46e5f68b52d269069c7aef0560ea8cb7f2c6c15fd2b47abd9efa0381ff0e847cceea4074cad73cbcece96a
   languageName: node
   linkType: hard
 
@@ -31885,7 +31885,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jest-haste-map@npm:^29.7.0":
+"jest-haste-map@npm:29.7.0":
   version: 29.7.0
   resolution: "jest-haste-map@npm:29.7.0"
   dependencies:
@@ -31905,6 +31905,29 @@ __metadata:
     fsevents:
       optional: true
   checksum: c2c8f2d3e792a963940fbdfa563ce14ef9e14d4d86da645b96d3cd346b8d35c5ce0b992ee08593939b5f718cf0a1f5a90011a056548a1dbf58397d4356786f01
+  languageName: node
+  linkType: hard
+
+"jest-haste-map@patch:jest-haste-map@npm%3A29.7.0#./.yarn/patches/jest-haste-map-npm-29.7.0-e3be419eff.patch::locator=root%40workspace%3A.":
+  version: 29.7.0
+  resolution: "jest-haste-map@patch:jest-haste-map@npm%3A29.7.0#./.yarn/patches/jest-haste-map-npm-29.7.0-e3be419eff.patch::version=29.7.0&hash=c4774f&locator=root%40workspace%3A."
+  dependencies:
+    "@jest/types": ^29.6.3
+    "@types/graceful-fs": ^4.1.3
+    "@types/node": "*"
+    anymatch: ^3.0.3
+    fb-watchman: ^2.0.0
+    fsevents: ^2.3.2
+    graceful-fs: ^4.2.9
+    jest-regex-util: ^29.6.3
+    jest-util: ^29.7.0
+    jest-worker: ^29.7.0
+    micromatch: ^4.0.4
+    walker: ^1.0.8
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  checksum: 37ceff10601c02e32519154b95af9e85dc9d5220c55d67ba038e9c91abed631c3c1863cbb4eb0ff43e02460382c29b2476493bcaaa969af534bd0ef6fa06297e
   languageName: node
   linkType: hard
 
