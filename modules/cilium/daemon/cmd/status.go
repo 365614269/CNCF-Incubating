@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/go-openapi/strfmt"
@@ -37,6 +36,7 @@ import (
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/rand"
 	"github.com/cilium/cilium/pkg/status"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/version"
 )
 
@@ -145,7 +145,7 @@ func (d *Daemon) getMasqueradingStatus() *models.Masquerading {
 
 func (d *Daemon) getIPV6BigTCPStatus() *models.IPV6BigTCP {
 	s := &models.IPV6BigTCP{
-		Enabled: option.Config.EnableIPv6BIGTCP,
+		Enabled: d.bigTCPConfig.EnableIPv6BIGTCP,
 		MaxGRO:  int64(d.bigTCPConfig.GetGROIPv6MaxSize()),
 		MaxGSO:  int64(d.bigTCPConfig.GetGSOIPv6MaxSize()),
 	}
@@ -155,7 +155,7 @@ func (d *Daemon) getIPV6BigTCPStatus() *models.IPV6BigTCP {
 
 func (d *Daemon) getIPV4BigTCPStatus() *models.IPV4BigTCP {
 	s := &models.IPV4BigTCP{
-		Enabled: option.Config.EnableIPv4BIGTCP,
+		Enabled: d.bigTCPConfig.EnableIPv4BIGTCP,
 		MaxGRO:  int64(d.bigTCPConfig.GetGROIPv4MaxSize()),
 		MaxGSO:  int64(d.bigTCPConfig.GetGSOIPv4MaxSize()),
 	}

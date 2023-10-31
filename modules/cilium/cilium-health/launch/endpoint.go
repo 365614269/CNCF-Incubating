@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
@@ -40,6 +39,7 @@ import (
 	"github.com/cilium/cilium/pkg/pidfile"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/sysctl"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 const (
@@ -226,7 +226,7 @@ func LaunchAsEndpoint(baseCtx context.Context,
 	policyGetter policyRepoGetter,
 	ipcache *ipcache.IPCache,
 	mtuConfig mtu.Configuration,
-	bigTCPConfig bigtcp.Configuration,
+	bigTCPConfig *bigtcp.Configuration,
 	epMgr EndpointAdder,
 	proxy endpoint.EndpointProxy,
 	allocator cache.IdentityAllocator,
