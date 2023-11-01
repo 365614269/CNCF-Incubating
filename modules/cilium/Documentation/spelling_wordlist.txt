@@ -534,6 +534,7 @@ pluggable
 pmdabcc
 png
 podCIDR
+podippool
 policyCIDRMatchMode
 policymap
 poller
@@ -726,6 +727,7 @@ webhook
 webhooks
 webservice
 whitespace
+wildcarded
 workqueue
 www
 xDS

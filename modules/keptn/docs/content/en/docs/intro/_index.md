@@ -47,8 +47,8 @@ simplifying configuration and integration into a single set of metrics.
 
 To learn more, see:
 
-* [Keptn metrics](../getting-started/usecase_metrics.md) getting started guide
-* [Keptn Metrics](../implementing/evaluatemetrics.md) guide
+* [Getting started with Keptn metrics](../getting-started/metrics.md)
+* [Keptn Metrics](../implementing/evaluatemetrics.md) User Guide
 
 ## Observability
 
@@ -86,10 +86,10 @@ to ensure that your deployments are observable.
 
 To learn more, see:
 
-* [Getting started with Keptn Observability](../getting-started/observability)
+* [Getting started with Keptn Observability](../getting-started/observability.md)
 * [Standardize observability](usecase-observability.md/)
-* [DORA metrics](../implementing/dora) guide
-* [OpenTelemetry observability](../implementing/otel.md) guide
+* [DORA metrics](../implementing/dora) User Guide
+* [OpenTelemetry observability](../implementing/otel.md) User Guide
 
 ## Release lifecycle management
 
@@ -134,15 +134,8 @@ or a
 which is a single, cohesive unit that groups multiple [workloads](https://kubernetes.io/docs/concepts/workloads/).
 For more information, see:
 
-* [Keptn tasks](../implementing/tasks) guide
-* [Evaluations](../implementing/evaluations.md) guide
-* [KeptnApp and KeptnWorkflow resources](../architecture/keptn-apps)
-
-## Next steps
-
-To learn more, see:
-
-* [Getting started with release lifecycle management](../getting-started/tasks/)
+* [Getting started with release lifecycle management](../getting-started/lifecycle-management.md)
+* [Deployment tasks](../implementing/tasks) User Guide
+* [Evaluations](../implementing/evaluations.md) User Guide
 * [Manage release lifecycle](usecase-orchestrate.md)
-* [Deployment tasks](../implementing/tasks) guide
-* [Evaluations](../implementing/evaluations.md) guide
+* [KeptnApp and KeptnWorkload resources](../architecture/keptn-apps.md)

@@ -55,7 +55,7 @@ and application health checks
 | `lifecycleOperator.env.pythonRunnerImage`                             | specify image for python task runtime                                                                                  | `ghcr.io/keptn/python-runtime:v1.0.1` |
 | `lifecycleOperator.image.registry`                                    | specify the container registry for the lifecycle-operator image                                                        | `ghcr.io`                             |
 | `lifecycleOperator.image.repository`                                  | specify registry for manager image                                                                                     | `keptn/lifecycle-operator`            |
-| `lifecycleOperator.image.tag`                                         | select tag for manager image                                                                                           | `v0.8.2`                              |
+| `lifecycleOperator.image.tag`                                         | select tag for manager image                                                                                           | `v0.8.3`                              |
 | `lifecycleOperator.imagePullPolicy`                                   | specify pull policy for manager image                                                                                  | `Always`                              |
 | `lifecycleOperator.livenessProbe`                                     | custom livenessprobe for manager container                                                                             |                                       |
 | `lifecycleOperator.readinessProbe`                                    | custom readinessprobe for manager container                                                                            |                                       |
@@ -86,7 +86,7 @@ and application health checks
 | `scheduler.env.otelCollectorUrl`                             | sets url for open telemetry collector                          | `otel-collector:4317` |
 | `scheduler.image.registry`                                   | specify the container registry for the scheduler image         | `ghcr.io`             |
 | `scheduler.image.repository`                                 | set image repository for scheduler                             | `keptn/scheduler`     |
-| `scheduler.image.tag`                                        | set image tag for scheduler                                    | `v0.8.2`              |
+| `scheduler.image.tag`                                        | set image tag for scheduler                                    | `v0.8.3`              |
 | `scheduler.imagePullPolicy`                                  | set image pull policy for scheduler                            | `Always`              |
 | `scheduler.livenessProbe`                                    | customizable liveness probe for the scheduler                  |                       |
 | `scheduler.readinessProbe`                                   | customizable readiness probe for the scheduler                 |                       |

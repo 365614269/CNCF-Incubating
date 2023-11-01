@@ -28,15 +28,11 @@ Find more providers in the [Upbound Marketplace](https://marketplace.upbound.io)
 <!-- vale write-good.Passive = NO -->
 <!-- "are Managed" isn't passive in this context -->
 Providers define every external resource they can create in Kubernetes as a
-Kubernetes API endpoint. These endpoints are
+Kubernetes API endpoint.  
+These endpoints are
 [_Managed Resources_]({{<ref "managed-resources" >}}).
 <!-- vale write-good.Passive = YES -->
 
-{{< hint "note" >}}
-Instructions on building your own Provider are outside of the scope of this
-document. Read the Crossplane contributing [Provider Development Guide](https://github.com/crossplane/crossplane/blob/master/contributing/guide-provider-development.md)
-for more information.
-{{< /hint >}}
 
 ## Install a Provider
 
@@ -63,13 +59,34 @@ spec:
   package: xpkg.upbound.io/crossplane-contrib/provider-aws:v0.39.0
 ```
 
-{{< hint "tip" >}}
-Providers are Crossplane Packages. Read more about Packages in the
-[Packages documentation]({{<ref "packages" >}}).
-{{< /hint >}}
-
 By default, the Provider pod installs in the same namespace as Crossplane
 (`crossplane-system`).
+
+{{<hint "note" >}}
+Providers are part of the 
+{{<hover label="install" line="1">}}pkg.crossplane.io{{</hover>}} group.  
+
+The {{<hover label="meta-pkg" line="1">}}meta.pkg.crossplane.io{{</hover>}}
+group is for creating Provider packages. 
+
+Instructions on building Providers are outside of the scope of this
+document.  
+Read the Crossplane contributing 
+[Provider Development Guide](https://github.com/crossplane/crossplane/blob/master/contributing/guide-provider-development.md)
+for more information.
+
+For information on the specification of Provider packages read the 
+[Crossplane Provider Package specification](https://github.com/crossplane/crossplane/blob/master/contributing/specifications/xpkg.md#provider-package-requirements).
+
+```yaml {label="meta-pkg"}
+apiVersion: meta.pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+# Removed for brevity
+```
+{{</hint >}}
 
 ### Install with Helm
 
@@ -90,27 +107,269 @@ crossplane-stable/crossplane \
 --set provider.packages='{xpkg.upbound.io/crossplane-contrib/provider-aws:v0.39.0}'
 ```
 
-### Install from a private repository
+### Install offline
 
-Installing a Provider from a private package repository requires a
-Kubernetes secret object. The Provider uses the secret with the
-{{<hover label="pps" line="7" >}}packagePullSecrets{{</hover>}} option.
+Crossplane installs packages from a local package cache. By
+default the Crossplane package cache is an 
+[emptyDir volume](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir). 
+
+Configure Crossplane to use a 
+[PersistentVolumeClaim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+to use a storage location containing the Provider image. Read more about
+configuring the Crossplane Pod settings in the 
+[Crossplane install documentation]({{<ref "../software/install#customize-the-crossplane-helm-chart">}}).
+
+Provide the name of the Provider's `.xpkg` file and set 
+{{<hover label="offline" line="7">}}packagePullPolicy: Never{{</hover>}}.
+
+For example, to install a locally stored version of Provider AWS set the 
+{{<hover label="offline" line="6">}}package{{</hover>}} to the local filename
+and set the Provider's 
+{{<hover label="offline" line="7">}}packagePullPolicy: Never{{</hover>}}.
+
+```yaml {label="offline"}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: offline-provider-aws
+spec:
+  package: provider-aws
+  packagePullPolicy: Never
+```
+
+### Installation options
+
+Providers support multiple configuration options to change installation related
+settings. 
+
+#### Provider pull policy
+
+Use a {{<hover label="pullpolicy" line="6">}}packagePullPolicy{{</hover>}} to
+define when Crossplane should download the Provider package to the local
+Crossplane package cache.
+
+The `packagePullPolicy` options are: 
+* `IfNotPresent` - (**default**) Only download the package if it isn't in the cache.
+* `Always` - Check for new packages every minute and download any matching
+  package that isn't in the cache.
+* `Never` - Never download the package. Packages are only installed from the
+  local package cache. 
+
+{{<hint "tip" >}}
+The Crossplane 
+{{<hover label="pullpolicy" line="6">}}packagePullPolicy{{</hover>}} works
+like the Kubernetes container image 
+[image pull policy](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy).  
+
+Crossplane supports the use of tags and package digest hashes like
+Kubernetes images. 
+{{< /hint >}}
+
+For example, to `Always` download a given Provider package use the 
+{{<hover label="pullpolicy" line="6">}}packagePullPolicy: Always{{</hover>}}
+configuration. 
+
+```yaml {label="pullpolicy",copy-lines="6"}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+  packagePullPolicy: Always
+# Removed for brevity
+```
+
+#### Revision activation policy
+
+The `Active` package revision
+is the package controller actively reconciling resources. 
+
+By default Crossplane sets the most recently installed package revision as 
+`Active`.
+
+Control the Provider upgrade behavior with a
+{{<hover label="revision" line="6">}}revisionActivationPolicy{{</hover>}}.
+
+The {{<hover label="revision" line="6">}}revisionActivationPolicy{{</hover>}} 
+options are:
+* `Automatic` - (**default**) Automatically activate the last installed Provider.
+* `Manual` - Don't automatically activate a Provider.
+
+For example, to change the upgrade behavior to require manual upgrades, set 
+{{<hover label="revision" line="6">}}revisionActivationPolicy: Manual{{</hover>}}.
+
+```yaml {label="revision"}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+  revisionActivationPolicy: Manual
+# Removed for brevity
+```
+
+#### Package revision history limit
+
+When Crossplane installs a different version of the same Provider package 
+Crossplane creates a new _revision_. 
+
+By default Crossplane maintains one _Inactive_ revision. 
+
+{{<hint "note" >}}
+Read the [Provider upgrade](#upgrade-a-provider) section for
+more information on the use of package revisions.
+{{< /hint >}}
+
+Change the number of revisions Crossplane maintains with a Provider Package 
+{{<hover label="revHistoryLimit" line="6">}}revisionHistoryLimit{{</hover>}}. 
+
+The {{<hover label="revHistoryLimit" line="6">}}revisionHistoryLimit{{</hover>}}
+field is an integer.  
+The default value is `1`.  
+Disable storing revisions by setting 
+{{<hover label="revHistoryLimit" line="6">}}revisionHistoryLimit{{</hover>}} to `0`.
+
+For example, to change the default setting and store 10 revisions use 
+{{<hover label="revHistoryLimit" line="6">}}revisionHistoryLimit: 10{{</hover>}}.
+
+```yaml {label="revHistoryLimit"}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+  revisionHistoryLimit: 10
+# Removed for brevity
+```
+
+#### Install a provider from a private registry
+
+Like Kubernetes uses `imagePullSecrets` to 
+[install images from private registries](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/), 
+Crossplane uses `packagePullSecrets` to install Provider packages from a private
+registry. 
+
+Use {{<hover label="pps" line="6">}}packagePullSecrets{{</hover>}} to provide a
+Kubernetes secret to use for authentication when downloading a Provider package. 
+
+{{<hint "important" >}}
+The Kubernetes secret must be in the same namespace as Crossplane.
+{{</hint >}}
+
+The {{<hover label="pps" line="6">}}packagePullSecrets{{</hover>}} is a list of
+secrets.
+
+For example, to use the secret named
+{{<hover label="pps" line="6">}}example-secret{{</hover>}} configure a 
+{{<hover label="pps" line="6">}}packagePullSecrets{{</hover>}}.
 
 ```yaml {label="pps"}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: private-provider
+  name: provider-aws
 spec:
-  package: private-repo.example.org/providers/my-provider
-  packagePullSecrets:
-    - name: my-secret
+  packagePullSecrets: 
+    - name: example-secret
+# Removed for brevity
 ```
 
-{{< hint "note" >}}
-The Kubernetes secret object the Provider uses must be in the same namespace as
-the Crossplane pod.
+{{<hint "note" >}}
+Configured `packagePullSecrets` aren't passed to any Provider package
+dependencies. 
 {{< /hint >}}
+
+#### Ignore dependencies
+
+By default Crossplane installs any [dependencies](#manage-dependencies) listed
+in a Provider package. 
+
+Crossplane can ignore a Provider package's dependencies with 
+{{<hover label="pkgDep" line="6" >}}skipDependencyResolution{{</hover>}}.
+
+For example, to disable dependency resolution configure 
+{{<hover label="pkgDep" line="6" >}}skipDependencyResolution: true{{</hover>}}.
+
+```yaml {label="pkgDep"}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+  skipDependencyResolution: true
+# Removed for brevity
+```
+
+#### Ignore Crossplane version requirements
+
+A Provider package may require a specific or minimum Crossplane version before
+installing. By default, Crossplane doesn't install a Provider if the Crossplane
+version doesn't meet the required version. 
+
+Crossplane can ignore the required version with 
+{{<hover label="xpVer" line="6">}}ignoreCrossplaneConstraints{{</hover>}}.
+
+For example, to install a Provider package into an unsupported Crossplane
+version, configure 
+{{<hover label="xpVer" line="6">}}ignoreCrossplaneConstraints: true{{</hover>}}.
+
+```yaml {label="xpVer"}
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-aws
+spec:
+  ignoreCrossplaneConstraints: true
+# Removed for brevity
+```
+
+### Manage dependencies
+
+Providers packages may include dependencies on other packages including
+Configurations or other Providers. 
+
+If Crossplane can't meet the dependencies of a Provider package the Provider
+reports `HEALTHY` as `False`. 
+
+For example, this installation of the Upbound AWS reference platform is
+`HEALTHY: False`.
+
+```shell {copy-lines="1"}
+kubectl get providers
+NAME              INSTALLED   HEALTHY   PACKAGE                                           AGE
+provider-aws-s3   True        False     xpkg.upbound.io/upbound/provider-aws-s3:v0.41.0   12s
+```
+
+To see more information on why the Provider isn't `HEALTHY` use 
+{{<hover label="depend" line="1">}}kubectl describe providerrevisions{{</hover>}}.
+
+```yaml {copy-lines="1",label="depend"}
+kubectl describe providerrevisions
+Name:         provider-aws-s3-92206523fff4
+API Version:  pkg.crossplane.io/v1
+Kind:         ProviderRevision
+Spec:
+  Desired State:                  Active
+  Image:                          xpkg.upbound.io/upbound/provider-aws-s3:v0.41.0
+  Revision:                       1
+Status:
+  Conditions:
+    Last Transition Time:  2023-10-10T21:06:39Z
+    Reason:                UnhealthyPackageRevision
+    Status:                False
+    Type:                  Healthy
+  Controller Ref:
+    Name:
+Events:
+  Type     Reason             Age                From                                         Message
+  ----     ------             ----               ----                                         -------
+  Warning  LintPackage        41s (x3 over 47s)  packages/providerrevision.pkg.crossplane.io  incompatible Crossplane version: package is not compatible with Crossplane version (v1.10.0)
+```
+
+The {{<hover label="depend" line="17">}}Events{{</hover>}} show a 
+{{<hover label="depend" line="20">}}Warning{{</hover>}} with a message that the
+current version of Crossplane doesn't meet the Configuration package 
+requirements.
 
 ## Upgrade a Provider
 
@@ -120,10 +379,34 @@ applying a new Provider manifest or with `kubectl edit providers`.
 Update the version number in the Provider's `spec.package` and apply the change.
 Crossplane installs the new image and creates a new `ProviderRevision`.
 
+The `ProviderRevision` allows Crossplane to store deprecated Provider CRDs
+without removing them until you decide.
+
+View the `ProviderRevisions` with 
+{{<hover label="getPR" line="1">}}kubectl get providerrevisions{{</hover>}}
+
+```shell {label="getPR",copy-lines="1"}
+kubectl get providerrevisions
+NAME                                       HEALTHY   REVISION   IMAGE                                                    STATE      DEP-FOUND   DEP-INSTALLED   AGE
+provider-aws-s3-dbc7f981d81f               True      1          xpkg.upbound.io/upbound/provider-aws-s3:v0.37.0          Active     1           1               10d
+provider-nop-552a394a8acc                  True      2          xpkg.upbound.io/crossplane-contrib/provider-nop:v0.3.0   Active                                 11d
+provider-nop-7e62d2a1a709                  True      1          xpkg.upbound.io/crossplane-contrib/provider-nop:v0.2.0   Inactive                               13d
+upbound-provider-family-aws-710d8cfe9f53   True      1          xpkg.upbound.io/upbound/provider-family-aws:v0.40.0      Active                                 10d
+```
+
+By default Crossplane keeps a single 
+{{<hover label="getPR" line="5">}}Inactive{{</hover>}} Provider.
+
+Read the [revision history limit](#package-revision-history-limit) section to
+change the default value. 
+
+Only a single revision of a Provider is 
+{{<hover label="getPR" line="4">}}Active{{</hover>}} at a time.
+
 ## Remove a Provider
 
-Remove a Provider by deleting the Provider object with `kubectl delete
-provider`.
+Remove a Provider by deleting the Provider object with 
+`kubectl delete provider`.
 
 {{< hint "warning" >}}
 Removing a Provider without first removing the Provider's managed resources
@@ -294,7 +577,9 @@ Reason: UnknownPackageRevisionHealth
 Providers have two different types of configurations:
 
 * _Controller configurations_ that change the settings of the Provider pod
-  running inside the Kubernetes cluster. For example, Pod `toleration`.
+  running inside the Kubernetes cluster. For example, setting a `toleration` on
+  the Provider pod.
+
 * _Provider configurations_ that change settings used when communicating with
   an external provider. For example, cloud provider authentication.
 
@@ -307,15 +592,15 @@ Apply `ProviderConfig` objects to managed resources.
 ### Controller configuration
 
 {{< hint "important" >}}
-The Crossplane community deprecated the `ControllerConfig` type in v1.11 to
-indicate that no further enhancements will be made to it.
-Applying a Controller configuration generates a deprecation warning.
+<!-- vale write-good.Passive = NO -->
+<!-- vale gitlab.FutureTense = NO -->
+The `ControllerConfig` type was deprecated in v1.11 and will be removed in
+a future release.
+<!-- vale write-good.Passive = YES -->
+<!-- vale gitlab.FutureTense = YES -->
 
-Controller configurations are still supported until there is a replacement type
-in a future Crossplane version. You can read more about the design of
-[Package Runtime Config](https://github.com/crossplane/crossplane/blob/master/design/one-pager-package-runtime-config.md)
-which will replace it in the future.
-
+[`DeploymentRuntimeConfig`]({{<ref "#runtime-configuration" >}}) is the
+replacement for Controller configuration and is available in v1.14.
 {{< /hint >}}
 
 Applying a Crossplane `ControllerConfig` to a Provider changes the settings of
@@ -329,6 +614,169 @@ Provider's pod enabling optional services. For example, enabling
 for a Provider.
 
 Each Provider determines their supported set of `args`.
+
+### Runtime configuration
+
+{{<hint "important" >}}
+`DeploymentRuntimeConfigs` is a beta feature. 
+
+It's on by default, and you can disable it by passing
+`--enable-deployment-runtime-configs=false` to the Crossplane deployment.
+{{< /hint >}}
+
+Runtime configuration is a generalized mechanism for configuring the runtime for
+Crossplane packages with a runtime, namely `Providers` and `Functions`. It
+replaces the deprecated `ControllerConfig` type and is available in v1.14+.
+
+With its default configuration, Crossplane uses Kubernetes Deployments to
+deploy runtime for packages, more specifically, a controller for a `Provider`
+or a gRPC server for a `Function`. It's possible to configure the runtime
+manifest by applying a `DeploymentRuntimeConfig` and referencing it in the
+`Provider` or `Function` object.
+
+{{<hint "note" >}}
+Different from `ControllerConfig`, `DeploymentRuntimeConfig` embed the whole
+Kubernetes Deployment spec, which allows for more flexibility in configuring
+the runtime. Refer to the [design document](https://github.com/crossplane/crossplane/blob/2c5e7f07ba9e3d83d1c85169bbde685de8514ab8/design/one-pager-package-runtime-config.md)
+for more details.
+{{< /hint >}}
+
+
+As an example, to enable the external secret stores alpha feature for a `Provider`
+by adding the `--enable-external-secret-stores` argument to the controller,
+one can apply the following:
+
+```yaml
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-gcp-iam
+spec:
+  package: xpkg.upbound.io/upbound/provider-gcp-iam:v0.37.0
+  runtimeConfigRef:
+    name: enable-ess
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: enable-ess
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              args:
+                - --enable-external-secret-stores
+```
+
+Please note that the packages manager uses  `package-runtime` as the name of
+the runtime container. When you use a different container name, the package
+manager introduces it as a sidecar container instead of modifying the
+package runtime container.
+
+<!-- vale write-good.Passive = NO -->
+The package manager is opinionated about some fields to ensure
+<!-- vale write-good.Passive = YES -->
+the runtime is working and overlay them on top of the values
+in the runtime configuration. For example, it defaults the replica count
+to 1 if not set and overrides the label selectors to make sure the Deployment
+and Service match. It also injects any necessary environment variables,
+ports as well as volumes and volume mounts.
+
+The `Provider` or `Functions`'s `spec.runtimeConfigRef.name` field defaults
+to value `default`, which means Crossplane uses the default runtime configuration
+if not specified. Crossplane ensures there is always a default runtime
+<!-- vale gitlab.FutureTense = NO -->
+configuration in the cluster, but won't change it if it already exists. This
+<!-- vale gitlab.FutureTense = YES -->
+allows users to customize the default runtime configuration to their needs.
+
+{{<hint "tip" >}}
+<!-- vale gitlab.SubstitutionWarning = NO -->
+Since `DeploymentRuntimeConfig` uses the same schema as Kubernetes `Deployment`
+<!-- vale gitlab.SubstitutionWarning = YES -->
+spec, you may need to pass empty values to bypass the schema validation.
+For example, if you just want to change the `replicas` field, you would
+need to pass the following:
+
+```yaml
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: multi-replicas
+spec:
+  deploymentTemplate:
+    spec:
+      replicas: 2
+      selector: {}
+      template: {}
+```
+
+{{< /hint >}}
+
+#### Configuring runtime deployment spec
+
+Using the Deployment spec provided in the `DeploymentRuntimeConfig` as a base,
+the package manager builds the Deployment spec for the package runtime with
+the following rules:
+- Injects the package runtime container as the first container in the
+  `containers` array, with name `package-runtime`.
+- If not provided, defaults with the following:
+  - `spec.replicas` as 1.
+  - Image pull policy as `IfNotPresent`.
+  - Pod Security Context as:
+    ```yaml
+    runAsNonRoot: true
+    runAsUser: 2000
+    runAsGroup: 2000
+    ```
+  - Security Context for the runtime container as:
+    ```yaml
+    allowPrivilegeEscalation: false
+    privileged: false
+    runAsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 2000
+    ```
+- Applies the following:
+  - **Sets** `metadata.namespace` as Crossplane namespace.
+  - **Sets** `metadata.ownerReferences` such that the deployment owned by the package revision.
+  - **Sets** `spec.selectors` using generated labels.
+  - **Sets** `spec.serviceAccount` with the created **Service Account**.
+  - **Adds** pull secrets provided in the Package spec as image pull secrets, `spec.packagePullSecrets`.
+  - **Sets** the **Image Pull Policy** with the value provided in the Package spec, `spec.packagePullPolicy`.
+  - **Adds** necessary **Ports** to the runtime container.
+  - **Adds** necessary **Environments** to the runtime container.
+  - Mounts TLS secrets by **adding** necessary **Volumes**, **Volume Mounts** and **Environments** to the runtime container.
+
+#### Configuring metadata of runtime resources
+
+`DeploymentRuntimeConfig` also enables configuring the following metadata of
+Runtime resources, namely `Deployment`, `ServiceAccount` and `Service`:
+- name
+- labels
+- annotations
+
+The following example shows how to configure the name of the ServiceAccount
+and the labels of the Deployment:
+
+```yaml
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: my-runtime-config
+spec:
+  deploymentTemplate:
+    metadata:
+      labels:
+        my-label: my-value
+  serviceAccountTemplate:
+    metadata:
+      name: my-service-account
+```
 
 ### Provider configuration
 
