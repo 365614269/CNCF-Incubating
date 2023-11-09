@@ -157,8 +157,8 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 
 	log.Info("Initializing identity allocator")
 
-	minID := idpool.ID(identity.MinimalAllocationIdentity)
-	maxID := idpool.ID(identity.MaximumAllocationIdentity)
+	minID := idpool.ID(identity.GetMinimalAllocationIdentity())
+	maxID := idpool.ID(identity.GetMaximumAllocationIdentity())
 
 	log.WithFields(map[string]interface{}{
 		"min":        minID,
@@ -211,7 +211,7 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 			allocator.WithMax(maxID), allocator.WithMin(minID),
 			allocator.WithEvents(events),
 			allocator.WithMasterKeyProtection(),
-			allocator.WithPrefixMask(idpool.ID(option.Config.ClusterID<<identity.ClusterIDShift)))
+			allocator.WithPrefixMask(idpool.ID(option.Config.ClusterID<<identity.GetClusterIDShift())))
 		if err != nil {
 			log.WithError(err).Fatalf("Unable to initialize Identity Allocator with backend %s", option.Config.IdentityAllocationMode)
 		}

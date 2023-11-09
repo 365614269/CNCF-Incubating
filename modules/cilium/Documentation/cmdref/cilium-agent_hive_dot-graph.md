@@ -49,6 +49,7 @@ cilium-agent hive dot-graph [flags]
       --k8s-kubeconfig-path string                                Absolute path of the kubernetes kubeconfig file
       --k8s-service-proxy-name string                             Value of K8s service-proxy-name label for which Cilium handles the services (empty = all services without service.kubernetes.io/service-proxy-name label)
       --l2-pod-announcements-interface string                     Interface used for sending gratuitous arp messages
+      --max-connected-clusters uint32                             Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
       --mesh-auth-enabled                                         Enable authentication processing & garbage collection (beta) (default true)
       --mesh-auth-gc-interval duration                            Interval in which auth entries are attempted to be garbage collected (default 5m0s)
       --mesh-auth-mutual-connect-timeout duration                 Timeout for connecting to the remote node TCP socket (default 5s)
@@ -59,6 +60,7 @@ cilium-agent hive dot-graph [flags]
       --mesh-auth-spire-admin-socket string                       The path for the SPIRE admin agent Unix socket.
       --metrics strings                                           Metrics that should be enabled or disabled from the default metric list. (+metric_foo to enable metric_foo, -metric_bar to disable metric_bar)
       --monitor-queue-size int                                    Size of the event queue when reading monitor events
+      --nodeport-addresses strings                                A whitelist of CIDRs to limit which IPs are used for NodePort. If not set, primary IPv4 and/or IPv6 address of each native device is used.
       --pprof                                                     Enable serving pprof debugging API
       --pprof-address string                                      Address that pprof listens on (default "localhost")
       --pprof-port uint16                                         Port that pprof listens on (default 6060)

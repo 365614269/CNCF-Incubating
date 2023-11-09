@@ -47,6 +47,7 @@ var (
 	errInvalidMembers   = errors.New("invalid members")
 	errInvalidLeader    = errors.New("invalid leader")
 	errInvalidNodeID    = errors.New("invalid node_id")
+	errInvalidKafka     = errors.New("invalid kafka")
 )
 
 var (
@@ -118,7 +119,7 @@ func NewService(conf *Config) (svr *Service, err error) {
 	}
 	topologyMgr := NewClusterTopologyMgr(clusterMgrCli, topoConf)
 
-	kafkaClient := base.NewKafkaConsumer(conf.Kafka.BrokerList, time.Duration(conf.Kafka.CommitIntervalMs)*time.Millisecond, clusterMgrCli)
+	kafkaClient := base.NewKafkaConsumer(conf.Kafka.BrokerList)
 	shardRepairMgr, err := NewShardRepairMgr(&conf.ShardRepair, topologyMgr, switchMgr, blobnodeCli, clusterMgrCli, kafkaClient)
 	if err != nil {
 		log.Errorf("new shard repair mgr: cfg[%+v], err[%w]", conf.ShardRepair, err)
@@ -149,12 +150,11 @@ func NewService(conf *Config) (svr *Service, err error) {
 		return
 	}
 
-	err = svr.NewKafkaMonitor(conf.ClusterID, clusterMgrCli)
+	err = svr.NewKafkaMonitor(conf.ClusterID)
 	if err != nil {
 		log.Errorf("run kafka monitor failed: err[%w]", err)
 		return nil, err
 	}
-	svr.RunKafkaMonitors()
 
 	// all migrate manager
 	taskLogger, err := recordlog.NewEncoder(&conf.TaskLog)
@@ -265,25 +265,21 @@ func (svr *Service) RunTask() error {
 	return nil
 }
 
-func (svr *Service) NewKafkaMonitor(clusterID proto.ClusterID, access base.IConsumerOffset) error {
+func (svr *Service) NewKafkaMonitor(clusterID proto.ClusterID) error {
 	// blob delete
 	brokerList := conf.Kafka.BrokerList
-	if err := svr.newMonitor(proto.TaskTypeBlobDelete, clusterID, conf.BlobDelete.topics(),
-		brokerList, access); err != nil {
+	if err := svr.newMonitor(proto.TaskTypeBlobDelete, clusterID, conf.BlobDelete.topics(), brokerList); err != nil {
 		return err
 	}
 
 	// shard repair
-	return svr.newMonitor(proto.TaskTypeShardRepair, clusterID, conf.ShardRepair.topics(),
-		brokerList, access)
+	return svr.newMonitor(proto.TaskTypeShardRepair, clusterID, conf.ShardRepair.topics(), brokerList)
 }
 
-func (svr *Service) newMonitor(taskType proto.TaskType, clusterID proto.ClusterID,
-	topics []string, brokerList []string, access base.IConsumerOffset) error {
-	monitorIntervalS := 1
+func (svr *Service) newMonitor(taskType proto.TaskType, clusterID proto.ClusterID, topics []string, brokerList []string) error {
 	for _, topic := range topics {
 		cfg := &base.KafkaConfig{BrokerList: brokerList, Topic: topic}
-		m, err := base.NewKafkaTopicMonitor(taskType, clusterID, cfg, access, monitorIntervalS)
+		m, err := base.NewKafkaTopicMonitor(taskType, clusterID, cfg)
 		if err != nil {
 			log.Errorf("new kafka topic monitor topic failed: topic[%s], err[%+v]", topic, err)
 			return err
@@ -291,14 +287,6 @@ func (svr *Service) newMonitor(taskType proto.TaskType, clusterID proto.ClusterI
 		svr.kafkaMonitors = append(svr.kafkaMonitors, m)
 	}
 	return nil
-}
-
-func (svr *Service) RunKafkaMonitors() {
-	for _, monitor := range svr.kafkaMonitors {
-		go func(monitor *base.KafkaTopicMonitor) {
-			monitor.Run()
-		}(monitor)
-	}
 }
 
 func (svr *Service) CloseKafkaMonitors() {

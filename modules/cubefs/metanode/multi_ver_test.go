@@ -19,6 +19,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -1548,4 +1549,36 @@ func TestMpMultiVerStore(t *testing.T) {
 	})
 	err := mp.loadMultiVer(filePath, crc)
 	assert.True(t, err == nil)
+}
+
+func TestGetAllVerList(t *testing.T) {
+	initMp(t)
+	mp.multiVersionList = &proto.VolVersionInfoList{
+		VerList: []*proto.VolVersionInfo{
+			{Ver: 20, Status: proto.VersionNormal},
+			{Ver: 30, Status: proto.VersionNormal},
+			{Ver: 40, Status: proto.VersionNormal},
+			{Ver: 50, Status: proto.VersionNormal}},
+	}
+	tmp := mp.multiVersionList.VerList
+	mp.multiVersionList.VerList = append(mp.multiVersionList.VerList[:1], mp.multiVersionList.VerList[2:]...)
+	tmp = append(tmp, &proto.VolVersionInfo{Ver: 30, Status: proto.VersionNormal})
+
+	sort.SliceStable(tmp, func(i, j int) bool {
+		if tmp[i].Ver < tmp[j].Ver {
+			return true
+		}
+		return false
+	})
+
+	t.Logf("tmp %v", tmp)
+	t.Logf("mp.multiVersionList %v", mp.multiVersionList)
+
+	mp.multiVersionList.TemporaryVerMap = make(map[uint64]*proto.VolVersionInfo)
+	mp.multiVersionList.TemporaryVerMap[25] = &proto.VolVersionInfo{Ver: 25, Status: proto.VersionNormal}
+	mp.multiVersionList.TemporaryVerMap[45] = &proto.VolVersionInfo{Ver: 45, Status: proto.VersionNormal}
+	newList := mp.GetAllVerList()
+	oldList := mp.multiVersionList.VerList
+	t.Logf("newList %v oldList %v", newList, oldList)
+	assert.True(t, true)
 }

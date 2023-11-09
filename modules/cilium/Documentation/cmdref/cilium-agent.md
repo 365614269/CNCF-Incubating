@@ -264,6 +264,7 @@ cilium-agent [flags]
       --log-driver strings                                        Logging endpoints to use for example syslog
       --log-opt map                                               Log driver options for cilium-agent, configmap example for syslog driver: {"syslog.level":"info","syslog.facility":"local5","syslog.tag":"cilium-agent"}
       --log-system-load                                           Enable periodic logging of system load
+      --max-connected-clusters uint32                             Maximum number of clusters to be connected in a clustermesh. Increasing this value will reduce the maximum number of identities available. Valid configurations are [255, 511]. (default 255)
       --mesh-auth-enabled                                         Enable authentication processing & garbage collection (beta) (default true)
       --mesh-auth-gc-interval duration                            Interval in which auth entries are attempted to be garbage collected (default 5m0s)
       --mesh-auth-mutual-connect-timeout duration                 Timeout for connecting to the remote node TCP socket (default 5s)
@@ -281,6 +282,7 @@ cilium-agent [flags]
       --node-encryption-opt-out-labels string                     Label selector for nodes which will opt-out of node-to-node encryption (default "node-role.kubernetes.io/control-plane")
       --node-port-bind-protection                                 Reject application bind(2) requests to service ports in the NodePort range (default true)
       --node-port-range strings                                   Set the min/max NodePort port range (default [30000,32767])
+      --nodeport-addresses strings                                A whitelist of CIDRs to limit which IPs are used for NodePort. If not set, primary IPv4 and/or IPv6 address of each native device is used.
       --policy-audit-mode                                         Enable policy audit (non-drop) mode
       --policy-cidr-match-mode strings                            The entities that can be selected by CIDR policy. Supported values: 'nodes'
       --policy-queue-size int                                     Size of queues for policy-related events (default 100)

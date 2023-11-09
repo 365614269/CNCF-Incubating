@@ -28,6 +28,7 @@ import (
 
 	"github.com/cubefs/cubefs/blobstore/common/codemode"
 	"github.com/cubefs/cubefs/blobstore/common/counter"
+	bloberr "github.com/cubefs/cubefs/blobstore/common/errors"
 	errcode "github.com/cubefs/cubefs/blobstore/common/errors"
 	"github.com/cubefs/cubefs/blobstore/common/proto"
 	"github.com/cubefs/cubefs/blobstore/common/recordlog"
@@ -86,7 +87,11 @@ func newBlobDeleteMgr(t *testing.T) *BlobDeleteMgr {
 		delFailCounterByMin:    &counter.Counter{},
 
 		Closer: closer.New(),
-		cfg:    &BlobDeleteConfig{MessagePunishThreshold: defaultMessagePunishThreshold},
+		cfg: &BlobDeleteConfig{
+			MessagePunishThreshold: defaultMessagePunishThreshold,
+			MaxBatchSize:           defaultMaxBatchSize,
+			BatchIntervalS:         1,
+		},
 	}
 }
 
@@ -98,18 +103,17 @@ func TestBlobDeleteConsume(t *testing.T) {
 	defer commonCloser.Close()
 	{
 		// return invalid message
+		kafkaMsgs := make([]*sarama.ConsumerMessage, 2)
 		msg := proto.DeleteMsg{}
 		msgByte, _ := json.Marshal(msg)
 		kafkaMsg := &sarama.ConsumerMessage{
 			Value: msgByte,
 		}
-		success := mgr.Consume(kafkaMsg, commonCloser)
-		require.True(t, success)
-
-		kafkaMsg = &sarama.ConsumerMessage{
+		kafkaMsgs[0] = kafkaMsg
+		kafkaMsgs[1] = &sarama.ConsumerMessage{
 			Value: []byte("123"),
 		}
-		success = mgr.Consume(kafkaMsg, commonCloser)
+		success := mgr.Consume(kafkaMsgs, commonCloser)
 		require.True(t, success)
 	}
 	{
@@ -131,7 +135,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		kafkaMsg := &sarama.ConsumerMessage{
 			Value: msgByte,
 		}
-		success := mgr.Consume(kafkaMsg, commonCloser)
+		kafkaMsgs := []*sarama.ConsumerMessage{kafkaMsg}
+		success := mgr.Consume(kafkaMsgs, commonCloser)
 		require.True(t, success)
 		mgr.clusterTopology = oldClusterTopology
 	}
@@ -157,7 +162,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		kafkaMsg := &sarama.ConsumerMessage{
 			Value: msgByte,
 		}
-		success := mgr.Consume(kafkaMsg, commonCloser)
+		kafkaMsgs := []*sarama.ConsumerMessage{kafkaMsg}
+		success := mgr.Consume(kafkaMsgs, commonCloser)
 		require.True(t, success)
 		mgr.clusterTopology = oldClusterTopology
 		mgr.blobnodeCli = oldBlobNode
@@ -193,7 +199,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			closer.Close()
 		}()
-		success := mgr.Consume(kafkaMsg, closer)
+		kafkaMsgs := []*sarama.ConsumerMessage{kafkaMsg}
+		success := mgr.Consume(kafkaMsgs, closer)
 		require.False(t, success)
 		mgr.clusterTopology = oldClusterTopology
 	}
@@ -213,7 +220,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		mgr.clusterTopology = clusterTopology
 		msg := &proto.DeleteMsg{Bid: 1, Vid: 1, ReqId: "123456"}
 
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusDone, ret.status)
 		require.Equal(t, 1, len(msg.BlobDelStages.Stages))
 		for _, v := range msg.BlobDelStages.Stages {
@@ -241,7 +249,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		stages[0] = proto.DeleteStageMarkDelete
 		msg := &proto.DeleteMsg{Bid: 1, Vid: 1, ReqId: "123456", BlobDelStages: proto.BlobDeleteStage{Stages: stages}}
 
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusDone, ret.status)
 		require.Equal(t, 1, len(msg.BlobDelStages.Stages))
 		for _, v := range msg.BlobDelStages.Stages {
@@ -269,7 +278,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		stages[0] = proto.DeleteStageDelete
 		msg := &proto.DeleteMsg{Bid: 1, Vid: 1, ReqId: "123456", BlobDelStages: proto.BlobDeleteStage{Stages: stages}}
 
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusDone, ret.status)
 		require.Equal(t, 1, len(msg.BlobDelStages.Stages))
 		for _, v := range msg.BlobDelStages.Stages {
@@ -299,7 +309,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 			Time:  time.Now().Unix() - 1,
 		}
 		mgr.safeDelayTime = 2 * time.Second
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusDone, ret.status)
 		mgr.clusterTopology = oldClusterTopology
 	}
@@ -330,7 +341,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			closer.Close()
 		}()
-		ret := mgr.consume(ctx, msg, closer)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, closer)
 		require.Equal(t, DeleteStatusUndo, ret.status)
 		mgr.clusterTopology = oldClusterTopology
 	}
@@ -352,7 +364,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		mgr.blobnodeCli = blobnodeCli
 
 		msg := &proto.DeleteMsg{Bid: 2, Vid: 2, ReqId: "markDeleteFailed"}
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusFailed, ret.status)
 		require.ErrorIs(t, errMock, ret.err)
 		mgr.clusterTopology = oldClusterTopology
@@ -384,7 +397,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		mgr.blobnodeCli = blobnodeCli
 
 		msg := &proto.DeleteMsg{Bid: 2, Vid: 2, ReqId: "delete failed"}
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusFailed, ret.status)
 		require.Nil(t, msg.BlobDelStages.Stages)
 		require.ErrorIs(t, errcode.ErrDiskBroken, ret.err)
@@ -420,7 +434,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		mgr.blobnodeCli = blobnodeCli
 
 		msg := &proto.DeleteMsg{Bid: 2, Vid: 2, ReqId: "delete failed"}
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusFailed, ret.status)
 		require.Nil(t, msg.BlobDelStages.Stages)
 
@@ -434,7 +449,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		)
 		clusterTopology.EXPECT().IsBrokenDisk(any).AnyTimes().Return(false)
 		mgr.clusterTopology = clusterTopology
-		ret = mgr.consume(ctx, msg, commonCloser)
+		ret = delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusFailed, ret.status)
 		require.Nil(t, msg.BlobDelStages.Stages)
 		require.ErrorIs(t, errcode.ErrDiskBroken, ret.err)
@@ -459,7 +475,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		mgr.clusterTopology = clusterTopology
 
 		msg := &proto.DeleteMsg{Bid: 2, Vid: 2, ReqId: "delete failed"}
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusFailed, ret.status)
 		require.Nil(t, msg.BlobDelStages.Stages)
 		mgr.clusterTopology = oldClusterTopology
@@ -481,7 +498,8 @@ func TestBlobDeleteConsume(t *testing.T) {
 		msg := &proto.DeleteMsg{Bid: 2, Vid: 2, ReqId: "delete failed", Retry: defaultMessagePunishThreshold}
 		oldPunishTime := mgr.punishTime
 		mgr.punishTime = 10 * time.Millisecond
-		ret := mgr.consume(ctx, msg, commonCloser)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, commonCloser)
 		require.Equal(t, DeleteStatusDone, ret.status)
 		require.Equal(t, 1, len(msg.BlobDelStages.Stages))
 		for _, v := range msg.BlobDelStages.Stages {
@@ -498,8 +516,47 @@ func TestBlobDeleteConsume(t *testing.T) {
 			closer.Close()
 		}()
 		msg := &proto.DeleteMsg{Bid: 2, Vid: 2, ReqId: "delete failed", Retry: defaultMessagePunishThreshold}
-		ret := mgr.consume(ctx, msg, closer)
+		ret := delBlobRet{delMsg: msg, ctx: ctx}
+		mgr.consume(&ret, closer)
 		require.Equal(t, DeleteStatusUndo, ret.status)
+	}
+	{
+		// consume success, and slow down consume message
+		start := time.Now()
+		oldClusterTopology := mgr.clusterTopology
+		clusterTopology := NewMockClusterTopology(ctr)
+		clusterTopology.EXPECT().GetVolume(any).AnyTimes().DoAndReturn(
+			func(vid proto.Vid) (*client.VolumeInfoSimple, error) {
+				return &client.VolumeInfoSimple{
+					Vid:            vid,
+					VunitLocations: []proto.VunitLocation{{Vuid: 1}},
+				}, nil
+			},
+		)
+		clusterTopology.EXPECT().IsBrokenDisk(any).AnyTimes().Return(false)
+		mgr.clusterTopology = clusterTopology
+
+		oldBlobNode := mgr.blobnodeCli
+		blobnodeCli := NewMockBlobnodeAPI(ctr)
+		blobnodeCli.EXPECT().MarkDelete(any, any, any).AnyTimes().Return(bloberr.ErrOverload)
+		mgr.blobnodeCli = blobnodeCli
+		oldSlowDownTime := mgr.slowDownTime
+		mgr.slowDownTime = time.Second * defaultSlowDownTimeS
+
+		msg := &proto.DeleteMsg{Bid: 1, Vid: 1, ReqId: "123456"}
+		msgByte, _ := json.Marshal(msg)
+		kafkaMsg := &sarama.ConsumerMessage{
+			Value: msgByte,
+		}
+		kafkaMsgs := []*sarama.ConsumerMessage{kafkaMsg}
+
+		success := mgr.Consume(kafkaMsgs, commonCloser)
+		end := time.Now() // normal success use 200 us,
+		require.True(t, success)
+		require.LessOrEqual(t, time.Duration(defaultSlowDownTimeS)*time.Second, end.Sub(start)) // overload, slow down a while
+		mgr.clusterTopology = oldClusterTopology
+		mgr.blobnodeCli = oldBlobNode
+		mgr.slowDownTime = oldSlowDownTime
 	}
 }
 
@@ -544,7 +601,7 @@ func TestNewDeleteMgr(t *testing.T) {
 	kafkaClient := NewMockKafkaConsumer(ctr)
 	consumer := NewMockGroupConsumer(ctr)
 	consumer.EXPECT().Stop().AnyTimes().Return()
-	kafkaClient.EXPECT().StartKafkaConsumer(any, any, any).AnyTimes().Return(consumer, nil)
+	kafkaClient.EXPECT().StartKafkaConsumer(any, any).AnyTimes().Return(consumer, nil)
 
 	mgr, err := NewBlobDeleteMgr(blobCfg, clusterTopology, switchMgr, blobnodeCli, kafkaClient)
 	require.NoError(t, err)
