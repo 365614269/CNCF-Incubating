@@ -21,12 +21,12 @@ require (
 	github.com/cilium/checkmate v1.0.3
 	github.com/cilium/coverbee v0.3.2
 	github.com/cilium/deepequal-gen v0.0.0-20230330134849-754271daeec2
-	github.com/cilium/dns v1.1.51-0.20230303133941-d3bcb3008ed2
+	github.com/cilium/dns v1.1.51-0.20231108175042-eaf71f6affd2
 	github.com/cilium/ebpf v0.12.2
 	github.com/cilium/fake v0.5.0
 	github.com/cilium/linters v0.0.0-20231010093903-8256e346c024
 	github.com/cilium/lumberjack/v2 v2.3.0
-	github.com/cilium/proxy v0.0.0-20231018073547-ab187719b71b
+	github.com/cilium/proxy v0.0.0-20231031145409-f19708f3d018
 	github.com/cilium/workerpool v1.2.0
 	github.com/containernetworking/cni v1.1.2
 	github.com/containernetworking/plugins v1.3.0
@@ -100,7 +100,7 @@ require (
 	golang.org/x/mod v0.13.0
 	golang.org/x/net v0.17.0
 	golang.org/x/sync v0.4.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/sys v0.14.1-0.20231108175955-e4099bfacb8c
 	golang.org/x/term v0.13.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.14.0

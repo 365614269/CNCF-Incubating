@@ -237,6 +237,7 @@ ifdef
 ifeq
 ifile
 ifndef
+IHandler
 IManager
 IMeter
 Infof
@@ -601,6 +602,8 @@ tracetest
 trivy
 trivyignore
 trunc
+ttlsecondsafterfinished
+ttlsecondstask
 UIDs
 undeploy
 unmarshal
