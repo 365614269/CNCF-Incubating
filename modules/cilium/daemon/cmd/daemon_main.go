@@ -718,12 +718,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.InstallIptRules)
 	option.BindEnv(vp, option.InstallIptRules)
 
-	flags.Duration(option.IPTablesLockTimeout, 5*time.Second, "Time to pass to each iptables invocation to wait for xtables lock acquisition")
-	option.BindEnv(vp, option.IPTablesLockTimeout)
-
-	flags.Bool(option.IPTablesRandomFully, false, "Set iptables flag random-fully on masquerading rules")
-	option.BindEnv(vp, option.IPTablesRandomFully)
-
 	flags.Int(option.MaxCtrlIntervalName, 0, "Maximum interval (in seconds) between controller runs. Zero is no limit.")
 	flags.MarkHidden(option.MaxCtrlIntervalName)
 	option.BindEnv(vp, option.MaxCtrlIntervalName)
@@ -769,11 +763,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.ExternalEnvoyProxy, false, "whether the Envoy is deployed externally in form of a DaemonSet or not")
 	option.BindEnv(vp, option.ExternalEnvoyProxy)
-
-	flags.StringP(option.TunnelName, "t", "", fmt.Sprintf("Tunnel mode {%s} (default \"vxlan\" for the \"veth\" datapath mode)", option.GetTunnelModes()))
-	option.BindEnv(vp, option.TunnelName)
-	flags.MarkDeprecated(option.TunnelName,
-		fmt.Sprintf("This option will be removed in v1.15. Please use --%s and --%s instead.", option.RoutingMode, option.TunnelProtocol))
 
 	flags.String(option.RoutingMode, defaults.RoutingMode, fmt.Sprintf("Routing mode (%q or %q)", option.RoutingModeNative, option.RoutingModeTunnel))
 	option.BindEnv(vp, option.RoutingMode)
@@ -1017,9 +1006,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.StringSlice(option.HubbleRedactHttpHeadersDeny, []string{}, "HTTP headers to redact from flows")
 	option.BindEnv(vp, option.HubbleRedactHttpHeadersDeny)
-
-	flags.StringSlice(option.DisableIptablesFeederRules, []string{}, "Chains to ignore when installing feeder rules.")
-	option.BindEnv(vp, option.DisableIptablesFeederRules)
 
 	flags.Bool(option.EnableIPv4FragmentsTrackingName, defaults.EnableIPv4FragmentsTracking, "Enable IPv4 fragments tracking for L4-based lookups")
 	option.BindEnv(vp, option.EnableIPv4FragmentsTrackingName)

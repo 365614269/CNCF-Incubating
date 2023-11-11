@@ -364,6 +364,11 @@ Removed Options
   datapath has been improved to not require any additional routes in
   ENI environments.
 
+* The ``tunnel`` option (deprecated in Cilium 1.14) has been removed. To
+  enable native-routing mode, set ``routing-mode=native`` (previously
+  ``tunnel=disabled``). To configure the tunneling protocol, set
+  ``tunnel-protocol=vxlan|geneve`` (previously ``tunnel=vxlan|geneve``).
+
 Helm Options
 ~~~~~~~~~~~~
 
@@ -381,6 +386,9 @@ Helm Options
 
 * ``egressGateway.installRoutes`` has been deprecated because the setting is no
   longer necessary.
+
+* Value ``tunnel`` was deprecated in Cilium 1.14 in favor of ``routingMode`` and
+  ``tunnelProtocol``, and has been removed.
 
 Added Metrics
 ~~~~~~~~~~~~~

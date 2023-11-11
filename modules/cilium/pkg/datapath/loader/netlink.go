@@ -128,8 +128,12 @@ func replaceDatapath(ctx context.Context, ifName, objPath string, progs []progDe
 	// Load the CollectionSpec into the kernel, picking up any pinned maps from
 	// bpffs in the process.
 	finalize := func() {}
+	pinPath := bpf.TCGlobalsPath()
 	opts := ebpf.CollectionOptions{
-		Maps: ebpf.MapOptions{PinPath: bpf.TCGlobalsPath()},
+		Maps: ebpf.MapOptions{PinPath: pinPath},
+	}
+	if err := bpf.MkdirBPF(pinPath); err != nil {
+		return nil, fmt.Errorf("creating bpffs pin path: %w", err)
 	}
 	l.Debug("Loading Collection into kernel")
 	coll, err := bpf.LoadCollection(spec, opts)
@@ -170,8 +174,20 @@ func replaceDatapath(ctx context.Context, ifName, objPath string, progs []progDe
 
 	for _, prog := range progs {
 		scopedLog := l.WithField("progName", prog.progName).WithField("direction", prog.direction)
-		scopedLog.Debug("Attaching program to interface")
-		if err := attachProgram(link, coll.Programs[prog.progName], prog.progName, directionToParent(prog.direction), xdpModeToFlag(xdpMode)); err != nil {
+		if xdpMode != "" {
+			linkDir := bpffsDeviceLinksDir(bpf.CiliumPath(), link)
+			if err := bpf.MkdirBPF(linkDir); err != nil {
+				return nil, fmt.Errorf("creating bpffs link dir for device %s: %w", link.Attrs().Name, err)
+			}
+
+			scopedLog.Debug("Attaching XDP program to interface")
+			err = attachXDPProgram(link, coll.Programs[prog.progName], prog.progName, linkDir, xdpModeToFlag(xdpMode))
+		} else {
+			scopedLog.Debug("Attaching TC program to interface")
+			err = attachTCProgram(link, coll.Programs[prog.progName], prog.progName, directionToParent(prog.direction))
+		}
+
+		if err != nil {
 			// Program replacement unsuccessful, revert bpffs migration.
 			l.Debug("Reverting bpffs map migration")
 			if err := bpf.FinalizeBPFFSMigration(bpf.TCGlobalsPath(), spec, true); err != nil {
@@ -186,21 +202,10 @@ func replaceDatapath(ctx context.Context, ifName, objPath string, progs []progDe
 	return finalize, nil
 }
 
-// attachProgram attaches prog to link.
-// If xdpFlags is non-zero, attaches prog to XDP.
-func attachProgram(link netlink.Link, prog *ebpf.Program, progName string, qdiscParent uint32, xdpFlags uint32) error {
+// attachTCProgram attaches the TC program 'prog' to link.
+func attachTCProgram(link netlink.Link, prog *ebpf.Program, progName string, qdiscParent uint32) error {
 	if prog == nil {
 		return errors.New("cannot attach a nil program")
-	}
-
-	if xdpFlags != 0 {
-		// Omitting XDP_FLAGS_UPDATE_IF_NOEXIST equals running 'ip' with -force,
-		// and will clobber any existing XDP attachment to the interface.
-		if err := netlink.LinkSetXdpFdWithFlags(link, prog.FD(), int(xdpFlags)); err != nil {
-			return fmt.Errorf("attaching XDP program to interface %s: %w", link.Attrs().Name, err)
-		}
-
-		return nil
 	}
 
 	if err := replaceQdisc(link); err != nil {
@@ -227,9 +232,9 @@ func attachProgram(link netlink.Link, prog *ebpf.Program, progName string, qdisc
 	return nil
 }
 
-// RemoveTCFilters removes all tc filters from the given interface.
+// removeTCFilters removes all tc filters from the given interface.
 // Direction is passed as netlink.HANDLE_MIN_{INGRESS,EGRESS} via tcDir.
-func RemoveTCFilters(ifName string, tcDir uint32) error {
+func removeTCFilters(ifName string, tcDir uint32) error {
 	link, err := netlink.LinkByName(ifName)
 	if err != nil {
 		return err

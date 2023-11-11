@@ -400,11 +400,6 @@ const (
 	// to skip netfilter connection tracking on all pod traffic.
 	InstallNoConntrackIptRules = "install-no-conntrack-iptables-rules"
 
-	IPTablesLockTimeout = "iptables-lock-timeout"
-
-	// IPTablesRandomFully sets iptables flag random-fully on masquerading rules
-	IPTablesRandomFully = "iptables-random-fully"
-
 	// IPv6NodeAddr is the IPv6 address of node
 	IPv6NodeAddr = "ipv6-node"
 
@@ -512,9 +507,6 @@ const (
 	// BPFSocketLBHostnsOnly is the name of the BPFSocketLBHostnsOnly option
 	BPFSocketLBHostnsOnly = "bpf-lb-sock-hostns-only"
 
-	// TunnelName is the name of the Tunnel option
-	TunnelName = "tunnel"
-
 	// RoutingMode is the name of the option to choose between native routing and tunneling mode
 	RoutingMode = "routing-mode"
 
@@ -529,7 +521,7 @@ const (
 	// SingleClusterRoute enables use of a single route covering the entire
 	// cluster CIDR to point to the cilium_host interface instead of using
 	// a separate route for each cluster node CIDR. This option is not
-	// compatible with Tunnel=TunnelDisabled
+	// compatible with --routing-mode=native
 	SingleClusterRouteName = "single-cluster-route"
 
 	// MaxInternalTimerDelay sets a maximum on all periodic timers in
@@ -1055,10 +1047,6 @@ const (
 	// HubbleRedactHttpHeadersDeny controls which http headers will be redacted from flows
 	HubbleRedactHttpHeadersDeny = "hubble-redact-http-headers-deny"
 
-	// DisableIptablesFeederRules specifies which chains will be excluded
-	// when installing the feeder rules
-	DisableIptablesFeederRules = "disable-iptables-feeder-rules"
-
 	// K8sHeartbeatTimeout configures the timeout for apiserver heartbeat
 	K8sHeartbeatTimeout = "k8s-heartbeat-timeout"
 
@@ -1385,11 +1373,6 @@ const (
 	PprofPortAgent = 6060
 )
 
-// GetTunnelModes returns the list of all tunnel modes
-func GetTunnelModes() string {
-	return fmt.Sprintf("%s, %s, %s", TunnelVXLAN, TunnelGeneve, TunnelDisabled)
-}
-
 // getEnvName returns the environment variable to be used for the given option name.
 func getEnvName(option string) string {
 	under := strings.Replace(option, "-", "_", -1)
@@ -1463,7 +1446,6 @@ type DaemonConfig struct {
 	EnableRuntimeDeviceDetection bool
 
 	DatapathMode   string // Datapath mode
-	Tunnel         string // Tunnel mode
 	RoutingMode    string // Routing mode
 	TunnelProtocol string // Tunneling protocol
 	TunnelPort     int    // Tunnel port
@@ -1680,14 +1662,6 @@ type DaemonConfig struct {
 	// PrependIptablesChains is the name of the option to enable prepending
 	// iptables chains instead of appending
 	PrependIptablesChains bool
-
-	// IPTablesLockTimeout defines the "-w" iptables option when the
-	// iptables CLI is directly invoked from the Cilium agent.
-	IPTablesLockTimeout time.Duration
-
-	// IPTablesRandomFully defines the "--random-fully" iptables option when the
-	// iptables CLI is directly invoked from the Cilium agent.
-	IPTablesRandomFully bool
 
 	// K8sNamespace is the name of the namespace in which Cilium is
 	// deployed in when running in Kubernetes mode
@@ -2320,10 +2294,6 @@ type DaemonConfig struct {
 	// EndpointStatus enables population of information in the
 	// CiliumEndpoint.Status resource
 	EndpointStatus map[string]struct{}
-
-	// DisableIptablesFeederRules specifies which chains will be excluded
-	// when installing the feeder rules
-	DisableIptablesFeederRules []string
 
 	// EnableIPv4FragmentsTracking enables IPv4 fragments tracking for
 	// L4-based lookups. Needs LRU map support.
@@ -3213,8 +3183,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnvoyConfigTimeout = vp.GetDuration(EnvoyConfigTimeout)
 	c.IPMasqAgentConfigPath = vp.GetString(IPMasqAgentConfigPath)
 	c.InstallIptRules = vp.GetBool(InstallIptRules)
-	c.IPTablesLockTimeout = vp.GetDuration(IPTablesLockTimeout)
-	c.IPTablesRandomFully = vp.GetBool(IPTablesRandomFully)
 	c.IPSecKeyFile = vp.GetString(IPSecKeyFileName)
 	c.IPsecKeyRotationDuration = vp.GetDuration(IPsecKeyRotationDuration)
 	c.EnableIPsecKeyWatcher = vp.GetBool(EnableIPsecKeyWatcher)
@@ -3294,21 +3262,9 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	}
 	c.TCFilterPriority = uint16(tcFilterPrio)
 
-	c.Tunnel = vp.GetString(TunnelName)
 	c.RoutingMode = vp.GetString(RoutingMode)
 	c.TunnelProtocol = vp.GetString(TunnelProtocol)
 	c.TunnelPort = vp.GetInt(TunnelPortName)
-
-	if c.Tunnel != "" && c.RoutingMode != defaults.RoutingMode {
-		log.Fatalf("Option --%s cannot be used in combination with --%s", RoutingMode, TunnelName)
-	}
-
-	if c.Tunnel == "disabled" {
-		c.RoutingMode = RoutingModeNative
-	} else if c.Tunnel != "" {
-		c.TunnelProtocol = c.Tunnel
-	}
-	c.Tunnel = ""
 
 	if c.TunnelPort == 0 {
 		// manually pick port for native-routing and DSR with Geneve dispatch:
@@ -3636,8 +3592,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.HubbleRedactKafkaApiKey = vp.GetBool(HubbleRedactKafkaApiKey)
 	c.HubbleRedactHttpHeadersAllow = vp.GetStringSlice(HubbleRedactHttpHeadersAllow)
 	c.HubbleRedactHttpHeadersDeny = vp.GetStringSlice(HubbleRedactHttpHeadersDeny)
-
-	c.DisableIptablesFeederRules = vp.GetStringSlice(DisableIptablesFeederRules)
 
 	// Hidden options
 	c.CompilerFlags = vp.GetStringSlice(CompilerFlags)
@@ -4445,4 +4399,14 @@ func parseBPFMapEventConfigs(confs BPFEventBufferConfigs, confMap map[string]str
 		confs[name] = conf
 	}
 	return nil
+}
+
+func (d *DaemonConfig) EnforceLXCFibLookup() bool {
+	// See https://github.com/cilium/cilium/issues/27343 for the symptoms.
+	//
+	// We want to enforce FIB lookup if EndpointRoutes are enabled, because
+	// this was a config dependency change which caused different behaviour
+	// since v1.14.0-snapshot.2. We will remove this hack later, once we
+	// have auto-device detection on by default.
+	return d.EnableEndpointRoutes
 }
