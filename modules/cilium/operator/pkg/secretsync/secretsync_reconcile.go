@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package gateway_api
+package secretsync
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	controllerruntime "github.com/cilium/cilium/operator/pkg/controller-runtime"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 
@@ -23,7 +24,7 @@ import (
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.2/pkg/reconcile
 func (r *secretSyncer) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	scopedLog := log.WithContext(ctx).WithFields(logrus.Fields{
+	scopedLog := r.logger.WithFields(logrus.Fields{
 		logfields.Controller: "secret-syncer",
 		logfields.Resource:   req.NamespacedName,
 	})
@@ -34,41 +35,53 @@ func (r *secretSyncer) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		if k8serrors.IsNotFound(err) {
 			scopedLog.WithError(err).Debug("Unable to get Secret - either deleted or not yet available")
 
-			// Check if there's an existing synced secret for the deleted Secret
-			if err := r.cleanupSyncedSecret(ctx, req, scopedLog); err != nil {
-				return fail(err)
+			// Check whether synced secret needs to be deleted from the registered secret namespaces.
+			for _, ns := range r.secretNamespaces {
+				// Check if there's an existing synced secret for the deleted Secret
+				if err := r.cleanupSyncedSecret(ctx, req, scopedLog, ns); err != nil {
+					return controllerruntime.Fail(err)
+				}
 			}
 
-			// there is nothing to copy, the related gateway is not accepted anyway.
-			// if later the secret is created, the gateway will be reconciled again,
-			// then this secret will be copied.
-			return success()
+			return controllerruntime.Success()
 		}
 
-		return fail(err)
+		return controllerruntime.Fail(err)
 	}
 
-	if !r.isUsedByCiliumGateway(ctx, original) {
+	cleanupNamespaces := map[string]struct{}{}
+	for _, ns := range r.secretNamespaces {
+		cleanupNamespaces[ns] = struct{}{}
+	}
+
+	for _, reg := range r.registrations {
+		if reg.RefObjectCheckFunc(ctx, r.client, original) {
+			desiredSync := desiredSyncSecret(reg.SecretsNamespace, original)
+
+			if err := r.ensureSyncedSecret(ctx, desiredSync); err != nil {
+				return controllerruntime.Fail(err)
+			}
+
+			delete(cleanupNamespaces, reg.SecretsNamespace)
+		}
+	}
+
+	// Check whether synced secret needs to be deleted from the secret namespaces
+	// where the secret is no longer referenced by any registration.
+	for ns := range cleanupNamespaces {
 		// Check if there's an existing synced secret that should be deleted
-		if err := r.cleanupSyncedSecret(ctx, req, scopedLog); err != nil {
-			return fail(err)
+		if err := r.cleanupSyncedSecret(ctx, req, scopedLog, ns); err != nil {
+			return controllerruntime.Fail(err)
 		}
-		return success()
-	}
-
-	desiredSync := desiredSyncSecret(r.secretsNamespace, original)
-
-	if err := r.ensureSyncedSecret(ctx, desiredSync); err != nil {
-		return fail(err)
 	}
 
 	scopedLog.Info("Successfully synced secrets")
-	return success()
+	return controllerruntime.Success()
 }
 
-func (r *secretSyncer) cleanupSyncedSecret(ctx context.Context, req reconcile.Request, scopedLog *logrus.Entry) error {
+func (r *secretSyncer) cleanupSyncedSecret(ctx context.Context, req reconcile.Request, scopedLog *logrus.Entry, ns string) error {
 	syncSecret := &corev1.Secret{}
-	if err := r.client.Get(ctx, types.NamespacedName{Namespace: r.secretsNamespace, Name: req.Namespace + "-" + req.Name}, syncSecret); err == nil {
+	if err := r.client.Get(ctx, types.NamespacedName{Namespace: ns, Name: req.Namespace + "-" + req.Name}, syncSecret); err == nil {
 		// Try to delete existing synced secret
 		scopedLog.Debug("Delete synced secret")
 		if err := r.client.Delete(ctx, syncSecret); err != nil {
@@ -88,25 +101,14 @@ func desiredSyncSecret(secretsNamespace string, original *corev1.Secret) *corev1
 	if s.Labels == nil {
 		s.Labels = map[string]string{}
 	}
-	s.Labels[owningSecretNamespace] = original.Namespace
-	s.Labels[owningSecretName] = original.Name
+	s.Labels[OwningSecretNamespace] = original.Namespace
+	s.Labels[OwningSecretName] = original.Name
 	s.Immutable = original.Immutable
 	s.Data = original.Data
 	s.StringData = original.StringData
 	s.Type = original.Type
 
 	return s
-}
-
-func (r *secretSyncer) isUsedByCiliumGateway(ctx context.Context, obj *corev1.Secret) bool {
-	gateways := getGatewaysForSecret(ctx, r.client, obj)
-	for _, gw := range gateways {
-		if hasMatchingController(ctx, r.client, r.controllerName)(gw) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (r *secretSyncer) ensureSyncedSecret(ctx context.Context, desired *corev1.Secret) error {

@@ -19,6 +19,7 @@ import (
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	operatorOption "github.com/cilium/cilium/operator/option"
+	"github.com/cilium/cilium/operator/pkg/secretsync"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -35,6 +36,7 @@ var Cell = cell.Module(
 		GatewayAPISecretsNamespace:  "cilium-secrets",
 	}),
 	cell.Invoke(initGatewayAPIController),
+	cell.Provide(registerSecretSync),
 )
 
 var requiredGVK = []schema.GroupVersionKind{
@@ -86,7 +88,6 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 
 	if err := registerReconcilers(
 		params.CtrlRuntimeManager,
-		params.Config.EnableGatewayAPISecretsSync,
 		params.Config.GatewayAPISecretsNamespace,
 		operatorOption.Config.ProxyIdleTimeoutSeconds,
 	); err != nil {
@@ -94,6 +95,23 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 	}
 
 	return nil
+}
+
+// registerSecretSync registers the Gateway API for secret synchronization based on TLS secrets referenced
+// by a Cilium Gateway resource.
+func registerSecretSync(params gatewayAPIParams) secretsync.SecretSyncRegistrationOut {
+	if !operatorOption.Config.EnableGatewayAPI || !params.Config.EnableGatewayAPISecretsSync {
+		return secretsync.SecretSyncRegistrationOut{}
+	}
+
+	return secretsync.SecretSyncRegistrationOut{
+		SecretSyncRegistration: &secretsync.SecretSyncRegistration{
+			RefObject:            &gatewayv1.Gateway{},
+			RefObjectEnqueueFunc: EnqueueTLSSecrets(params.CtrlRuntimeManager.GetClient(), params.Logger),
+			RefObjectCheckFunc:   IsReferencedByCiliumGateway,
+			SecretsNamespace:     params.Config.GatewayAPISecretsNamespace,
+		},
+	}
 }
 
 func checkRequiredCRDs(ctx context.Context, clientset k8sClient.Clientset) error {
@@ -126,7 +144,7 @@ func checkRequiredCRDs(ctx context.Context, clientset k8sClient.Clientset) error
 }
 
 // registerReconcilers registers the Gateway API reconcilers to the controller-runtime library manager.
-func registerReconcilers(mgr ctrlRuntime.Manager, enableSecretSync bool, secretsNamespace string, idleTimeoutSeconds int) error {
+func registerReconcilers(mgr ctrlRuntime.Manager, secretsNamespace string, idleTimeoutSeconds int) error {
 	reconcilers := []interface {
 		SetupWithManager(mgr ctrlRuntime.Manager) error
 	}{
@@ -136,10 +154,6 @@ func registerReconcilers(mgr ctrlRuntime.Manager, enableSecretSync bool, secrets
 		newHTTPRouteReconciler(mgr),
 		newGRPCRouteReconciler(mgr),
 		newTLSRouteReconciler(mgr),
-	}
-
-	if enableSecretSync {
-		reconcilers = append(reconcilers, newSecretSyncReconciler(mgr, secretsNamespace))
 	}
 
 	for _, r := range reconcilers {
