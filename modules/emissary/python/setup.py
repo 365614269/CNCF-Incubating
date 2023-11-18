@@ -16,7 +16,6 @@ import os
 
 from setuptools import find_packages, setup
 
-# from ambassador.VERSION import Version
 Version = "0.0.0-dev"
 
 requirements = open("requirements.txt", "r").read().split("\n")
@@ -43,20 +42,13 @@ data_files = [("", ["ambassador.version"])] + template_files + schema_files + ka
 
 setup(
     name="ambassador",
-    # version=versioneer.get_version(),
-    # cmdclass=versioneer.get_cmdclass(),
     version=Version,
     packages=find_packages(exclude=["tests"]),
-    # include_package_data=True,
     install_requires=requirements,
     data_files=data_files,
     entry_points={
         "console_scripts": [
-            "ambassador=ambassador_cli.ambassador:main",
             "diagd=ambassador_diag.diagd:main",
-            "mockery=ambassador_cli.mockery:main",
-            "grab-snapshots=ambassador_cli.grab_snapshots:main",
-            "ert=ambassador_cli.ert:main",
         ]
     },
     author="datawire.io",
