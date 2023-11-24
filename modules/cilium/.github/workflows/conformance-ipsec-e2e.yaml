@@ -218,6 +218,7 @@ jobs:
       - name: Install Cilium CLI-cli
         uses: cilium/cilium-cli@446392499db483906bcc3ade85f023912a79e5ee # v0.15.14
         with:
+          repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
           ci-version: ${{ env.cilium_cli_ci_version }}
           binary-name: cilium-cli
@@ -274,7 +275,7 @@ jobs:
               --flush-ct
 
       - name: Rotate IPsec Key & Test (${{ join(matrix.*, ', ') }})
-        uses: cilium/cilium/.github/actions/conn-disrupt-test@93f26fd0af7f5bd5832e08b10785ec53d4252b1c
+        uses: cilium/cilium/.github/actions/conn-disrupt-test@afff5e950e4948667e77131b379df0c2a2be24c5
         with:
           job-name: conformance-ipsec-e2e-key-rotation-${{ matrix.name }}
           operation-cmd: |
