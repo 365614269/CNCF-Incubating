@@ -303,9 +303,8 @@ func (ic *Controller) handleIngressUpdatedEvent(event ingressUpdatedEvent) error
 }
 
 func (ic *Controller) handleIngressDeletedEvent(event ingressDeletedEvent) error {
-	log.WithField(logfields.Ingress, event.ingress.Name).WithField(logfields.K8sNamespace, event.ingress.Namespace).Debug("Deleting CiliumEnvoyConfig for ingress")
-
 	if ic.isEffectiveLoadbalancerModeDedicated(event.ingress) {
+		log.WithField(logfields.Ingress, event.ingress.Name).WithField(logfields.K8sNamespace, event.ingress.Namespace).Debug("Deleting resources (CiliumEnvoyConfig, Service & Endpoints) for dedicated Ingress")
 		if err := ic.deleteResources(event.ingress); err != nil {
 			log.WithError(err).Warn("Failed to delete resources for ingress")
 			return err
@@ -593,7 +592,7 @@ func (ic *Controller) regenerate(ing *slim_networkingv1.Ingress, forceShared boo
 		translator = ic.sharedTranslator
 		for _, k := range ic.ingressStore.ListKeys() {
 			item, _ := ic.getByKey(k)
-			if !ic.isCiliumIngressEntry(item) || ic.isEffectiveLoadbalancerModeDedicated(item) || ing.GetDeletionTimestamp() != nil {
+			if !ic.isCiliumIngressEntry(item) || ic.isEffectiveLoadbalancerModeDedicated(item) || item.GetDeletionTimestamp() != nil {
 				continue
 			}
 			if annotations.GetAnnotationTLSPassthroughEnabled(item) {
