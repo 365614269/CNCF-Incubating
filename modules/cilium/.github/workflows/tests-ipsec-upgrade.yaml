@@ -54,7 +54,7 @@ env:
   cilium_cli_ci_version:
   check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
   # renovate: datasource=docker depName=quay.io/cilium/kindest-node
-  k8s_version: v1.28.3
+  k8s_version: v1.29.0-rc.1
 
 jobs:
   commit-status-start:
@@ -247,7 +247,6 @@ jobs:
           host-mount: ./
           cpu: 4
           mem: '12G'
-          dns-resolver: '1.1.1.1'
           install-dependencies: 'true'
           cmd: |
             git config --global --add safe.directory /host
