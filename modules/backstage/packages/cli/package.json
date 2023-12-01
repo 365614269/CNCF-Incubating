@@ -47,7 +47,7 @@
     "@octokit/request": "^6.0.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.7",
     "@rollup/plugin-commonjs": "^25.0.0",
-    "@rollup/plugin-json": "^5.0.0",
+    "@rollup/plugin-json": "^6.0.0",
     "@rollup/plugin-node-resolve": "^15.0.0",
     "@rollup/plugin-yaml": "^4.0.0",
     "@spotify/eslint-config-base": "^14.0.0",
@@ -177,7 +177,7 @@
     "@vitejs/plugin-react": "^4.0.4",
     "vite": "^4.4.9",
     "vite-plugin-html": "^3.2.0",
-    "vite-plugin-node-polyfills": "^0.16.0"
+    "vite-plugin-node-polyfills": "^0.17.0"
   },
   "peerDependenciesMeta": {
     "@vitejs/plugin-react": {

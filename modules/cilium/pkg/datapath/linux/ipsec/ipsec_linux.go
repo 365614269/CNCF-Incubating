@@ -27,12 +27,12 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/route"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/fswatcher"
-	"github.com/cilium/cilium/pkg/inctimer"
+	"github.com/cilium/cilium/pkg/hive/cell"
+	"github.com/cilium/cilium/pkg/hive/job"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/encrypt"
 	"github.com/cilium/cilium/pkg/node"
-	"github.com/cilium/cilium/pkg/nodediscovery"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/resiliency"
 	"github.com/cilium/cilium/pkg/time"
@@ -962,7 +962,7 @@ func DeleteIPsecEncryptRoute() {
 	}
 }
 
-func keyfileWatcher(ctx context.Context, watcher *fswatcher.Watcher, keyfilePath string, nodediscovery *nodediscovery.NodeDiscovery, nodeHandler datapath.NodeHandler) {
+func keyfileWatcher(ctx context.Context, watcher *fswatcher.Watcher, keyfilePath string, nodediscovery datapath.NodeUpdater, nodeHandler datapath.NodeHandler, health cell.HealthReporter) error {
 	for {
 		select {
 		case event := <-watcher.Events:
@@ -972,6 +972,7 @@ func keyfileWatcher(ctx context.Context, watcher *fswatcher.Watcher, keyfilePath
 
 			_, spi, err := LoadIPSecKeysFile(keyfilePath)
 			if err != nil {
+				health.Degraded(fmt.Sprintf("Failed to load keyfile %q", keyfilePath), err)
 				log.WithError(err).Errorf("Failed to load IPsec keyfile")
 				continue
 			}
@@ -993,21 +994,24 @@ func keyfileWatcher(ctx context.Context, watcher *fswatcher.Watcher, keyfilePath
 			// Push SPI update into BPF datapath now that XFRM state
 			// is configured.
 			if err := SetIPSecSPI(spi); err != nil {
+				health.Degraded("Failed to set IPsec SPI", err)
 				log.WithError(err).Errorf("Failed to set IPsec SPI")
 				continue
 			}
+			health.OK("Watching keyfiles")
 		case err := <-watcher.Errors:
 			log.WithError(err).WithField(logfields.Path, keyfilePath).
 				Warning("Error encountered while watching file with fsnotify")
 
 		case <-ctx.Done():
+			health.Stopped("Context done")
 			watcher.Close()
-			return
+			return nil
 		}
 	}
 }
 
-func StartKeyfileWatcher(ctx context.Context, keyfilePath string, nodediscovery *nodediscovery.NodeDiscovery, nodeHandler datapath.NodeHandler) error {
+func StartKeyfileWatcher(group job.Group, keyfilePath string, nodeDiscovery datapath.NodeUpdater, nodeHandler datapath.NodeHandler) error {
 	if !option.Config.EnableIPsecKeyWatcher {
 		return nil
 	}
@@ -1017,7 +1021,9 @@ func StartKeyfileWatcher(ctx context.Context, keyfilePath string, nodediscovery 
 		return err
 	}
 
-	go keyfileWatcher(ctx, watcher, keyfilePath, nodediscovery, nodeHandler)
+	group.Add(job.OneShot("keyfile-watcher", func(ctx context.Context, health cell.HealthReporter) error {
+		return keyfileWatcher(ctx, watcher, keyfilePath, nodeDiscovery, nodeHandler, health)
+	}))
 
 	return nil
 }
@@ -1134,14 +1140,14 @@ func equalDefaultDropPolicy(defaultDropPolicy, p *netlink.XfrmPolicy) bool {
 		p.Dst.String() == defaultDropPolicy.Dst.String()
 }
 
-func doReclaimStaleKeys() {
+func staleKeyReclaimer(ctx context.Context) error {
 	ipSecLock.Lock()
 	defer ipSecLock.Unlock()
 
 	// In case no IPSec key has been loaded yet, don't try to reclaim any
 	// old key
 	if ipSecCurrentKeySPI == 0 {
-		return
+		return nil
 	}
 
 	reclaimTimestamp := time.Now()
@@ -1149,26 +1155,14 @@ func doReclaimStaleKeys() {
 	scopedLog := log.WithField(logfields.SPI, ipSecCurrentKeySPI)
 	if err := deleteStaleXfrmStates(reclaimTimestamp); err != nil {
 		scopedLog.WithError(err).Warning("Failed to delete stale XFRM states")
+		return err
 	}
 	if err := deleteStaleXfrmPolicies(reclaimTimestamp); err != nil {
 		scopedLog.WithError(err).Warning("Failed to delete stale XFRM policies")
+		return err
 	}
-}
 
-func StartStaleKeysReclaimer(ctx context.Context) {
-	timer, timerDone := inctimer.New()
-
-	go func() {
-		for {
-			select {
-			case <-timer.After(1 * time.Minute):
-				doReclaimStaleKeys()
-			case <-ctx.Done():
-				timerDone()
-				return
-			}
-		}
-	}()
+	return nil
 }
 
 // We need to install xfrm state for the local router (cilium_host) early
