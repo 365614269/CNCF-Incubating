@@ -2542,7 +2542,13 @@ spec:
 			// before to give up. TODO: there is a smarter way to wait?
 			Eventually(func() string {
 				By("Obtaining Prometheus' configuration data")
-				secret, err := coreClient.Secrets("openshift-monitoring").Get(context.Background(), "prometheus-k8s", metav1.GetOptions{})
+				var secret *k8sv1.Secret
+				for _, monitoringNamespace := range util.DefaultMonitorNamespaces {
+					secret, err = coreClient.Secrets(monitoringNamespace).Get(context.Background(), "prometheus-k8s", metav1.GetOptions{})
+					if err == nil {
+						break
+					}
+				}
 				Expect(err).ToNot(HaveOccurred())
 
 				data, ok := secret.Data["prometheus.yaml"]
@@ -3058,11 +3064,13 @@ spec:
 	})
 
 	Context("[Serial] Deployment of common-instancetypes", Serial, func() {
+		var appComponent string
 		var labelSelector string
 
 		BeforeEach(func() {
+			appComponent = apply.GetAppComponent(util2.GetCurrentKv(virtClient))
 			labelSelector = labels.Set{
-				v1.AppComponentLabel: v1.AppComponent,
+				v1.AppComponentLabel: appComponent,
 				v1.ManagedByLabel:    v1.ManagedByLabelOperatorValue,
 			}.String()
 		})
@@ -3117,8 +3125,8 @@ spec:
 		})
 
 		Context("Should take ownership", func() {
-			const appComponent = "something"
-			const managedBy = "someone"
+			const appComponentChanged = "something"
+			const managedByChanged = "someone"
 
 			It("of instancetypes", func() {
 				By("Getting instancetypes to be deployed by virt-operator")
@@ -3129,15 +3137,15 @@ spec:
 				By("Picking the first instancetype and changing its labels")
 				instancetype := instancetypes[0]
 				instancetype.Labels = map[string]string{
-					v1.AppComponentLabel: appComponent,
-					v1.ManagedByLabel:    managedBy,
+					v1.AppComponentLabel: appComponentChanged,
+					v1.ManagedByLabel:    managedByChanged,
 				}
 
 				By("Creating the instancetype")
 				instancetype, err = virtClient.VirtualMachineClusterInstancetype().Create(context.Background(), instancetype, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(instancetype.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, appComponent))
-				Expect(instancetype.Labels).To(HaveKeyWithValue(v1.ManagedByLabel, managedBy))
+				Expect(instancetype.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, appComponentChanged))
+				Expect(instancetype.Labels).To(HaveKeyWithValue(v1.ManagedByLabel, managedByChanged))
 
 				By("Enabling the feature gate and waiting for KubeVirt to be ready")
 				tests.EnableFeatureGate(virtconfig.CommonInstancetypesDeploymentGate)
@@ -3146,7 +3154,7 @@ spec:
 				By("Verifying virt-operator took ownership of the instancetype")
 				instancetype, err = virtClient.VirtualMachineClusterInstancetype().Get(context.Background(), instancetype.Name, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(instancetype.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, v1.AppComponent))
+				Expect(instancetype.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, appComponent))
 				Expect(instancetype.Labels).To(HaveKeyWithValue(v1.ManagedByLabel, v1.ManagedByLabelOperatorValue))
 			})
 
@@ -3159,15 +3167,15 @@ spec:
 				By("Picking the first preference and changing its labels")
 				preference := preferences[0]
 				preference.Labels = map[string]string{
-					v1.AppComponentLabel: appComponent,
-					v1.ManagedByLabel:    managedBy,
+					v1.AppComponentLabel: appComponentChanged,
+					v1.ManagedByLabel:    managedByChanged,
 				}
 
 				By("Creating the preference")
 				preference, err = virtClient.VirtualMachineClusterPreference().Create(context.Background(), preference, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(preference.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, appComponent))
-				Expect(preference.Labels).To(HaveKeyWithValue(v1.ManagedByLabel, managedBy))
+				Expect(preference.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, appComponentChanged))
+				Expect(preference.Labels).To(HaveKeyWithValue(v1.ManagedByLabel, managedByChanged))
 
 				By("Enabling the feature gate and waiting for KubeVirt to be ready")
 				tests.EnableFeatureGate(virtconfig.CommonInstancetypesDeploymentGate)
@@ -3176,7 +3184,7 @@ spec:
 				By("Verifying virt-operator took ownership of the preference")
 				preference, err = virtClient.VirtualMachineClusterPreference().Get(context.Background(), preference.Name, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
-				Expect(preference.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, v1.AppComponent))
+				Expect(preference.Labels).To(HaveKeyWithValue(v1.AppComponentLabel, appComponent))
 				Expect(preference.Labels).To(HaveKeyWithValue(v1.ManagedByLabel, v1.ManagedByLabelOperatorValue))
 			})
 		})
@@ -3193,7 +3201,7 @@ spec:
 					ObjectMeta: metav1.ObjectMeta{
 						GenerateName: "clusterinstancetype-",
 						Labels: map[string]string{
-							v1.AppComponentLabel: v1.AppComponent,
+							v1.AppComponentLabel: appComponent,
 							v1.ManagedByLabel:    v1.ManagedByLabelOperatorValue,
 						},
 					},
@@ -3216,7 +3224,7 @@ spec:
 					ObjectMeta: metav1.ObjectMeta{
 						GenerateName: "clusterpreference-",
 						Labels: map[string]string{
-							v1.AppComponentLabel: v1.AppComponent,
+							v1.AppComponentLabel: appComponent,
 							v1.ManagedByLabel:    v1.ManagedByLabelOperatorValue,
 						},
 					},
