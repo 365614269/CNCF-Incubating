@@ -47,11 +47,13 @@ k8sServicePort: ""
 # rate limit, the agent and operator will start to throttle requests by delaying
 # them until there is budget or the request times out.
 k8sClientRateLimit:
-  # -- The sustained request rate in requests per second.
-  qps: 5
-  # -- The burst request rate in requests per second.
+  # -- (int) The sustained request rate in requests per second.
+  # @default -- 5 for k8s up to 1.26. 10 for k8s version 1.27+
+  qps:
+  # -- (int) The burst request rate in requests per second.
   # The rate limiter will allow short bursts with a higher rate.
-  burst: 10
+  # @default -- 10 for k8s up to 1.26. 20 for k8s version 1.27+
+  burst:
 
 cluster:
   # -- Name of the cluster. Only required for Cluster Mesh and mutual authentication with SPIRE.
@@ -3343,6 +3345,8 @@ authentication:
         enabled: true
         # -- SPIRE namespace to install into
         namespace: cilium-spire
+        # -- SPIRE namespace already exists. Set to true if Helm should not create, manage, and import the SPIRE namespace.
+        existingNamespace: false
         # -- init container image of SPIRE agent and server
         initImage:
           override: ~
@@ -3357,8 +3361,8 @@ authentication:
           image:
             override: ~
             repository: "ghcr.io/spiffe/spire-agent"
-            tag: "1.8.4"
-            digest: "sha256:d489bc8470d7a0f292e0e3576c3e7025253343dc798241bcfd9061828e2a6bef"
+            tag: "1.8.5"
+            digest: "sha256:99405637647968245ff9fe215f8bd2bd0ea9807be9725f8bf19fe1b21471e52b"
             useDigest: true
             pullPolicy: "Always"
           # -- SPIRE agent service account
@@ -3392,8 +3396,8 @@ authentication:
           image:
             override: ~
             repository: "ghcr.io/spiffe/spire-server"
-            tag: "1.8.4"
-            digest: "sha256:bf79e0a921f8b8aa92602f7ea335616e72f7e91f939848e7ccc52d5bddfe96a1"
+            tag: "1.8.5"
+            digest: "sha256:28269265882048dcf0fed32fe47663cd98613727210b8d1a55618826f9bf5428"
             useDigest: true
             pullPolicy: "Always"
           # -- SPIRE server service account

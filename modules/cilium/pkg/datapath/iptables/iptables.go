@@ -1204,7 +1204,7 @@ func (m *Manager) RemoveFromNodeIpset(nodeIP net.IP) {
 	if ip.IsIPv6(nodeIP) {
 		ciliumNodeIpset = ciliumNodeIpsetV6
 	}
-	progArgs := []string{"del", ciliumNodeIpset, nodeIP.String()}
+	progArgs := []string{"del", ciliumNodeIpset, nodeIP.String(), "-exist"}
 	if err := ipset.runProg(progArgs); err != nil {
 		scopedLog.WithError(err).Errorf("Failed to remove IP from ipset %s", ciliumNodeIpset)
 	}
@@ -1300,12 +1300,24 @@ func (m *Manager) installMasqueradeRules(prog iptablesInterface, ifName, localDe
 					"-t", "nat",
 					"-A", ciliumPostNatChain,
 					"-s", allocRange,
-					"-d", r.Dst.String(),
+				}
+				if cidr.Equal(r.Dst, cidr.ZeroNet(r.Family)) {
+					progArgs = append(
+						progArgs,
+						"!", "-d", snatDstExclusionCIDR)
+				} else {
+					progArgs = append(
+						progArgs,
+						"-d", r.Dst.String())
 				}
 				if link != nil {
 					progArgs = append(
 						progArgs,
 						"-o", link.Attrs().Name)
+				} else {
+					progArgs = append(
+						progArgs,
+						"!", "-o", "cilium_+")
 				}
 				progArgs = append(
 					progArgs,
@@ -1325,47 +1337,47 @@ func (m *Manager) installMasqueradeRules(prog iptablesInterface, ifName, localDe
 				goto nextPass
 			}
 		}
-	}
-
-	// Masquerade all egress traffic leaving the node (catch-all)
-	//
-	// This rule must be first as the node ipset rule as it has different
-	// exclusion criteria than the other rules in this table.
-	//
-	// The following conditions must be met:
-	// * May not leave on a cilium_ interface, this excludes all
-	//   tunnel traffic
-	// * Must originate from an IP in the local allocation range
-	// * Must not be reply if BPF NodePort is enabled
-	// * Tunnel mode:
-	//   * May not be targeted to an IP in the local allocation
-	//     range
-	// * Non-tunnel mode:
-	//   * May not be targeted to an IP in the cluster range
-	progArgs := []string{
-		"-t", "nat",
-		"-A", ciliumPostNatChain,
-		"!", "-d", snatDstExclusionCIDR,
-	}
-	if len(m.sharedCfg.MasqueradeInterfaces) > 0 {
-		progArgs = append(
-			progArgs,
-			"-o", strings.Join(m.sharedCfg.MasqueradeInterfaces, ","))
 	} else {
+		// Masquerade all egress traffic leaving the node (catch-all)
+		//
+		// This rule must be first as the node ipset rule as it has different
+		// exclusion criteria than the other rules in this table.
+		//
+		// The following conditions must be met:
+		// * May not leave on a cilium_ interface, this excludes all
+		//   tunnel traffic
+		// * Must originate from an IP in the local allocation range
+		// * Must not be reply if BPF NodePort is enabled
+		// * Tunnel mode:
+		//   * May not be targeted to an IP in the local allocation
+		//     range
+		// * Non-tunnel mode:
+		//   * May not be targeted to an IP in the cluster range
+		progArgs := []string{
+			"-t", "nat",
+			"-A", ciliumPostNatChain,
+			"!", "-d", snatDstExclusionCIDR,
+		}
+		if len(m.sharedCfg.MasqueradeInterfaces) > 0 {
+			progArgs = append(
+				progArgs,
+				"-o", strings.Join(m.sharedCfg.MasqueradeInterfaces, ","))
+		} else {
+			progArgs = append(
+				progArgs,
+				"-s", allocRange,
+				"!", "-o", "cilium_+")
+		}
 		progArgs = append(
 			progArgs,
-			"-s", allocRange,
-			"!", "-o", "cilium_+")
-	}
-	progArgs = append(
-		progArgs,
-		"-m", "comment", "--comment", "cilium masquerade non-cluster",
-		"-j", "MASQUERADE")
-	if m.cfg.IPTablesRandomFully {
-		progArgs = append(progArgs, "--random-fully")
-	}
-	if err := prog.runProg(progArgs); err != nil {
-		return err
+			"-m", "comment", "--comment", "cilium masquerade non-cluster",
+			"-j", "MASQUERADE")
+		if m.cfg.IPTablesRandomFully {
+			progArgs = append(progArgs, "--random-fully")
+		}
+		if err := prog.runProg(progArgs); err != nil {
+			return err
+		}
 	}
 
 	// The following rule exclude traffic from the remaining rules in this chain.
