@@ -184,7 +184,7 @@ const config = {
             className: "header-twitter-link heade-icon",
           },
           {
-            href: "https://kubeedge.slack.com/join/shared_invite/enQtNjc0MTg2NTg2MTk0LWJmOTBmOGRkZWNhMTVkNGU1ZjkwNDY4MTY4YTAwNDAyMjRkMjdlMjIzYmMxODY1NGZjYzc4MWM5YmIxZjU1ZDI#/shared-invite/email",
+            to: "/docs/community/slack",
             position: "right",
             className: "header-slack-link heade-icon",
           },
@@ -201,10 +201,10 @@ const config = {
             html: '<p style="font-size: large;">KubeEdge is a <a href="https://cncf.io/">Cloud Native Computing Foundation</a> incubating project.</p>',
           },
           {
-            html: '<img src="https://github.com/cncf/artwork/blob/master/other/cncf/horizontal/color/cncf-color.png?raw=true" class="footer__logo light">',
+            html: '<img src="https://github.com/cncf/artwork/blob/main/other/cncf/horizontal/color/cncf-color.png?raw=true" class="footer__logo light">',
           },
           {
-            html: '<img src="https://github.com/cncf/artwork/blob/master/other/cncf/horizontal/white/cncf-white.png?raw=true" class="footer__logo dark">',
+            html: '<img src="https://github.com/cncf/artwork/blob/main/other/cncf/horizontal/white/cncf-white.png?raw=true" class="footer__logo dark">',
           },
           {
             html: '<p>The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of The Linux Foundation, please see our <a href="https://www.linuxfoundation.org/trademark-usage" target="_blank">Trademark Usage</a> page.</p>',

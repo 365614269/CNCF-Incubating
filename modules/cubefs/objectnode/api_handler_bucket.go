@@ -53,6 +53,10 @@ func (o *ObjectNode) createBucketHandler(w http.ResponseWriter, r *http.Request)
 		o.errorResponse(w, r, err, errorCode)
 	}()
 
+	if o.disableCreateBucketByS3 {
+		errorCode = DisableCreateBucketByS3
+		return
+	}
 	param := ParseRequestParam(r)
 	bucket := param.Bucket()
 	if bucket == "" {
@@ -246,7 +250,12 @@ func (o *ObjectNode) listBucketsHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var output listBucketsOutput
-	for _, ownVol := range userInfo.Policy.OwnVols {
+	authVos := userInfo.Policy.AuthorizedVols
+	ownVols := userInfo.Policy.OwnVols
+	for vol := range authVos {
+		ownVols = append(ownVols, vol)
+	}
+	for _, ownVol := range ownVols {
 		var vol *Volume
 		if vol, err = o.getVol(ownVol); err != nil {
 			log.LogErrorf("listBucketsHandler: load volume fail: requestID(%v) volume(%v) err(%v)",

@@ -46,6 +46,16 @@ run_format() {
     ${compose} run format
 }
 
+run_build_libsdkpre() {
+    prepare
+    ${compose} run build_libsdkpre
+}
+
+run_goreleaser() {
+    prepare
+    ${compose} run goreleaser
+}
+
 run_bsgofumpt() {
     prepare
     ${compose} run bs_gofumpt
@@ -54,6 +64,11 @@ run_bsgofumpt() {
 run_bsgolint() {
     prepare
     ${compose} run bs_golint
+}
+
+run_gosec() {
+    prepare
+    ${compose} run gosec
 }
 
 # build
@@ -147,11 +162,20 @@ for opt in ${ARGS[*]} ; do
         -f|--format)
             cmd=run_format
             ;;
+        --buildlibsdkpre)
+            cmd=run_build_libsdkpre
+            ;;
+        --goreleaser)
+            cmd=run_goreleaser
+            ;;
         --bsgofumpt)
             cmd=run_bsgofumpt
             ;;
         --bsgolint)
             cmd=run_bsgolint
+            ;;
+        --gosec)
+            cmd=run_gosec
             ;;
         -clean|--clean)
             cmd=clean
@@ -204,8 +228,11 @@ case "-$cmd" in
     -run_test) run_unit_test ;;
     -run_format) run_format ;;
     -run_s3test) run_s3test ;;
+    -run_build_libsdkpre) run_build_libsdkpre ;;
+    -run_goreleaser) run_goreleaser ;;
     -run_bsgofumpt) run_bsgofumpt ;;
     -run_bsgolint) run_bsgolint ;;
+    -run_gosec) run_gosec ;;
     -clean) clean ;;
     *) help ;;
 esac
