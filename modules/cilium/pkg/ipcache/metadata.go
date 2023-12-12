@@ -704,28 +704,26 @@ func (ipc *IPCache) TriggerLabelInjection() {
 
 	// This controller is for retrying this operation in case it fails. It
 	// should eventually succeed.
-	ipc.UpdateController(
-		LabelInjectorName,
-		controller.ControllerParams{
-			Group:   injectLabelsControllerGroup,
-			Context: ipc.Configuration.Context,
-			DoFunc: func(ctx context.Context) error {
-				idsToModify, rev := ipc.metadata.dequeuePrefixUpdates()
-				remaining, err := ipc.InjectLabels(ctx, idsToModify)
-				if len(remaining) > 0 {
-					ipc.metadata.enqueuePrefixUpdates(remaining...)
-				} else {
-					ipc.metadata.setInjectedRevision(rev)
-				}
+	ipc.injectionStarted.Do(func() {
+		ipc.UpdateController(
+			LabelInjectorName,
+			controller.ControllerParams{
+				Group:   injectLabelsControllerGroup,
+				Context: ipc.Configuration.Context,
+				DoFunc: func(ctx context.Context) error {
+					idsToModify, rev := ipc.metadata.dequeuePrefixUpdates()
+					remaining, err := ipc.InjectLabels(ctx, idsToModify)
+					if len(remaining) > 0 {
+						ipc.metadata.enqueuePrefixUpdates(remaining...)
+					} else {
+						ipc.metadata.setInjectedRevision(rev)
+					}
 
-				return err
+					return err
+				},
+				MaxRetryInterval: 1 * time.Minute,
 			},
-			MaxRetryInterval: 1 * time.Minute,
-		},
-	)
-}
-
-// ShutdownLabelInjection shuts down the controller in TriggerLabelInjection().
-func (ipc *IPCache) ShutdownLabelInjection() error {
-	return ipc.controllers.RemoveControllerAndWait(LabelInjectorName)
+		)
+	})
+	ipc.controllers.TriggerController(LabelInjectorName)
 }
