@@ -23,6 +23,10 @@ import {
   ComponentRef,
   componentsApiRef,
   coreExtensionData,
+  createApiExtension,
+  createComponentExtension,
+  createNavItemExtension,
+  createThemeExtension,
   createTranslationExtension,
   ExtensionDataRef,
   ExtensionOverrides,
@@ -80,7 +84,7 @@ import {
   appLanguageApiRef,
   translationApiRef,
 } from '@backstage/core-plugin-api/alpha';
-import { AppRouteBinder } from '../routing';
+import { CreateAppRouteBinder } from '../routing';
 import { RoutingProvider } from '../routing/RoutingProvider';
 import { resolveRouteBindings } from '../routing/resolveRouteBindings';
 import { collectRouteIds } from '../routing/collectRouteIds';
@@ -194,7 +198,7 @@ export function createExtensionTree(options: {
 
       return this.getExtensionAttachments('core/nav', 'items')
         .map((node, index) => {
-          const target = node.getData(coreExtensionData.navTarget);
+          const target = node.getData(createNavItemExtension.targetDataRef);
           if (!target) {
             return null;
           }
@@ -238,8 +242,8 @@ function deduplicateFeatures(
 /** @public */
 export function createApp(options?: {
   features?: (BackstagePlugin | ExtensionOverrides)[];
-  configLoader?: () => Promise<ConfigApi>;
-  bindRoutes?(context: { bind: AppRouteBinder }): void;
+  configLoader?: () => Promise<{ config: ConfigApi }>;
+  bindRoutes?(context: { bind: CreateAppRouteBinder }): void;
   featureLoader?: (ctx: {
     config: ConfigApi;
   }) => Promise<(BackstagePlugin | ExtensionOverrides)[]>;
@@ -248,7 +252,7 @@ export function createApp(options?: {
 } {
   async function appLoader() {
     const config =
-      (await options?.configLoader?.()) ??
+      (await options?.configLoader?.().then(c => c.config)) ??
       ConfigReader.fromConfigs(
         overrideBaseUrlConfigs(defaultConfigLoaderSync()),
       );
@@ -289,7 +293,7 @@ export function createApp(options?: {
 export function createSpecializedApp(options?: {
   features?: (BackstagePlugin | ExtensionOverrides)[];
   config?: ConfigApi;
-  bindRoutes?(context: { bind: AppRouteBinder }): void;
+  bindRoutes?(context: { bind: CreateAppRouteBinder }): void;
 }): { createRoot(): JSX.Element } {
   const {
     features: duplicatedFeatures = [],
@@ -365,13 +369,13 @@ function createApiHolder(
   const pluginApis =
     tree.root.edges.attachments
       .get('apis')
-      ?.map(e => e.instance?.getData(coreExtensionData.apiFactory))
+      ?.map(e => e.instance?.getData(createApiExtension.factoryDataRef))
       .filter((x): x is AnyApiFactory => !!x) ?? [];
 
   const themeExtensions =
     tree.root.edges.attachments
       .get('themes')
-      ?.map(e => e.instance?.getData(coreExtensionData.theme))
+      ?.map(e => e.instance?.getData(createThemeExtension.themeDataRef))
       .filter((x): x is AppTheme => !!x) ?? [];
 
   const translationResources =
@@ -412,7 +416,7 @@ function createApiHolder(
   const componentsExtensions =
     tree.root.edges.attachments
       .get('components')
-      ?.map(e => e.instance?.getData(coreExtensionData.component))
+      ?.map(e => e.instance?.getData(createComponentExtension.componentDataRef))
       .filter(x => !!x) ?? [];
 
   const componentsMap = componentsExtensions.reduce(

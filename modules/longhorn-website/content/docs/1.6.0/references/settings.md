@@ -77,7 +77,7 @@ weight: 1
   - [Storage Network](#storage-network)
   - [Remove Snapshots During Filesystem Trim](#remove-snapshots-during-filesystem-trim)
   - [Guaranteed Instance Manager CPU](#guaranteed-instance-manager-cpu)
-
+  - [Disable Snapshot Purge](#disable-snapshot-purge)
 
 ### Customizing Default Settings
 
@@ -90,11 +90,24 @@ To configure Longhorn before installing it, see [this section](../../advanced-re
 > Default: `block-if-contains-last-replica`
 
 Define the policy to use when a node with the last healthy replica of a volume is drained. Available options:
-- `block-if-contains-last-replica`: Longhorn will block the drain when the node contains the last healthy replica of a volume.
-- `allow-if-replica-is-stopped`: Longhorn will allow the drain when the node contains the last healthy replica of a volume but the replica is stopped.
-  WARNING: possible data loss if the node is removed after draining. Select this option if you want to drain the node and do in-place upgrade/maintenance.
-- `always-allow`: Longhorn will allow the drain even though the node contains the last healthy replica of a volume.
-  WARNING: possible data loss if the node is removed after draining. Also possible data corruption if the last replica was running during the draining.
+
+- `block-if-contains-last-replica`: Longhorn will block the drain when the node contains the last healthy replica of a
+  volume.
+- `allow-if-replica-is-stopped`: Longhorn will allow the drain when the node contains the last healthy replica of a
+  volume but the replica is stopped.  
+  WARNING: possible data loss if the node is removed after draining.
+- `always-allow`: Longhorn will allow the drain even though the node contains the last healthy replica of a volume.  
+  WARNING: possible data loss if the node is removed after draining. Also possible data corruption if the last replica
+  was running during the draining.
+- `block-for-eviction`: Longhorn will automatically evict all replicas and block the drain until eviction is complete.  
+  WARNING: Can result in slow drains and extra data movement associated with replica rebuilding.
+- `block-for-eviction-if-contains-last-replica`: Longhorn will automatically evict any replicas that don't have a
+  healthy counterpart and block the drain until eviction is complete.  
+  WARNING: Can result in slow drains and extra data movement associated with replica rebuilding.
+
+Each option has benefits and drawbacks. See [Node Drain Policy
+Recommendations](../../volumes-and-nodes/maintenance/#node-drain-policy-recommendations) for help deciding which is most
+appropriate in your environment.
 
 #### Detach Manually Attached Volumes When Cordoned
 
@@ -811,3 +824,16 @@ If it's hard to estimate the usage now, you can leave it with the default value,
 >  - One more set of instance manager pods may need to be deployed when the Longhorn system is upgraded. If current available CPUs of the nodes are not enough for the new instance manager pods, you need to detach the volumes using the oldest instance manager pods so that Longhorn can clean up the old pods automatically and release the CPU resources. And the new pods with the latest instance manager image will be launched then.
 >  - This global setting will be ignored for a node if the field "InstanceManagerCPURequest" on the node is set.
 >  - After this setting is changed, all instance manager pods using this global setting on all the nodes will be automatically restarted. In other words, DO NOT CHANGE THIS SETTING WITH ATTACHED VOLUMES.
+
+#### Disable Snapshot Purge
+
+> Default: `false`
+
+When set to true, temporarily prevent all attempts to purge volume snapshots.
+
+Longhorn typically purges snapshots during replica rebuilding and user-initiated snapshot deletion. While purging,
+Longhorn coalesces unnecessary snapshots into their newer counterparts, freeing space consumed by historical data.
+
+Allowing snapshot purging during normal operations is ideal, but this process temporarily consumes additional disk
+space. If insufficient disk space prevents the process from continuing, consider temporarily disabling purging while
+data is moved to other disks.
