@@ -265,6 +265,7 @@ This information will help us gain insights how Longhorn is being used, which wi
 **Node Information collected from all cluster nodes includes:**
 - Number of disks of each device type (HDD, SSD, NVMe, unknown).
   > This value may not be accurate for virtual machines.
+- Number of disks for each Longhorn disk type (block, filesystem).
 - Host kernel release.
 - Host operating system (OS) distribution.
 - Kubernetest node provider.
@@ -273,6 +274,7 @@ This information will help us gain insights how Longhorn is being used, which wi
 - Longhorn namespace UID.
 - Number of Longhorn nodes.
 - Number of volumes of each access mode (RWO, RWX, unknown).
+- Number of volumes associated with the backend store driver in each data engine (v1, v2).
 - Number of volumes of each data locality type (disabled, best_effort, strict_local, unknown).
 - Number of volumes of each frontend type (blockdev, iscsi).
 - Average volume size in bytes.
