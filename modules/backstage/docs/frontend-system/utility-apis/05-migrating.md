@@ -6,6 +6,8 @@ sidebar_label: Migrating
 description: Migrating Utility APIs from the old frontend system
 ---
 
+> **NOTE: The new frontend system is in alpha and is only supported by a small number of plugins.**
+
 If you are migrating your plugins or app over from the old frontend system, there are a few things to keep in mind in regards to utility APIs.
 
 ## Overview
@@ -72,7 +74,7 @@ import {
 import { workApiRef } from '@internal/plugin-example-react';
 import { WorkImpl } from './WorkImpl';
 
-const workApi = createApiFactory({
+const exampleWorkApi = createApiFactory({
   api: workApiRef,
   deps: { storageApi: storageApiRef },
   factory: ({ storageApi }) => new WorkImpl({ storageApi }),
@@ -81,7 +83,7 @@ const workApi = createApiFactory({
 /** @public */
 export const catalogPlugin = createPlugin({
   id: 'example',
-  apis: [workApi],
+  apis: [exampleWorkApi],
 });
 ```
 
@@ -91,6 +93,8 @@ The major changes we'll make are
 - Wrap the existing API factory in a `createApiExtension`
 - Change to the new version of `createPlugin` which exports this extension
 - Change the plugin export to be the default instead
+
+The end result, after simplifying imports and cleaning up a bit, might look like this:
 
 ```tsx title="in @internal/plugin-example"
 import {
@@ -102,7 +106,7 @@ import {
 import { workApiRef } from '@internal/plugin-example-react';
 import { WorkImpl } from './WorkImpl';
 
-const workApi = createApiExtension({
+const exampleWorkApi = createApiExtension({
   factory: createApiFactory({
     api: workApiRef,
     deps: { storageApi: storageApiRef },
@@ -113,10 +117,10 @@ const workApi = createApiExtension({
 /** @public */
 export default createPlugin({
   id: 'example',
-  extensions: [workApi],
+  extensions: [exampleWorkApi],
 });
 ```
 
 ## Further work
 
-Since utility APIs are now complete extensions, you may want to take a bigger look at how they used to be used, and what the new frontend system offers. You may for example consider [adding configurability or inputs](./04-configuring.md) to your API, if that makes sense for your current application.
+Since utility APIs are now complete extensions, you may want to take a bigger look at how they used to be used, and what the new frontend system offers. You may for example consider [adding configurability or inputs](./02-creating.md) to your API, if that makes sense for your current application.
