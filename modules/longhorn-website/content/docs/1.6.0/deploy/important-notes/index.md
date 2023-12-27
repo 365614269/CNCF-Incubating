@@ -23,6 +23,23 @@ in an old version of longhorn-instance-manager until it is detached (by scaling 
 reattached (by scaling its consuming workload up). Consider scaling workloads down and back up again as soon as possible
 after upgrading from a version without this mechanism (v1.5.1 or older) to v{{< current-version >}}.
 
+### Default Priority Class
+
+Longhorn v1.6.0 introduces the default Priority Class `longhorn-critical`, which has the highest value and ensures that Longhorn pods are not evicted by kube-scheduler when system resources are low.
+
+During upgrades, Longhorn applies the default Priority Class to components depending on specific settings.
+
+- When all volumes are detached and you did not specify a value for the global Priority Class setting `priority-class`, the default Priority Class is applied to all Longhorn components. `priority-class` is updated.
+- When all volumes are detached and you specified a value for the global Priority Class setting `priority-class`, the default Priority Class is applied only to user-deployed components. `priority-class` is not updated.
+- When one or more volumes are attached and you did not specify a value for `PriorityClass` in the `chart/value.yaml` or `longhorn/deploy/longhorn.yaml`, the default Priority Class is applied only to user-deployed components. `priority-class` is not updated.
+
+If you want to apply the default Priority Class to system-managed components, you must detach all volumes and change the Priority Class default setting value after the upgrade is successfully completed.
+
+You can change these behaviors by customizing the following before starting the upgrade process:
+
+- For user deployed components: `priorityClass` parameters for each component in the `values.yaml` file of the [Longhorn Helm chart](https://github.com/longhorn/longhorn/blob/v1.6.0/chart/values.yaml)
+- For system managed components: `defaultSetting.priorityClass` in the `values.yaml` file of the [Longhorn Helm chart](https://github.com/longhorn/longhorn/blob/v1.6.0/chart/values.yaml)
+
 ### New Node Drain Policies Added
 
 There are two new options for the [Node Drain Policy](../../references/settings#node-drain-policy) setting. Both `Block
@@ -74,3 +91,28 @@ Support for the `v1beta1` version of CSI snapshot CRDs was previously deprecated
 The CSI components in Longhorn v{{< current-version >}} only function with the `v1` version.
 Please follow the instructions at [Enable CSI Snapshot Support](../../snapshots-and-backups/csi-snapshot-support/enable-csi-snapshot-support) to update CSI snapshot CRDs and the CSI snapshot controller.
 If you have Longhorn volume manifests or scripts that are still using `v1beta1` version, you must upgrade them to `v1` as well.
+
+### Engine Upgrade Enforcement
+
+Beginning with version v1.6.0, Longhorn is implementing mandatory engine upgrades. See the [release note](https://github.com/longhorn/longhorn/releases/tag/v{{< current-version >}}) for information about the minimum supported engine image version.
+
+When upgrading through Helm, a component compatibility check is automatically performed. If the new Longhorn is not compatible with the engine images that are currently in use, the upgrade path is blocked through a pre-hook mechanism.
+
+If you installed Longhorn using the manifests, engine upgrades are enforced by the Longhorn Manager. Attempts to upgrade Longhorn Manager may cause unsuccessful pod launches and generate corresponding error logs, although it poses no harm. If you encounter such errors, you must revert to the previous Longhorn version and then upgrade the engines that are using the incompatible engine images before the next upgrade.
+
+You can determine the versions of engine images that are currently in use with the following script:
+```bash
+#!/bin/bash
+
+namespace="longhorn-system"
+
+engine_images=$(kubectl -n $namespace get engineimage -o=jsonpath='{.items[*].metadata.name}')
+
+for engine_image in $engine_images; do
+    cli_api_version=$(kubectl -n $namespace get engineimage $engine_image -o=jsonpath='{.status.cliAPIVersion}')
+    controller_api_version=$(kubectl -n $namespace get engineimage $engine_image -o=jsonpath='{.status.controllerAPIVersion}')
+    echo "EngineImage: $engine_image | cliAPIVersion: $cli_api_version | controllerAPIVersion: $controller_api_version"
+done
+```
+
+Once you successfully upgrade to version v1.6.0, you will be able to view information about engine image versions on the UI.
