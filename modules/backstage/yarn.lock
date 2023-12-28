@@ -3109,13 +3109,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/runtime-corejs3@npm:^7.20.7, @babel/runtime-corejs3@npm:^7.22.15, @babel/runtime-corejs3@npm:^7.23.2":
-  version: 7.23.2
-  resolution: "@babel/runtime-corejs3@npm:7.23.2"
+"@babel/runtime-corejs3@npm:^7.20.7, @babel/runtime-corejs3@npm:^7.22.15, @babel/runtime-corejs3@npm:^7.23.5":
+  version: 7.23.6
+  resolution: "@babel/runtime-corejs3@npm:7.23.6"
   dependencies:
     core-js-pure: ^3.30.2
     regenerator-runtime: ^0.14.0
-  checksum: 922f25c47996a8af604cea82441e41be8b11910e96c662511e54120078f4c64258c045a28a311467a8f14a0c17f46a1f057f7c0501e567869a4343a6ce017962
+  checksum: 92576ea17ff674025aa3cd208bfb8301e4bde432cfa404b56f94242948cbd40125c1a4c9c54a99134e08ded8bcde305633a22b1f4c676687c3b868557d23b762
   languageName: node
   linkType: hard
 
@@ -20945,13 +20945,13 @@ __metadata:
   linkType: hard
 
 "axios@npm:^1.4.0, axios@npm:^1.6.0":
-  version: 1.6.2
-  resolution: "axios@npm:1.6.2"
+  version: 1.6.3
+  resolution: "axios@npm:1.6.3"
   dependencies:
     follow-redirects: ^1.15.0
     form-data: ^4.0.0
     proxy-from-env: ^1.1.0
-  checksum: 4a7429e2b784be0f2902ca2680964391eae7236faa3967715f30ea45464b98ae3f1c6f631303b13dfe721b17126b01f486c7644b9ef276bfc63112db9fd379f8
+  checksum: 07ef3bb83fc2dacc1ae2c97f2bbd04ef7701f5655f9037789d79ee78b698ffa50eaa8465c2017d4d3e9ce7d94cb779f730acaab32ce9036d0a4933c1e89df4da
   languageName: node
   linkType: hard
 
@@ -23212,10 +23212,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cookie@npm:0.5.0, cookie@npm:^0.5.0, cookie@npm:~0.5.0":
+"cookie@npm:0.5.0, cookie@npm:^0.5.0":
   version: 0.5.0
   resolution: "cookie@npm:0.5.0"
   checksum: 1f4bd2ca5765f8c9689a7e8954183f5332139eb72b6ff783d8947032ec1fdf43109852c178e21a953a30c0dd42257828185be01b49d1eb1a67fd054ca588a180
+  languageName: node
+  linkType: hard
+
+"cookie@npm:~0.6.0":
+  version: 0.6.0
+  resolution: "cookie@npm:0.6.0"
+  checksum: f56a7d32a07db5458e79c726b77e3c2eff655c36792f2b6c58d351fb5f61531e5b1ab7f46987150136e366c65213cbe31729e02a3eaed630c3bf7334635fb410
   languageName: node
   linkType: hard
 
@@ -30466,8 +30473,8 @@ __metadata:
   linkType: hard
 
 "isomorphic-git@npm:^1.23.0":
-  version: 1.25.0
-  resolution: "isomorphic-git@npm:1.25.0"
+  version: 1.25.2
+  resolution: "isomorphic-git@npm:1.25.2"
   dependencies:
     async-lock: ^1.1.0
     clean-git-ref: ^2.0.1
@@ -30482,7 +30489,7 @@ __metadata:
     simple-get: ^4.0.1
   bin:
     isogit: cli.cjs
-  checksum: d7f97cc3a7c7deb45077e3308c72aadd20a4a2ecf1c4ba929edb4e658356453bfe10daa38dcb5a34de0432e0a98ad91cfc540e62a8604aec9fd07ab5e7197299
+  checksum: b8e7a1b66c393ac1ab30fd0deb561b97e4ca249aad97367f11be8ed18b20132460bec89451752e3533e64a5a8c47b3509dc5a7dee2eea266c812b45df633b441
   languageName: node
   linkType: hard
 
@@ -31271,7 +31278,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jose@npm:^4.14.6, jose@npm:^4.15.1, jose@npm:^4.6.0":
+"jose@npm:^4.14.6, jose@npm:^4.15.4, jose@npm:^4.6.0":
   version: 4.15.4
   resolution: "jose@npm:4.15.4"
   checksum: dccad91cb3357f36423774a0b89ad830dd84b31090de65cd139b85488439f16a00f8c59c0773825e8a1adb0dd9d13ad725ad66e6ea33880ecb3959bb99e1ea5b
@@ -35665,14 +35672,14 @@ __metadata:
   linkType: hard
 
 "openid-client@npm:^5.2.1, openid-client@npm:^5.3.0, openid-client@npm:^5.4.3":
-  version: 5.6.1
-  resolution: "openid-client@npm:5.6.1"
+  version: 5.6.2
+  resolution: "openid-client@npm:5.6.2"
   dependencies:
-    jose: ^4.15.1
+    jose: ^4.15.4
     lru-cache: ^6.0.0
     object-hash: ^2.2.0
     oidc-token-hash: ^5.0.3
-  checksum: 9d939cec57540e6dd3f67e9a248ec5ecec3b439b7ab5bd2e9fb4481bd03e8d030deedd87a447348194be7f3e93e84085841b0414033caf86479870f526cdbc2f
+  checksum: e61bc7170bb53d9b50098476b68b72e07f93769caae8ae12ffb885c2dac5fb2fdf6de437a9eb29c5501f52b296f01c083de8d6f3500f2999fc863c9f9f5142fa
   languageName: node
   linkType: hard
 
@@ -41776,9 +41783,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"swagger-client@npm:^3.24.5":
-  version: 3.24.5
-  resolution: "swagger-client@npm:3.24.5"
+"swagger-client@npm:^3.24.6":
+  version: 3.24.6
+  resolution: "swagger-client@npm:3.24.6"
   dependencies:
     "@babel/runtime-corejs3": ^7.22.15
     "@swagger-api/apidom-core": ">=0.83.0 <1.0.0"
@@ -41786,7 +41793,7 @@ __metadata:
     "@swagger-api/apidom-json-pointer": ">=0.83.0 <1.0.0"
     "@swagger-api/apidom-ns-openapi-3-1": ">=0.83.0 <1.0.0"
     "@swagger-api/apidom-reference": ">=0.83.0 <1.0.0"
-    cookie: ~0.5.0
+    cookie: ~0.6.0
     deepmerge: ~4.3.0
     fast-json-patch: ^3.0.0-1
     is-plain-object: ^5.0.0
@@ -41796,15 +41803,15 @@ __metadata:
     qs: ^6.10.2
     traverse: ~0.6.6
     undici: ^5.24.0
-  checksum: d41ff94f9a506b99e7b30334c96a5011b14acf2af5204648b70e5b8e1902f3bf62ca2297b4e5f7536a3f0bb0a9cd4aa83d439b9352d0f1e3a110409201cae0bc
+  checksum: 8bb1aeea4576fdd88543c4e011b1f087c52b34e5a069d560937a5c32a6e1e6c7eda243810886f8b09e4e12062e8f2768edaa5e6193140a28f9604bac42b18104
   languageName: node
   linkType: hard
 
 "swagger-ui-react@npm:^5.0.0":
-  version: 5.10.3
-  resolution: "swagger-ui-react@npm:5.10.3"
+  version: 5.10.5
+  resolution: "swagger-ui-react@npm:5.10.5"
   dependencies:
-    "@babel/runtime-corejs3": ^7.23.2
+    "@babel/runtime-corejs3": ^7.23.5
     "@braintree/sanitize-url": =6.0.4
     base64-js: ^1.5.1
     classnames: ^2.3.1
@@ -41833,7 +41840,7 @@ __metadata:
     reselect: ^4.1.8
     serialize-error: ^8.1.0
     sha.js: ^2.4.11
-    swagger-client: ^3.24.5
+    swagger-client: ^3.24.6
     url-parse: ^1.5.10
     xml: =1.0.1
     xml-but-prettier: ^1.0.1
@@ -41841,7 +41848,7 @@ __metadata:
   peerDependencies:
     react: ">=17.0.0"
     react-dom: ">=17.0.0"
-  checksum: 505dfb7b6f09b75bd637ac89796a6c4c8f3833b3907463f6824c37732cb4d19d045408fd92070dd1d93416996063bd97749de4397b2fca978df8025f2243b60c
+  checksum: 79256d68d56389d089a953f7d6c3a95a67c0b4e2794ae3992ba60adc0312aeb4446d8ba1e20687fcd7708d562e7c15fa733dbcb54cd8f99948ebf4c4513fa042
   languageName: node
   linkType: hard
 
@@ -43851,8 +43858,8 @@ __metadata:
   linkType: hard
 
 "vite-plugin-html@npm:^3.2.0":
-  version: 3.2.0
-  resolution: "vite-plugin-html@npm:3.2.0"
+  version: 3.2.1
+  resolution: "vite-plugin-html@npm:3.2.1"
   dependencies:
     "@rollup/pluginutils": ^4.2.0
     colorette: ^2.0.16
@@ -43868,7 +43875,7 @@ __metadata:
     pathe: ^0.2.0
   peerDependencies:
     vite: ">=2.0.0"
-  checksum: f5222247b65da1c36215f0b2f509fd3975a7426b8d44546beb49f3ba51ee87b3a6b6e6afc9e7567a0d8bd1016631f2db3f934808f62a7c8f7f83fa83d8561d2d
+  checksum: 6add7cd7a8f9e83b0c58b20cde2d4da7e132ef56db6a60f3d4cc7022c944896236aeca6bde4c6dc2da3d506f756f63de56251adc47f0ae359c07485b24dd64db
   languageName: node
   linkType: hard
 
@@ -45082,11 +45089,11 @@ __metadata:
   linkType: hard
 
 "zod-to-json-schema@npm:^3.20.4, zod-to-json-schema@npm:^3.21.4":
-  version: 3.22.1
-  resolution: "zod-to-json-schema@npm:3.22.1"
+  version: 3.22.3
+  resolution: "zod-to-json-schema@npm:3.22.3"
   peerDependencies:
     zod: ^3.22.4
-  checksum: 7c0cdcf0acac81a9b69b26e44bc45e43aefacd5759e12f89856f0a4b957b66be27560671473ef7ab4a5883a871b6990a7f61fce3cee96ecad3823c5b7e524fa5
+  checksum: 2747a3d1514f579006939c0edd6a420acae65ad016df223b09c4a542cbc8c0ae61b4d7b391228a211cde973635ed49c47b1449791982f3b32d799319bb174f42
   languageName: node
   linkType: hard
 
