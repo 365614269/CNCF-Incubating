@@ -105,8 +105,8 @@ importers:
         specifier: ^7.49.2
         version: 7.49.2(react@18.2.0)
       react-i18next:
-        specifier: ^13.5.0
-        version: 13.5.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^14.0.0
+        version: 14.0.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom:
         specifier: ^6.21.1
         version: 6.21.1(react-dom@18.2.0)(react@18.2.0)
@@ -211,8 +211,8 @@ importers:
         specifier: ^7.49.2
         version: 7.49.2(react@18.2.0)
       react-i18next:
-        specifier: ^13.5.0
-        version: 13.5.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^14.0.0
+        version: 14.0.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom:
         specifier: ^6.21.1
         version: 6.21.1(react-dom@18.2.0)(react@18.2.0)
@@ -233,8 +233,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1(cypress@13.6.2)
       '@testing-library/jest-dom':
-        specifier: ^6.1.5
-        version: 6.1.5(vitest@1.1.0)
+        specifier: ^6.1.6
+        version: 6.1.6(vitest@1.1.0)
       '@testing-library/react':
         specifier: ^14.1.2
         version: 14.1.2(react-dom@18.2.0)(react@18.2.0)
@@ -455,8 +455,8 @@ importers:
         specifier: 7.49.2
         version: 7.49.2(react@18.2.0)
       react-i18next:
-        specifier: ^13.5.0
-        version: 13.5.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^14.0.0
+        version: 14.0.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
     devDependencies:
       '@types/lodash-es':
         specifier: ^4.17.12
@@ -504,8 +504,8 @@ packages:
     engines: {node: '>=0.10.0'}
     dev: true
 
-  /@adobe/css-tools@4.3.1:
-    resolution: {integrity: sha512-/62yikz7NLScCGAAST5SHdnjaDJQBDq0M2muyRTpf2VQhw6StBg2ALiu73zSJQ4fMVLA+0uBhBHAle7Wg+2kSg==}
+  /@adobe/css-tools@4.3.2:
+    resolution: {integrity: sha512-DA5a1C0gD/pLOvhv33YMrbf2FK3oUzwNl9oOJqE4XVjuEtt6XIakRcsd7eLiOSPkp1kTRQGICTA8cKra/vFbjw==}
     dev: true
 
   /@babel/code-frame@7.22.13:
@@ -1696,8 +1696,8 @@ packages:
       pretty-format: 27.5.1
     dev: true
 
-  /@testing-library/jest-dom@6.1.5(vitest@1.1.0):
-    resolution: {integrity: sha512-3y04JLW+EceVPy2Em3VwNr95dOKqA8DhR0RJHhHKDZNYXcVXnEK7WIrpj4eYU8SVt/qYZ2aRWt/WgQ+grNES8g==}
+  /@testing-library/jest-dom@6.1.6(vitest@1.1.0):
+    resolution: {integrity: sha512-YwuiOdYEcxhfC2u5iNKlvg2Q5MgbutovP6drq7J1HrCbvR+G58BbtoCoq+L/kNlrNFsu2Kt3jaFAviLVxYHJZg==}
     engines: {node: '>=14', npm: '>=6', yarn: '>=1'}
     peerDependencies:
       '@jest/globals': '>= 28'
@@ -1714,7 +1714,7 @@ packages:
       vitest:
         optional: true
     dependencies:
-      '@adobe/css-tools': 4.3.1
+      '@adobe/css-tools': 4.3.2
       '@babel/runtime': 7.23.2
       aria-query: 5.3.0
       chalk: 3.0.0
@@ -5953,8 +5953,8 @@ packages:
       react: 18.2.0
     dev: false
 
-  /react-i18next@13.5.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-CFJ5NDGJ2MUyBohEHxljOq/39NQ972rh1ajnadG9BjTk+UXbHLq4z5DKEbEQBDoIhUmmbuS/fIMJKo6VOax1HA==}
+  /react-i18next@14.0.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-OCrS8rHNAmnr8ggGRDxjakzihrMW7HCbsplduTm3EuuQ6fyvWGT41ksZpqbduYoqJurBmEsEVZ1pILSUWkHZng==}
     peerDependencies:
       i18next: '>= 23.2.3'
       react: '>= 16.8.0'
@@ -7600,7 +7600,7 @@ packages:
       react-dropzone: 14.2.3(react@18.2.0)
       react-error-boundary: 3.1.4(react@18.2.0)
       react-hook-form: 7.49.2(react@18.2.0)
-      react-i18next: 13.5.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
+      react-i18next: 14.0.0(i18next@23.7.11)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom: 6.21.1(react-dom@18.2.0)(react@18.2.0)
       reactflow: 11.10.1(@types/react@18.2.45)(react-dom@18.2.0)(react@18.2.0)
       ui-shared: link:libs/ui-shared
