@@ -1,6 +1,6 @@
-module kyverno
+module github.com/kyverno/website
 
-go 1.18
+go 1.19
 
 require (
 	github.com/google/docsy v0.7.1 // indirect
