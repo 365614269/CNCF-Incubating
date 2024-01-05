@@ -18,7 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"net/http"
 	"regexp"
@@ -27,15 +27,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cubefs/cubefs/util/errors"
-	"github.com/cubefs/cubefs/util/iputil"
-
 	"golang.org/x/time/rate"
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/cryptoutil"
+	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/exporter"
+	"github.com/cubefs/cubefs/util/iputil"
 	"github.com/cubefs/cubefs/util/log"
 	"github.com/cubefs/cubefs/util/stat"
 )
@@ -1470,7 +1469,7 @@ func (m *Server) changeDataPartitionLeader(w http.ResponseWriter, r *http.Reques
 		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
 		return
 	}
-	rstMsg := fmt.Sprintf(" changeDataPartitionLeader command sucess send to dest host but need check. ")
+	rstMsg := fmt.Sprintf(" changeDataPartitionLeader command success send to dest host but need check. ")
 	_ = sendOkReply(w, r, newSuccessHTTPReply(rstMsg))
 }
 
@@ -1740,7 +1739,7 @@ func (m *Server) changeMetaPartitionLeader(w http.ResponseWriter, r *http.Reques
 		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
 		return
 	}
-	rstMsg := fmt.Sprintf(" changeMetaPartitionLeader command sucess send to dest host but need check. ")
+	rstMsg := fmt.Sprintf(" changeMetaPartitionLeader command success send to dest host but need check. ")
 	_ = sendOkReply(w, r, newSuccessHTTPReply(rstMsg))
 }
 
@@ -4568,23 +4567,12 @@ func (m *Server) putDataPartitions(w http.ResponseWriter, r *http.Request) {
 	if err = r.ParseForm(); err != nil {
 		return
 	}
-	if body, err = ioutil.ReadAll(r.Body); err != nil {
+	if body, err = io.ReadAll(r.Body); err != nil {
 		return
 	}
 	if !m.cluster.partition.IsRaftLeader() {
-
-		reply := &struct {
-			Code int32           `json:"code"`
-			Msg  string          `json:"msg"`
-			Data json.RawMessage `json:"data"`
-		}{}
-
-		if err = json.Unmarshal(body, reply); err != nil {
-			log.LogErrorf("putDataPartitions. umarshal error volName %v", name)
-			return
-		}
 		view := &proto.DataPartitionsView{}
-		if err = json.Unmarshal(reply.Data, view); err != nil {
+		if err = proto.UnmarshalHTTPReply(body, view); err != nil {
 			log.LogErrorf("putDataPartitions. umarshal reply.Data error volName %v", name)
 			return
 		}
@@ -4907,7 +4895,7 @@ func (m *Server) changeMasterLeader(w http.ResponseWriter, r *http.Request) {
 		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
 		return
 	}
-	rstMsg := fmt.Sprintf(" changeMasterLeader. command sucess send to dest host but need check. ")
+	rstMsg := fmt.Sprintf(" changeMasterLeader. command success send to dest host but need check. ")
 	_ = sendOkReply(w, r, newSuccessHTTPReply(rstMsg))
 }
 
@@ -4929,7 +4917,7 @@ func (m *Server) OpFollowerPartitionsRead(w http.ResponseWriter, r *http.Request
 	}
 	m.cluster.followerReadManager.needCheck = enableFollower
 
-	rstMsg := fmt.Sprintf(" OpFollowerPartitionsRead. set needCheck %v command sucess. ", enableFollower)
+	rstMsg := fmt.Sprintf(" OpFollowerPartitionsRead. set needCheck %v command success. ", enableFollower)
 	_ = sendOkReply(w, r, newSuccessHTTPReply(rstMsg))
 }
 
@@ -5847,7 +5835,7 @@ func (m *Server) GetQuota(w http.ResponseWriter, r *http.Request) {
 // 		return
 // 	}
 
-// 	if body, err = ioutil.ReadAll(r.Body); err != nil {
+// 	if body, err = io.ReadAll(r.Body); err != nil {
 // 		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
 // 		return
 // 	}
@@ -6035,7 +6023,7 @@ func (m *Server) SetBucketLifecycle(w http.ResponseWriter, r *http.Request) {
 		bytes []byte
 		err   error
 	)
-	if bytes, err = ioutil.ReadAll(r.Body); err != nil {
+	if bytes, err = io.ReadAll(r.Body); err != nil {
 		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
 		return
 	}
