@@ -669,9 +669,9 @@ type PeerValidationContext struct {
 	// CACertificate holds a reference to the Secret containing the CA to be used to
 	// verify the upstream connection.
 	CACertificate *Secret
-	// SubjectName holds an optional subject name which Envoy will check against the
-	// certificate presented by the upstream.
-	SubjectName string
+	// SubjectNames holds optional subject names which Envoy will check against the
+	// certificate presented by the upstream. The first entry must match the value of SubjectName
+	SubjectNames []string
 	// SkipClientCertValidation when set to true will ensure Envoy requests but
 	// does not verify peer certificates.
 	SkipClientCertValidation bool
@@ -698,13 +698,14 @@ func (pvc *PeerValidationContext) GetCACertificate() []byte {
 	return pvc.CACertificate.Object.Data[CACertificateKey]
 }
 
-// GetSubjectName returns the SubjectName from PeerValidationContext.
-func (pvc *PeerValidationContext) GetSubjectName() string {
+// GetSubjectName returns the SubjectNames from PeerValidationContext.
+func (pvc *PeerValidationContext) GetSubjectNames() []string {
 	if pvc == nil {
 		// No validation required.
-		return ""
+		return nil
 	}
-	return pvc.SubjectName
+
+	return pvc.SubjectNames
 }
 
 // GetCRL returns the Certificate Revocation List.
@@ -966,6 +967,10 @@ type Service struct {
 	// MaxRetries is the maximum number of parallel retries that
 	// Envoy will allow to the upstream cluster.
 	MaxRetries uint32
+
+	// PerHostMaxConnections is the maximum number of connections
+	// that Envoy will allow to each individual host in a cluster.
+	PerHostMaxConnections uint32
 
 	// ExternalName is an optional field referencing a dns entry for Service type "ExternalName"
 	ExternalName string

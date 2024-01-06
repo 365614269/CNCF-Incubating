@@ -427,6 +427,7 @@ func TestClusterCircuitbreakerAnnotationsIngress(t *testing.T) {
 		Annotate("projectcontour.io/max-pending-requests", "4096").
 		Annotate("projectcontour.io/max-requests", "404").
 		Annotate("projectcontour.io/max-retries", "7").
+		Annotate("projectcontour.io/per-host-max-connections", "45").
 		WithPorts(v1.ServicePort{Port: 8080, TargetPort: intstr.FromString("8080")})
 
 	i1 := &networking_v1.Ingress{
@@ -459,6 +460,9 @@ func TestClusterCircuitbreakerAnnotationsIngress(t *testing.T) {
 						MaxPendingRequests: wrapperspb.UInt32(4096),
 						MaxRequests:        wrapperspb.UInt32(404),
 						MaxRetries:         wrapperspb.UInt32(7),
+					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{
+						MaxConnections: wrapperspb.UInt32(45),
 					}},
 				},
 			}),
@@ -493,6 +497,7 @@ func TestClusterCircuitbreakerAnnotationsIngress(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(15),
 						MaxRetries:         wrapperspb.UInt32(17),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
@@ -526,6 +531,7 @@ func TestClusterCircuitbreakerAnnotationsIngress(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(15),
 						MaxRetries:         wrapperspb.UInt32(17),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
@@ -591,6 +597,7 @@ func TestClusterCircuitbreakerAnnotationsHTTPProxy(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(404),
 						MaxRetries:         wrapperspb.UInt32(7),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
@@ -624,6 +631,7 @@ func TestClusterCircuitbreakerAnnotationsHTTPProxy(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(15),
 						MaxRetries:         wrapperspb.UInt32(17),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
@@ -657,6 +665,7 @@ func TestClusterCircuitbreakerAnnotationsHTTPProxy(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(15),
 						MaxRetries:         wrapperspb.UInt32(17),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
@@ -765,6 +774,7 @@ func TestClusterCircuitbreakerAnnotationsGateway(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(404),
 						MaxRetries:         wrapperspb.UInt32(7),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
@@ -798,6 +808,7 @@ func TestClusterCircuitbreakerAnnotationsGateway(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(15),
 						MaxRetries:         wrapperspb.UInt32(17),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
@@ -831,6 +842,7 @@ func TestClusterCircuitbreakerAnnotationsGateway(t *testing.T) {
 						MaxRequests:        wrapperspb.UInt32(15),
 						MaxRetries:         wrapperspb.UInt32(17),
 					}},
+					PerHostThresholds: []*envoy_cluster_v3.CircuitBreakers_Thresholds{{}},
 				},
 			}),
 		),
