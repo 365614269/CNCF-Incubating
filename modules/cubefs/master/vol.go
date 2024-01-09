@@ -494,9 +494,12 @@ func (vol *Vol) initMetaPartitions(c *Cluster, count int) (err error) {
 	return
 }
 
-func (vol *Vol) initDataPartitions(c *Cluster) (err error) {
+func (vol *Vol) initDataPartitions(c *Cluster, dpCount int) (err error) {
+	if dpCount == 0 {
+		dpCount = defaultInitDataPartitionCnt
+	}
 	// initialize k data partitionMap at a time
-	err = c.batchCreateDataPartition(vol, defaultInitDataPartitionCnt, true)
+	err = c.batchCreateDataPartition(vol, dpCount, true)
 	return
 }
 
@@ -1098,7 +1101,11 @@ func (vol *Vol) deleteDataPartition(c *Cluster, dp *DataPartition) {
 // If an volume is marked as deleted, then generate corresponding delete task (meta partition or data partition)
 // If all the meta partition and data partition of this volume have been deleted, then delete this volume.
 func (vol *Vol) checkStatus(c *Cluster) {
+	if !atomic.CompareAndSwapInt32(&vol.VersionMgr.checkStatus, 0, 1) {
+		return
+	}
 	defer func() {
+		atomic.StoreInt32(&vol.VersionMgr.checkStatus, 0)
 		if r := recover(); r != nil {
 			log.LogWarnf("checkStatus occurred panic,err[%v]", r)
 			WarnBySpecialKey(fmt.Sprintf("%v_%v_scheduling_job_panic", c.Name, ModuleName),
