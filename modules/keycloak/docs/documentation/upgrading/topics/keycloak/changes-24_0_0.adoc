@@ -8,7 +8,7 @@ The welcome theme was one of the more outdated themes in Keycloak. It was origin
 
 If you are still using PatternFly 3 in your own custom theme (not extending the built-in one), you can continue to use it, but PatternFly 3 support will be removed in a future release, so you should consider migrating to PatternFly 5 as soon as possible.
 
-== Automatic redirect the the Administration Console
+== Automatic redirect to the Administration Console
 
 If the Administration Console is enabled, the welcome page will automatically redirect to it if the administrative user already exists. This behavior can be modified by setting the `redirectToAdmin` in your `theme.properties` file. By default, the property is set to `false`, unless you are extending the built-in theme, in which case, the property is set to `true`.
 
@@ -143,6 +143,18 @@ and potentially introduce unexpected changes and behavior that should only affec
 
 If you have customizations to the `login-update-profile.ftl` template to customize how users update their profiles when authenticating through a broker, make sure to move your changes
 to the new template.
+
+= Sequential loading of offline sessions and remote sessions
+
+Starting with this release, the first member of a Keycloak cluster will load remote sessions sequentially instead of in parallel.
+If offline session preloading is enabled, those will be loaded sequentially as well.
+
+The previous code led to high resource-consumption across the cluster at startup and was challenging to analyze in production environments and could lead to complex failure scenarios if a node was restarted during loading.
+Therefore, it was changed to sequential session loading.
+
+For offline sessions, the default in this and previous versions of Keycloak is to load those sessions on demand, which scales better with a lot of offline sessions than the attempt to preload them in parallel. Setups that use this default setup are not affected by the change of the loading strategy for offline sessions.
+Setups that have offline session preloading enabled should migrate to a setup where offline-session preloading is disabled.
+
 
 = Infinispan metrics use labels for cache manager and cache names
 
