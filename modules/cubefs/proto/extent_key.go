@@ -55,7 +55,7 @@ type ExtentKey struct {
 	ExtentOffset uint64 // offset in extent like tiny extent offset large than 0,normal is 0
 	Size         uint32 // real size that inode used on the extent,it's size may be part of extent real size, such as tinyExt
 	CRC          uint32
-	//snapshot
+	// snapshot
 	SnapInfo *ExtSnapInfo
 }
 
@@ -239,11 +239,6 @@ func (k *ExtentKey) MarshalBinaryExt(data []byte) {
 
 // MarshalBinary marshals the binary format of the extent key.
 func (k *ExtentKey) MarshalBinary(v3 bool) ([]byte, error) {
-	extLen := ExtentLength
-	if v3 {
-		extLen += ExtentVerFieldSize
-	}
-
 	buf := bytes.NewBuffer(make([]byte, 0, ExtentLength))
 	if err := binary.Write(buf, binary.BigEndian, k.FileOffset); err != nil {
 		return nil, err
