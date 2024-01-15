@@ -1,5 +1,5 @@
 ---
-title: Autoscaling across clusters with resoruce metrics
+title: Autoscaling across clusters with resource metrics
 ---
 In Karmada, a FederatedHPA scales up/down the workload's replicas across multiple clusters, with the aim of automatically scaling the workload to match the demand.
 
@@ -90,10 +90,7 @@ We need to install `karmada-metrics-adapter` in Karmada control plane to provide
 hack/deploy-metrics-adapter.sh ${host_cluster_kubeconfig} ${host_cluster_context} ${karmada_apiserver_kubeconfig} ${karmada_apiserver_context_name}
 ```
 
-If you use the `hack/local-up-karmada.sh` script to deploy Karmada, you can run following command to deploy `karmada-metrics-adapter`:
-```sh
-hack/deploy-metrics-adapter.sh $HOME/.kube/karmada.config karmada-host $HOME/.kube/karmada.config karmada-apiserver
-```
+If you use the `hack/local-up-karmada.sh` script to deploy Karmada, `karmada-metrics-adapter` will be installed by default.
 
 ## Deploy workload in `member1` and `member2` cluster
 
