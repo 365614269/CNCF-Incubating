@@ -48,10 +48,11 @@ import java.nio.file.Paths;
 public class LoggingDistTest {
 
     @Test
-    @Launch({ "start-dev", "--log-level=debug" })
+    @Launch({ "start-dev", "--log-level=warn" })
     void testSetRootLevel(LaunchResult result) {
         CLIResult cliResult = (CLIResult) result;
-        assertTrue(cliResult.getOutput().contains("DEBUG [io.netty.util.internal"));
+        assertFalse(cliResult.getOutput().contains("INFO [io.quarkus]"));
+        assertFalse(cliResult.getOutput().contains("Listening on:"));
         cliResult.assertStartedDevMode();
     }
 
@@ -144,7 +145,7 @@ public class LoggingDistTest {
     void failUnknownHandlersInConfFile(KeycloakDistribution dist) {
         dist.copyOrReplaceFileFromClasspath("/logging/keycloak.conf", Paths.get("conf", "keycloak.conf"));
         CLIResult cliResult = dist.run("start-dev");
-        cliResult.assertError("Invalid value for option 'kc.log': foo,console. Expected values are: console, file, gelf.");
+        cliResult.assertError("Invalid value for option 'kc.log': foo. Expected values are: console, file, gelf.");
     }
 
     @Test
@@ -158,7 +159,7 @@ public class LoggingDistTest {
     @Launch({ "start-dev","--log=foo,bar" })
     void failUnknownHandlersInCliCommand(LaunchResult result) {
         CLIResult cliResult = (CLIResult) result;
-        cliResult.assertError("Invalid value for option '--log': foo,bar");
+        cliResult.assertError("Invalid value for option '--log': foo");
     }
 
     @Test
