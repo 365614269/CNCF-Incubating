@@ -59,7 +59,7 @@ jobs:
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       with:
         persist-credentials: false
-    - uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 # v3.3.2
+    - uses: actions/cache@e12d46a63a90f2fae62d114769bbf2a179198b5c # v3.3.3
       with:
         # * Module download cache
         # * Build cache (Linux)
@@ -84,7 +84,7 @@ jobs:
         export CONTOUR_E2E_IMAGE="ghcr.io/projectcontour/contour:$(git describe --tags)"
         make setup-kind-cluster run-gateway-conformance cleanup-kind
     - name: Upload gateway conformance report
-      uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392 # v4.0.0
+      uses: actions/upload-artifact@1eb3cb2b3e0f29609092a73eb033bb759a334595 # v4.1.0
       with:
         name: gateway-conformance-report
         path: gateway-conformance-report/projectcontour-contour-*.yaml
