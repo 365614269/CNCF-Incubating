@@ -1132,12 +1132,12 @@ files = [
 
 [[package]]
 name = "placebo"
-version = "0.9.0"
+version = "0.10.0"
 description = "Make boto3 calls that look real but have no effect"
 optional = false
 python-versions = "*"
 files = [
-    {file = "placebo-0.9.0.tar.gz", hash = "sha256:03157f8527bbc2965b71b88f4a139ef8038618b346787f20d63e3c5da541b047"},
+    {file = "placebo-0.10.0.tar.gz", hash = "sha256:390db04f3f3486790b583dc18cb0bc116f195f196d4e58195adb4bb543ebe0bd"},
 ]
 
 [[package]]
@@ -2125,4 +2125,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "18d7ebf0a6634a785f6fba09227ab5568f5a568bbe54e5fd10ccc51dc7ba19be"
+content-hash = "22443e4966d25990b4da411f6062c7d3de6942b164195eeb1af81773b8acabb1"

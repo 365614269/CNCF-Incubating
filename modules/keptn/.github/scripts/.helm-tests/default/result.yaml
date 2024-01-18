@@ -8956,6 +8956,12 @@ spec:
     - jsonPath: .spec.range.interval
       name: Interval
       type: string
+    - jsonPath: .spec.range.step
+      name: Step
+      type: string
+    - jsonPath: .spec.range.aggregation
+      name: Aggregation
+      type: string
     - jsonPath: .status.value
       name: Value
       type: string
@@ -9825,6 +9831,14 @@ rules:
   - secrets
   verbs:
   - get
+- apiGroups:
+  - lifecycle.keptn.sh
+  resources:
+  - keptnappcontexts
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - lifecycle.keptn.sh
   resources:
