@@ -166,7 +166,7 @@ var _ = Describe("[Serial][sig-operator]Operator", Serial, decorators.SigOperato
 		fetchVirtHandlerCommand                func() string
 	)
 
-	tests.DeprecatedBeforeAll(func() {
+	deprecatedBeforeAll(func() {
 		virtClient = kubevirt.Client()
 		config, err := kubecli.GetKubevirtClientConfig()
 		util2.PanicOnError(err)
@@ -2401,67 +2401,6 @@ spec:
 				vm = nil
 			}
 		})
-
-		It("[test_id:3153][QUARANTINE] Ensure infra can handle dynamically detecting DataVolume Support", decorators.Quarantine, func() {
-			if !libstorage.HasDataVolumeCRD() {
-				Skip("Can't test DataVolume support when DataVolume CRD isn't present")
-			}
-			// This tests starting infrastructure with and without the DataVolumes feature gate
-			var foundSC bool
-			vm, foundSC = tests.NewRandomVMWithDataVolume(cd.DataVolumeImportUrlForContainerDisk(cd.ContainerDiskAlpine), testsuite.GetTestNamespace(nil))
-			if !foundSC {
-				Skip("Skip test when Filesystem storage is not present")
-			}
-
-			running := false
-			vm.Spec.Running = &running
-
-			// Delete CDI object
-			By("Deleting CDI install")
-			Eventually(func() error {
-				cdi, err := virtClient.CdiClient().CdiV1beta1().CDIs().Get(context.Background(), originalCDI.Name, metav1.GetOptions{})
-				if err != nil && errors.IsNotFound(err) {
-					// cdi is deleted
-					return nil
-				} else if err != nil {
-					return err
-				}
-
-				if cdi.DeletionTimestamp == nil {
-					err := virtClient.CdiClient().CdiV1beta1().CDIs().Delete(context.Background(), originalCDI.Name, metav1.DeleteOptions{})
-					if err != nil {
-						return err
-					}
-				}
-
-				return fmt.Errorf("still waiting on cdi to delete")
-
-			}, 240*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-
-			// wait for virt-api and virt-controller to pick up the change that CDI no longer exists.
-			time.Sleep(30 * time.Second)
-
-			// Verify posting a VM with DataVolumeTemplate fails when DataVolumes
-			// feature gate is disabled
-			By("Expecting Error to Occur when posting VM with DataVolume")
-			_, err = virtClient.VirtualMachine(testsuite.GetTestNamespace(nil)).Create(context.Background(), vm)
-			Expect(err).To(HaveOccurred())
-
-			// Enable DataVolumes by reinstalling CDI
-			By("Enabling CDI install")
-			createCdi()
-
-			// wait for virt-api to pick up the change.
-			time.Sleep(30 * time.Second)
-
-			// Verify we can post a VM with DataVolumeTemplates successfully
-			By("Expecting Error to not occur when posting VM with DataVolume")
-			vm, err = virtClient.VirtualMachine(testsuite.GetTestNamespace(nil)).Create(context.Background(), vm)
-			Expect(err).ToNot(HaveOccurred())
-
-			By("Expecting VM to start successfully")
-			tests.StartVirtualMachine(vm)
-		})
 	})
 
 	Context("[rfe_id:2897][crit:medium][vendor:cnv-qe@redhat.com][level:component]With ServiceMonitor Disabled", func() {
@@ -3475,6 +3414,18 @@ func nodeSelectorExistInDeployment(virtClient kubecli.KubevirtClient, deployment
 		return false
 	}
 	return true
+}
+
+// Deprecated: deprecatedBeforeAll must not be used. Tests need to be self-contained to allow sane cleanup, accurate reporting and
+// parallel execution.
+func deprecatedBeforeAll(fn func()) {
+	first := true
+	BeforeEach(func() {
+		if first {
+			fn()
+			first = false
+		}
+	})
 }
 
 func usesSha(image string) bool {
