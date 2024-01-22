@@ -4448,7 +4448,7 @@ __metadata:
     "@testing-library/user-event": ^14.0.0
     "@types/react": ^16.13.1 || ^17.0.0
     "@types/swagger-ui-react": ^4.18.0
-    graphiql: 3.0.10
+    graphiql: 3.1.0
     graphql: ^16.0.0
     graphql-config: ^5.0.2
     graphql-ws: ^5.4.1
@@ -4622,7 +4622,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@backstage/plugin-auth-backend-module-microsoft-provider@workspace:plugins/auth-backend-module-microsoft-provider":
+"@backstage/plugin-auth-backend-module-microsoft-provider@workspace:^, @backstage/plugin-auth-backend-module-microsoft-provider@workspace:plugins/auth-backend-module-microsoft-provider":
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-auth-backend-module-microsoft-provider@workspace:plugins/auth-backend-module-microsoft-provider"
   dependencies:
@@ -4636,6 +4636,7 @@ __metadata:
     "@types/passport-microsoft": ^1.0.0
     express: ^4.18.2
     jose: ^4.6.0
+    lodash: ^4.17.21
     msw: ^1.0.0
     node-fetch: ^2.6.7
     passport: ^0.7.0
@@ -4670,6 +4671,30 @@ __metadata:
     "@backstage/errors": "workspace:^"
     "@backstage/plugin-auth-node": "workspace:^"
     jose: ^4.6.0
+  languageName: unknown
+  linkType: soft
+
+"@backstage/plugin-auth-backend-module-oidc-provider@workspace:^, @backstage/plugin-auth-backend-module-oidc-provider@workspace:plugins/auth-backend-module-oidc-provider":
+  version: 0.0.0-use.local
+  resolution: "@backstage/plugin-auth-backend-module-oidc-provider@workspace:plugins/auth-backend-module-oidc-provider"
+  dependencies:
+    "@backstage/backend-common": "workspace:^"
+    "@backstage/backend-defaults": "workspace:^"
+    "@backstage/backend-plugin-api": "workspace:^"
+    "@backstage/backend-test-utils": "workspace:^"
+    "@backstage/cli": "workspace:^"
+    "@backstage/config": "workspace:^"
+    "@backstage/plugin-auth-backend": "workspace:^"
+    "@backstage/plugin-auth-node": "workspace:^"
+    cookie-parser: ^1.4.6
+    express: ^4.18.2
+    express-promise-router: ^4.1.1
+    express-session: ^1.17.3
+    jose: ^4.14.6
+    msw: ^1.3.1
+    openid-client: ^5.5.0
+    passport: ^0.6.0
+    supertest: ^6.3.3
   languageName: unknown
   linkType: soft
 
@@ -4752,8 +4777,10 @@ __metadata:
     "@backstage/plugin-auth-backend-module-github-provider": "workspace:^"
     "@backstage/plugin-auth-backend-module-gitlab-provider": "workspace:^"
     "@backstage/plugin-auth-backend-module-google-provider": "workspace:^"
+    "@backstage/plugin-auth-backend-module-microsoft-provider": "workspace:^"
     "@backstage/plugin-auth-backend-module-oauth2-provider": "workspace:^"
     "@backstage/plugin-auth-backend-module-oauth2-proxy-provider": "workspace:^"
+    "@backstage/plugin-auth-backend-module-oidc-provider": "workspace:^"
     "@backstage/plugin-auth-backend-module-okta-provider": "workspace:^"
     "@backstage/plugin-auth-node": "workspace:^"
     "@backstage/plugin-catalog-node": "workspace:^"
@@ -4795,7 +4822,6 @@ __metadata:
     passport-auth0: ^1.4.3
     passport-bitbucket-oauth2: ^0.1.2
     passport-github2: ^0.1.12
-    passport-gitlab2: ^5.0.0
     passport-google-oauth20: ^2.0.0
     passport-microsoft: ^1.0.0
     passport-oauth2: ^1.6.1
@@ -6141,10 +6167,12 @@ __metadata:
   resolution: "@backstage/plugin-devtools@workspace:plugins/devtools"
   dependencies:
     "@backstage/cli": "workspace:^"
+    "@backstage/core-compat-api": "workspace:^"
     "@backstage/core-components": "workspace:^"
     "@backstage/core-plugin-api": "workspace:^"
     "@backstage/dev-utils": "workspace:^"
     "@backstage/errors": "workspace:^"
+    "@backstage/frontend-plugin-api": "workspace:^"
     "@backstage/plugin-devtools-common": "workspace:^"
     "@backstage/plugin-permission-react": "workspace:^"
     "@material-ui/core": ^4.9.13
@@ -14102,13 +14130,13 @@ __metadata:
   linkType: hard
 
 "@playwright/test@npm:^1.32.3":
-  version: 1.41.0
-  resolution: "@playwright/test@npm:1.41.0"
+  version: 1.41.1
+  resolution: "@playwright/test@npm:1.41.1"
   dependencies:
-    playwright: 1.41.0
+    playwright: 1.41.1
   bin:
     playwright: cli.js
-  checksum: 3a7039f8cd14dd242154255417c100a99c3254a3c1fd26df2a11be24c10b06ef77d2736336d7743dedc5e1a6a52748e58ced730b6048f8bd75d8867ce81661e0
+  checksum: d9877e777a1a7f60f097df57b6abc2478e2ae342930a409c8546c8aa40d6e206cbc16bf1c71b23414ac3fbad36dcae1ad79635d7f4eb705ab54d3c705e82ea04
   languageName: node
   linkType: hard
 
@@ -14828,10 +14856,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@remix-run/router@npm:1.13.1":
-  version: 1.13.1
-  resolution: "@remix-run/router@npm:1.13.1"
-  checksum: cebbf0a8cf31cafd818d8ce42d5b6a0bfdd0e1f81b9ffb7a88c5d7a9d2a81d1fdf098cc8610d34ef3d6cfe7bc778b2ca1fe336a740eb7a175d1234d017927f8a
+"@remix-run/router@npm:1.14.2":
+  version: 1.14.2
+  resolution: "@remix-run/router@npm:1.14.2"
+  checksum: 8be55596f64563de95dea04c147ab67c4e6c9b72277c92d4de257dbb326e2aa16ad2adbdec32eb2c985808c642933ac895220654b8c899e4f4bd38f9fd97ff6e
   languageName: node
   linkType: hard
 
@@ -17150,8 +17178,8 @@ __metadata:
   linkType: soft
 
 "@testing-library/dom@npm:^9.0.0":
-  version: 9.3.3
-  resolution: "@testing-library/dom@npm:9.3.3"
+  version: 9.3.4
+  resolution: "@testing-library/dom@npm:9.3.4"
   dependencies:
     "@babel/code-frame": ^7.10.4
     "@babel/runtime": ^7.12.5
@@ -17161,7 +17189,7 @@ __metadata:
     dom-accessibility-api: ^0.5.9
     lz-string: ^1.5.0
     pretty-format: ^27.0.2
-  checksum: 34e0a564da7beb92aa9cc44a9080221e2412b1a132eb37be3d513fe6c58027674868deb9f86195756d98d15ba969a30fe00632a4e26e25df2a5a4f6ac0686e37
+  checksum: dfd6fb0d6c7b4dd716ba3c47309bc9541b4a55772cb61758b4f396b3785efe2dbc75dc63423545c039078c7ffcc5e4b8c67c2db1b6af4799580466036f70026f
   languageName: node
   linkType: hard
 
@@ -18424,9 +18452,9 @@ __metadata:
   linkType: hard
 
 "@types/node@npm:^16.11.26, @types/node@npm:^16.7.10, @types/node@npm:^16.9.2":
-  version: 16.18.72
-  resolution: "@types/node@npm:16.18.72"
-  checksum: c0f1748b20566417d3b777d11962f84500b4cb9c77ebb59c51f2882c3e5141bd4636709dc63fe2e45d6d6799fc4c5a98931abcb2dd3a5b107e448d76ae848320
+  version: 16.18.74
+  resolution: "@types/node@npm:16.18.74"
+  checksum: 33d8f157b51cb2f6907a7019e0bef0733f6ebd025f208863e6e6ea4721348902f2c7ac9eeaadff9f1e138927921e620c7f0a655475a298569d7551f2d28e35f3
   languageName: node
   linkType: hard
 
@@ -23281,9 +23309,9 @@ __metadata:
   linkType: hard
 
 "core-js@npm:^3.26.0, core-js@npm:^3.6.5":
-  version: 3.35.0
-  resolution: "core-js@npm:3.35.0"
-  checksum: 25c224aca3df012b98f08f13ccbd8171ef5852acd33fd5e58e106d27f5f0c97de2fdbc520f0b4364d26253caf2deb3e5d265310f57d2a66ae6cc922850e649f0
+  version: 3.35.1
+  resolution: "core-js@npm:3.35.1"
+  checksum: e246af6b634be3763ffe3ce6ac4601b4dc5b928006fb6c95e5d08ecd82a2413bf36f00ffe178b89c9a8e94000288933a78a9881b2c9498e6cf312b031013b952
   languageName: node
   linkType: hard
 
@@ -28442,23 +28470,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphiql@npm:3.0.10":
-  version: 3.0.10
-  resolution: "graphiql@npm:3.0.10"
-  dependencies:
-    "@graphiql/react": ^0.20.2
-    "@graphiql/toolkit": ^0.9.1
-    graphql-language-service: ^5.2.0
-    markdown-it: ^12.2.0
-  peerDependencies:
-    graphql: ^15.5.0 || ^16.0.0
-    react: ^16.8.0 || ^17 || ^18
-    react-dom: ^16.8.0 || ^17 || ^18
-  checksum: f85b5e82cd2280325dedb28d42580119df46b6724a913a571b7a8183c2bf23d4832edf45570d6c8a0af18ba576f50c9b39219a8537277cba626f0411e6ed55bb
-  languageName: node
-  linkType: hard
-
-"graphiql@npm:^3.0.6":
+"graphiql@npm:3.1.0, graphiql@npm:^3.0.6":
   version: 3.1.0
   resolution: "graphiql@npm:3.1.0"
   dependencies:
@@ -31649,13 +31661,13 @@ __metadata:
   linkType: hard
 
 "json-schema-to-ts@npm:^2.6.2":
-  version: 2.9.2
-  resolution: "json-schema-to-ts@npm:2.9.2"
+  version: 2.12.0
+  resolution: "json-schema-to-ts@npm:2.12.0"
   dependencies:
     "@babel/runtime": ^7.18.3
     "@types/json-schema": ^7.0.9
-    ts-algebra: ^1.2.0
-  checksum: 64bf7226511a3719075d28e715fbd203576088b6ebcf494d6c5ee2bcf5b24d6081fa0cfce22ce254ad8798b7044603db4e4d19779c6f5765285fb9ddaa0756ef
+    ts-algebra: ^1.2.2
+  checksum: 6dc4bc836591d888beb20e8bf45dfa3b75df4a331f18675bd2e39a2262e105e0dc86012031fff0be408499a07ae8bc30f5a879c24696189b2c30a34edd5fa72f
   languageName: node
   linkType: hard
 
@@ -35697,7 +35709,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"openid-client@npm:^5.2.1, openid-client@npm:^5.3.0, openid-client@npm:^5.4.3":
+"openid-client@npm:^5.2.1, openid-client@npm:^5.3.0, openid-client@npm:^5.4.3, openid-client@npm:^5.5.0":
   version: 5.6.4
   resolution: "openid-client@npm:5.6.4"
   dependencies:
@@ -36346,6 +36358,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"passport@npm:^0.6.0":
+  version: 0.6.0
+  resolution: "passport@npm:0.6.0"
+  dependencies:
+    passport-strategy: 1.x.x
+    pause: 0.0.1
+    utils-merge: ^1.0.1
+  checksum: ef932ad671d50de34765c7a53cd1e058d8331a82a6df09265a9c6c1168911aee4a7b5215803d0101110ab7f317e096b4954ca7e18fb2c33b9929f0bd17dbe159
+  languageName: node
+  linkType: hard
+
 "passport@npm:^0.7.0":
   version: 0.7.0
   resolution: "passport@npm:0.7.0"
@@ -36851,27 +36874,27 @@ __metadata:
   languageName: node
   linkType: hard
 
-"playwright-core@npm:1.41.0":
-  version: 1.41.0
-  resolution: "playwright-core@npm:1.41.0"
+"playwright-core@npm:1.41.1":
+  version: 1.41.1
+  resolution: "playwright-core@npm:1.41.1"
   bin:
     playwright-core: cli.js
-  checksum: 14671265916a1fd0c71d94640de19c48bcce3f7dec35530f10e349e97030ea44ffa8ee518cbf811501e3ab2b74874aecf917e46bf40fea0570db1d4bea1fe7ac
+  checksum: c83446a560c6bd85f6f0cd586ff8c643b77e2005567386e12f85890936cc370673114b94cd883246018797cc1580e93b0296ade7d07275bb611b8962f5bb9693
   languageName: node
   linkType: hard
 
-"playwright@npm:1.41.0":
-  version: 1.41.0
-  resolution: "playwright@npm:1.41.0"
+"playwright@npm:1.41.1":
+  version: 1.41.1
+  resolution: "playwright@npm:1.41.1"
   dependencies:
     fsevents: 2.3.2
-    playwright-core: 1.41.0
+    playwright-core: 1.41.1
   dependenciesMeta:
     fsevents:
       optional: true
   bin:
     playwright: cli.js
-  checksum: e7c32136911c58e06b964fe7d33f8b3d8f6a067ae5218662a0811dd6c90e007db1774eb7e161f4aa748d760f404f4c066b7b7303c2b617f7448b6ee4b86c9999
+  checksum: 3da7fb929abdec6adbdd8829f840580f5f210713214a8d230b130127f2270403eb2113c6c1418012221149707250fff896794c7c22c260dd09a92bf800227f31
   languageName: node
   linkType: hard
 
@@ -38606,15 +38629,15 @@ __metadata:
   linkType: hard
 
 "react-router-dom@npm:^6.3.0":
-  version: 6.20.1
-  resolution: "react-router-dom@npm:6.20.1"
+  version: 6.21.3
+  resolution: "react-router-dom@npm:6.21.3"
   dependencies:
-    "@remix-run/router": 1.13.1
-    react-router: 6.20.1
+    "@remix-run/router": 1.14.2
+    react-router: 6.21.3
   peerDependencies:
     react: ">=16.8"
     react-dom: ">=16.8"
-  checksum: 137b12fd3c3fd2a9469367946353c8ccd4e31473c6ec650eeb2d9e9f256f64b031fafaecb2ae4dc47bbab817c8d089b1f07a0db74699df7d874850e511cd5380
+  checksum: bcf668aa1428ca3048d7675f1ae3fe983c8792357a0ed59a1414cb1d682227727aad7c44c4222c6774b8d01bf352478845f7f3f668ebfcaa177208ef64e10bdc
   languageName: node
   linkType: hard
 
@@ -38629,14 +38652,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-router@npm:6.20.1, react-router@npm:^6.3.0":
-  version: 6.20.1
-  resolution: "react-router@npm:6.20.1"
+"react-router@npm:6.21.3, react-router@npm:^6.3.0":
+  version: 6.21.3
+  resolution: "react-router@npm:6.21.3"
   dependencies:
-    "@remix-run/router": 1.13.1
+    "@remix-run/router": 1.14.2
   peerDependencies:
     react: ">=16.8"
-  checksum: 046efa4b101c64de823f0c838948a50ad53f3ccdd7887604d93c1ccf19c4e797935cab602aa001d793544445412ebeb95c2c7f880e3e86ca447772db574789d7
+  checksum: 7e6297d5b67ae07d2e8564e036dbb15ebd706b41c22238940f47eee9b21ffb76d41336803c3b33435f1ebe210226577e32df3838bcbf2cd7c813fa357c0a4fac
   languageName: node
   linkType: hard
 
@@ -42512,10 +42535,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ts-algebra@npm:^1.2.0":
-  version: 1.2.0
-  resolution: "ts-algebra@npm:1.2.0"
-  checksum: 471d3a049dbceadf2355f980e4d0a4cba413b50e66f0c8fb5eece876c238f7d2a270e1c85aa9ebd04349ae70335715f8e6d87338fd8cf755d12e285e884b3d91
+"ts-algebra@npm:^1.2.2":
+  version: 1.2.2
+  resolution: "ts-algebra@npm:1.2.2"
+  checksum: eea0c08fba10c4a758086079c575a32c4c050f50087e06fcc1ccd53b045bdf7bdb0ab9597a52a241a714f058ff047cedbddcb1539de5e66bb424aa5b33c677a1
   languageName: node
   linkType: hard
 
