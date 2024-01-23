@@ -332,8 +332,31 @@ func newDataPartition(dpCfg *dataPartitionCfg, disk *Disk, isCreate bool) (dp *D
 	dp = partition
 	go partition.statusUpdateScheduler()
 	go partition.startEvict()
+	if emsg := dp.getVerListFromMaster(); emsg != nil {
+		log.LogWarnf("action[newDataPartition] vol %v dp %v loadFromMaster verList failed err %v", dp.volumeID, dp.partitionID, emsg)
+	}
 	log.LogInfof("action[newDataPartition] dp %v replica num %v CreateType %v create success",
 		dp.partitionID, dpCfg.ReplicaNum, dp.DataPartitionCreateType)
+	return
+}
+
+func (dp *DataPartition) getVerListFromMaster() (err error) {
+	var verList *proto.VolVersionInfoList
+	verList, err = MasterClient.AdminAPI().GetVerList(dp.volumeID)
+	if err != nil {
+		log.LogErrorf("action[onStart] GetVerList err[%v]", err)
+		return
+	}
+
+	for _, info := range verList.VerList {
+		if info.Status != proto.VersionNormal {
+			continue
+		}
+		dp.volVersionInfoList.VerList = append(dp.volVersionInfoList.VerList, info)
+	}
+
+	log.LogDebugf("action[onStart] dp %v verList %v", dp.partitionID, dp.volVersionInfoList.VerList)
+	dp.verSeq = dp.volVersionInfoList.GetLastVer()
 	return
 }
 
@@ -352,17 +375,6 @@ func (dp *DataPartition) replicasInit() {
 			dp.isLeader = true
 		}
 	}
-}
-
-func (dp *DataPartition) UpdateVersion(verSeq uint64) (err error) {
-	log.LogInfof("action[UpdateVersion] dp [%v] update seq from [%v] to [%v]", dp.partitionID, dp.verSeq, verSeq)
-	if verSeq < dp.verSeq {
-		err = fmt.Errorf("error.seq [%v] less than exist [%v]", verSeq, dp.verSeq)
-		log.LogErrorf("action[UpdateVersion] %v", err)
-		return
-	}
-	dp.verSeq = verSeq
-	return
 }
 
 func (dp *DataPartition) GetExtentCount() int {

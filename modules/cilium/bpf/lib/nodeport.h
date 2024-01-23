@@ -778,7 +778,6 @@ nodeport_dsr_ingress_ipv6(struct __ctx_buff *ctx, struct ipv6_ct_tuple *tuple,
 			  __s8 *ext_err)
 {
 	struct ct_state ct_state_new = {};
-	struct ct_state ct_state = {};
 	__u32 monitor = 0;
 	int ret;
 
@@ -787,7 +786,7 @@ nodeport_dsr_ingress_ipv6(struct __ctx_buff *ctx, struct ipv6_ct_tuple *tuple,
 
 	ret = ct_lazy_lookup6(get_ct_map6(tuple), tuple, ctx, l4_off,
 			      CT_EGRESS, SCOPE_FORWARD, CT_ENTRY_DSR,
-			      &ct_state, &monitor);
+			      NULL, &monitor);
 	switch (ret) {
 	case CT_NEW:
 	case CT_REOPENED:
@@ -797,8 +796,11 @@ create_ct:
 
 		ct_state_new.src_sec_id = WORLD_IPV6_ID;
 		ct_state_new.dsr = 1;
+		ct_state_new.proxy_redirect = false;
+		ct_state_new.from_l7lb = false;
+
 		ret = ct_create6(get_ct_map6(tuple), NULL, tuple, ctx,
-				 CT_EGRESS, &ct_state_new, false, false, ext_err);
+				 CT_EGRESS, &ct_state_new, ext_err);
 		if (!IS_ERR(ret))
 			ret = snat_v6_create_dsr(tuple, addr, port, ext_err);
 
@@ -1405,8 +1407,11 @@ redo:
 #ifndef HAVE_FIB_IFINDEX
 			ct_state_new.ifindex = (__u16)NATIVE_DEV_IFINDEX;
 #endif
+			ct_state_new.proxy_redirect = false;
+			ct_state_new.from_l7lb = false;
+
 			ret = ct_create6(get_ct_map6(&tuple), NULL, &tuple, ctx,
-					 CT_EGRESS, &ct_state_new, false, false, ext_err);
+					 CT_EGRESS, &ct_state_new, ext_err);
 			if (IS_ERR(ret))
 				return ret;
 			break;
@@ -1471,7 +1476,6 @@ nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
 	struct bpf_fib_lookup_padded fib_params __maybe_unused = {};
 	struct lb6_reverse_nat *nat_info;
 	struct ipv6_ct_tuple tuple = {};
-	struct ct_state ct_state = {};
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
 	int ret, l4_off;
@@ -1505,7 +1509,7 @@ nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
 
 	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, CT_INGRESS,
 			      SCOPE_REVERSE, CT_ENTRY_NODEPORT | CT_ENTRY_DSR,
-			      &ct_state, &trace->monitor);
+			      NULL, &trace->monitor);
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
 
@@ -2292,7 +2296,6 @@ nodeport_dsr_ingress_ipv4(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
 			  __be32 addr, __be16 port, __s8 *ext_err)
 {
 	struct ct_state ct_state_new = {};
-	struct ct_state ct_state = {};
 	__u32 monitor = 0;
 	int ret;
 
@@ -2301,7 +2304,7 @@ nodeport_dsr_ingress_ipv4(struct __ctx_buff *ctx, struct ipv4_ct_tuple *tuple,
 
 	ret = ct_lazy_lookup4(get_ct_map4(tuple), tuple, ctx, ipv4_is_fragment(ip4),
 			      l4_off, has_l4_header, CT_EGRESS, SCOPE_FORWARD,
-			      CT_ENTRY_DSR, &ct_state, &monitor);
+			      CT_ENTRY_DSR, NULL, &monitor);
 	switch (ret) {
 	case CT_NEW:
 	/* Maybe we can be a bit more selective about CT_REOPENED?
@@ -2318,8 +2321,11 @@ create_ct:
 
 		ct_state_new.src_sec_id = WORLD_IPV4_ID;
 		ct_state_new.dsr = 1;
+		ct_state_new.proxy_redirect = 0;
+		ct_state_new.from_l7lb = 0;
+
 		ret = ct_create4(get_ct_map4(tuple), NULL, tuple, ctx,
-				 CT_EGRESS, &ct_state_new, false, false, ext_err);
+				 CT_EGRESS, &ct_state_new, ext_err);
 		if (!IS_ERR(ret))
 			ret = snat_v4_create_dsr(tuple, addr, port, ext_err);
 
@@ -2927,8 +2933,11 @@ redo:
 #ifndef HAVE_FIB_IFINDEX
 			ct_state_new.ifindex = (__u16)NATIVE_DEV_IFINDEX;
 #endif
+			ct_state_new.proxy_redirect = false;
+			ct_state_new.from_l7lb = false;
+
 			ret = ct_create4(get_ct_map4(&tuple), NULL, &tuple, ctx,
-					 CT_EGRESS, &ct_state_new, false, false, ext_err);
+					 CT_EGRESS, &ct_state_new, ext_err);
 			if (IS_ERR(ret))
 				return ret;
 			break;

@@ -2526,7 +2526,8 @@ func (m *metadataManager) updatePackRspSeq(mp MetaPartition, p *Packet) {
 		log.LogDebugf("action[checkmultiSnap.multiVersionstatus] mp ver %v, packet ver %v", mp.GetVerSeq(), p.VerSeq)
 		p.VerSeq = mp.GetVerSeq() // used to response to client and try update verSeq of client
 		p.ExtentType |= proto.VersionListFlag
-		p.VerList = mp.GetVerList()
+		p.VerList = make([]*proto.VolVersionInfo, len(mp.GetVerList()))
+		copy(p.VerList, mp.GetVerList())
 	}
 	return
 }
@@ -2544,7 +2545,8 @@ func (m *metadataManager) checkMultiVersionStatus(mp MetaPartition, p *Packet) (
 			log.LogDebugf("action[checkmultiSnap.multiVersionstatus] mp ver %v, packet ver %v", mp.GetVerSeq(), p.VerSeq)
 			p.VerSeq = mp.GetVerSeq() // used to response to client and try update verSeq of client
 			p.ExtentType |= proto.VersionListFlag
-			p.VerList = mp.GetVerList()
+			p.VerList = make([]*proto.VolVersionInfo, len(mp.GetVerList()))
+			copy(p.VerList, mp.GetVerList())
 		}
 		return
 	}
