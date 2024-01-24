@@ -1,4 +1,4 @@
 ---
 title: Deploy
-weight: 2
+weight: 1
 ---
