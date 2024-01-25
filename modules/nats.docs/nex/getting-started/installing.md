@@ -2,7 +2,7 @@
 All of the functionality you need for Nex is conveniently wrapped up in a single command line tool. To install it, all you need to do is use the following `go` command (A more formal release image will be added soon).
 
 ```
-go install github.com/ConnectEverything/nex/nex@latest
+go install github.com/synadia-io/nex/nex@latest
 ```
 
 {% hint style="info" %}
@@ -15,7 +15,7 @@ Once you've installed it, you should be able to check the CLI version with `nex 
 Starting a Nex node involves the use of the Linux kernel, the `firecracker` binary, a few CNI configuration files, an `ext4` root file system, and machine configuration. That's a lot to keep track of, so Nex has conveniently provided a _preflight check_. Before you can run a preflight check, however, you need to create a node configuration file.
 
 ### Creating a Node Configuration
-The easiest way to create a node configuration file is to copy one from the Nex examples folder, such as the [simple.json](https://github.com/ConnectEverything/nex/blob/main/examples/nodeconfigs/simple.json) file, which contains the following JSON:
+The easiest way to create a node configuration file is to copy one from the Nex examples folder, such as the [simple.json](https://github.com/synadia-io/nex/blob/main/examples/nodeconfigs/simple.json) file, which contains the following JSON:
 
 ```json
 {

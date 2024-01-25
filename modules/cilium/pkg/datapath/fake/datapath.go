@@ -144,6 +144,10 @@ func (f *fakeLoader) ReloadDatapath(ctx context.Context, ep datapath.Endpoint, s
 	panic("implement me")
 }
 
+func (f *fakeLoader) ReinitializeXDP(ctx context.Context, o datapath.BaseProgramOwner, extraCArgs []string) error {
+	panic("implement me")
+}
+
 func (f *fakeLoader) EndpointHash(cfg datapath.EndpointConfiguration) (string, error) {
 	panic("implement me")
 }
@@ -166,4 +170,12 @@ func (f *fakeLoader) Reinitialize(ctx context.Context, o datapath.BaseProgramOwn
 
 func (f *fakeLoader) HostDatapathInitialized() <-chan struct{} {
 	return nil
+}
+
+func (f *fakeLoader) RestoreTemplates(stateDir string) error {
+	return nil
+}
+
+func (f *fakeLoader) DeviceHasTCProgramLoaded(hostInterface string, checkEgress bool) (bool, error) {
+	return false, nil
 }
