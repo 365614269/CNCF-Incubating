@@ -1,3 +1,6 @@
+---
+exclude_search: true
+---
 |  ശീർഷകം  | വെയ്റ്റ് |
 | :------: | :---: |
 | gRPC API |   7   |
@@ -49,7 +52,7 @@ grpc:
 # gRPC server using an unix socket
 grpc:
   enabled: true
-  bind_address: "unix:///var/run/falco.sock"
+  bind_address: "unix:///run/falco/falco.sock"
   threadiness: 8
 ```
 

@@ -15,6 +15,8 @@ Let's go step by step:
 
 - [Setting up the environment](#setting-up-the-environment)
   - [Creating a VM](#creating-a-vm)
+  - [Creating an Emulated `x86_64` VM](#creating-an-emulated-x86_64-vm)
+  - [Lima Tips](#lima-tips)
 - [Installing Falco](#installing-falco)
   - [Installing the Falco driver](#installing-the-falco-driver)
 - [Running Falco](#running-falco)
@@ -45,7 +47,7 @@ $ brew install lima
 
 #### Creating a VM
 
-Lima has different templates already available to choose from:
+Lima has different [templates](https://lima-vm.io/docs/templates/) already available to choose from:
 
 ```shell
 $ limactl start --list-templates
@@ -98,9 +100,9 @@ After a few seconds, you have a Fedora VM already available! Let's connect into 
 $ limactl shell falco-fedora
 
 $ uname -a
-Linux lima-falco-fedora 5.17.5-300.fc36.aarch64 #1 SMP Thu Apr 28 15:22:08 UTC 2022 aarch64 aarch64 aarch64 GNU/Linux
+Linux lima-falco-fedora 6.5.6-300.fc39.aarch64 #1 SMP PREEMPT_DYNAMIC Fri Oct  6 19:36:57 UTC 2023 aarch64 GNU/Linux
 $ cat /etc/fedora-release
-Fedora release 36 (Thirty Six)
+Fedora release 39 (Thirty Nine)
 ```
 
 Before moving forward, let's update the packages to the most recent versions and reboot the VM to use the latest kernel available:
@@ -112,6 +114,33 @@ $ sudo bash -c "dnf clean all && \
 ```
 
 After a few minutes, the VM is updated and rebooted. Now it is time to install Falco!
+
+#### Creating an Emulated `x86_64` VM
+
+Would you like to test in an emulated `x86_64` VM? Let's set up the same Fedora VM for the `x86_64` architecture.
+
+```shell
+$ limactl start --vm-type=qemu --arch=x86_64 --name=falco-fedora-x86_64 template://fedora
+```
+
+Drop into the VM interactively:
+
+```shell
+$ limactl shell falco-fedora-x86_64
+
+$ uname -a
+Linux lima-falco-fedora-x8664 6.5.6-300.fc39.x86_64 #1 SMP PREEMPT_DYNAMIC Fri Oct  6 19:57:21 UTC 2023 x86_64 GNU/Linux
+$ cat /etc/fedora-release
+Fedora release 39 (Thirty Nine)
+```
+
+__NOTE__ : You can always install your own custom kernel and reboot the VM into that new kernel.
+
+#### Lima Tips
+
+- Checkout the [Advanced Configuration](https://lima-vm.io/docs/examples/#advanced-configuration). For example, using additional flags such as `--memory 8 --cpus 8 --mount-type "reverse-sshfs" --mount-writable` when starting the VM allows for easy testing of your custom rules since your cwd from your macOS host is automatically mounted.
+- After rebooting the VM, we observed that mounts may not work anymore. However, leveraging [limactl edit](https://lima-vm.io/docs/reference/limactl_edit/) can fix it.
+- If you encounter issues, you can force stop and delete the VM, and then rebuild it. For instance, you can use the following commands: `limactl stop -f falco-fedora-x86_64 || true; limactl delete falco-fedora-x86_64 || true;`.
 
 ### Installing Falco
 
