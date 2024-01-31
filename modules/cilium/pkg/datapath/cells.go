@@ -26,14 +26,12 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/maps"
 	"github.com/cilium/cilium/pkg/maps/eventsmap"
 	"github.com/cilium/cilium/pkg/maps/nodemap"
 	monitorAgent "github.com/cilium/cilium/pkg/monitor/agent"
 	"github.com/cilium/cilium/pkg/mtu"
-	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	wg "github.com/cilium/cilium/pkg/wireguard/agent"
 	wgTypes "github.com/cilium/cilium/pkg/wireguard/types"
@@ -128,7 +126,7 @@ var Cell = cell.Module(
 	loader.Cell,
 )
 
-func newWireguardAgent(lc hive.Lifecycle, localNodeStore *node.LocalNodeStore) *wg.Agent {
+func newWireguardAgent(lc cell.Lifecycle) *wg.Agent {
 	var wgAgent *wg.Agent
 	if option.Config.EnableWireguard {
 		if option.Config.EnableIPSec {
@@ -138,13 +136,13 @@ func newWireguardAgent(lc hive.Lifecycle, localNodeStore *node.LocalNodeStore) *
 
 		var err error
 		privateKeyPath := filepath.Join(option.Config.StateDir, wgTypes.PrivKeyFilename)
-		wgAgent, err = wg.NewAgent(privateKeyPath, localNodeStore)
+		wgAgent, err = wg.NewAgent(privateKeyPath)
 		if err != nil {
 			log.Fatalf("failed to initialize WireGuard: %s", err)
 		}
 
-		lc.Append(hive.Hook{
-			OnStop: func(hive.HookContext) error {
+		lc.Append(cell.Hook{
+			OnStop: func(cell.HookContext) error {
 				wgAgent.Close()
 				return nil
 			},
@@ -173,8 +171,8 @@ func newDatapath(params datapathParams) types.Datapath {
 		Loader:         params.Loader,
 	}, datapathConfig)
 
-	params.LC.Append(hive.Hook{
-		OnStart: func(hive.HookContext) error {
+	params.LC.Append(cell.Hook{
+		OnStart: func(cell.HookContext) error {
 			datapath.NodeIDs().RestoreNodeIDs()
 			return nil
 		},
@@ -186,7 +184,7 @@ func newDatapath(params datapathParams) types.Datapath {
 type datapathParams struct {
 	cell.In
 
-	LC      hive.Lifecycle
+	LC      cell.Lifecycle
 	WgAgent *wg.Agent
 
 	// Force map initialisation before loader. You should not use these otherwise.

@@ -27,6 +27,7 @@ cilium-operator-azure hive [flags]
       --enable-k8s                                           Enable the k8s clientset (default true)
       --enable-k8s-api-discovery                             Enable discovery of Kubernetes API groups and resources with the discovery API
       --enable-k8s-endpoint-slice                            Enables k8s EndpointSlice feature in Cilium if the k8s cluster supports it (default true)
+      --enable-node-ipam                                     Enable Node IPAM
       --enforce-ingress-https                                Enforces https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header. (default true)
       --gateway-api-secrets-namespace string                 Namespace having tls secrets used by CEC for Gateway API (default "cilium-secrets")
       --gops-port uint16                                     Port for gops server to listen on (default 9891)
@@ -38,7 +39,7 @@ cilium-operator-azure hive [flags]
       --ingress-default-lb-mode string                       Default loadbalancer mode for Ingress. Applicable values: dedicated, shared (default "dedicated")
       --ingress-default-secret-name string                   Default secret name for Ingress.
       --ingress-default-secret-namespace string              Default secret namespace for Ingress.
-      --ingress-lb-annotation-prefixes strings               Annotations and labels which are needed to propagate from Ingress to the Load Balancer. (default [service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
+      --ingress-lb-annotation-prefixes strings               Annotations and labels which are needed to propagate from Ingress to the Load Balancer. (default [lbipam.cilium.io,service.beta.kubernetes.io,service.kubernetes.io,cloud.google.com])
       --ingress-secrets-namespace string                     Namespace having tls secrets used by Ingress and CEC. (default "cilium-secrets")
       --ingress-shared-lb-service-name string                Name of shared LB service name for Ingress. (default "cilium-ingress")
       --k8s-api-server string                                Kubernetes API server URL

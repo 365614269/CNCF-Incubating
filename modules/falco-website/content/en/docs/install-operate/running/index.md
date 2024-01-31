@@ -16,7 +16,7 @@ Let's imagine we want to start the `falco-bpf.service`.
 
 2. Now you have to decide whether you want the Falcoctl service running together with the Falco one. If yes you don't have to do anything, else you will need to mask the Falcoctl service with `systemctl mask falcoctl-artifact-follow.service`. As pointed out [in this section](/docs/getting-started/installation/#rule-update) the Falcoctl service is strictly related to the Falco one so if you don't mask it, it will be started together with the Falco service.
 
-3. Type `falco-driver-loader bpf` to download/compile the BPF probe.
+3. Type `falcoctl driver config --type ebpf` to configure Falco to use eBPF driver, then `falcoctl driver install` to download/compile the eBPF probe.
 
 4. Now running `systemctl start falco-bpf.service` and typing `systemctl list-units | grep falco` you should see something like that (supposing you didn't mask the Falcoctl service):
 
@@ -41,12 +41,12 @@ Here you can find some examples of how to run Falco after having [installed](/do
 
 
 ```bash
-# Kernel module (default driver)
+# Default driver as set in the Falco config file
 falco
-# eBPF probe
-FALCO_BPF_PROBE="" falco
-# modern eBPF probe
-falco --modern-bpf
+# Force eBPF probe
+falco -o engine.kind=ebpf
+# Force modern eBPF probe
+falco -o engine.kind=modern_ebpf
 # For more info see all available options
 falco --help
 ```
@@ -104,7 +104,7 @@ Once the kernel module has been installed directly on the host system, it can be
         falcosecurity/falco-driver-loader:latest
     ```
 
-The `falcosecurity/falco-driver-loader` image just wraps the `falco-driver-loader` script.
+The `falcosecurity/falco-driver-loader` image just wraps the `falcoctl driver` tool.
 You can find more about its usage [here](/docs/getting-started/installation#install-driver)
 
 2. Run Falco in a container using Docker with the [principle of least privilege](https://en.wikipedia.org/wiki/Principle_of_least_privilege):
@@ -153,7 +153,7 @@ To run Falco in least privileged mode with the eBPF driver, we list all the requ
         -v /lib/modules:/host/lib/modules:ro \
         -v /usr:/host/usr:ro \
         -v /etc:/host/etc:ro \
-        falcosecurity/falco-driver-loader:latest bpf
+        falcosecurity/falco-driver-loader:latest ebpf
     ```
 
 2. Then, run Falco
@@ -166,11 +166,10 @@ To run Falco in least privileged mode with the eBPF driver, we list all the requ
         --cap-add sys_resource \
         --cap-add sys_ptrace \
         -v /var/run/docker.sock:/host/var/run/docker.sock \
-        -e FALCO_BPF_PROBE="" \
         -v /root/.falco:/root/.falco \
         -v /etc:/host/etc \
         -v /proc:/host/proc:ro \
-        falcosecurity/falco-no-driver:latest
+        falcosecurity/falco-no-driver:latest -o engine.kind=ebpf
 
 	# Please remember to add '-v /sys/kernel/debug:/sys/kernel/debug:ro \' to the above docker command
 	# if you are running a kernel version < 4.14
@@ -208,14 +207,13 @@ Alternatively, you can use the eBPF probe driver:
 docker pull falcosecurity/falco:latest
 docker run --rm -i -t \
     --privileged \
-    -e FALCO_BPF_PROBE="" \
     -v /var/run/docker.sock:/host/var/run/docker.sock \
     -v /proc:/host/proc:ro \
     -v /boot:/host/boot:ro \
     -v /lib/modules:/host/lib/modules:ro \
     -v /usr:/host/usr:ro \
     -v /etc:/host/etc:ro \
-    falcosecurity/falco:latest
+    falcosecurity/falco:latest -o engine.kind=ebpf
 
 # Please remember to add '-v /sys/kernel/debug:/sys/kernel/debug:ro \' to the above docker command
 # if you are running a kernel version < 4.14
@@ -238,7 +236,7 @@ docker run --rm -i -t \
     falcosecurity/falco-driver-loader:latest
 ```
 
-Once this has been done, or if you have installed the driver on the host permanently via the `falco-driver-loader` script instead of the Docker image, then you can simply load up the `falco-no-driver` image in privileged mode:
+Once this has been done, or if you have installed the driver on the host permanently via the `falcoctl driver` tool instead of the Docker image, then you can simply load up the `falco-no-driver` image in privileged mode:
 
 ```shell
 docker pull falcosecurity/falco-no-driver:latest
@@ -253,19 +251,21 @@ docker run --rm -i -t \
 To use `falco-no-driver` and `falco-driver-loader` with the eBPF probe you have to remove the `-v /dev:/host/dev` (which is only required by the Kernel Module) and add:
 
 ```shell
-    -e FALCO_BPF_PROBE="" -v /root/.falco:/root/.falco \
+    -v /root/.falco:/root/.falco \
 ```
+
+Plus, adding `-o engine.kind=ebpf` as Falco command line option.
 
 Other configurable options:
 
-- `DRIVER_REPO` - See the [Installing the driver](https://falco.org/docs/getting-started/installation/#install-driver) section.
-- `SKIP_DRIVER_LOADER` - Set this environment variable to avoid running `falco-driver-loader` when the `falcosecurity/falco` image starts. Useful when the driver has been already installed on the host by other means.
+- `FALCOCTL_DRIVER_REPOS` - See the [Installing the driver](https://falco.org/docs/getting-started/installation/#install-driver) section.
+- `SKIP_DRIVER_LOADER` - Set this environment variable to avoid running `falcoctl driver` tool when the `falcosecurity/falco` image starts. Useful when the driver has been already installed on the host by other means.
 
 ### Modern eBPF
 
 #### Privileged
 
-The modern BPF is shipped into Falco so the `falco-no-driver` image is enough. This allows you to run Falco without dependencies, just the following command:
+The modern eBPF is bundled into Falco therefore the `falco-no-driver` image is enough. This allows you to run Falco without dependencies, just the following command:
 
 ```bash
 docker run --rm -i -t \
@@ -273,7 +273,7 @@ docker run --rm -i -t \
            -v /var/run/docker.sock:/host/var/run/docker.sock \
            -v /proc:/host/proc:ro \
            -v /etc:/host/etc:ro \
-           falcosecurity/falco-no-driver:latest falco --modern-bpf
+           falcosecurity/falco-no-driver:latest falco -o engine.kind=modern_ebpf
 ```
 
 #### Least privileged
@@ -296,7 +296,7 @@ docker run --rm -i -t \
            -v /var/run/docker.sock:/host/var/run/docker.sock \
            -v /proc:/host/proc:ro \
            -v /etc:/host/etc:ro \
-           falcosecurity/falco-no-driver:latest falco --modern-bpf
+           falcosecurity/falco-no-driver:latest falco -o engine.kind=modern_ebpf
 ```
 
 > __Note__: in the command we use `CAP_SYS_ADMIN` because [docker doesn't support](https://github.com/moby/moby/pull/41563) `CAP_BPF` and `CAP_PERFMON` yet
