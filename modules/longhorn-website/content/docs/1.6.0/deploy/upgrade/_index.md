@@ -9,13 +9,20 @@ Here we cover how to upgrade to the latest Longhorn from all previous releases.
 
 There are no deprecated or incompatible changes introduced in v{{< current-version >}}.
 
-# Upgrade Path Enforcement
+# Upgrade Path Enforcement and Downgrade Prevention  
 
-Since Longhorn v1.5.0, Longhorn only allows upgrades from supported versions. If upgrading from any unsupported version, the upgrade will fail. However, users can revert to the previous state without any service interruption or downtime.
+Starting with v1.5.0, Longhorn only allows upgrades from supported versions. When you attempt to upgrade from an unsupported version, the operation automatically fails but you can revert to the previously installed version without any service interruption or downtime.  
 
-In addition, Longhorn disallows downgrading to any previous version to prevent unexpected system statuses caused by potential function incompatibility, deprecation, or removal. Please refer to the following matrix to understand the supported upgrade versions and there is an example for each upgrade path:
+Moreover, Longhorn does not support downgrades to earlier versions. This restriction helps prevent unexpected system behavior and issues associated with function incompatibility, deprecation, or removal.  
 
-  |  Current version |  Upgrading version |  Allow | Example |
+> **Warning**:
+> - Once you successfully upgrade to v1.6.0, you will not be allowed to revert to the previously installed version. 
+> - The Downgrade Prevention feature was introduced in v1.5.0 so Longhorn is unable to prevent downgrade attempts in older versions.
+However, downgrading is completely unsupported and is therefore not recommended.
+
+The following table outlines the supported upgrade paths.
+
+  |  Current version |  Target version |  Supported | Example |
   |    :-:      |    :-:      |   :-:  |    :-:    |
   |  x.y.*      |  x.(y+1).*  |   ✓    |  v1.4.2  to  v1.5.1  |
   |  x.y.*      |  x.y.(*+n)  |   ✓    |  v1.5.0  to  v1.5.1  |
@@ -25,10 +32,7 @@ In addition, Longhorn disallows downgrading to any previous version to prevent u
   |  x.y.*      |  x.(y-1).*  |   X    |  v1.6.0  to  v1.5.1  |
   |  x.y.*      |  x.y.(*-1)  |   X    |  v1.5.1  to  v1.5.0  |
 
-[^lastMinorVersion]: Longhorn only allows upgrades from any patch version of the last minor release before the new major version. (For example, v1.30.* is allowed to upgrade to v2.0.*, given that v1.30 is the last minor release branch before 2.0.)
-
-> **Warning**:
-> * Upgrade path enforcement is introduced in Longhorn v1.5.0, which means that downgrading from v1.5.0 to any previous version is possible. **Please note that downgrading is not supported**.
+[^lastMinorVersion]: Longhorn only allows upgrades from any patch version of the last minor release before the new major version. For example, if v1.3.0 is the last minor version before v2.0, you can upgrade from any patch version of v1.3.0 to any patch version of v2.0.
 
 # Upgrading Longhorn
 

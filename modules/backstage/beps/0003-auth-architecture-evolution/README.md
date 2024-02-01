@@ -50,6 +50,7 @@ The following goals are the primary focus of this BEP:
   - Protection of the frontend app bundle from being accessed by unauthenticated users.
   - Basic rate limiting of non-authenticated requests.
   - Cookie-based authentication of requests for static assets that protects against CSRF attacks and does not unnecessarily expose user tokens.
+  - A solution where plugin builders need to opt-out of endpoint protection, for example allowing cookie or unauthenticated access.
 - Basic improvements to the service-to-service auth service interfaces such that we are confident that we do not need to break them in the near future.
   - If possible we will keep using the existing symmetrical keys that are used today, but it is likely that we will need to break compatibility of existing tokens.
   - Encapsulation of user credentials in upstream service requests, avoiding the pattern where backend plugins re-use the user token directly for their outgoing requests.
@@ -71,7 +72,7 @@ For service-to-service communication we will move away from reusing user tokens 
 
 ## Design Details
 
-### AuthService (WIP)
+### `AuthService` (WIP)
 
 The new `AuthService` interface is defined as follows:
 
@@ -96,9 +97,11 @@ export interface AuthService {
 }
 ```
 
-TODO: add usage patterns for this service
+#### Usage Patterns
 
-### HttpAuthService (WIP)
+TODO
+
+### `HttpAuthService` (WIP)
 
 The new `HttpAuthService` interface is defined as follows:
 
@@ -119,19 +122,115 @@ export interface HttpAuthService {
     options?: HttpAuthServiceMiddlewareOptions,
   ): BackstageCredentials;
 
-  requestHeaders(credentials: BackstageCredentials): Record<string, string>;
+  requestHeaders(
+    credentials: BackstageCredentials,
+  ): Promise<Record<string, string>>;
 
   issueUserCookie(res: Response): Promise<void>;
 }
 ```
 
-TODO: add usage patterns for this service
+#### Opt-out behavior
+
+The `HttpAuthService` must be implemented in such a way that any requests that are handled by the plugin must always touch at least one `httpAuth.middleware(...)`, or it is rejected. This is implemented by overriding the necessary response methods on the `res` object to make it an error to call any of them, but to then restore the original methods in the `httpAuth.middleware(...)`.
+
+#### Usage Patterns
+
+All of these usages patterns are from the perspective of a plugin backend.
+
+**Authenticate incoming request that requires user authentication**
+
+```ts
+// Adding the middleware separately like this makes it apply to ALL
+// routes added below it. You can also add it between the path and the
+// handler below, to make it apply only for that particular path.
+router.use(httpAuth.middleware({ allow: ['user'] }));
+
+router.get('/read-data', (req, res) => {
+  // TODO: user can currently be undefined, figure out best pattern to avoid that
+  const { user } = httpAuth.credentials(req);
+  console.log(
+    `User ref=${user.userEntityRef} ownership=${user.ownershipEntityRefs}`,
+  );
+  // ...
+});
+```
+
+**Forward the user credentials from an incoming requests to upstream plugin backend**
+
+```ts
+router.get(
+  '/read-data',
+  // Here, the middleware applies to the current path only
+  httpAuth.middleware({ allow: ['user'] }),
+  (req, res) => {
+    const entity = await catalogClient.getEntityByRef(req.params.entityRef, {
+      credentials: httpAuth.credentials(req),
+    });
+    // ...
+  },
+);
+```
+
+**Allow both user and service request**
+
+```ts
+router.get(
+  '/read-data',
+  httpAuth.middleware({ allow: ['user', 'service'] }),
+  (req, res) => {
+    const credentials = httpAuth.credentials(req);
+    if (credentials.user) {
+      res.json(
+        // Silly example just to highlight separate code paths for user and
+        // service requests
+        todoStore.listOwnedTodos({ owner: credentials.user.userEntityRef }),
+      );
+    } else {
+      res.json(todoStore.listTodos());
+    }
+  },
+);
+```
+
+**Issuing a cookie and allowing user cookie auth on a separate endpoint**
+
+```ts
+router.get('/cookie', httpAuth.middleware({ allow: ['user'] }), (req, res) => {
+  await httpAuth.issueUserCookie(res);
+  res.json({ ok: true });
+});
+
+// Separate endpoint that serves static content, allowing user cookie auth as
+// well as regular user auth
+router.use(
+  '/static',
+  httpAuth.middleware({ allow: ['user', 'user-cookie'] }),
+  express.static(staticContentDir),
+);
+```
+
+**Passing along user identity from a cookie in an upstream request**
+
+```ts
+router.get(
+  '/read-data',
+  httpAuth.middleware({ allow: ['user-cookie'] }),
+  (req, res) => {
+    const { cookieUser } = httpAuth.credentials(req);
+    console.log(
+      `User ref=${cookieUser.userEntityRef} ownership=${cookieUser.ownershipEntityRefs}`,
+    );
+    // ...
+  },
+);
+```
 
 ## Release Plan
 
 The existing `IdentityService` and `TokenManagerService` will be deprecated and instead implemented in terms of the new `AuthService`.
 
-The release plan for the `HttpAuthService` is TBD, but is likely to be shipped as a no-op for plugins using the old backend system.
+The release plan for the `HttpAuthService` is TBD, but is likely to be shipped as a no-op for plugins using the old backend system. The goal is for all plugins using the new backend system to have endpoint security be opt-out, which will be a breaking change.
 
 ## Dependencies
 

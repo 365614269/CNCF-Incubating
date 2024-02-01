@@ -1143,7 +1143,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:debc09c066c11a756234ba3482f301e20ca0f99fd7f4a41fe01e49ca2fa9c50a","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.27.2-4366a60cb693c38ab1917d924f5b1d26f1e58b1e","useDigest":true}``
+     - ``{"digest":"sha256:a3eaf21675c6f1e375aa7f74d03893e0a69a036569ff04c77a1eae0380748b81","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.28.0-67a82649395fd783b2a79c0e78eba25af8c556a6","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -2596,10 +2596,6 @@
      - Taint nodes where Cilium is scheduled but not running. This prevents pods from being scheduled to nodes where Cilium is not the default CNI provider.
      - string
      - same as removeNodeTaints
-   * - :spelling:ignore:`operator.skipCNPStatusStartupClean`
-     - Skip CNP node status clean up at operator startup.
-     - bool
-     - ``false``
    * - :spelling:ignore:`operator.skipCRDCreation`
      - Skip CRDs creation for cilium-operator
      - bool

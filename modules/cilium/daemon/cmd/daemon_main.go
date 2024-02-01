@@ -477,10 +477,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.String(option.IPv6ServiceRange, AutoCIDR, "Kubernetes IPv6 services CIDR if not inside cluster prefix")
 	option.BindEnv(vp, option.IPv6ServiceRange)
 
-	flags.Bool(option.LegacyTurnOffK8sEventHandover, defaults.LegacyTurnOffK8sEventHandover, "Turn off K8sEventsHandover - this is legacy behaviour")
-	option.BindEnv(vp, option.LegacyTurnOffK8sEventHandover)
-	flags.MarkHidden(option.LegacyTurnOffK8sEventHandover)
-
 	flags.String(option.K8sNamespaceName, "", "Name of the Kubernetes namespace in which Cilium is deployed in")
 	option.BindEnv(vp, option.K8sNamespaceName)
 
@@ -1623,7 +1619,7 @@ type daemonParams struct {
 	Lifecycle            cell.Lifecycle
 	Clientset            k8sClient.Clientset
 	Datapath             datapath.Datapath
-	WGAgent              *wireguard.Agent `optional:"true"`
+	WGAgent              *wireguard.Agent
 	LocalNodeStore       *node.LocalNodeStore
 	BGPController        *bgpv1.Controller
 	Shutdowner           hive.Shutdowner

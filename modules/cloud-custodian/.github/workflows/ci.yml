@@ -109,7 +109,7 @@ jobs:
           key: sphinx-docs-${{ runner.os }}-3.11-v3-${{ hashFiles('**/poetry.lock') }}
 
       - name: Deploy Docs
-        # if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' }}
         uses: ./.github/composites/docs-publish
         with:
           aws-role: ${{ secrets.DOCS_PUBLISH_ROLE }}
