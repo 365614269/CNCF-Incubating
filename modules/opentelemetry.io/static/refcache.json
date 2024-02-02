@@ -1503,6 +1503,10 @@
     "StatusCode": 200,
     "LastSeen": "2024-01-30T16:14:53.797365-05:00"
   },
+  "https://docs.spring.io/spring/docs/current/spring-framework-reference/core.html#aop": {
+    "StatusCode": 206,
+    "LastSeen": "2024-01-30T20:32:51.933581-05:00"
+  },
   "https://docs.thousandeyes.com/product-documentation/api/opentelemetry": {
     "StatusCode": 206,
     "LastSeen": "2024-01-30T05:18:01.115211-05:00"
@@ -2102,6 +2106,14 @@
   "https://github.com/aws-observability/aws-otel-collector": {
     "StatusCode": 200,
     "LastSeen": "2024-01-24T14:54:51.229664+01:00"
+  },
+  "https://github.com/baronfel": {
+    "StatusCode": 200,
+    "LastSeen": "2024-02-01T19:02:28.92421992Z"
+  },
+  "https://github.com/baronfel/otel-startup-hook": {
+    "StatusCode": 200,
+    "LastSeen": "2024-02-01T19:02:28.4090231Z"
   },
   "https://github.com/bhs": {
     "StatusCode": 200,

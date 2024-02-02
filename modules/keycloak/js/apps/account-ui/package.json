@@ -1,6 +1,14 @@
 {
   "name": "account-ui",
   "type": "module",
+  "main": "dist/account-ui.js",
+  "types": "./dist/account-ui.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/account-ui.js",
+      "types": "./dist/account-ui.d.ts"
+    }
+  },
   "scripts": {
     "dev": "wireit",
     "build": "wireit",
@@ -13,8 +21,8 @@
     "@patternfly/react-core": "^4.278.0",
     "@patternfly/react-icons": "^4.93.7",
     "@patternfly/react-table": "^4.113.6",
-    "i18next": "^23.8.1",
-    "i18next-http-backend": "^2.4.2",
+    "i18next": "^23.8.2",
+    "i18next-http-backend": "^2.4.3",
     "keycloak-js": "workspace:*",
     "keycloak-masthead": "workspace:*",
     "lodash-es": "^4.17.21",
@@ -34,7 +42,7 @@
     "@vitejs/plugin-react-swc": "^3.5.0",
     "lightningcss": "^1.23.0",
     "vite": "^5.0.12",
-    "vite-plugin-checker": "^0.6.2"
+    "vite-plugin-checker": "^0.6.4"
   },
   "wireit": {
     "dev": {
