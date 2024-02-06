@@ -51,6 +51,7 @@ spec:
           image: e2e-registry:10000/apiext:latest
           imagePullPolicy: IfNotPresent
           command: [ "apiext", "emissary-apiext" ]
+          args: ["--crd-label-selector", "app.kubernetes.io/part-of=emissary-apiext"]
           ports:
             - name: http
               containerPort: 8080

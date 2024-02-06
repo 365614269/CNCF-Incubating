@@ -375,6 +375,7 @@ kyverno
 lastword
 Lato
 LFC
+libcrypto
 Lifcycle
 lifecyclekeptnsh
 linenums
@@ -515,6 +516,7 @@ readyz
 Reale
 realpath
 redis
+refcache
 remediations
 replicasets
 replicationcontrollers
@@ -621,10 +623,10 @@ tokenreviews
 toml
 totalscore
 tplvalues
+traceid
 traceparent
 tracerfactory
 tracetest
-traceid
 trivy
 trivyignore
 trunc
