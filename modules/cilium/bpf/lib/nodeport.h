@@ -2399,6 +2399,7 @@ nodeport_rev_dnat_ingress_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace,
 	struct iphdr *ip4;
 	__u32 tunnel_endpoint __maybe_unused = 0;
 	__u32 dst_sec_identity __maybe_unused = 0;
+	__u32 src_sec_identity __maybe_unused = SECLABEL;
 	bool allow_neigh_map = true;
 	bool check_revdnat = true;
 	bool has_l4_header;
@@ -2473,7 +2474,7 @@ redirect:
 		__be16 src_port = tunnel_gen_src_port_v4(&tuple);
 
 		ret = nodeport_add_tunnel_encap(ctx, IPV4_DIRECT_ROUTING, src_port,
-						tunnel_endpoint, SECLABEL, dst_sec_identity,
+						tunnel_endpoint, src_sec_identity, dst_sec_identity,
 						trace->reason, trace->monitor, &ifindex);
 		if (IS_ERR(ret))
 			return ret;
@@ -2658,6 +2659,8 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 	struct iphdr *ip4;
 	__s8 ext_err = 0;
 #ifdef TUNNEL_MODE
+	__u32 src_sec_identity = ctx_load_meta(ctx, CB_SRC_LABEL);
+	__u8 cluster_id __maybe_unused = (__u8)ctx_load_meta(ctx, CB_CLUSTER_ID_EGRESS);
 	struct remote_endpoint_info *info;
 	__be32 tunnel_endpoint = 0;
 	__u32 dst_sec_identity = 0;
@@ -2671,12 +2674,16 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 	has_l4_header = ipv4_has_l4_header(ip4);
 
 #ifdef TUNNEL_MODE
-	info = lookup_ip4_remote_endpoint(ip4->daddr, 0);
+	info = lookup_ip4_remote_endpoint(ip4->daddr, cluster_id);
 	if (info && info->tunnel_endpoint != 0) {
 		tunnel_endpoint = info->tunnel_endpoint;
 		dst_sec_identity = info->sec_identity;
 
 		target.addr = IPV4_GATEWAY;
+#if defined(ENABLE_CLUSTER_AWARE_ADDRESSING) && defined(ENABLE_INTER_CLUSTER_SNAT)
+		if (cluster_id && cluster_id != CLUSTER_ID)
+			target.addr = IPV4_INTER_CLUSTER_SNAT;
+#endif
 	}
 #endif
 
@@ -2717,7 +2724,7 @@ int tail_nodeport_nat_egress_ipv4(struct __ctx_buff *ctx)
 						IPV4_DIRECT_ROUTING,
 						src_port,
 						tunnel_endpoint,
-						WORLD_IPV4_ID,
+						src_sec_identity,
 						dst_sec_identity,
 						trace.reason,
 						trace.monitor,
@@ -2913,6 +2920,22 @@ skip_service_lookup:
 	if (backend_local || !nodeport_uses_dsr4(&tuple)) {
 		struct ct_state ct_state = {};
 
+#if !(defined(ENABLE_CLUSTER_AWARE_ADDRESSING) && defined(ENABLE_INTER_CLUSTER_SNAT))
+		src_sec_identity = WORLD_IPV4_ID;
+#else
+		if (src_sec_identity == 0)
+			src_sec_identity = WORLD_IPV4_ID;
+#endif
+
+		 /* Before forwarding the identity, make sure it's not a CIDR
+		  * identity, as these are __u32 values, but transporting them
+		  * via the VNI field in the VXLAN / Geneve header allows for
+		  * only 24 bits.
+		  */
+
+		if (identity_is_cidr_range(src_sec_identity))
+			return DROP_INVALID_IDENTITY;
+
 		/* lookup with SCOPE_FORWARD: */
 		__ipv4_ct_tuple_reverse(&tuple);
 
@@ -2923,7 +2946,7 @@ skip_service_lookup:
 		switch (ret) {
 		case CT_NEW:
 redo:
-			ct_state_new.src_sec_id = WORLD_IPV4_ID;
+			ct_state_new.src_sec_id = src_sec_identity;
 			ct_state_new.node_port = 1;
 #ifndef HAVE_FIB_IFINDEX
 			ct_state_new.ifindex = (__u16)NATIVE_DEV_IFINDEX;
@@ -2974,6 +2997,8 @@ redo:
 #endif /* DSR_ENCAP_MODE */
 		return tail_call_internal(ctx, CILIUM_CALL_IPV4_NODEPORT_DSR, ext_err);
 	} else {
+		ctx_store_meta(ctx, CB_SRC_LABEL, src_sec_identity);
+		ctx_store_meta(ctx, CB_CLUSTER_ID_EGRESS, cluster_id);
 		return tail_call_internal(ctx, CILIUM_CALL_IPV4_NODEPORT_NAT_EGRESS,
 					  ext_err);
 	}

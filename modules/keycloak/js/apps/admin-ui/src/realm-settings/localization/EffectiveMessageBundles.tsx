@@ -116,6 +116,16 @@ export const EffectiveMessageBundles = ({
   const loader = async () => {
     try {
       const filter = getValues();
+
+      const requiredKeys = ["theme", "themeType", "locale"];
+      const shouldReturnEmpty = requiredKeys.some(
+        (key) => !filter[key as keyof EffectiveMessageBundlesSearchForm],
+      );
+
+      if (shouldReturnEmpty) {
+        return [];
+      }
+
       const messages = await adminClient.serverInfo.findEffectiveMessageBundles(
         {
           realm,
@@ -192,7 +202,10 @@ export const EffectiveMessageBundles = ({
       >
         <FlexItem>
           <TextContent>
-            <Text className="pf-u-mb-md pf-u-mt-0" component={TextVariants.p}>
+            <Text
+              className="pf-u-mb-md pf-u-mt-0 pf-u-mr-md"
+              component={TextVariants.p}
+            >
               {t("effectiveMessageBundlesDescription")}
             </Text>
           </TextContent>
@@ -202,6 +215,7 @@ export const EffectiveMessageBundles = ({
             buttonText={t("searchForEffectiveMessageBundles")}
             setSearchDropdownOpen={setSearchDropdownOpen}
             searchDropdownOpen={searchDropdownOpen}
+            marginRight="2.5rem"
             width="15vw"
           >
             <Form
@@ -471,14 +485,6 @@ export const EffectiveMessageBundles = ({
               </ActionGroup>
             </Form>
           </DropdownPanel>
-          <Button
-            variant="primary"
-            className="pf-u-ml-md"
-            onClick={() => submitSearch()}
-            data-testid="refresh-effective-message-bundles-btn"
-          >
-            {t("refresh")}
-          </Button>
         </FlexItem>
         <FlexItem>
           {Object.entries(activeFilters).length > 0 && (
