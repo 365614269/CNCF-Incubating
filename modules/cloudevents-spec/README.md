@@ -23,8 +23,10 @@ CloudEvents has received a large amount of industry interest, ranging from major
 cloud providers to popular SaaS companies. CloudEvents is hosted by the
 [Cloud Native Computing Foundation](https://cncf.io) (CNCF) and was approved as
 a Cloud Native sandbox level project on
-[May 15, 2018](https://docs.google.com/presentation/d/1KNSv70fyTfSqUerCnccV7eEC_ynhLsm9A_kjnlmU_t0/edit#slide=id.g37acf52904_1_41) and as an
-incubator project on [Oct 24, 2019](https://github.com/cncf/toc/pull/297).
+[May 15, 2018](https://docs.google.com/presentation/d/1KNSv70fyTfSqUerCnccV7eEC_ynhLsm9A_kjnlmU_t0/edit#slide=id.g37acf52904_1_41), an
+incubator project on [Oct 24, 2019](https://github.com/cncf/toc/pull/297)
+and a graduated project on [Jan 25, 2024](https://github.com/cncf/toc/pull/996)
+([announcement](https://www.cncf.io/announcements/2024/01/25/cloud-native-computing-foundation-announces-the-graduation-of-cloudevents/)).
 
 ## CloudEvents Documents
 
@@ -114,6 +116,8 @@ native ecosystem by making our systems interoperable with CloudEvents.
 - [Adopters](https://cloudevents.io/) - See "Integrations".
 - [Contributors](docs/contributors.md): people and organizations who helped
   us get started or are actively working on the CloudEvents specification.
+- [Presentations, notes and other misc shared
+  docs](https://drive.google.com/drive/folders/1eKH-tVNV25jwkuBEoi3ESqvVjNRlJqYX?usp=sharing)
 - [Demos & open source](docs/README.md) -- if you have something to share
   about your use of CloudEvents, please submit a PR!
 - [Code of Conduct](https://github.com/cncf/foundation/blob/master/code-of-conduct.md)
