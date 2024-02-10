@@ -36,6 +36,7 @@ import (
 	"kubevirt.io/kubevirt/tests/decorators"
 	"kubevirt.io/kubevirt/tests/framework/kubevirt"
 	. "kubevirt.io/kubevirt/tests/framework/matcher"
+	"kubevirt.io/kubevirt/tests/libpod"
 	"kubevirt.io/kubevirt/tests/libwait"
 )
 
@@ -81,8 +82,7 @@ var _ = Describe("[sig-compute][Serial]CPU Hotplug", decorators.SigCompute, deco
 			}
 			return
 		}
-
-		It("should successfully plug vCPUs", func() {
+		It("[test_id:10811]should successfully plug vCPUs", func() {
 			By("Creating a running VM with 1 socket and 2 max sockets")
 			const (
 				maxSockets uint32 = 2
@@ -106,7 +106,7 @@ var _ = Describe("[sig-compute][Serial]CPU Hotplug", decorators.SigCompute, deco
 			libwait.WaitForSuccessfulVMIStart(vmi)
 
 			By("Ensuring the compute container has 200m CPU")
-			compute := tests.GetComputeContainerOfPod(tests.GetVmiPod(virtClient, vmi))
+			compute := libpod.LookupComputeContainer(tests.GetVmiPod(virtClient, vmi))
 
 			Expect(compute).NotTo(BeNil(), "failed to find compute container")
 			reqCpu := compute.Resources.Requests.Cpu().Value()
@@ -155,7 +155,7 @@ var _ = Describe("[sig-compute][Serial]CPU Hotplug", decorators.SigCompute, deco
 			}))
 
 			By("Ensuring the virt-launcher pod now has 400m CPU")
-			compute = tests.GetComputeContainerOfPod(tests.GetVmiPod(virtClient, vmi))
+			compute = libpod.LookupComputeContainer(tests.GetVmiPod(virtClient, vmi))
 			Expect(compute).NotTo(BeNil(), "failed to find compute container")
 			reqCpu = compute.Resources.Requests.Cpu().Value()
 			expCpu = resource.MustParse("400m")
@@ -181,7 +181,7 @@ var _ = Describe("[sig-compute][Serial]CPU Hotplug", decorators.SigCompute, deco
 			Eventually(ThisVM(vm), 4*time.Minute, 2*time.Second).Should(HaveConditionMissingOrFalse(v1.VirtualMachineRestartRequired))
 		})
 
-		It("should successfully plug guaranteed vCPUs", decorators.RequiresTwoWorkerNodesWithCPUManager, func() {
+		It("[test_id:10822]should successfully plug guaranteed vCPUs", decorators.RequiresTwoWorkerNodesWithCPUManager, func() {
 			checks.ExpectAtLeastTwoWorkerNodesWithCPUManager(virtClient)
 			const maxSockets uint32 = 3
 
@@ -205,7 +205,7 @@ var _ = Describe("[sig-compute][Serial]CPU Hotplug", decorators.SigCompute, deco
 			libwait.WaitForSuccessfulVMIStart(vmi)
 
 			By("Ensuring the compute container has 2 CPU")
-			compute := tests.GetComputeContainerOfPod(tests.GetVmiPod(virtClient, vmi))
+			compute := libpod.LookupComputeContainer(tests.GetVmiPod(virtClient, vmi))
 
 			Expect(compute).NotTo(BeNil(), "failed to find compute container")
 			reqCpu := compute.Resources.Requests.Cpu().Value()
@@ -252,7 +252,7 @@ var _ = Describe("[sig-compute][Serial]CPU Hotplug", decorators.SigCompute, deco
 			}))
 
 			By("Ensuring the virt-launcher pod now has 4 CPU")
-			compute = tests.GetComputeContainerOfPod(tests.GetVmiPod(virtClient, vmi))
+			compute = libpod.LookupComputeContainer(tests.GetVmiPod(virtClient, vmi))
 
 			Expect(compute).NotTo(BeNil(), "failed to find compute container")
 			reqCpu = compute.Resources.Requests.Cpu().Value()

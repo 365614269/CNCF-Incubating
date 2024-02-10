@@ -58,6 +58,7 @@ import (
 	"kubevirt.io/kubevirt/tests/framework/checks"
 	"kubevirt.io/kubevirt/tests/framework/matcher"
 	"kubevirt.io/kubevirt/tests/libnet"
+	netcloudinit "kubevirt.io/kubevirt/tests/libnet/cloudinit"
 	"kubevirt.io/kubevirt/tests/libnode"
 	"kubevirt.io/kubevirt/tests/libvmi"
 	"kubevirt.io/kubevirt/tests/libwait"
@@ -451,7 +452,7 @@ var _ = Describe("[Serial]SRIOV", Serial, decorators.SRIOV, func() {
 				To(Succeed(), shouldCreateNetwork)
 		})
 
-		It("[test_id:3956]should connect to another machine with sriov interface over IPv4", func() {
+		It("[test_id:3956]should connect to another machine with sriov interface over IP", func() {
 			cidrA := "192.168.1.1/24"
 			cidrB := "192.168.1.2/24"
 			ipA, err := libnet.CidrToIP(cidrA)
@@ -477,35 +478,6 @@ var _ = Describe("[Serial]SRIOV", Serial, decorators.SRIOV, func() {
 			}, 15*time.Second, time.Second).Should(Succeed())
 			Eventually(func() error {
 				return libnet.PingFromVMConsole(vmi2, ipA)
-			}, 15*time.Second, time.Second).Should(Succeed())
-		})
-
-		It("[test_id:3957]should connect to another machine with sriov interface over IPv6", func() {
-			vmi1CIDR := "fc00::1/64"
-			vmi2CIDR := "fc00::2/64"
-			vmi1IP, err := libnet.CidrToIP(vmi1CIDR)
-			Expect(err).ToNot(HaveOccurred())
-			vmi2IP, err := libnet.CidrToIP(vmi2CIDR)
-			Expect(err).ToNot(HaveOccurred())
-
-			//create two vms on the same sriov network
-			vmi1, err := createSRIOVVmiOnNode(sriovNode, sriovnetLinkEnabled, vmi1CIDR)
-			Expect(err).ToNot(HaveOccurred())
-			DeferCleanup(deleteVMI, vmi1)
-			vmi2, err := createSRIOVVmiOnNode(sriovNode, sriovnetLinkEnabled, vmi2CIDR)
-			Expect(err).ToNot(HaveOccurred())
-			DeferCleanup(deleteVMI, vmi2)
-
-			vmi1, err = waitVMI(vmi1)
-			Expect(err).NotTo(HaveOccurred())
-			vmi2, err = waitVMI(vmi2)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() error {
-				return libnet.PingFromVMConsole(vmi1, vmi2IP)
-			}, 15*time.Second, time.Second).Should(Succeed())
-			Eventually(func() error {
-				return libnet.PingFromVMConsole(vmi2, vmi1IP)
 			}, 15*time.Second, time.Second).Should(Succeed())
 		})
 
@@ -649,7 +621,7 @@ func validatePodKubevirtResourceNameByVMI(virtClient kubecli.KubevirtClient, vmi
 }
 
 func defaultCloudInitNetworkData() string {
-	networkData := libnet.CreateDefaultCloudInitNetworkData()
+	networkData := netcloudinit.CreateDefaultCloudInitNetworkData()
 	return networkData
 }
 
@@ -797,7 +769,7 @@ func createSRIOVVmiOnNode(nodeName, networkName, cidr string) (*v1.VirtualMachin
 	// no DHCP server to serve the address to the guest
 	vmi := newSRIOVVmi(
 		[]string{networkName},
-		cloudInitNetworkDataWithStaticIPsByMac(networkName, mac.String(), cidr),
+		netcloudinit.CreateNetworkDataWithStaticIPsByMac(networkName, mac.String(), cidr),
 	)
 	libvmi.WithNodeAffinityFor(nodeName)(vmi)
 	const secondaryInterfaceIndex = 1

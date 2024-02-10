@@ -46,7 +46,7 @@ require (
 	github.com/prometheus/client_model v0.5.0
 	github.com/prometheus/common v0.46.0
 	// Prometheus maps version 2.x.y to tags v0.x.y.
-	github.com/prometheus/prometheus v0.49.2-0.20240202164002-aa845f7c12ce
+	github.com/prometheus/prometheus v0.49.2-0.20240205174859-6005ac6f9dc6
 	github.com/segmentio/fasthash v1.0.3
 	github.com/sony/gobreaker v0.5.0
 	github.com/spf13/afero v1.9.5
@@ -56,7 +56,7 @@ require (
 	github.com/thanos-io/thanos v0.34.1-0.20240201134136-94f971bc2b7f
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	github.com/weaveworks/common v0.0.0-20230728070032-dd9e68f319d5
-	go.etcd.io/etcd/api/v3 v3.5.11
+	go.etcd.io/etcd/api/v3 v3.5.12
 	go.etcd.io/etcd/client/pkg/v3 v3.5.9
 	go.etcd.io/etcd/client/v3 v3.5.7
 	go.opentelemetry.io/contrib/propagators/aws v1.22.0

@@ -27,6 +27,7 @@ import (
 	"kubevirt.io/kubevirt/tests/decorators"
 	"kubevirt.io/kubevirt/tests/framework/kubevirt"
 	. "kubevirt.io/kubevirt/tests/framework/matcher"
+	"kubevirt.io/kubevirt/tests/libpod"
 	"kubevirt.io/kubevirt/tests/libwait"
 )
 
@@ -91,7 +92,7 @@ var _ = Describe("[sig-compute][Serial]Memory Hotplug", decorators.SigCompute, d
 			return &memory
 		}
 
-		It("should successfully hotplug memory", func() {
+		It("[test_id:10823]should successfully hotplug memory", func() {
 			By("Creating a VM")
 			guest := resource.MustParse("128Mi")
 			maxGuest := resource.MustParse("256Mi")
@@ -102,7 +103,7 @@ var _ = Describe("[sig-compute][Serial]Memory Hotplug", decorators.SigCompute, d
 			migration.CreateMigrationPolicy(virtClient, migration.PreparePolicyAndVMIWithBandwidthLimitation(vmi, migrationBandwidthLimit))
 
 			By("Ensuring the compute container has at least 128Mi of memory")
-			compute := tests.GetComputeContainerOfPod(tests.GetVmiPod(virtClient, vmi))
+			compute := libpod.LookupComputeContainer(tests.GetVmiPod(virtClient, vmi))
 
 			Expect(compute).NotTo(BeNil(), "failed to find compute container")
 			reqMemory := compute.Resources.Requests.Memory().Value()
@@ -147,13 +148,13 @@ var _ = Describe("[sig-compute][Serial]Memory Hotplug", decorators.SigCompute, d
 			}, 240*time.Second, time.Second).Should(BeNumerically(">", guest.Value()))
 
 			By("Ensuring the virt-launcher pod now has at least more than 256Mi of memory")
-			compute = tests.GetComputeContainerOfPod(tests.GetVmiPod(virtClient, vmi))
+			compute = libpod.LookupComputeContainer(tests.GetVmiPod(virtClient, vmi))
 			Expect(compute).NotTo(BeNil(), "failed to find compute container")
 			reqMemory = compute.Resources.Requests.Memory().Value()
 			Expect(reqMemory).To(BeNumerically(">=", maxGuest.Value()))
 		})
 
-		It("after a hotplug memory and a restart the new memory value should be the base for the VM", func() {
+		It("[test_id:10824]after a hotplug memory and a restart the new memory value should be the base for the VM", func() {
 			By("Creating a VM")
 			guest := resource.MustParse("128Mi")
 			maxGuest := resource.MustParse("512Mi")
@@ -194,7 +195,7 @@ var _ = Describe("[sig-compute][Serial]Memory Hotplug", decorators.SigCompute, d
 			Expect(vm.Spec.Template.Spec.Domain.Memory.Guest.Value()).To(Equal(newGuestMemory.Value()))
 		})
 
-		It("should successfully hotplug Memory and CPU in parallel", func() {
+		It("[test_id:10825]should successfully hotplug Memory and CPU in parallel", func() {
 			By("Creating a VM")
 			guest := resource.MustParse("128Mi")
 			maxGuest := resource.MustParse("512Mi")
