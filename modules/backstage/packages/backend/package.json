@@ -1,6 +1,6 @@
 {
   "name": "example-backend",
-  "version": "0.2.92-next.2",
+  "version": "0.2.92-next.3",
   "main": "dist/index.cjs.js",
   "types": "src/index.ts",
   "license": "Apache-2.0",
@@ -63,6 +63,7 @@
     "@backstage/plugin-rollbar-backend": "workspace:^",
     "@backstage/plugin-scaffolder-backend": "workspace:^",
     "@backstage/plugin-scaffolder-backend-module-confluence-to-markdown": "workspace:^",
+    "@backstage/plugin-scaffolder-backend-module-gitlab": "workspace:^",
     "@backstage/plugin-scaffolder-backend-module-rails": "workspace:^",
     "@backstage/plugin-search-backend": "workspace:^",
     "@backstage/plugin-search-backend-module-catalog": "workspace:^",

@@ -27,7 +27,6 @@ import (
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/auth"
 	"github.com/cilium/cilium/pkg/aws/eni"
-	bgpv1 "github.com/cilium/cilium/pkg/bgpv1/agent"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
 	"github.com/cilium/cilium/pkg/clustermesh"
@@ -187,6 +186,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.AutoCreateCiliumNodeResource, defaults.AutoCreateCiliumNodeResource, "Automatically create CiliumNode resource for own node on startup")
 	option.BindEnv(vp, option.AutoCreateCiliumNodeResource)
+
+	flags.StringSlice(option.ExcludeNodeLabelPatterns, []string{}, "List of k8s node label regex patterns to be excluded from CiliumNode")
+	option.BindEnv(vp, option.ExcludeNodeLabelPatterns)
 
 	flags.String(option.BPFRoot, "", "Path to BPF filesystem")
 	option.BindEnv(vp, option.BPFRoot)
@@ -1617,7 +1619,6 @@ type daemonParams struct {
 	Datapath             datapath.Datapath
 	WGAgent              *wireguard.Agent
 	LocalNodeStore       *node.LocalNodeStore
-	BGPController        *bgpv1.Controller
 	Shutdowner           hive.Shutdowner
 	Resources            agentK8s.Resources
 	CacheStatus          k8s.CacheStatus
@@ -1839,10 +1840,6 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 			d.startKubeProxyHealthzHTTPService(option.Config.KubeProxyReplacementHealthzBindAddr)
 		}
 	}
-
-	// Assign the BGP Control to the struct field so non-modularized components can interact with the BGP Controller
-	// like they are used to.
-	d.bgpControlPlaneController = params.BGPController
 
 	err := d.SendNotification(monitorAPI.StartMessage(time.Now()))
 	if err != nil {
