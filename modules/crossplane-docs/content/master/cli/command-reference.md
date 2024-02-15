@@ -388,6 +388,7 @@ spec:
 |              | `--context-files=<key>=<file>,<key>=<file>`    | A comma separated list of files to load for function "contexts." |
 |              | `--context-values=<key>=<value>,<key>=<value>` | A comma separated list of key-value pairs to load for function "contexts."                                                    |
 | `-r`         | `--include-function-results`          | Include the "results" or events from the function.   |
+| `-x`         | `--include-full-xr`          | Include a copy of the input Composite Resource spec and metadata fields in the rendered output.   |
 | `-o`         | `--observed-resources=<directory or file>`               | Provide artificial managed resource data to the function.                                                    |
 |              | `--timeout=`                          | Amount of time to wait for a function to finish.                    |
 {{< /table >}}
@@ -408,6 +409,15 @@ The context is JSON formatted data.
 If a function produces Kubernetes events with statuses use the 
 `--include-function-results` to print them along with the managed resource 
 outputs. 
+
+#### Include the composite resource 
+
+Composition functions can only change the `status` field of a composite 
+resource. By default, the `crossplane beta render` command only prints the
+`status` field with `metadata.name`.  
+
+Use `--include-full-xr` to print the full composite resource, 
+including the `spec` and `metadata` fields.
 
 #### Mock managed resources
 
@@ -594,6 +604,7 @@ with the command
 The `<name>` input isn't used. Crossplane reserves the `<name>` for future releases.
 
 The `<template>` value may be one of four well known templates:
+* `configuration-template` - A template to build a Crossplane [Configuration]({{<ref "../concepts/packages">}}) from the [crossplane/configuration-template](https://github.com/crossplane/configuration-template) repository.
 * `function-template-go` - A template to build Crossplane Go [composition functions]({{<ref "../concepts/composition-functions">}}) from the [crossplane/function-template-go](https://github.com/crossplane/function-template-go) repository.
 * `function-template-python` - A template to build Crossplane Python [composition functions]({{<ref "../concepts/composition-functions">}}) from the [crossplane/function-template-python](https://github.com/crossplane/function-template-go) repository.
 * `provider-template` - A template to build a basic Crossplane provider from the [Crossplane/provider-template](https://github.com/crossplane/provider-template) repository.
@@ -622,7 +633,8 @@ personalize the template.
 | Short flag   | Long flag               | Description                                                                                      |
 | ------------ | ----------------------- | ------------------------------                                                                   |
 | `-d`         | `--directory`           | The directory to create and load the template files into. Uses the current directory by default. |
-| `-r`         | `--run-init-script`     | Run the init.sh script without prompting, if it exists.                                                        |
+| `-r`         | `--run-init-script`     | Run the init.sh script without prompting, if it exists.                                          |
+| `-b`         | `--ref-name`            | The branch or tag to clone from the template repository.                                         |
 <!-- vale Crossplane.Spelling = YES -->
 {{< /table >}}
 
