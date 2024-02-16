@@ -8,6 +8,7 @@ bool
 boolean
 booleans
 Buf
+CEL
 CI
 CLI
 cluster-scoped
@@ -37,6 +38,7 @@ kube-apiserver
 kube-controller-manager
 kubeconfig
 kubectl
+metrics-server
 minikube
 multi-platform
 namespace
