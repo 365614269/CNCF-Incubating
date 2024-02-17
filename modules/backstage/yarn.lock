@@ -3775,7 +3775,7 @@ __metadata:
     minimist: ^1.2.5
     msw: ^1.0.0
     node-fetch: ^2.6.7
-    typescript-json-schema: ^0.62.0
+    typescript-json-schema: ^0.63.0
     yaml: ^2.0.0
     zen-observable: ^0.10.0
   languageName: unknown
@@ -8492,6 +8492,24 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@backstage/plugin-scaffolder-backend-module-gitea@workspace:^, @backstage/plugin-scaffolder-backend-module-gitea@workspace:plugins/scaffolder-backend-module-gitea":
+  version: 0.0.0-use.local
+  resolution: "@backstage/plugin-scaffolder-backend-module-gitea@workspace:plugins/scaffolder-backend-module-gitea"
+  dependencies:
+    "@backstage/backend-common": "workspace:^"
+    "@backstage/backend-plugin-api": "workspace:^"
+    "@backstage/backend-test-utils": "workspace:^"
+    "@backstage/cli": "workspace:^"
+    "@backstage/config": "workspace:^"
+    "@backstage/errors": "workspace:^"
+    "@backstage/integration": "workspace:^"
+    "@backstage/plugin-scaffolder-node": "workspace:^"
+    msw: ^1.0.0
+    node-fetch: ^2.6.7
+    yaml: ^2.0.0
+  languageName: unknown
+  linkType: soft
+
 "@backstage/plugin-scaffolder-backend-module-github@workspace:^, @backstage/plugin-scaffolder-backend-module-github@workspace:plugins/scaffolder-backend-module-github":
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-scaffolder-backend-module-github@workspace:plugins/scaffolder-backend-module-github"
@@ -8616,6 +8634,7 @@ __metadata:
     "@backstage/plugin-scaffolder-backend-module-bitbucket-cloud": "workspace:^"
     "@backstage/plugin-scaffolder-backend-module-bitbucket-server": "workspace:^"
     "@backstage/plugin-scaffolder-backend-module-gerrit": "workspace:^"
+    "@backstage/plugin-scaffolder-backend-module-gitea": "workspace:^"
     "@backstage/plugin-scaffolder-backend-module-github": "workspace:^"
     "@backstage/plugin-scaffolder-backend-module-gitlab": "workspace:^"
     "@backstage/plugin-scaffolder-common": "workspace:^"
@@ -8725,7 +8744,6 @@ __metadata:
     classnames: ^2.2.6
     flatted: 3.2.9
     humanize-duration: ^3.25.1
-    immer: ^9.0.1
     json-schema: ^0.4.0
     json-schema-library: ^7.3.9
     lodash: ^4.17.21
@@ -8790,7 +8808,6 @@ __metadata:
     event-source-polyfill: ^1.0.31
     git-url-parse: ^14.0.0
     humanize-duration: ^3.25.1
-    immer: ^9.0.1
     json-schema: ^0.4.0
     json-schema-library: ^7.3.9
     jszip: ^3.10.1
@@ -30474,7 +30491,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"immer@npm:^9.0.1, immer@npm:^9.0.6, immer@npm:^9.0.7":
+"immer@npm:^9.0.6, immer@npm:^9.0.7":
   version: 9.0.21
   resolution: "immer@npm:9.0.21"
   checksum: 70e3c274165995352f6936695f0ef4723c52c92c92dd0e9afdfe008175af39fa28e76aafb3a2ca9d57d1fb8f796efc4dd1e1cc36f18d33fa5b74f3dfb0375432
@@ -43237,8 +43254,8 @@ __metadata:
   linkType: hard
 
 "swagger-ui-react@npm:^5.0.0":
-  version: 5.11.6
-  resolution: "swagger-ui-react@npm:5.11.6"
+  version: 5.11.7
+  resolution: "swagger-ui-react@npm:5.11.7"
   dependencies:
     "@babel/runtime-corejs3": ^7.23.9
     "@braintree/sanitize-url": =7.0.0
@@ -43277,7 +43294,7 @@ __metadata:
   peerDependencies:
     react: ">=16.8.0 <19"
     react-dom: ">=16.8.0 <19"
-  checksum: 4556acd2fca69d5b0f7fd1592467818428611f7fce37aeea002c71604c3fdf5314425a99180f08ad257676eec80123cd9ac31e2576102ac9f9fb5f420cb5bbf4
+  checksum: b4589abe7d4cdc97fd05f8f8f8b40daee33bb4604faa1f9c513b3ef4765fc407fef37c704dbc56c5493fa5430472e8cb30921a4d4ba544372266d06ef4d1b1e6
   languageName: node
   linkType: hard
 
@@ -43294,14 +43311,14 @@ __metadata:
   linkType: hard
 
 "swr@npm:^2.0.0":
-  version: 2.2.4
-  resolution: "swr@npm:2.2.4"
+  version: 2.2.5
+  resolution: "swr@npm:2.2.5"
   dependencies:
     client-only: ^0.0.1
     use-sync-external-store: ^1.2.0
   peerDependencies:
     react: ^16.11.0 || ^17.0.0 || ^18.0.0
-  checksum: d1398f89fd68af0e0cb6100a5769b1e17c0dbe8a778898643ad28456acda64add43344754c7d919e3f2ca82854adf86ff7d465aba25a2d555bcb669e457138f8
+  checksum: c6e6a5bd254951b22e5fd0930a95c7f79b5d0657f803c41ba1542cd6376623fb70b1895049d54ddde26da63b91951ae9d62a06772f82be28c1014d421e5b7aa9
   languageName: node
   linkType: hard
 
@@ -44336,9 +44353,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript-json-schema@npm:^0.62.0":
-  version: 0.62.0
-  resolution: "typescript-json-schema@npm:0.62.0"
+"typescript-json-schema@npm:^0.63.0":
+  version: 0.63.0
+  resolution: "typescript-json-schema@npm:0.63.0"
   dependencies:
     "@types/json-schema": ^7.0.9
     "@types/node": ^16.9.2
@@ -44350,7 +44367,7 @@ __metadata:
     yargs: ^17.1.1
   bin:
     typescript-json-schema: bin/typescript-json-schema
-  checksum: 0b0ba8f86456e7bd0b2d35d3c74a6cb72b168e779352398956d4f237eff011ec2a30b0ab1b3932bd5ceab99e1ea7bc6cc7158e49d49f24daeaf11771c27c7771
+  checksum: 619ab7aece08e140ba9542c6378c335751dbff3994a23343d0af67786a0c1e682d532a436c1674ddb10bca3f34972ecac7ba529b66d0e9b3e00ca81defb3aa77
   languageName: node
   linkType: hard
 
@@ -44490,11 +44507,11 @@ __metadata:
   linkType: hard
 
 "undici@npm:^5.24.0":
-  version: 5.26.3
-  resolution: "undici@npm:5.26.3"
+  version: 5.28.3
+  resolution: "undici@npm:5.28.3"
   dependencies:
     "@fastify/busboy": ^2.0.0
-  checksum: aaa9aadb712cf80e1a9cea2377e4842670105e00abbc184a21770ea5a8b77e4e2eadc200eac62442e74a1cd3b16a840c6f73b112b9e886bd3c1a125eb22e4f21
+  checksum: fa1e65aff896c5e2ee23637b632e306f9e3a2b32a3dc0b23ea71e5555ad350bcc25713aea894b3dccc0b7dc2c5e92a5a58435ebc2033b731a5524506f573dfd2
   languageName: node
   linkType: hard
 
@@ -45676,8 +45693,8 @@ __metadata:
   linkType: hard
 
 "webpack@npm:^5, webpack@npm:^5.70.0":
-  version: 5.90.1
-  resolution: "webpack@npm:5.90.1"
+  version: 5.90.2
+  resolution: "webpack@npm:5.90.2"
   dependencies:
     "@types/eslint-scope": ^3.7.3
     "@types/estree": ^1.0.5
@@ -45708,7 +45725,7 @@ __metadata:
       optional: true
   bin:
     webpack: bin/webpack.js
-  checksum: a7be844d5720a0c6282fec012e6fa34b1137dff953c5d48bf2ef066a6c27c1dbc92a9b9effc05ee61c9fe269499266db9782073f2d82a589d3c5c966ffc56584
+  checksum: 4af55f314c3610e0b17afd01960c4cf9d8d90c87a58ef7d7dc7a0a019f48e2bba4eff63b02d9da56fc61df5b04af0d66b3fa4ec82937a780d37a64db84c643fe
   languageName: node
   linkType: hard
 

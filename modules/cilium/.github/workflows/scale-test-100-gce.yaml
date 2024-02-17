@@ -85,7 +85,7 @@ jobs:
           go-version: ${{ env.go_version }}
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@d79f56bc2f2b2dbb2d5e41696c2f3aec0ebd3eb0 # v0.15.21
+        uses: cilium/cilium-cli@b0955d62f5d0fd22449c568c6be921f46b66f603 # v0.15.22
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -94,7 +94,7 @@ jobs:
         uses: cilium/scale-tests-action/install-kops@238d773bd07754bfd693a6b22c94eddf3a12778d # main
 
       - name: Setup gcloud credentials
-        uses: google-github-actions/auth@5a50e581162a13f4baa8916d01180d2acbc04363 # v2.1.0
+        uses: google-github-actions/auth@a6e2e39c0a0331da29f7fd2c2a20a427e8d3ad1f # v2.1.1
         with:
           credentials_json: '${{ secrets.GCP_PERF_SA_KEY }}'
 
