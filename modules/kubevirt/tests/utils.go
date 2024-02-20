@@ -29,7 +29,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -103,29 +102,6 @@ const (
 	DiskWindowsSysprep     = "disk-windows-sysprep"
 	DiskCustomHostPath     = "disk-custom-host-path"
 )
-
-func GetSupportedCPUFeatures(nodes k8sv1.NodeList) []string {
-	var featureDenyList = map[string]bool{
-		"svm": true,
-	}
-	featuresMap := make(map[string]bool)
-	for _, node := range nodes.Items {
-		for key := range node.Labels {
-			if strings.Contains(key, services.NFD_CPU_FEATURE_PREFIX) {
-				feature := strings.TrimPrefix(key, services.NFD_CPU_FEATURE_PREFIX)
-				if _, ok := featureDenyList[feature]; !ok {
-					featuresMap[feature] = true
-				}
-			}
-		}
-	}
-
-	features := make([]string, 0)
-	for feature := range featuresMap {
-		features = append(features, feature)
-	}
-	return features
-}
 
 func GetSupportedCPUModels(nodes k8sv1.NodeList) []string {
 	var cpuDenyList = map[string]bool{
@@ -1573,27 +1549,6 @@ func ExecuteCommandOnNodeThroughVirtHandler(virtCli kubecli.KubevirtClient, node
 		return "", "", err
 	}
 	return exec.ExecuteCommandOnPodWithResults(virtCli, virtHandlerPod, components.VirtHandlerName, command)
-}
-
-func GetKubevirtVMMetricsFunc(virtClient *kubecli.KubevirtClient, pod *k8sv1.Pod) func(string) string {
-	return func(ip string) string {
-		metricsURL := PrepareMetricsURL(ip, 8443)
-		stdout, _, err := exec.ExecuteCommandOnPodWithResults(*virtClient,
-			pod,
-			"virt-handler",
-			[]string{
-				"curl",
-				"-L",
-				"-k",
-				metricsURL,
-			})
-		Expect(err).ToNot(HaveOccurred())
-		return stdout
-	}
-}
-
-func PrepareMetricsURL(ip string, port int) string {
-	return fmt.Sprintf("https://%s/metrics", net.JoinHostPort(ip, strconv.Itoa(port)))
 }
 
 func StartVMAndExpectRunning(virtClient kubecli.KubevirtClient, vm *v1.VirtualMachine) *v1.VirtualMachine {

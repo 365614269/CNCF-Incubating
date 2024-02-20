@@ -1597,9 +1597,12 @@ var daemonCell = cell.Module(
 	"daemon",
 	"Legacy Daemon",
 
-	cell.Provide(newDaemonPromise),
-	cell.Provide(newRestorerPromise),
-	cell.Provide(func() k8s.CacheStatus { return make(k8s.CacheStatus) }),
+	cell.Provide(
+		newDaemonPromise,
+		newRestorerPromise,
+		func() k8s.CacheStatus { return make(k8s.CacheStatus) },
+		newSyncHostIPs,
+	),
 	// Provide a read-only copy of the current daemon settings to be consumed
 	// by the debuginfo API
 	cell.ProvidePrivate(daemonSettings),
@@ -1661,6 +1664,7 @@ type daemonParams struct {
 	IPsecKeyCustodian   datapath.IPsecKeyCustodian
 	MTU                 mtu.MTU
 	Sysctl              sysctl.Sysctl
+	SyncHostIPs         *syncHostIPs
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
@@ -1688,10 +1692,12 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 			daemon = d
 
 			if !option.Config.DryMode {
-				startDaemon(daemon, restoredEndpoints, cleaner, params)
+				if err := startDaemon(daemon, restoredEndpoints, cleaner, params); err != nil {
+					daemonResolver.Reject(err)
+					return err
+				}
 			}
 			daemonResolver.Resolve(daemon)
-
 			return nil
 		},
 		OnStop: func(cell.HookContext) error {
@@ -1708,14 +1714,14 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 }
 
 // startDaemon starts the old unmodular part of the cilium-agent.
-func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daemonCleanup, params daemonParams) {
+func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daemonCleanup, params daemonParams) error {
 	log.Info("Initializing daemon")
 
 	// This validation needs to be done outside of the agent until
 	// datapath.NodeAddressing is used consistently across the code base.
 	log.Info("Validating configured node address ranges")
 	if err := node.ValidatePostInit(); err != nil {
-		log.Fatalf("postinit failed: %s", err)
+		return fmt.Errorf("postinit failed: %w", err)
 	}
 
 	bootstrapStats.enableConntrack.Start()
@@ -1744,11 +1750,11 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		d.endpointManager.InitHostEndpointLabels(d.ctx)
 	} else {
 		log.Info("Creating host endpoint")
-		if err := d.endpointManager.AddHostEndpoint(
+		err := d.endpointManager.AddHostEndpoint(
 			d.ctx, d, d, d.ipcache, d.l7Proxy, d.identityAllocator,
-			"Create host endpoint", nodeTypes.GetName(),
-		); err != nil {
-			log.Fatalf("unable to create host endpoint: %s", err)
+			"Create host endpoint", nodeTypes.GetName())
+		if err != nil {
+			return fmt.Errorf("unable to create host endpoint: %w", err)
 		}
 	}
 
@@ -1761,11 +1767,11 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 				log.Warn("Ingress IPs are not available, skipping creation of the Ingress Endpoint: Policy enforcement on Cilium Ingress will not work as expected.")
 			} else {
 				log.Info("Creating ingress endpoint")
-				if err := d.endpointManager.AddIngressEndpoint(
+				err := d.endpointManager.AddIngressEndpoint(
 					d.ctx, d, d, d.ipcache, d.l7Proxy, d.identityAllocator,
-					"Create ingress endpoint",
-				); err != nil {
-					log.Fatalf("unable to create ingress endpoint: %s", err)
+					"Create ingress endpoint")
+				if err != nil {
+					return fmt.Errorf("unable to create ingress endpoint: %w", err)
 				}
 			}
 		}
@@ -1774,7 +1780,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	if option.Config.EnableIPMasqAgent {
 		ipmasqAgent, err := ipmasq.NewIPMasqAgent(option.Config.IPMasqAgentConfigPath)
 		if err != nil {
-			log.Fatalf("failed to create ipmasq agent: %s", err)
+			return fmt.Errorf("failed to create ipmasq agent: %w", err)
 		}
 		ipmasqAgent.Start()
 	}
@@ -1876,6 +1882,8 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	if err != nil {
 		log.WithError(err).Error("Unable to store Viper's configuration")
 	}
+
+	return nil
 }
 
 func newRestorerPromise(lc cell.Lifecycle, daemonPromise promise.Promise[*Daemon]) promise.Promise[endpointstate.Restorer] {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Red Hat, Inc. and/or its affiliates
+ * Copyright 2024 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,16 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.keycloak.sdjwt;
 
-package org.keycloak.quarkus.runtime.cli;
+import com.fasterxml.jackson.databind.JsonNode;
 
-import picocli.CommandLine.IFactory;
+/**
+ * 
+ * @author <a href="mailto:francis.pouatcha@adorsys.com">Francis Pouatcha</a>
+ * 
+ */
+public interface SdJwtArrayElement {
+    /**
+     * Returns the value visibly printed as array element
+     * in the issuer signed jwt.
+     */
+    public JsonNode getVisibleValue(String hashAlg);
 
-public class DefaultFactory implements IFactory {
-
-    @Override
-    public <K> K create(Class<K> cls) throws Exception {
-        // picocli tries different approaches for creating instances, this is what we need
-        return cls.getDeclaredConstructor().newInstance();
-    }
+    public String getDisclosureString();
 }
