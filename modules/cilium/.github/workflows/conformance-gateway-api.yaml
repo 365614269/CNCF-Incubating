@@ -100,7 +100,7 @@ jobs:
         uses: ./.github/actions/set-env-variables
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@b0955d62f5d0fd22449c568c6be921f46b66f603 # v0.15.22
+        uses: cilium/cilium-cli@7306e3cdc6caee738157f08e3e1ba26179f104e5 # v0.15.23
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -156,7 +156,7 @@ jobs:
         uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.21.6
+          go-version: 1.22.0
 
       - name: Wait for images to be available
         timeout-minutes: 30
