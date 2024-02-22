@@ -73,7 +73,6 @@ import (
 	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 
 	kutil "kubevirt.io/kubevirt/pkg/util"
-	virtconfig "kubevirt.io/kubevirt/pkg/virt-config"
 	"kubevirt.io/kubevirt/pkg/virt-controller/services"
 	launcherApi "kubevirt.io/kubevirt/pkg/virt-launcher/virtwrap/api"
 	"kubevirt.io/kubevirt/pkg/virt-operator/util"
@@ -290,21 +289,6 @@ func GetVcpuMask(pod *k8sv1.Pod, emulator, cpu string) (output string, err error
 	tasksetcmd := "taskset -c -p " + vcpupid + " | cut -f2 -d:"
 	args = []string{BinBash, "-c", tasksetcmd}
 	output, err = exec.ExecuteCommandOnPod(virtClient, pod, "compute", args)
-	Expect(err).ToNot(HaveOccurred())
-
-	return strings.TrimSpace(output), err
-}
-
-func GetKvmPitMask(qemupid, nodeName string) (output string, err error) {
-	kvmpitcomm := "kvm-pit/" + qemupid
-	args := []string{"pgrep", "-f", kvmpitcomm}
-	output, err = ExecuteCommandInVirtHandlerPod(nodeName, args)
-	Expect(err).ToNot(HaveOccurred())
-
-	kvmpitpid := strings.TrimSpace(output)
-	tasksetcmd := "taskset -c -p " + kvmpitpid + " | cut -f2 -d:"
-	args = []string{BinBash, "-c", tasksetcmd}
-	output, err = ExecuteCommandInVirtHandlerPod(nodeName, args)
 	Expect(err).ToNot(HaveOccurred())
 
 	return strings.TrimSpace(output), err
@@ -759,14 +743,6 @@ func ChangeImgFilePermissionsToNonQEMU(pvc *k8sv1.PersistentVolumeClaim) {
 	RunPodAndExpectCompletion(pod)
 }
 
-func RenameImgFile(pvc *k8sv1.PersistentVolumeClaim, newName string) {
-	args := []string{fmt.Sprintf("mv %s %s && ls -al %s", filepath.Join(libstorage.DefaultPvcMountPath, "disk.img"), filepath.Join(libstorage.DefaultPvcMountPath, newName), libstorage.DefaultPvcMountPath)}
-
-	By("renaming disk.img")
-	pod := libstorage.RenderPodWithPVC("rename-disk-img-pod", []string{"/bin/bash", "-c"}, args, pvc)
-	RunPodAndExpectCompletion(pod)
-}
-
 func CopyAlpineWithNonQEMUPermissions() (dstPath, nodeName string) {
 	dstPath = testsuite.HostPathAlpine + "-nopriv"
 	args := []string{fmt.Sprintf(`mkdir -p %[1]s-nopriv && cp %[1]s/disk.img %[1]s-nopriv/ && chmod 640 %[1]s-nopriv/disk.img  && chown root:root %[1]s-nopriv/disk.img`, testsuite.HostPathAlpine)}
@@ -907,21 +883,6 @@ func RemoveHostDiskImage(diskPath string, nodeName string) {
 	Expect(err).ToNot(HaveOccurred())
 	_, _, err = exec.ExecuteCommandOnPodWithResults(virtClient, virtHandlerPod, "virt-handler", []string{"rm", "-rf", procPath})
 	Expect(err).ToNot(HaveOccurred())
-}
-
-func CreateHostDiskImage(diskPath string) *k8sv1.Pod {
-	hostPathType := k8sv1.HostPathDirectoryOrCreate
-	dir := filepath.Dir(diskPath)
-
-	command := fmt.Sprintf(`dd if=/dev/zero of=%s bs=1 count=0 seek=1G && ls -l %s`, diskPath, dir)
-	if !checks.HasFeature(virtconfig.Root) {
-		command = command + fmt.Sprintf(" && chown 107:107 %s", diskPath)
-	}
-
-	args := []string{command}
-	pod := libpod.RenderHostPathPod("hostdisk-create-job", dir, hostPathType, k8sv1.MountPropagationNone, []string{BinBash, "-c"}, args)
-
-	return pod
 }
 
 func GetVmiPod(virtClient kubecli.KubevirtClient, vmi *v1.VirtualMachineInstance) *k8sv1.Pod {
