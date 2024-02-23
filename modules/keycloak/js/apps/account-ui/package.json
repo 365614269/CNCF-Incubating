@@ -22,7 +22,7 @@
     "@patternfly/react-icons": "^4.93.7",
     "@patternfly/react-table": "^4.113.6",
     "i18next": "^23.9.0",
-    "i18next-http-backend": "^2.4.3",
+    "i18next-http-backend": "^2.5.0",
     "keycloak-js": "workspace:*",
     "keycloak-masthead": "workspace:*",
     "lodash-es": "^4.17.21",
@@ -41,9 +41,9 @@
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react-swc": "^3.6.0",
     "lightningcss": "^1.23.0",
-    "vite": "^5.1.3",
+    "vite": "^5.1.4",
     "vite-plugin-checker": "^0.6.4",
-    "vite-plugin-dts": "^3.7.2"
+    "vite-plugin-dts": "^3.7.3"
   },
   "wireit": {
     "dev": {

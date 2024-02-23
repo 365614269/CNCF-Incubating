@@ -20089,9 +20089,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@uiw/codemirror-extensions-basic-setup@npm:4.21.22":
-  version: 4.21.22
-  resolution: "@uiw/codemirror-extensions-basic-setup@npm:4.21.22"
+"@uiw/codemirror-extensions-basic-setup@npm:4.21.23":
+  version: 4.21.23
+  resolution: "@uiw/codemirror-extensions-basic-setup@npm:4.21.23"
   dependencies:
     "@codemirror/autocomplete": ^6.0.0
     "@codemirror/commands": ^6.0.0
@@ -20108,19 +20108,19 @@ __metadata:
     "@codemirror/search": ">=6.0.0"
     "@codemirror/state": ">=6.0.0"
     "@codemirror/view": ">=6.0.0"
-  checksum: 75e9f8fa8c9462d45e89d05b6bda5c82825fd0fc2a73c20c2c7b5f7d1d5fce6b0a43aefac3b5651877eb655f5b82ff1eba34f9db57acd69a4da6d4e75540d3fe
+  checksum: cd17481d9d9a9b620f961a4df6e8208bcabe98652ca6c18366a8688fbcc09d37a030694a70dcc010aaabe02c85c342acf9f80357c6853b57f1081af5b130bd26
   languageName: node
   linkType: hard
 
 "@uiw/react-codemirror@npm:^4.9.3":
-  version: 4.21.22
-  resolution: "@uiw/react-codemirror@npm:4.21.22"
+  version: 4.21.23
+  resolution: "@uiw/react-codemirror@npm:4.21.23"
   dependencies:
     "@babel/runtime": ^7.18.6
     "@codemirror/commands": ^6.1.0
     "@codemirror/state": ^6.1.1
     "@codemirror/theme-one-dark": ^6.0.0
-    "@uiw/codemirror-extensions-basic-setup": 4.21.22
+    "@uiw/codemirror-extensions-basic-setup": 4.21.23
     codemirror: ^6.0.0
   peerDependencies:
     "@babel/runtime": ">=7.11.0"
@@ -20130,7 +20130,7 @@ __metadata:
     codemirror: ">=6.0.0"
     react: ">=16.8.0"
     react-dom: ">=16.8.0"
-  checksum: 3d3152c32cb017f419956ac729e0842181c1f2836f1199c991fb6aab27b4b372d994085f28b83e293288e5630556186a87f2bbed305de96fedee7e0902dc9529
+  checksum: 7d0209d947e1e57cf80ef44a097bb3af04d2bab2d6fc57deed91619a0db77e3d4289db8f03fb43906b2e324496d25c872fa99b83834f085c40ad95137ea4459c
   languageName: node
   linkType: hard
 
@@ -21993,13 +21993,13 @@ __metadata:
   linkType: hard
 
 "better-sqlite3@npm:^9.0.0":
-  version: 9.4.2
-  resolution: "better-sqlite3@npm:9.4.2"
+  version: 9.4.3
+  resolution: "better-sqlite3@npm:9.4.3"
   dependencies:
     bindings: ^1.5.0
     node-gyp: latest
     prebuild-install: ^7.1.1
-  checksum: cd3038d028def835f14cf989a3fada118d2c586e19f2b4e52462d67f0a616364ce73f916bf8d857b144bff0f3ef36945399ab11451c256990be21cd425a76f26
+  checksum: 09e8d52e52e42f7175fd71fb8856873e9e39714a31b7739e0c6c2017b020bfa3f1cdd255ad1fe4d68140b0c74a5d043eca4d1ed8be9a080e172557bbea0deaf5
   languageName: node
   linkType: hard
 
@@ -26753,8 +26753,8 @@ __metadata:
   linkType: hard
 
 "eslint-plugin-jest@npm:^27.0.0":
-  version: 27.8.0
-  resolution: "eslint-plugin-jest@npm:27.8.0"
+  version: 27.9.0
+  resolution: "eslint-plugin-jest@npm:27.9.0"
   dependencies:
     "@typescript-eslint/utils": ^5.10.0
   peerDependencies:
@@ -26766,7 +26766,7 @@ __metadata:
       optional: true
     jest:
       optional: true
-  checksum: 1fcdcf332b6d95c2433dcdf908b46e494a671bb101c675f99525c7a664853e60c247d63f302946d5a4f74f497a73c41673bc365a841f81bb4651b527379487e2
+  checksum: e2a4b415105408de28ad146818fcc6f4e122f6a39c6b2216ec5c24a80393f1390298b20231b0467bc5fd730f6e24b05b89e1a6a3ce651fc159aa4174ecc233d0
   languageName: node
   linkType: hard
 
@@ -32263,8 +32263,8 @@ __metadata:
   linkType: hard
 
 "jscodeshift@npm:^0.15.0":
-  version: 0.15.1
-  resolution: "jscodeshift@npm:0.15.1"
+  version: 0.15.2
+  resolution: "jscodeshift@npm:0.15.2"
   dependencies:
     "@babel/core": ^7.23.0
     "@babel/parser": ^7.23.0
@@ -32293,7 +32293,7 @@ __metadata:
       optional: true
   bin:
     jscodeshift: bin/jscodeshift.js
-  checksum: d760dee2b634fa8a4610bdbdf787ce117a9a6bcc73e9ae55a38be77e380698d928d34a375a93ed4685e8bbdecfbd3cdbb87eb4b7e22fc58381db3d59fb554687
+  checksum: e3fa018bfd0ee5b65da1b98797a2536ae8ff0185f0c0d11f9be11e27e1f25ab33a4e17cecc8b73ef520e5d9d8dade98abc49bc0835c024a0f1ff14b48288528b
   languageName: node
   linkType: hard
 
