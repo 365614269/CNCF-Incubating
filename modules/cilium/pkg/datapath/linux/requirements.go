@@ -6,7 +6,6 @@ package linux
 import (
 	"errors"
 	"os"
-	"path/filepath"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -34,20 +33,15 @@ func CheckRequirements() {
 	if !option.Config.DryMode {
 		probeManager := probes.NewProbeManager()
 
-		// VTEP integration feature requires kernel 1m large instruction support
-		if option.Config.EnableVTEP {
-			if probes.HaveLargeInstructionLimit() != nil {
-				log.Fatalf("VXLAN Tunnel Endpoint (VTEP) Integration: requires support for large programs (Linux 5.2.0 or newer)")
-			}
+		if probes.HaveLargeInstructionLimit() != nil {
+			log.Fatalf("Require support for large programs (Linux 5.2.0 or newer)")
 		}
+
 		if err := probeManager.SystemConfigProbes(); err != nil {
 			errMsg := "BPF system config check: NOT OK."
 			// TODO(vincentmli): revisit log when GH#14314 has been resolved
 			// Warn missing required kernel config option
 			log.WithError(err).Warn(errMsg)
-		}
-		if err := probes.CreateHeaderFiles(filepath.Join(option.Config.BpfDir, "include/bpf"), probes.ExecuteHeaderProbes()); err != nil {
-			log.WithError(err).Fatal("failed to create header files with feature macros")
 		}
 	}
 }
