@@ -53,7 +53,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/thanos-io/objstore v0.0.0-20240128223450-bdadaefbfe03
 	github.com/thanos-io/promql-engine v0.0.0-20240125175542-4a8e9731acba
-	github.com/thanos-io/thanos v0.34.1-0.20240201134136-94f971bc2b7f
+	github.com/thanos-io/thanos v0.34.2-0.20240226184600-e7cd6c1c60fb
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	github.com/weaveworks/common v0.0.0-20230728070032-dd9e68f319d5
 	go.etcd.io/etcd/api/v3 v3.5.12
@@ -77,6 +77,7 @@ require (
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.1
+	github.com/bboreham/go-loser v0.0.0-20230920113527-fcc2c21820a3
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/google/go-cmp v0.6.0
 	github.com/sercand/kuberesolver/v4 v4.0.0
@@ -111,7 +112,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.16.19 // indirect
 	github.com/aws/smithy-go v1.13.3 // indirect
-	github.com/bboreham/go-loser v0.0.0-20230920113527-fcc2c21820a3 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
