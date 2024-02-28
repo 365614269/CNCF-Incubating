@@ -80,7 +80,6 @@ import (
 	"kubevirt.io/kubevirt/tests/flags"
 	. "kubevirt.io/kubevirt/tests/framework/matcher"
 	"kubevirt.io/kubevirt/tests/libdv"
-	"kubevirt.io/kubevirt/tests/libnet/cloudinit"
 	"kubevirt.io/kubevirt/tests/libnode"
 	"kubevirt.io/kubevirt/tests/libpod"
 	"kubevirt.io/kubevirt/tests/libstorage"
@@ -531,20 +530,6 @@ func AddEphemeralDisk(vmi *v1.VirtualMachineInstance, name string, bus v1.DiskBu
 	return vmi
 }
 
-// NewRandomFedoraVMI
-//
-// Deprecated: Use libvmi directly
-func NewRandomFedoraVMI(opts ...libvmi.Option) *v1.VirtualMachineInstance {
-	networkData := cloudinit.CreateDefaultCloudInitNetworkData()
-
-	return libvmi.NewFedora(append([]libvmi.Option{
-		libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
-		libvmi.WithNetwork(v1.DefaultPodNetwork()),
-		libvmi.WithCloudInitNoCloudNetworkData(networkData)},
-		opts...)...,
-	)
-}
-
 func GetFedoraToolsGuestAgentBlacklistUserData(commands string) string {
 	return fmt.Sprintf(`#!/bin/bash
             echo -e "\n\nBLACKLIST_RPC=%s" | sudo tee -a /etc/sysconfig/qemu-ga
@@ -767,24 +752,6 @@ func GetRunningVirtualMachineInstanceDomainXML(virtClient kubecli.KubevirtClient
 		return "", fmt.Errorf("could not dump libvirt domxml (remotely on pod %s): %v: %s, %s", vmiPod.Name, err, stdout, stderr)
 	}
 	return stdout, err
-}
-
-func LibvirtDomainIsPaused(virtClient kubecli.KubevirtClient, vmi *v1.VirtualMachineInstance) (bool, error) {
-	vmiPod, err := getRunningPodByVirtualMachineInstance(vmi, testsuite.GetTestNamespace(vmi))
-	if err != nil {
-		return false, err
-	}
-
-	stdout, stderr, err := exec.ExecuteCommandOnPodWithResults(
-		virtClient,
-		vmiPod,
-		libpod.LookupComputeContainer(vmiPod).Name,
-		[]string{"virsh", "--quiet", "domstate", vmi.Namespace + "_" + vmi.Name},
-	)
-	if err != nil {
-		return false, fmt.Errorf("could not get libvirt domstate (remotely on pod): %v: %s", err, stderr)
-	}
-	return strings.Contains(stdout, "paused"), nil
 }
 
 func GenerateVMJson(vm *v1.VirtualMachine, generateDirectory string) (string, error) {
