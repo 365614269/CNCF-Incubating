@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@types/node':
-        specifier: ^20.11.20
-        version: 20.11.20
+        specifier: ^20.11.21
+        version: 20.11.21
       '@typescript-eslint/eslint-plugin':
         specifier: ^7.0.0
         version: 7.0.0(@typescript-eslint/parser@6.21.0)(eslint@8.57.0)(typescript@5.3.3)
@@ -118,14 +118,14 @@ importers:
         specifier: workspace:*
         version: link:../../libs/keycloak-admin-client
       '@playwright/test':
-        specifier: ^1.41.2
-        version: 1.41.2
+        specifier: ^1.42.0
+        version: 1.42.0
       '@types/lodash-es':
         specifier: ^4.17.12
         version: 4.17.12
       '@types/react':
-        specifier: ^18.2.59
-        version: 18.2.59
+        specifier: ^18.2.60
+        version: 18.2.60
       '@types/react-dom':
         specifier: ^18.2.19
         version: 18.2.19
@@ -137,13 +137,13 @@ importers:
         version: 1.24.0
       vite:
         specifier: ^5.1.4
-        version: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+        version: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
       vite-plugin-checker:
         specifier: ^0.6.4
         version: 0.6.4(eslint@8.57.0)(typescript@5.3.3)(vite@5.1.4)
       vite-plugin-dts:
         specifier: ^3.7.3
-        version: 3.7.3(@types/node@20.11.20)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4)
+        version: 3.7.3(@types/node@20.11.21)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4)
 
   apps/admin-ui:
     dependencies:
@@ -170,7 +170,7 @@ importers:
         version: 4.113.6(react-dom@18.2.0)(react@18.2.0)
       admin-ui:
         specifier: 'file:'
-        version: file:apps/admin-ui(@types/react@18.2.59)(react-monaco-editor@0.51.0)
+        version: file:apps/admin-ui(@types/react@18.2.60)(react-monaco-editor@0.51.0)
       dagre:
         specifier: ^0.8.5
         version: 0.8.5
@@ -218,7 +218,7 @@ importers:
         version: 6.22.1(react-dom@18.2.0)(react@18.2.0)
       reactflow:
         specifier: ^11.10.4
-        version: 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+        version: 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       ui-shared:
         specifier: workspace:*
         version: link:../../libs/ui-shared
@@ -248,8 +248,8 @@ importers:
         specifier: ^4.17.12
         version: 4.17.12
       '@types/react':
-        specifier: ^18.2.59
-        version: 18.2.59
+        specifier: ^18.2.60
+        version: 18.2.60
       '@types/react-dom':
         specifier: ^18.2.19
         version: 18.2.19
@@ -279,19 +279,19 @@ importers:
         version: 1.24.0
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@20.11.20)(typescript@5.3.3)
+        version: 10.9.2(@types/node@20.11.21)(typescript@5.3.3)
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
       vite:
         specifier: ^5.1.4
-        version: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+        version: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
       vite-plugin-checker:
         specifier: ^0.6.4
         version: 0.6.4(eslint@8.57.0)(typescript@5.3.3)(vite@5.1.4)
       vitest:
         specifier: ^1.3.0
-        version: 1.3.1(@types/node@20.11.20)(jsdom@24.0.0)(lightningcss@1.24.0)
+        version: 1.3.1(@types/node@20.11.21)(jsdom@24.0.0)(lightningcss@1.24.0)
 
   apps/keycloak-server:
     dependencies:
@@ -339,8 +339,8 @@ importers:
         specifier: ^10.0.6
         version: 10.0.6
       '@types/node':
-        specifier: ^20.11.20
-        version: 20.11.20
+        specifier: ^20.11.21
+        version: 20.11.21
       chai:
         specifier: ^5.1.0
         version: 5.1.0
@@ -352,7 +352,7 @@ importers:
         version: 10.3.0
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@20.11.20)(typescript@5.3.3)
+        version: 10.9.2(@types/node@20.11.21)(typescript@5.3.3)
 
   libs/keycloak-js:
     dependencies:
@@ -407,8 +407,8 @@ importers:
         version: 18.2.0(react@18.2.0)
     devDependencies:
       '@types/react':
-        specifier: ^18.2.59
-        version: 18.2.59
+        specifier: ^18.2.60
+        version: 18.2.60
       '@types/react-dom':
         specifier: ^18.2.19
         version: 18.2.19
@@ -420,13 +420,13 @@ importers:
         version: 2.2.4(rollup@4.12.0)
       vite:
         specifier: ^5.1.4
-        version: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+        version: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
       vite-plugin-checker:
         specifier: ^0.6.4
         version: 0.6.4(eslint@8.57.0)(typescript@5.3.3)(vite@5.1.4)
       vite-plugin-dts:
         specifier: ^3.7.3
-        version: 3.7.3(@types/node@20.11.20)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4)
+        version: 3.7.3(@types/node@20.11.21)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4)
 
   libs/ui-shared:
     dependencies:
@@ -462,8 +462,8 @@ importers:
         specifier: ^4.17.12
         version: 4.17.12
       '@types/react':
-        specifier: ^18.2.59
-        version: 18.2.59
+        specifier: ^18.2.60
+        version: 18.2.60
       '@types/react-dom':
         specifier: ^18.2.19
         version: 18.2.19
@@ -475,19 +475,19 @@ importers:
         version: 2.2.4(rollup@4.12.0)
       vite:
         specifier: ^5.1.4
-        version: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+        version: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
       vite-plugin-checker:
         specifier: ^0.6.4
         version: 0.6.4(eslint@8.57.0)(typescript@5.3.3)(vite@5.1.4)
       vite-plugin-dts:
         specifier: ^3.7.3
-        version: 3.7.3(@types/node@20.11.20)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4)
+        version: 3.7.3(@types/node@20.11.21)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4)
       vite-plugin-lib-inject-css:
         specifier: ^2.0.0
         version: 2.0.0(vite@5.1.4)
       vitest:
         specifier: ^1.3.0
-        version: 1.3.1(@types/node@20.11.20)(jsdom@24.0.0)(lightningcss@1.24.0)
+        version: 1.3.1(@types/node@20.11.21)(jsdom@24.0.0)(lightningcss@1.24.0)
 
 packages:
 
@@ -1146,24 +1146,24 @@ packages:
       '@jridgewell/sourcemap-codec': 1.4.15
     dev: true
 
-  /@microsoft/api-extractor-model@7.28.3(@types/node@20.11.20):
+  /@microsoft/api-extractor-model@7.28.3(@types/node@20.11.21):
     resolution: {integrity: sha512-wT/kB2oDbdZXITyDh2SQLzaWwTOFbV326fP0pUwNW00WeliARs0qjmXBWmGWardEzp2U3/axkO3Lboqun6vrig==}
     dependencies:
       '@microsoft/tsdoc': 0.14.2
       '@microsoft/tsdoc-config': 0.16.2
-      '@rushstack/node-core-library': 3.62.0(@types/node@20.11.20)
+      '@rushstack/node-core-library': 3.62.0(@types/node@20.11.21)
     transitivePeerDependencies:
       - '@types/node'
     dev: true
 
-  /@microsoft/api-extractor@7.39.0(@types/node@20.11.20):
+  /@microsoft/api-extractor@7.39.0(@types/node@20.11.21):
     resolution: {integrity: sha512-PuXxzadgnvp+wdeZFPonssRAj/EW4Gm4s75TXzPk09h3wJ8RS3x7typf95B4vwZRrPTQBGopdUl+/vHvlPdAcg==}
     hasBin: true
     dependencies:
-      '@microsoft/api-extractor-model': 7.28.3(@types/node@20.11.20)
+      '@microsoft/api-extractor-model': 7.28.3(@types/node@20.11.21)
       '@microsoft/tsdoc': 0.14.2
       '@microsoft/tsdoc-config': 0.16.2
-      '@rushstack/node-core-library': 3.62.0(@types/node@20.11.20)
+      '@rushstack/node-core-library': 3.62.0(@types/node@20.11.21)
       '@rushstack/rig-package': 0.5.1
       '@rushstack/ts-command-line': 4.17.1
       colors: 1.2.5
@@ -1332,7 +1332,7 @@ packages:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       react-dropzone: 9.0.0(react@18.2.0)
-      react-monaco-editor: 0.51.0(@types/react@18.2.59)(monaco-editor@0.46.0)(react@18.2.0)
+      react-monaco-editor: 0.51.0(@types/react@18.2.60)(monaco-editor@0.46.0)(react@18.2.0)
       tslib: 2.6.2
     dev: false
 
@@ -1399,47 +1399,47 @@ packages:
       tslib: 2.6.2
     dev: true
 
-  /@playwright/test@1.41.2:
-    resolution: {integrity: sha512-qQB9h7KbibJzrDpkXkYvsmiDJK14FULCCZgEcoe2AvFAS64oCirWTwzTlAYEbKaRxWs5TFesE1Na6izMv3HfGg==}
+  /@playwright/test@1.42.0:
+    resolution: {integrity: sha512-2k1HzC28Fs+HiwbJOQDUwrWMttqSLUVdjCqitBOjdCD0svWOMQUVqrXX6iFD7POps6xXAojsX/dGBpKnjZctLA==}
     engines: {node: '>=16'}
     hasBin: true
     dependencies:
-      playwright: 1.41.2
+      playwright: 1.42.0
     dev: true
 
-  /@reactflow/background@11.3.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/background@11.3.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-byj/G9pEC8tN0wT/ptcl/LkEP/BBfa33/SvBkqE4XwyofckqF87lKp573qGlisfnsijwAbpDlf81PuFL41So4Q==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.4
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.4.6(@types/react@18.2.59)(react@18.2.0)
+      zustand: 4.4.6(@types/react@18.2.60)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/controls@11.2.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/controls@11.2.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-e8nWplbYfOn83KN1BrxTXS17+enLyFnjZPbyDgHSRLtI5ZGPKF/8iRXV+VXb2LFVzlu4Wh3la/pkxtfP/0aguA==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.4
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.4.6(@types/react@18.2.59)(react@18.2.0)
+      zustand: 4.4.6(@types/react@18.2.60)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/core@11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/core@11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-j3i9b2fsTX/sBbOm+RmNzYEFWbNx4jGWGuGooh2r1jQaE2eV+TLJgiG/VNOp0q5mBl9f6g1IXs3Gm86S9JfcGw==}
     peerDependencies:
       react: '>=17'
@@ -1455,19 +1455,19 @@ packages:
       d3-zoom: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.4.6(@types/react@18.2.59)(react@18.2.0)
+      zustand: 4.4.6(@types/react@18.2.60)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/minimap@11.7.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/minimap@11.7.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-le95jyTtt3TEtJ1qa7tZ5hyM4S7gaEQkW43cixcMOZLu33VAdc2aCpJg/fXcRrrf7moN2Mbl9WIMNXUKsp5ILA==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       '@types/d3-selection': 3.0.8
       '@types/d3-zoom': 3.0.6
       classcat: 5.0.4
@@ -1475,41 +1475,41 @@ packages:
       d3-zoom: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.4.6(@types/react@18.2.59)(react@18.2.0)
+      zustand: 4.4.6(@types/react@18.2.60)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/node-resizer@2.2.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/node-resizer@2.2.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-HfickMm0hPDIHt9qH997nLdgLt0kayQyslKE0RS/GZvZ4UMQJlx/NRRyj5y47Qyg0NnC66KYOQWDM9LLzRTnUg==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.4
       d3-drag: 3.0.0
       d3-selection: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.4.6(@types/react@18.2.59)(react@18.2.0)
+      zustand: 4.4.6(@types/react@18.2.60)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/node-toolbar@1.3.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/node-toolbar@1.3.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-VmgxKmToax4sX1biZ9LXA7cj/TBJ+E5cklLGwquCCVVxh+lxpZGTBF3a5FJGVHiUNBBtFsC8ldcSZIK4cAlQww==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.4
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.4.6(@types/react@18.2.59)(react@18.2.0)
+      zustand: 4.4.6(@types/react@18.2.60)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
@@ -1740,7 +1740,7 @@ packages:
     dev: true
     optional: true
 
-  /@rushstack/node-core-library@3.62.0(@types/node@20.11.20):
+  /@rushstack/node-core-library@3.62.0(@types/node@20.11.21):
     resolution: {integrity: sha512-88aJn2h8UpSvdwuDXBv1/v1heM6GnBf3RjEy6ZPP7UnzHNCqOHA2Ut+ScYUbXcqIdfew9JlTAe3g+cnX9xQ/Aw==}
     peerDependencies:
       '@types/node': '*'
@@ -1748,7 +1748,7 @@ packages:
       '@types/node':
         optional: true
     dependencies:
-      '@types/node': 20.11.20
+      '@types/node': 20.11.21
       colors: 1.2.5
       fs-extra: 7.0.1
       import-lazy: 4.0.0
@@ -1955,7 +1955,7 @@ packages:
       dom-accessibility-api: 0.6.3
       lodash: 4.17.21
       redent: 3.0.0
-      vitest: 1.3.1(@types/node@20.11.20)(jsdom@24.0.0)(lightningcss@1.24.0)
+      vitest: 1.3.1(@types/node@20.11.21)(jsdom@24.0.0)(lightningcss@1.24.0)
     dev: true
 
   /@testing-library/react@14.2.1(react-dom@18.2.0)(react@18.2.0):
@@ -2198,7 +2198,7 @@ packages:
   /@types/gunzip-maybe@1.4.2:
     resolution: {integrity: sha512-2uqXZg1jTCKE1Pjbab8qb74+f2+i9h/jz8rQ+jRR+zaNJF75zWwrpbX8/TjF4m56m3KFOg9umHdCJ074KwiVxg==}
     dependencies:
-      '@types/node': 20.11.19
+      '@types/node': 20.11.20
     dev: false
 
   /@types/json-schema@7.0.14:
@@ -2223,14 +2223,14 @@ packages:
     resolution: {integrity: sha512-dJvrYWxP/UcXm36Qn36fxhUKu8A/xMRXVT2cliFF1Z7UA9liG5Psj3ezNSZw+5puH2czDXRLcXQxf8JbJt0ejg==}
     dev: true
 
-  /@types/node@20.11.19:
-    resolution: {integrity: sha512-7xMnVEcZFu0DikYjWOlRq7NTPETrm7teqUT2WkQjrTIkEgUyyGdWsj/Zg8bEJt5TNklzbPD1X3fqfsHw3SpapQ==}
+  /@types/node@20.11.20:
+    resolution: {integrity: sha512-7/rR21OS+fq8IyHTgtLkDK949uzsa6n8BkziAKtPVpugIkO6D+/ooXMvzXxDnZrmtXVfjb1bKQafYpb8s89LOg==}
     dependencies:
       undici-types: 5.26.5
     dev: false
 
-  /@types/node@20.11.20:
-    resolution: {integrity: sha512-7/rR21OS+fq8IyHTgtLkDK949uzsa6n8BkziAKtPVpugIkO6D+/ooXMvzXxDnZrmtXVfjb1bKQafYpb8s89LOg==}
+  /@types/node@20.11.21:
+    resolution: {integrity: sha512-/ySDLGscFPNasfqStUuWWPfL78jompfIoVzLJPVVAHBh6rpG68+pI2Gk+fNLeI8/f1yPYL4s46EleVIc20F1Ow==}
     dependencies:
       undici-types: 5.26.5
 
@@ -2240,11 +2240,11 @@ packages:
   /@types/react-dom@18.2.19:
     resolution: {integrity: sha512-aZvQL6uUbIJpjZk4U8JZGbau9KDeAwMfmhyWorxgBkqDIEf6ROjRozcmPIicqsUwPUjbkDfHKgGee1Lq65APcA==}
     dependencies:
-      '@types/react': 18.2.59
+      '@types/react': 18.2.60
     dev: true
 
-  /@types/react@18.2.59:
-    resolution: {integrity: sha512-DE+F6BYEC8VtajY85Qr7mmhTd/79rJKIHCg99MU9SWPB4xvLb6D1za2vYflgZfmPqQVEr6UqJTnLXEwzpVPuOg==}
+  /@types/react@18.2.60:
+    resolution: {integrity: sha512-dfiPj9+k20jJrLGOu9Nf6eqxm2EyJRrq2NvwOFsfbb7sFExZ9WELPs67UImHj3Ayxg8ruTtKtNnbjaF8olPq0A==}
     dependencies:
       '@types/prop-types': 15.7.9
       '@types/scheduler': 0.16.5
@@ -2272,14 +2272,14 @@ packages:
   /@types/tar-fs@2.0.4:
     resolution: {integrity: sha512-ipPec0CjTmVDWE+QKr9cTmIIoTl7dFG/yARCM5MqK8i6CNLIG1P8x4kwDsOQY1ChZOZjH0wO9nvfgBvWl4R3kA==}
     dependencies:
-      '@types/node': 20.11.19
+      '@types/node': 20.11.20
       '@types/tar-stream': 3.1.2
     dev: false
 
   /@types/tar-stream@3.1.2:
     resolution: {integrity: sha512-qnIpUItVb5u8jl3kbrHofkM40ggO3YKSzc7TWqLYjDdwlrL7CiEAkDySaGfeUBLtC50RTfh2acdz51ItUbV7pQ==}
     dependencies:
-      '@types/node': 20.11.20
+      '@types/node': 20.11.21
     dev: false
 
   /@types/uuid@9.0.8:
@@ -2290,7 +2290,7 @@ packages:
     resolution: {integrity: sha512-Km7XAtUIduROw7QPgvcft0lIupeG8a8rdKL8RiSyKvlE7dYY31fEn41HVuQsRFDuROA8tA4K2UVL+WdfFmErBA==}
     requiresBuild: true
     dependencies:
-      '@types/node': 20.11.20
+      '@types/node': 20.11.21
     dev: true
     optional: true
 
@@ -2513,7 +2513,7 @@ packages:
       vite: ^4 || ^5
     dependencies:
       '@swc/core': 1.3.107
-      vite: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+      vite: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
     transitivePeerDependencies:
       - '@swc/helpers'
     dev: true
@@ -6470,18 +6470,18 @@ packages:
       pathe: 1.1.1
     dev: true
 
-  /playwright-core@1.41.2:
-    resolution: {integrity: sha512-VaTvwCA4Y8kxEe+kfm2+uUUw5Lubf38RxF7FpBxLPmGe5sdNkSg5e3ChEigaGrX7qdqT3pt2m/98LiyvU2x6CA==}
+  /playwright-core@1.42.0:
+    resolution: {integrity: sha512-0HD9y8qEVlcbsAjdpBaFjmaTHf+1FeIddy8VJLeiqwhcNqGCBe4Wp2e8knpqiYbzxtxarxiXyNDw2cG8sCaNMQ==}
     engines: {node: '>=16'}
     hasBin: true
     dev: true
 
-  /playwright@1.41.2:
-    resolution: {integrity: sha512-v0bOa6H2GJChDL8pAeLa/LZC4feoAMbSQm1/jF/ySsWWoaNItvrMP7GEkvEEFyCTUYKMxjQKaTSg5up7nR6/8A==}
+  /playwright@1.42.0:
+    resolution: {integrity: sha512-Ko7YRUgj5xBHbntrgt4EIw/nE//XBHOKVKnBjO1KuZkmkhlbgyggTe5s9hjqQ1LpN+Xg+kHsQyt5Pa0Bw5XpvQ==}
     engines: {node: '>=16'}
     hasBin: true
     dependencies:
-      playwright-core: 1.41.2
+      playwright-core: 1.42.0
     optionalDependencies:
       fsevents: 2.3.2
     dev: true
@@ -6760,14 +6760,14 @@ packages:
     resolution: {integrity: sha512-xWGDIW6x921xtzPkhiULtthJHoJvBbF3q26fzloPCK0hsvxtPVelvftw3zjbHWSkR2km9Z+4uxbDDK/6Zw9B8w==}
     dev: true
 
-  /react-monaco-editor@0.51.0(@types/react@18.2.59)(monaco-editor@0.46.0)(react@18.2.0):
+  /react-monaco-editor@0.51.0(@types/react@18.2.60)(monaco-editor@0.46.0)(react@18.2.0):
     resolution: {integrity: sha512-6jx1V8p6gHVKJHFaTvicOtmlhFjOJhekobeNd92ZAo7F5UvAin1cF7bxWLCKgtxClYZ7CB3Ar284Kpbhj22FpQ==}
     peerDependencies:
       '@types/react': '>=17 <= 18'
       monaco-editor: ^0.34.1
       react: '>=17 <= 18'
     dependencies:
-      '@types/react': 18.2.59
+      '@types/react': 18.2.60
       monaco-editor: 0.46.0
       prop-types: 15.8.1
       react: 18.2.0
@@ -6802,18 +6802,18 @@ packages:
     dependencies:
       loose-envify: 1.4.0
 
-  /reactflow@11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0):
+  /reactflow@11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-0CApYhtYicXEDg/x2kvUHiUk26Qur8lAtTtiSlptNKuyEuGti6P1y5cS32YGaUoDMoCqkm/m+jcKkfMOvSCVRA==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/background': 11.3.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/controls': 11.2.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/core': 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/minimap': 11.7.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/node-resizer': 2.2.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/node-toolbar': 1.3.9(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/background': 11.3.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/controls': 11.2.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/minimap': 11.7.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/node-resizer': 2.2.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/node-toolbar': 1.3.9(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
     transitivePeerDependencies:
@@ -7623,7 +7623,7 @@ packages:
       typescript: 5.3.3
     dev: true
 
-  /ts-node@10.9.2(@types/node@20.11.20)(typescript@5.3.3):
+  /ts-node@10.9.2(@types/node@20.11.21)(typescript@5.3.3):
     resolution: {integrity: sha512-f0FFpIdcHgn8zcPSbf1dRevwt047YMnaiJM3u2w2RewrB+fob/zePZcrOyQoLMMO7aBIddLcQIEK5dYjkLnGrQ==}
     hasBin: true
     peerDependencies:
@@ -7642,7 +7642,7 @@ packages:
       '@tsconfig/node12': 1.0.11
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.4
-      '@types/node': 20.11.20
+      '@types/node': 20.11.21
       acorn: 8.11.2
       acorn-walk: 8.3.0
       arg: 4.1.3
@@ -7933,7 +7933,7 @@ packages:
       extsprintf: 1.4.1
     dev: true
 
-  /vite-node@1.3.1(@types/node@20.11.20)(lightningcss@1.24.0):
+  /vite-node@1.3.1(@types/node@20.11.21)(lightningcss@1.24.0):
     resolution: {integrity: sha512-azbRrqRxlWTJEVbzInZCTchx0X69M/XPTCz4H+TLvlTcR/xH/3hkRqhOakT41fMJCMzXTu4UvegkZiEoJAWvng==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -7942,7 +7942,7 @@ packages:
       debug: 4.3.4(supports-color@8.1.1)
       pathe: 1.1.1
       picocolors: 1.0.0
-      vite: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+      vite: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
     transitivePeerDependencies:
       - '@types/node'
       - less
@@ -7998,14 +7998,14 @@ packages:
       strip-ansi: 6.0.1
       tiny-invariant: 1.3.1
       typescript: 5.3.3
-      vite: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+      vite: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
       vscode-languageclient: 7.0.0
       vscode-languageserver: 7.0.0
       vscode-languageserver-textdocument: 1.0.11
       vscode-uri: 3.0.8
     dev: true
 
-  /vite-plugin-dts@3.7.3(@types/node@20.11.20)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4):
+  /vite-plugin-dts@3.7.3(@types/node@20.11.21)(rollup@4.12.0)(typescript@5.3.3)(vite@5.1.4):
     resolution: {integrity: sha512-26eTlBYdpjRLWCsTJebM8vkCieE+p9gP3raf+ecDnzzK5E3FG6VE1wcy55OkRpfWWVlVvKkYFe6uvRHYWx7Nog==}
     engines: {node: ^14.18.0 || >=16.0.0}
     peerDependencies:
@@ -8015,13 +8015,13 @@ packages:
       vite:
         optional: true
     dependencies:
-      '@microsoft/api-extractor': 7.39.0(@types/node@20.11.20)
+      '@microsoft/api-extractor': 7.39.0(@types/node@20.11.21)
       '@rollup/pluginutils': 5.1.0(rollup@4.12.0)
       '@vue/language-core': 1.8.26(typescript@5.3.3)
       debug: 4.3.4(supports-color@8.1.1)
       kolorist: 1.8.0
       typescript: 5.3.3
-      vite: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+      vite: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
       vue-tsc: 1.8.26(typescript@5.3.3)
     transitivePeerDependencies:
       - '@types/node'
@@ -8036,10 +8036,10 @@ packages:
     dependencies:
       magic-string: 0.30.7
       picocolors: 1.0.0
-      vite: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
+      vite: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
     dev: true
 
-  /vite@5.1.4(@types/node@20.11.20)(lightningcss@1.24.0):
+  /vite@5.1.4(@types/node@20.11.21)(lightningcss@1.24.0):
     resolution: {integrity: sha512-n+MPqzq+d9nMVTKyewqw6kSt+R3CkvF9QAKY8obiQn8g1fwTscKxyfaYnC632HtBXAQGc1Yjomphwn1dtwGAHg==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -8067,7 +8067,7 @@ packages:
       terser:
         optional: true
     dependencies:
-      '@types/node': 20.11.20
+      '@types/node': 20.11.21
       esbuild: 0.19.12
       lightningcss: 1.24.0
       postcss: 8.4.35
@@ -8076,7 +8076,7 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /vitest@1.3.1(@types/node@20.11.20)(jsdom@24.0.0)(lightningcss@1.24.0):
+  /vitest@1.3.1(@types/node@20.11.21)(jsdom@24.0.0)(lightningcss@1.24.0):
     resolution: {integrity: sha512-/1QJqXs8YbCrfv/GPQ05wAZf2eakUPLPa18vkJAKE7RXOKfVHqMZZ1WlTjiwl6Gcn65M5vpNUB6EFLnEdRdEXQ==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
@@ -8101,7 +8101,7 @@ packages:
       jsdom:
         optional: true
     dependencies:
-      '@types/node': 20.11.20
+      '@types/node': 20.11.21
       '@vitest/expect': 1.3.1
       '@vitest/runner': 1.3.1
       '@vitest/snapshot': 1.3.1
@@ -8120,8 +8120,8 @@ packages:
       strip-literal: 2.0.0
       tinybench: 2.5.1
       tinypool: 0.8.2
-      vite: 5.1.4(@types/node@20.11.20)(lightningcss@1.24.0)
-      vite-node: 1.3.1(@types/node@20.11.20)(lightningcss@1.24.0)
+      vite: 5.1.4(@types/node@20.11.21)(lightningcss@1.24.0)
+      vite-node: 1.3.1(@types/node@20.11.21)(lightningcss@1.24.0)
       why-is-node-running: 2.2.2
     transitivePeerDependencies:
       - less
@@ -8472,7 +8472,7 @@ packages:
       commander: 9.5.0
     dev: true
 
-  /zustand@4.4.6(@types/react@18.2.59)(react@18.2.0):
+  /zustand@4.4.6(@types/react@18.2.60)(react@18.2.0):
     resolution: {integrity: sha512-Rb16eW55gqL4W2XZpJh0fnrATxYEG3Apl2gfHTyDSE965x/zxslTikpNch0JgNjJA9zK6gEFW8Fl6d1rTZaqgg==}
     engines: {node: '>=12.7.0'}
     peerDependencies:
@@ -8487,12 +8487,12 @@ packages:
       react:
         optional: true
     dependencies:
-      '@types/react': 18.2.59
+      '@types/react': 18.2.60
       react: 18.2.0
       use-sync-external-store: 1.2.0(react@18.2.0)
     dev: false
 
-  file:apps/admin-ui(@types/react@18.2.59)(react-monaco-editor@0.51.0):
+  file:apps/admin-ui(@types/react@18.2.60)(react-monaco-editor@0.51.0):
     resolution: {directory: apps/admin-ui, type: directory}
     id: file:apps/admin-ui
     name: admin-ui
@@ -8519,7 +8519,7 @@ packages:
       react-hook-form: 7.50.1(react@18.2.0)
       react-i18next: 14.0.5(i18next@23.10.0)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom: 6.22.1(react-dom@18.2.0)(react@18.2.0)
-      reactflow: 11.10.4(@types/react@18.2.59)(react-dom@18.2.0)(react@18.2.0)
+      reactflow: 11.10.4(@types/react@18.2.60)(react-dom@18.2.0)(react@18.2.0)
       ui-shared: link:libs/ui-shared
       use-react-router-breadcrumbs: 4.0.1(react-router-dom@6.22.1)(react@18.2.0)
     transitivePeerDependencies:

@@ -1127,7 +1127,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:663a71073bfebde735bdde2d7afeb565ef7e5c37de1bf962afbb432f1062559f","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.28.1-e62af1059e691fe025d97b53b56ed4e8afa366dc","useDigest":true}``
+     - ``{"digest":"sha256:223fe3d2b7d2c82d0ec3f4fcfd8c322fb7d5052d128519768f6ebc8f6ae43eb7","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.28.1-f6d0ca17bd2f445e82eaf1892b132dbf10cb2124","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1412,6 +1412,14 @@
      - Enable support for Gateway API in cilium This will automatically set enable-envoy-config as well.
      - bool
      - ``false``
+   * - :spelling:ignore:`gatewayAPI.hostNetwork.enabled`
+     - Configure whether the Envoy listeners should be exposed on the host network.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`gatewayAPI.hostNetwork.nodes.matchLabels`
+     - Specify the labels of the nodes where the Ingress listeners should be exposed  matchLabels:   kubernetes.io/os: linux   kubernetes.io/hostname: kind-worker
+     - object
+     - ``{}``
    * - :spelling:ignore:`gatewayAPI.secretsNamespace`
      - SecretsNamespace is the namespace in which envoy SDS will retrieve TLS secrets from.
      - object
@@ -2052,6 +2060,22 @@
      - Enforce https for host having matching TLS host in Ingress. Incoming traffic to http listener will return 308 http error code with respective location in header.
      - bool
      - ``true``
+   * - :spelling:ignore:`ingressController.hostNetwork.enabled`
+     - Configure whether the Envoy listeners should be exposed on the host network.
+     - bool
+     - ``false``
+   * - :spelling:ignore:`ingressController.hostNetwork.nodes.matchLabels`
+     - Specify the labels of the nodes where the Ingress listeners should be exposed  matchLabels:   kubernetes.io/os: linux   kubernetes.io/hostname: kind-worker
+     - object
+     - ``{}``
+   * - :spelling:ignore:`ingressController.hostNetwork.sharedHTTPPort`
+     - Configure a specific port on the host network that gets used for the shared HTTP listener. This is used for HTTP and HTTPS.
+     - int
+     - ``0``
+   * - :spelling:ignore:`ingressController.hostNetwork.sharedTLSPassthroughPort`
+     - Configure a specific port on the host network that gets used for the shared TLS passthrough listener
+     - int
+     - ``0``
    * - :spelling:ignore:`ingressController.ingressLBAnnotationPrefixes`
      - IngressLBAnnotations are the annotation and label prefixes, which are used to filter annotations and/or labels to propagate from Ingress to the Load Balancer service
      - list

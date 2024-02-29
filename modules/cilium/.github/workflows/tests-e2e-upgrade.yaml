@@ -246,7 +246,7 @@ jobs:
             SHA="${{ github.sha }}"
           fi
           echo sha=${SHA} >> $GITHUB_OUTPUT
-          CILIUM_DOWNGRADE_VERSION=$(contrib/scripts/print-downgrade-version.sh)
+          CILIUM_DOWNGRADE_VERSION=$(contrib/scripts/print-downgrade-version.sh stable)
           echo downgrade_version=${CILIUM_DOWNGRADE_VERSION} >> $GITHUB_OUTPUT
 
       - name: Derive stable Cilium installation config
@@ -317,6 +317,7 @@ jobs:
           cmd: |
             cd /host/
 
+            export IMAGE=${{ env.KIND_K8S_IMAGE }}
             IP_FAM="dual"
             if [ "${{ matrix.ipv6 }}" == "false" ]; then
               IP_FAM="ipv4"
