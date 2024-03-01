@@ -96,10 +96,6 @@ func UnmarshalRandWriteRaftLog(raw []byte) (opItem *rndWrtOpItem, err error) {
 		return
 	}
 
-	if version != BinaryMarshalMagicVersion {
-		opItem, err = UnmarshalOldVersionRaftLog(raw)
-		return
-	}
 	if err = binary.Read(buff, binary.BigEndian, &opItem.opcode); err != nil {
 		return
 	}
@@ -120,6 +116,24 @@ func UnmarshalRandWriteRaftLog(raw []byte) (opItem *rndWrtOpItem, err error) {
 		return
 	}
 
+	return
+}
+
+func MarshalRaftCmd(raftOpItem *RaftCmdItem) (raw []byte, err error) {
+	if raw, err = json.Marshal(raftOpItem); err != nil {
+		return
+	}
+	return
+}
+
+func UnmarshalRaftCmd(raw []byte) (raftOpItem *RaftCmdItem, err error) {
+	raftOpItem = new(RaftCmdItem)
+	defer func() {
+		log.LogDebugf("Unmarsh use oldVersion,result %v", err)
+	}()
+	if err = json.Unmarshal(raw, raftOpItem); err != nil {
+		return
+	}
 	return
 }
 
@@ -213,7 +227,7 @@ func (dp *DataPartition) ApplyRandomWrite(command []byte, raftApplyID uint64) (r
 	defer func() {
 		if err == nil {
 			dp.uploadApplyID(raftApplyID)
-			log.LogDebug("action[ApplyRandomWrite] success!")
+			log.LogDebugf("action[ApplyRandomWrite] dp(%v) raftApplyID(%v) success!", dp.partitionID, raftApplyID)
 		} else {
 			if respStatus == proto.OpExistErr { // for tryAppendWrite
 				err = nil
@@ -223,7 +237,7 @@ func (dp *DataPartition) ApplyRandomWrite(command []byte, raftApplyID uint64) (r
 			}
 			err = fmt.Errorf("[ApplyRandomWrite] ApplyID(%v) Partition(%v)_Extent(%v)_ExtentOffset(%v)_Size(%v) apply err(%v) retry[20]",
 				raftApplyID, dp.partitionID, opItem.extentID, opItem.offset, opItem.size, err)
-			log.LogErrorf("action[ApplyRandomWrite] failed err %v", err)
+			log.LogErrorf("action[ApplyRandomWrite] Partition(%v) failed err %v", dp.partitionID, err)
 			exporter.Warning(err.Error())
 			if respStatus == proto.OpOk {
 				respStatus = proto.OpDiskErr
@@ -292,9 +306,14 @@ func (dp *DataPartition) RandomWriteSubmit(pkg *repl.Packet) (err error) {
 		log.LogErrorf("action[RandomWriteSubmit] [%v] marshal error %v", dp.partitionID, err)
 		return
 	}
+	pkg.ResultCode, err = dp.Submit(val)
+	return
+}
+
+func (dp *DataPartition) Submit(val []byte) (retCode uint8, err error) {
 	var resp interface{}
 	resp, err = dp.Put(nil, val)
-	pkg.ResultCode, _ = resp.(uint8)
+	retCode, _ = resp.(uint8)
 	if err != nil {
 		log.LogErrorf("action[RandomWriteSubmit] submit err %v", err)
 		return

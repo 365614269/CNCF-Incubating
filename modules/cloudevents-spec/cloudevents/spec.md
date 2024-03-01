@@ -419,7 +419,7 @@ on the definition of OPTIONAL.
 #### subject
 
 - Type: `String`
-- Description: This describes the subject of the event in the context of the
+- Description: This identifies the subject of the event in the context of the
   event producer (identified by `source`). In publish-subscribe scenarios, a
   subscriber will typically subscribe to events emitted by a `source`, but the
   `source` identifier alone might not be sufficient as a qualifier for any
@@ -436,15 +436,25 @@ on the definition of OPTIONAL.
 - Constraints:
   - OPTIONAL
   - If present, MUST be a non-empty string
-- Example:
+- Examples:
   - A subscriber might register interest for when new blobs are created inside a
     blob-storage container. In this case, the event `source` identifies the
     subscription scope (storage container), the `type` identifies the "blob
     created" event, and the `id` uniquely identifies the event instance to
     distinguish separate occurrences of a same-named blob having been created;
     the name of the newly created blob is carried in `subject`:
-    - `source`: `https://example.com/storage/tenant/container`
-    - `subject`: `mynewfile.jpg`
+      - `source`: `https://example.com/storage/tenant/container`
+      - `subject`: `mynewfile.jpg`
+  - A subscriber might register interest for when new updates are made to a client
+    in an eCommerce system. In this case, the event `source` identifies the
+    subscription scope (CRM part of an eCommerce system), the `type` identifies
+    the "client updated" event, and the `id` uniquely identifies the event
+    instance to distinguish separate occurrences of a same client being
+    updated multiple times; the `subject` uniquely identifies the client within
+    the scope of the `source` by including a "partner id" and "client id"
+    (which is unique within the scope of the "partner id") separated by a colon:
+      - `source`: `https://example.com/eCommerce/crm`
+      - `subject`: `partnerid/5/clientid/100`
 
 #### time
 
@@ -540,10 +550,10 @@ different protocols or for events to be re-encoded, the least efficient
 protocol and encoding used by the application SHOULD be considered for
 compliance with these size constraints:
 
-- Intermediaries MUST forward events of a size of 64 KByte or less.
-- Consumers SHOULD accept events of a size of at least 64 KByte.
+- Intermediaries MUST forward events of a size of 64 KiB or less.
+- Consumers SHOULD accept events of a size of at least 64 KiB.
 
-In effect, these rules will allow producers to publish events up to 64KB in size
+In effect, these rules will allow producers to publish events up to 64 KiB in size
 safely. Safely here means that it is generally reasonable to expect the event to
 be accepted and retransmitted by all intermediaries. It is in any particular
 consumer's control, whether it wants to accept or reject events of that size due
