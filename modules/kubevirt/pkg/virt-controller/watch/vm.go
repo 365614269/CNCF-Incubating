@@ -1137,7 +1137,6 @@ func isSetToStart(vm *virtv1.VirtualMachine, vmi *virtv1.VirtualMachineInstance)
 func (c *VMController) cleanupRestartRequired(vm *virtv1.VirtualMachine) (*virtv1.VirtualMachine, error) {
 	vmConditionManager := controller.NewVirtualMachineConditionManager()
 	if vmConditionManager.HasCondition(vm, virtv1.VirtualMachineRestartRequired) {
-		vm = vm.DeepCopy()
 		vmConditionManager.RemoveCondition(vm, virtv1.VirtualMachineRestartRequired)
 	}
 
@@ -2233,22 +2232,21 @@ func (c *VMController) enqueueVm(obj interface{}) {
 	c.Queue.Add(key)
 }
 
-func (c *VMController) getPatchFinalizerOps(oldObj, newObj v1.Object) ([]string, error) {
-	var ops []string
-
-	oldFinalizers, err := json.Marshal(oldObj.GetFinalizers())
+func (c *VMController) getPatchFinalizerOps(oldFinalizers, newFinalizers []string) ([]string, error) {
+	joldFinalizers, err := json.Marshal(oldFinalizers)
 	if err != nil {
-		return ops, err
+		return nil, err
 	}
 
-	newFinalizers, err := json.Marshal(newObj.GetFinalizers())
+	jnewFinalizers, err := json.Marshal(newFinalizers)
 	if err != nil {
-		return ops, err
+		return nil, err
 	}
 
-	ops = append(ops, fmt.Sprintf(`{ "op": "test", "path": "/metadata/finalizers", "value": %s }`, string(oldFinalizers)))
-	ops = append(ops, fmt.Sprintf(`{ "op": "replace", "path": "/metadata/finalizers", "value": %s }`, string(newFinalizers)))
-	return ops, nil
+	return []string{
+		fmt.Sprintf(`{ "op": "test", "path": "/metadata/finalizers", "value": %s }`, joldFinalizers),
+		fmt.Sprintf(`{ "op": "replace", "path": "/metadata/finalizers", "value": %s }`, jnewFinalizers),
+	}, nil
 }
 
 func (c *VMController) removeVMIFinalizer(vmi *virtv1.VirtualMachineInstance) error {
@@ -2257,9 +2255,16 @@ func (c *VMController) removeVMIFinalizer(vmi *virtv1.VirtualMachineInstance) er
 	}
 
 	log.Log.V(3).Object(vmi).Infof("VMI is in a final state. Removing VM controller finalizer")
-	newVmi := vmi.DeepCopy()
-	controller.RemoveFinalizer(newVmi, virtv1.VirtualMachineControllerFinalizer)
-	ops, err := c.getPatchFinalizerOps(vmi, newVmi)
+
+	newFinalizers := []string{}
+
+	for _, fin := range vmi.Finalizers {
+		if fin != virtv1.VirtualMachineControllerFinalizer {
+			newFinalizers = append(newFinalizers, fin)
+		}
+	}
+
+	ops, err := c.getPatchFinalizerOps(vmi.Finalizers, newFinalizers)
 	if err != nil {
 		return err
 	}
@@ -2268,15 +2273,22 @@ func (c *VMController) removeVMIFinalizer(vmi *virtv1.VirtualMachineInstance) er
 	return err
 }
 
-func (c *VMController) removeVMFinalizer(vm *virtv1.VirtualMachine, finalizer string) (*virtv1.VirtualMachine, error) {
-	if !controller.HasFinalizer(vm, finalizer) {
+func (c *VMController) removeVMFinalizer(vm *virtv1.VirtualMachine) (*virtv1.VirtualMachine, error) {
+	if !controller.HasFinalizer(vm, virtv1.VirtualMachineControllerFinalizer) {
 		return vm, nil
 	}
 
-	log.Log.V(3).Object(vm).Infof("Removing VM controller finalizer: %s", finalizer)
-	newVm := vm.DeepCopy()
-	controller.RemoveFinalizer(newVm, finalizer)
-	ops, err := c.getPatchFinalizerOps(vm, newVm)
+	log.Log.V(3).Object(vm).Infof("Removing VM controller finalizer: %s", virtv1.VirtualMachineControllerFinalizer)
+
+	newFinalizers := []string{}
+
+	for _, fin := range vm.Finalizers {
+		if fin != virtv1.VirtualMachineControllerFinalizer {
+			newFinalizers = append(newFinalizers, fin)
+		}
+	}
+
+	ops, err := c.getPatchFinalizerOps(vm.Finalizers, newFinalizers)
 	if err != nil {
 		return vm, err
 	}
@@ -2285,15 +2297,18 @@ func (c *VMController) removeVMFinalizer(vm *virtv1.VirtualMachine, finalizer st
 	return vm, err
 }
 
-func (c *VMController) addVMFinalizer(vm *virtv1.VirtualMachine, finalizer string) (*virtv1.VirtualMachine, error) {
-	if controller.HasFinalizer(vm, finalizer) {
+func (c *VMController) addVMFinalizer(vm *virtv1.VirtualMachine) (*virtv1.VirtualMachine, error) {
+	if controller.HasFinalizer(vm, virtv1.VirtualMachineControllerFinalizer) {
 		return vm, nil
 	}
 
-	log.Log.V(3).Object(vm).Infof("Adding VM controller finalizer: %s", finalizer)
-	newVm := vm.DeepCopy()
-	controller.AddFinalizer(newVm, finalizer)
-	ops, err := c.getPatchFinalizerOps(vm, newVm)
+	log.Log.V(3).Object(vm).Infof("Adding VM controller finalizer: %s", virtv1.VirtualMachineControllerFinalizer)
+
+	newFinalizers := make([]string, len(vm.Finalizers))
+	copy(newFinalizers, vm.Finalizers)
+	newFinalizers = append(newFinalizers, virtv1.VirtualMachineControllerFinalizer)
+
+	ops, err := c.getPatchFinalizerOps(vm.Finalizers, newFinalizers)
 	if err != nil {
 		return vm, err
 	}
@@ -2906,7 +2921,6 @@ func (c *VMController) addRestartRequiredIfNeeded(lastSeenVMSpec *virtv1.Virtual
 	}
 
 	if !equality.Semantic.DeepEqual(lastSeenVMSpec.Template.Spec, vm.Spec.Template.Spec) {
-		vm = vm.DeepCopy()
 		vmConditionManager := controller.NewVirtualMachineConditionManager()
 		vmConditionManager.UpdateCondition(vm, &virtv1.VirtualMachineCondition{
 			Type:               virtv1.VirtualMachineRestartRequired,
@@ -2959,7 +2973,7 @@ func (c *VMController) sync(vm *virtv1.VirtualMachine, vmi *virtv1.VirtualMachin
 
 	if vm.DeletionTimestamp != nil {
 		if vmi == nil || controller.HasFinalizer(vm, v1.FinalizerOrphanDependents) {
-			vm, err = c.removeVMFinalizer(vm, virtv1.VirtualMachineControllerFinalizer)
+			vm, err = c.removeVMFinalizer(vm)
 			if err != nil {
 				return vm, nil, err
 			}
@@ -2972,7 +2986,7 @@ func (c *VMController) sync(vm *virtv1.VirtualMachine, vmi *virtv1.VirtualMachin
 		}
 		return vm, nil, nil
 	} else {
-		vm, err = c.addVMFinalizer(vm, virtv1.VirtualMachineControllerFinalizer)
+		vm, err = c.addVMFinalizer(vm)
 		if err != nil {
 			return vm, nil, err
 		}
@@ -3073,9 +3087,11 @@ func (c *VMController) sync(vm *virtv1.VirtualMachine, vmi *virtv1.VirtualMachin
 
 		if syncErr == nil {
 			if !equality.Semantic.DeepEqual(vm, vmCopy) {
-				vm, err = c.clientset.VirtualMachine(vmCopy.Namespace).Update(context.Background(), vmCopy)
+				updatedVm, err := c.clientset.VirtualMachine(vmCopy.Namespace).Update(context.Background(), vmCopy)
 				if err != nil {
 					syncErr = &syncErrorImpl{fmt.Errorf("Error encountered when trying to update vm according to add volume and/or memory dump requests: %v", err), FailedUpdateErrorReason}
+				} else {
+					vm = updatedVm
 				}
 			}
 		}
