@@ -541,7 +541,7 @@ ct_recreate6:
 #ifdef ENABLE_NODEPORT
 # ifdef ENABLE_DSR
 		/* See comment in handle_ipv4_from_lxc(). */
-		if (ct_state->dsr) {
+		if (ct_state->dsr_internal) {
 			ret = xlate_dsr_v6(ctx, tuple, l4_off);
 			if (ret != 0)
 				return ret;
@@ -999,7 +999,7 @@ ct_recreate4:
 		 * needed for old connections that were established prior to
 		 * the bpf_host support:
 		 */
-		if (ct_state->dsr) {
+		if (ct_state->dsr_internal) {
 			ret = xlate_dsr_v4(ctx, tuple, l4_off, has_l4_header);
 			if (ret != 0)
 				return ret;
@@ -1497,7 +1497,8 @@ out:
 #ifdef ENABLE_IPV6
 static __always_inline int
 ipv6_policy(struct __ctx_buff *ctx, struct ipv6hdr *ip6, int ifindex, __u32 src_label,
-	    struct ipv6_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port)
+	    struct ipv6_ct_tuple *tuple_out, __s8 *ext_err, __u16 *proxy_port,
+	    bool from_tunnel)
 {
 	struct ct_state *ct_state, ct_state_new = {};
 	struct ipv6_ct_tuple *tuple;
@@ -1595,7 +1596,7 @@ skip_policy_enforcement:
 #ifdef ENABLE_NODEPORT
 	if (ret == CT_NEW || ret == CT_REOPENED) {
 # ifdef ENABLE_DSR
-		if (ret == CT_REOPENED && ct_state->dsr)
+		if (ret == CT_REOPENED && ct_state->dsr_internal)
 			ct_update_dsr(get_ct_map6(tuple), tuple, false);
 # endif /* ENABLE_DSR */
 		{
@@ -1614,6 +1615,7 @@ skip_policy_enforcement:
 
 	if (ret == CT_NEW) {
 		ct_state_new.src_sec_id = src_label;
+		ct_state_new.from_tunnel = from_tunnel;
 		ct_state_new.proxy_redirect = *proxy_port > 0;
 		ct_state_new.from_l7lb = false;
 
@@ -1669,7 +1671,7 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 	}
 
 	ret = ipv6_policy(ctx, ip6, ifindex, src_label, &tuple, &ext_err,
-			  &proxy_port);
+			  &proxy_port, from_tunnel);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy6(ctx, &tuple, proxy_port, from_host);
@@ -1772,7 +1774,7 @@ int tail_ipv6_to_endpoint(struct __ctx_buff *ctx)
 #endif
 
 	ret = ipv6_policy(ctx, ip6, 0, src_sec_identity, NULL, &ext_err,
-			  &proxy_port);
+			  &proxy_port, false);
 	switch (ret) {
 	case POLICY_ACT_PROXY_REDIRECT:
 		ret = ctx_redirect_to_proxy_hairpin_ipv6(ctx, proxy_port);
@@ -1953,8 +1955,8 @@ skip_policy_enforcement:
 #ifdef ENABLE_NODEPORT
 	if (ret == CT_NEW || ret == CT_REOPENED) {
 # ifdef ENABLE_DSR
-		/* Clear .dsr flag for old connections: */
-		if (ret == CT_REOPENED && ct_state->dsr)
+		/* Clear .dsr_internal flag for old connections: */
+		if (ret == CT_REOPENED && ct_state->dsr_internal)
 			ct_update_dsr(get_ct_map4(tuple), tuple, false);
 # endif /* ENABLE_DSR */
 		{
