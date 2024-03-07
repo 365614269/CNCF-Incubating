@@ -45,7 +45,6 @@ import io.quarkus.hibernate.orm.deployment.spi.AdditionalJpaModelBuildItem;
 import io.quarkus.resteasy.reactive.server.spi.MethodScannerBuildItem;
 import io.quarkus.runtime.configuration.ConfigurationException;
 import io.quarkus.runtime.configuration.ProfileManager;
-import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.smallrye.config.ConfigValue;
 import org.eclipse.microprofile.health.Readiness;
 import org.hibernate.cfg.AvailableSettings;
@@ -94,7 +93,6 @@ import org.keycloak.quarkus.runtime.configuration.QuarkusPropertiesConfigSource;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMappers;
 import org.keycloak.quarkus.runtime.integration.resteasy.KeycloakHandlerChainCustomizer;
-import org.keycloak.quarkus.runtime.integration.web.NotFoundHandler;
 import org.keycloak.quarkus.runtime.services.health.KeycloakReadyHealthCheck;
 import org.keycloak.quarkus.runtime.storage.database.jpa.NamedJpaConnectionProviderFactory;
 import org.keycloak.quarkus.runtime.themes.FlatClasspathThemeResourceProviderFactory;
@@ -128,6 +126,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -147,8 +146,6 @@ import java.util.logging.Handler;
 import static org.keycloak.connections.jpa.util.JpaUtils.loadSpecificNamedQueries;
 import static org.keycloak.quarkus.runtime.Environment.getCurrentOrCreateFeatureProfile;
 import static org.keycloak.quarkus.runtime.Environment.getProviderFiles;
-import static org.keycloak.quarkus.runtime.KeycloakRecorder.DEFAULT_HEALTH_ENDPOINT;
-import static org.keycloak.quarkus.runtime.KeycloakRecorder.DEFAULT_METRICS_ENDPOINT;
 import static org.keycloak.quarkus.runtime.Providers.getProviderManager;
 import static org.keycloak.quarkus.runtime.configuration.Configuration.getOptionalKcValue;
 import static org.keycloak.quarkus.runtime.configuration.Configuration.getOptionalValue;
@@ -600,24 +597,8 @@ class KeycloakProcessor {
     }
 
     @BuildStep
-    void disableMetricsEndpoint(BuildProducer<RouteBuildItem> routes) {
-        if (!isMetricsEnabled()) {
-            routes.produce(RouteBuildItem.builder().route(DEFAULT_METRICS_ENDPOINT.concat("/*")).handler(new NotFoundHandler()).build());
-        }
-    }
-
-    @BuildStep
-    void disableHealthEndpoint(BuildProducer<RouteBuildItem> routes, BuildProducer<BuildTimeConditionBuildItem> removeBeans,
-            CombinedIndexBuildItem index) {
-        boolean healthDisabled = !isHealthEnabled();
-
-        if (healthDisabled) {
-            routes.produce(RouteBuildItem.builder().route(DEFAULT_HEALTH_ENDPOINT.concat("/*")).handler(new NotFoundHandler()).build());
-        }
-
-        boolean metricsDisabled = !isMetricsEnabled();
-
-        if (healthDisabled || metricsDisabled) {
+    void disableHealthCheckBean(BuildProducer<BuildTimeConditionBuildItem> removeBeans, CombinedIndexBuildItem index) {
+        if (!isHealthEnabled() || !isMetricsEnabled()) {
             // disables the single check we provide which depends on metrics enabled
             ClassInfo disabledBean = index.getIndex()
                     .getClassByName(DotName.createSimple(KeycloakReadyHealthCheck.class.getName()));
@@ -714,12 +695,12 @@ class KeycloakProcessor {
                 }
             }
 
-            Map<String, ProviderFactory> deployedScriptProviders = loadDeployedScriptProviders(classLoader, spi);
+            Map<String, ProviderFactory<?>> deployedScriptProviders = loadDeployedScriptProviders(classLoader, spi);
 
             loadedFactories.addAll(deployedScriptProviders.values());
             preConfiguredProviders.putAll(deployedScriptProviders);
 
-            for (ProviderFactory factory : loadedFactories) {
+            for (ProviderFactory<?> factory : loadedFactories) {
                 if (IGNORED_PROVIDER_FACTORY.contains(factory.getClass())) {
                     continue;
                 }
@@ -744,31 +725,29 @@ class KeycloakProcessor {
         return factories;
     }
 
-    private Map<String, ProviderFactory> loadDeployedScriptProviders(ClassLoader classLoader, Spi spi) {
-        Map<String, ProviderFactory> providers = new HashMap<>();
+    private Map<String, ProviderFactory<?>> loadDeployedScriptProviders(ClassLoader classLoader, Spi spi) {
+        Map<String, ProviderFactory<?>> providers = new HashMap<>();
 
         if (supportsDeployeableScripts(spi)) {
             try {
-                Enumeration<URL> urls = classLoader.getResources(KEYCLOAK_SCRIPTS_JSON_PATH);
+                Enumeration<URL> descriptorsUrls = classLoader.getResources(KEYCLOAK_SCRIPTS_JSON_PATH);
 
-                while (urls.hasMoreElements()) {
-                    URL url = urls.nextElement();
-                    int fileSeparator = url.getFile().indexOf(JAR_FILE_SEPARATOR);
+                while (descriptorsUrls.hasMoreElements()) {
+                    URL url = descriptorsUrls.nextElement();
+                    List<ScriptProviderDescriptor> descriptors = getScriptProviderDescriptorsFromJarFile(url);
 
-                    if (fileSeparator != -1) {
-                        JarFile jarFile = new JarFile(url.getFile().substring("file:".length(), fileSeparator));
-                        JarEntry descriptorEntry = jarFile.getJarEntry(KEYCLOAK_SCRIPTS_JSON_PATH);
-                        ScriptProviderDescriptor descriptor;
+                    if (!Environment.isDistribution()) {
+                        // script providers are only loaded from classpath when running embedded
+                        descriptors = new ArrayList<>(descriptors);
+                        descriptors.addAll(getScriptProviderDescriptorsFromClassPath(url));
+                    }
 
-                        try (InputStream is = jarFile.getInputStream(descriptorEntry)) {
-                            descriptor = JsonSerialization.readValue(is, ScriptProviderDescriptor.class);
-                        }
-
+                    for (ScriptProviderDescriptor descriptor : descriptors) {
                         for (Entry<String, List<ScriptProviderMetadata>> entry : descriptor.getProviders().entrySet()) {
                             if (isScriptForSpi(spi, entry.getKey())) {
                                 for (ScriptProviderMetadata metadata : entry.getValue()) {
-                                    ProviderFactory provider = createDeployableScriptProvider(jarFile, entry, metadata);
-                                    providers.put(metadata.getId(), provider);
+                                    ProviderFactory<?> factory = DEPLOYEABLE_SCRIPT_PROVIDERS.get(entry.getKey()).apply(metadata);
+                                    providers.put(metadata.getId(), factory);
                                 }
                             }
                         }
@@ -782,31 +761,89 @@ class KeycloakProcessor {
         return providers;
     }
 
-    private ProviderFactory createDeployableScriptProvider(JarFile jarFile, Entry<String, List<ScriptProviderMetadata>> entry,
-            ScriptProviderMetadata metadata) throws IOException {
-        String fileName = metadata.getFileName();
+    private List<ScriptProviderDescriptor> getScriptProviderDescriptorsFromClassPath(URL url) throws IOException {
+        String file = url.getFile();
 
-        if (fileName == null) {
-            throw new RuntimeException("You must provide the script file name");
+        if (!file.endsWith(".json")) {
+            return List.of();
         }
 
-        JarEntry scriptFile = jarFile.getJarEntry(fileName);
+        List<ScriptProviderDescriptor> descriptors = new ArrayList<>();
 
-        try (InputStream in = jarFile.getInputStream(scriptFile)) {
-            metadata.setCode(StreamUtil.readString(in, StandardCharsets.UTF_8));
+        try (InputStream is = url.openStream()) {
+            ScriptProviderDescriptor descriptor = JsonSerialization.readValue(is, ScriptProviderDescriptor.class);
+
+            configureScriptDescriptor(descriptor, fileName -> {
+                // descriptor is at META-INF/
+                Path basePath = Path.of(url.getPath()).getParent().getParent();
+
+                try {
+                    return basePath.resolve(fileName).toUri().toURL().openStream();
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to read script file from: " + fileName);
+                }
+            });
+            descriptors.add(descriptor);
         }
 
-        metadata.setId(new StringBuilder("script").append("-").append(fileName).toString());
+        return descriptors;
+    }
 
-        String name = metadata.getName();
+    private List<ScriptProviderDescriptor> getScriptProviderDescriptorsFromJarFile(URL url) throws IOException {
+        String file = url.getFile();
 
-        if (name == null) {
-            name = fileName;
+        if (!file.contains(JAR_FILE_SEPARATOR)) {
+            return List.of();
         }
 
-        metadata.setName(name);
+        List<ScriptProviderDescriptor> descriptors = new ArrayList<>();
 
-        return DEPLOYEABLE_SCRIPT_PROVIDERS.get(entry.getKey()).apply(metadata);
+        try (JarFile jarFile = new JarFile(file.substring("file:".length(), file.indexOf(JAR_FILE_SEPARATOR)))) {
+            JarEntry descriptorEntry = jarFile.getJarEntry(KEYCLOAK_SCRIPTS_JSON_PATH);
+
+            try (InputStream is = jarFile.getInputStream(descriptorEntry)) {
+                ScriptProviderDescriptor descriptor = JsonSerialization.readValue(is, ScriptProviderDescriptor.class);
+
+                configureScriptDescriptor(descriptor, fileName -> {
+                    try {
+                        JarEntry scriptFile = jarFile.getJarEntry(fileName);
+                        return jarFile.getInputStream(scriptFile);
+                    } catch (IOException cause) {
+                        throw new RuntimeException("Failed to read script file from file: " + fileName, cause);
+                    }
+                });
+
+                descriptors.add(descriptor);
+            }
+        }
+
+        return descriptors;
+    }
+
+    private static void configureScriptDescriptor(ScriptProviderDescriptor descriptor, Function<String, InputStream> jsFileLoader) throws IOException {
+        for (List<ScriptProviderMetadata> metadatas : descriptor.getProviders().values()) {
+            for (ScriptProviderMetadata metadata : metadatas) {
+                String fileName = metadata.getFileName();
+
+                if (fileName == null) {
+                    throw new RuntimeException("You must provide the script file name");
+                }
+
+                try (InputStream in = jsFileLoader.apply(fileName)) {
+                    metadata.setCode(StreamUtil.readString(in, StandardCharsets.UTF_8));
+                }
+
+                metadata.setId(new StringBuilder("script").append("-").append(fileName).toString());
+
+                String name = metadata.getName();
+
+                if (name == null) {
+                    name = fileName;
+                }
+
+                metadata.setName(name);
+            }
+        }
     }
 
     private boolean isScriptForSpi(Spi spi, String type) {
