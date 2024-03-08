@@ -50,10 +50,10 @@ OPTIONAL for both the [Producer](#producer) and [Consumer](#consumer) of a
 message to support that feature. In other words, a producer can choose to
 include that feature in a message if it wants, and a consumer can choose to
 support that feature if it wants. A consumer that does not support that feature 
-is free to take any action it wishes, including no action or generating an error, as
-long as doing so does not violate other requirements defined by this specification.
-However, the RECOMMENDED action is to ignore it. The producer SHOULD be
-prepared for the situation where a consumer ignores that feature. An
+is free to take any action it wishes, including no action or generating an
+error, as long as doing so does not violate other requirements defined by this
+specification. However, the RECOMMENDED action is to ignore it. The producer
+SHOULD be prepared for the situation where a consumer ignores that feature. An
 [Intermediary](#intermediary) SHOULD forward OPTIONAL attributes.
 
 ### Terminology
@@ -270,6 +270,12 @@ The choice of serialization mechanism will determine how the context attributes
 and the event data will be serialized. For example, in the case of a JSON
 serialization, the context attributes and the event data might both appear
 within the same JSON object.
+
+Attributes are often used for identification purposes. While any particular
+attribute definition might include constraints on its value, in general this
+specification does not mandate how those identification attributes are
+constructed. For example, it might be a singleton (such as a name), or
+it could be a composite made up of multiple identifying sub-values.
 
 ### REQUIRED Attributes
 
@@ -496,7 +502,7 @@ The definition of an extension SHOULD fully define all aspects of the
 attribute - e.g. its name, type, semantic meaning and possible values. New
 extension definitions SHOULD use a name that is descriptive enough to reduce the
 chances of name collisions with other extensions. In particular, extension
-authors SHOULD check the [documented extensions](documented-extensions.md)
+authors SHOULD check the [documented extensions](extensions/README.md)
 document for the set of known extensions - not just for possible name conflicts
 but for extensions that might be of interest.
 
