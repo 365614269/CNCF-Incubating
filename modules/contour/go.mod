@@ -8,7 +8,7 @@ require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/bombsimon/logrusr/v4 v4.1.0
-	github.com/cert-manager/cert-manager v1.14.3
+	github.com/cert-manager/cert-manager v1.14.4
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/distribution/reference v0.5.0
 	github.com/envoyproxy/go-control-plane v0.12.1-0.20240111020705-5401a878d8bb
@@ -18,7 +18,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/onsi/ginkgo/v2 v2.15.0
+	github.com/onsi/ginkgo/v2 v2.16.0
 	github.com/onsi/gomega v1.31.1
 	github.com/projectcontour/yages v0.1.0
 	github.com/prometheus/client_golang v1.19.0
@@ -32,7 +32,7 @@ require (
 	golang.org/x/oauth2 v0.18.0
 	gonum.org/v1/plot v0.14.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80
-	google.golang.org/grpc v1.62.0
+	google.golang.org/grpc v1.62.1
 	google.golang.org/protobuf v1.33.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.29.2

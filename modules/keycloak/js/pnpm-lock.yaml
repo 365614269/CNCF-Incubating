@@ -36,8 +36,8 @@ importers:
         specifier: ^7.4.0
         version: 7.4.0(eslint@8.57.0)
       eslint-plugin-mocha:
-        specifier: ^10.3.0
-        version: 10.3.0(eslint@8.57.0)
+        specifier: ^10.4.1
+        version: 10.4.1(eslint@8.57.0)
       eslint-plugin-prettier:
         specifier: ^5.1.3
         version: 5.1.3(eslint-config-prettier@9.1.0)(eslint@8.57.0)(prettier@3.2.5)
@@ -81,8 +81,8 @@ importers:
         specifier: ^4.113.6
         version: 4.113.6(react-dom@18.2.0)(react@18.2.0)
       i18next:
-        specifier: ^23.10.0
-        version: 23.10.0
+        specifier: ^23.10.1
+        version: 23.10.1
       i18next-http-backend:
         specifier: ^2.5.0
         version: 2.5.0
@@ -105,8 +105,8 @@ importers:
         specifier: ^7.51.0
         version: 7.51.0(react@18.2.0)
       react-i18next:
-        specifier: ^14.0.8
-        version: 14.0.8(i18next@23.10.0)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^14.1.0
+        version: 14.1.0(i18next@23.10.1)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom:
         specifier: ^6.22.2
         version: 6.22.2(react-dom@18.2.0)(react@18.2.0)
@@ -184,8 +184,8 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1
       i18next:
-        specifier: ^23.10.0
-        version: 23.10.0
+        specifier: ^23.10.1
+        version: 23.10.1
       i18next-http-backend:
         specifier: ^2.5.0
         version: 2.5.0
@@ -196,8 +196,8 @@ importers:
         specifier: ^4.17.21
         version: 4.17.21
       monaco-editor:
-        specifier: ^0.46.0
-        version: 0.46.0
+        specifier: ^0.47.0
+        version: 0.47.0
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -211,8 +211,8 @@ importers:
         specifier: ^7.51.0
         version: 7.51.0(react@18.2.0)
       react-i18next:
-        specifier: ^14.0.8
-        version: 14.0.8(i18next@23.10.0)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^14.1.0
+        version: 14.1.0(i18next@23.10.1)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom:
         specifier: ^6.22.2
         version: 6.22.2(react-dom@18.2.0)(react@18.2.0)
@@ -440,8 +440,8 @@ importers:
         specifier: ^4.93.7
         version: 4.93.7(react-dom@18.2.0)(react@18.2.0)
       i18next:
-        specifier: ^23.10.0
-        version: 23.10.0
+        specifier: ^23.10.1
+        version: 23.10.1
       lodash-es:
         specifier: ^4.17.21
         version: 4.17.21
@@ -455,8 +455,8 @@ importers:
         specifier: 7.51.0
         version: 7.51.0(react@18.2.0)
       react-i18next:
-        specifier: ^14.0.8
-        version: 14.0.8(i18next@23.10.0)(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^14.1.0
+        version: 14.1.0(i18next@23.10.1)(react-dom@18.2.0)(react@18.2.0)
     devDependencies:
       '@types/lodash-es':
         specifier: ^4.17.12
@@ -1332,7 +1332,7 @@ packages:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       react-dropzone: 9.0.0(react@18.2.0)
-      react-monaco-editor: 0.51.0(@types/react@18.2.64)(monaco-editor@0.46.0)(react@18.2.0)
+      react-monaco-editor: 0.51.0(@types/react@18.2.64)(monaco-editor@0.47.0)(react@18.2.0)
       tslib: 2.6.2
     dev: false
 
@@ -4430,14 +4430,15 @@ packages:
       lodash: 4.17.21
     dev: true
 
-  /eslint-plugin-mocha@10.3.0(eslint@8.57.0):
-    resolution: {integrity: sha512-IWzbg2K6B1Q7h37Ih4zMyW+nhmw1JvUlHlbCUUUu6PfOOAUGCB0gxmvv7/U+TQQ6e8yHUv+q7KMdIIum4bx+PA==}
+  /eslint-plugin-mocha@10.4.1(eslint@8.57.0):
+    resolution: {integrity: sha512-G85ALUgKaLzuEuHhoW3HVRgPTmia6njQC3qCG6CEvA8/Ja9PDZnRZOuzekMki+HaViEQXINuYsmhp5WR5/4MfA==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       eslint: '>=7.0.0'
     dependencies:
       eslint: 8.57.0
       eslint-utils: 3.0.0(eslint@8.57.0)
+      globals: 13.24.0
       rambda: 7.5.0
     dev: true
 
@@ -5143,6 +5144,13 @@ packages:
       type-fest: 0.20.2
     dev: true
 
+  /globals@13.24.0:
+    resolution: {integrity: sha512-AhO5QUcj8llrbG09iWhPU2B204J1xnPeL8kQmVorSsy+Sjj1sk8gIyh6cUocGmH4L0UuhAJy+hJMRA4mgA4mFQ==}
+    engines: {node: '>=8'}
+    dependencies:
+      type-fest: 0.20.2
+    dev: true
+
   /globalthis@1.0.3:
     resolution: {integrity: sha512-sFdI5LyBiNTHjRd7cGPWapiHWMOXKyuBNX/cWJ3NfzrZQVa8GI/8cofCl74AOVqq9W5kNmguTIzJ/1s2gyI9wA==}
     engines: {node: '>= 0.4'}
@@ -5338,8 +5346,8 @@ packages:
       - encoding
     dev: false
 
-  /i18next@23.10.0:
-    resolution: {integrity: sha512-/TgHOqsa7/9abUKJjdPeydoyDc0oTi/7u9F8lMSj6ufg4cbC1Oj3f/Jja7zj7WRIhEQKB7Q4eN6y68I9RDxxGQ==}
+  /i18next@23.10.1:
+    resolution: {integrity: sha512-NDiIzFbcs3O9PXpfhkjyf7WdqFn5Vq6mhzhtkXzj51aOcNuPNcTwuYNuXCpHsanZGHlHKL35G7huoFeVic1hng==}
     dependencies:
       '@babel/runtime': 7.23.9
     dev: false
@@ -6368,8 +6376,8 @@ packages:
       requirejs-config-file: 4.0.0
     dev: true
 
-  /monaco-editor@0.46.0:
-    resolution: {integrity: sha512-ADwtLIIww+9FKybWscd7OCfm9odsFYHImBRI1v9AviGce55QY8raT+9ihH8jX/E/e6QVSGM+pKj4jSUSRmALNQ==}
+  /monaco-editor@0.47.0:
+    resolution: {integrity: sha512-VabVvHvQ9QmMwXu4du008ZDuyLnHs9j7ThVFsiJoXSOQk18+LF89N4ADzPbFenm0W4V2bGHnFBztIRQTgBfxzw==}
     dev: false
 
   /ms@2.1.2:
@@ -6958,8 +6966,8 @@ packages:
       react: 18.2.0
     dev: false
 
-  /react-i18next@14.0.8(i18next@23.10.0)(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-1HKM41/Q8c/nQ2rYNNZlFmrjF2aubZT8sMBmY9aH/xa1/gsrTZ+hPwuLv4V7Cr8fYIh0GQ7vv5C1jCx104uNig==}
+  /react-i18next@14.1.0(i18next@23.10.1)(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-3KwX6LHpbvGQ+sBEntjV4sYW3Zovjjl3fpoHbUwSgFHf0uRBcbeCBLR5al6ikncI5+W0EFb71QXZmfop+J6NrQ==}
     peerDependencies:
       i18next: '>= 23.2.3'
       react: '>= 16.8.0'
@@ -6973,7 +6981,7 @@ packages:
     dependencies:
       '@babel/runtime': 7.23.9
       html-parse-stringify: 3.0.1
-      i18next: 23.10.0
+      i18next: 23.10.1
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
     dev: false
@@ -6989,7 +6997,7 @@ packages:
     resolution: {integrity: sha512-xWGDIW6x921xtzPkhiULtthJHoJvBbF3q26fzloPCK0hsvxtPVelvftw3zjbHWSkR2km9Z+4uxbDDK/6Zw9B8w==}
     dev: true
 
-  /react-monaco-editor@0.51.0(@types/react@18.2.64)(monaco-editor@0.46.0)(react@18.2.0):
+  /react-monaco-editor@0.51.0(@types/react@18.2.64)(monaco-editor@0.47.0)(react@18.2.0):
     resolution: {integrity: sha512-6jx1V8p6gHVKJHFaTvicOtmlhFjOJhekobeNd92ZAo7F5UvAin1cF7bxWLCKgtxClYZ7CB3Ar284Kpbhj22FpQ==}
     peerDependencies:
       '@types/react': '>=17 <= 18'
@@ -6997,7 +7005,7 @@ packages:
       react: '>=17 <= 18'
     dependencies:
       '@types/react': 18.2.64
-      monaco-editor: 0.46.0
+      monaco-editor: 0.47.0
       prop-types: 15.8.1
       react: 18.2.0
     dev: false
@@ -8832,16 +8840,16 @@ packages:
       file-saver: 2.0.5
       file-selector: 0.6.0
       flat: 6.0.1
-      i18next: 23.10.0
+      i18next: 23.10.1
       i18next-http-backend: 2.5.0
       keycloak-js: link:libs/keycloak-js
       lodash-es: 4.17.21
-      monaco-editor: 0.46.0
+      monaco-editor: 0.47.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       react-dropzone: 14.2.3(react@18.2.0)
       react-hook-form: 7.51.0(react@18.2.0)
-      react-i18next: 14.0.8(i18next@23.10.0)(react-dom@18.2.0)(react@18.2.0)
+      react-i18next: 14.1.0(i18next@23.10.1)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom: 6.22.2(react-dom@18.2.0)(react@18.2.0)
       reactflow: 11.10.4(@types/react@18.2.64)(react-dom@18.2.0)(react@18.2.0)
       ui-shared: link:libs/ui-shared
