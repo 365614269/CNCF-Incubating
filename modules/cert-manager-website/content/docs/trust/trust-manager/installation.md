@@ -15,8 +15,17 @@ and as such trust-manager is also installed into the cert-manager namespace.
 
 ```bash
 helm repo add jetstack https://charts.jetstack.io --force-update
-helm upgrade -i -n cert-manager cert-manager jetstack/cert-manager --set installCRDs=true --wait --create-namespace
-helm upgrade -i -n cert-manager trust-manager jetstack/trust-manager --wait
+
+helm upgrade cert-manager jetstack/cert-manager \
+  --install \
+  --create-namespace \
+  --namespace cert-manager \
+  --set installCRDs=true
+
+helm upgrade trust-manager jetstack/trust-manager \
+  --install \
+  --namespace cert-manager \
+  --wait
 ```
 
 ## Installation Options
@@ -39,7 +48,12 @@ As of trust-manager v0.6.0 you can choose to automatically add an approver-polic
 will approve the trust-manager webhook certificate:
 
 ```bash
-helm upgrade -i -n cert-manager trust-manager jetstack/trust-manager --set app.webhook.tls.approverPolicy.enabled=true --set app.webhook.tls.approverPolicy.certManagerNamespace=cert-manager --wait
+helm upgrade trust-manager jetstack/trust-manager \
+  --install \
+  --namespace cert-manager \
+  --wait \
+  --set app.webhook.tls.approverPolicy.enabled=true \
+  --set app.webhook.tls.approverPolicy.certManagerNamespace=cert-manager
 ```
 
 Note that if you've installed cert-manager to a different namespace, you'll need to pass that namespace in `app.webhook.tls.approverPolicy.certManagerNamespace`!
@@ -58,6 +72,33 @@ namespace to whichever is most appropriate for your environment.
 
 An ideal deployment would be a fresh namespace dedicated entirely to trust-manager, to minimize the number of actors in your
 cluster that can modify your trust sources.
+
+## Uninstalling
+
+To uninstall trust-manager installed via Helm, run:
+
+```terminal
+$ helm uninstall trust-manager -n cert-manager
+
+These resources were kept due to the resource policy:
+[CustomResourceDefinition] bundles.trust.cert-manager.io
+
+release "trust-manager" uninstalled
+```
+
+As shown in the output, the `CustomResourceDefinition` for `Bundle` is not removed by the Helm uninstall command.
+This is to prevent data loss, as removing the `CustomResourceDefinition` would also remove all `Bundle` resources.
+
+> ☢️ This will remove all `Bundle` resources from the cluster:
+>
+> ```terminal
+> kubectl delete crd bundles.trust.cert-manager.io
+> ```
+
+> ⚠️ trust-manager versions prior to `v0.9.0` do not keep the `CustomResourceDefinition` on uninstall
+> and will remove all `Bundle` resources from the cluster. Make sure to back up your `Bundle` resources
+> before uninstalling trust-manager if you are using a version prior to `v0.9.0`. Or upgrade to `v0.9.0`
+> before uninstalling.
 
 ## Usage
 

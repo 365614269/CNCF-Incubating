@@ -219,7 +219,7 @@ spec:
     image: nginx
 ```
 
-Assume this Pod is saved as `pod.yaml` locally, its `containers[]` may be queried using a simple JMESPath expression with help from the [Kyverno CLI](/docs/kyverno-cli/#jp).
+Assume this Pod is saved as `pod.yaml` locally, its `containers[]` may be queried using a simple JMESPath expression with help from the [Kyverno CLI](/docs/kyverno-cli/usage/jp/).
 
 ```sh
 $ kyverno jp query -i pod.yaml "spec.containers[]"
@@ -343,7 +343,7 @@ spec:
 
 In addition to the filters available in the upstream JMESPath library which Kyverno uses, there are also many new and custom filters developed for Kyverno's use found nowhere else. These filters augment the already robust capabilities of JMESPath to bring new functionality and capabilities which help solve common use cases in running Kubernetes. The filters endemic to Kyverno can be used in addition to any of those found in the upstream JMESPath library used by Kyverno and do not represent replaced or removed functionality.
 
-For instructions on how to test these filters in a standalone method (i.e., outside of Kyverno policy), see the [documentation](/docs/kyverno-cli/#jp) on the `kyverno jp` subcommand.
+For instructions on how to test these filters in a standalone method (i.e., outside of Kyverno policy), see the [documentation](/docs/kyverno-cli/usage/jp/) on the `kyverno jp` subcommand.
 
 Information on each subcommand, its inputs and output, and specific usage instructions can be found below along with helpful and common use cases that have been identified.
 
@@ -1901,6 +1901,41 @@ spec:
 </p>
 </details>
 
+### Sha256
+
+<details><summary>Expand</summary>
+<p>
+
+The `sha256()` filter takes a string of any length and returns a fixed hash value. For example, when `sha256()` is applied to the string `alertmanager-kube-prometheus-stack-alertmanager`, which exceeds the character limit, it returns a fixed hash value of `75c07bb807f2d80a85d34880b8af0c5f29f7c27577076ed5d0e4b427dee7dbcc`. This feature is particularly useful for situations where the length of a string surpasses Kyverno's 52-character limit. It can be employed to generate resource names and to create resources for deployments whose names are not under our control.
+
+| Input 1            | Output  |
+|--------------------|---------|
+| String             | String  |
+
+**Example:** This policy mutates the names of specified resources to their SHA256 hash values.
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: sha256-demo
+spec:
+  rules:
+    - name: convert-name-to-hash
+      match:
+        any:
+        - resources:
+            kinds:
+              - Pod
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            name: "{{ sha256(request.object.metadata.name) }}"
+```
+
+</p>
+</details>
+
 ### Split
 
 <details><summary>Expand</summary>
@@ -3052,36 +3087,3 @@ spec:
 </p>
 </details>
 
-### SHA256
-
-<details><summary>Expand</summary>
-<p>
-
-The `sha256()` filter takes a string of any length and returns a fixed hash value. For example, when `sha256()` is applied to the string `alertmanager-kube-prometheus-stack-alertmanager`, which exceeds the character limit, it returns a fixed hash value of `75c07bb807f2d80a85d34880b8af0c5f29f7c27577076ed5d0e4b427dee7dbcc`. This feature is particularly useful for situations where the length of a string surpasses Kyverno's 52-character limit. It can be employed to generate resource names and to create resources for deployments whose names are not under our control.
-
-| Input 1            | Output  |
-|--------------------|---------|
-| String             | String  |
-
-**Example:** This policy mutates the names of specified resources to their SHA256 hash values.
-
-```yaml
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
-metadata:
-  name: sha256-demo
-spec:
-  rules:
-    - name: convert-name-to-hash
-      match:
-        resources:
-          kinds:
-            - Pod
-      mutate:
-        patchStrategicMerge:
-          metadata:
-            name: "{{ sha256(request.object.metadata.name) }}"
-```
-
-</p>
-</details>
