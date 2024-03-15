@@ -2,6 +2,12 @@
 
 Source for: https://kyverno.io
 
+## Accessing Earlier Documentation
+
+The Kyverno website follows the same support policy as Kyverno, an N-2 policy. Documentation will be made available for the current release and the two previous minor releases. While this extends to the version list on the website, users may still access earlier versions of the documentation by navigating to a specific version by URL.
+
+Documentation for each version is published at a URL like `https://release-X-Y-0.kyverno.io/` where `X` is the major version and `Y` is the minor version. To access the documentation for version 1.9.0, navigate to the URL [https://release-1-9-0.kyverno.io/](https://release-1-9-0.kyverno.io/).
+
 ## Contributors
 
 <a href="https://github.com/kyverno/website/graphs/contributors">
@@ -30,6 +36,7 @@ git clone https://github.com/{YOUR-GITHUB-ID}/website kyverno-website/
 cd kyverno-website
 hugo server
 ```
+
 **Note For Windows Users:** When running the `hugo server` command, make sure to execute it with administrator privileges in your terminal. This is necessary to ensure proper access and functionality during the server execution.
 
 By default, Hugo runs the website at: http://localhost:1313 and will re-build the site on changes.
@@ -41,7 +48,6 @@ The project uses [Hugo Modules](https://gohugo.io/hugo-modules/) to manage the t
 Run `hugo mod get -u ./...` from project root.
 
 To clean the module cache use `hugo mod clean`.
-
 
 ## Rendering Policies to Markdown
 
@@ -89,7 +95,7 @@ To create a new release branch:
 
 In the `main` branch:
 
-1. Update the versions list in [config.toml](/config/_default/config.toml) to add the next release.
+1. Update the versions list in [params.toml](/config/_default/params.toml) to add the next release.
 
 2. Update `version_menu` and `version` in [params.toml](/config/_default/params.toml) for the next release.
 
@@ -103,7 +109,9 @@ In the current release branch:
 
 #### Submitting a PR to multiple release branches
 
-Ideally all changes will go to `main` and then be promoted to a release branch. However, occasionally we will need to fix documentation issues for already released versions. For such cases, a PR must be created for each release branch. Rendered policies will always go to all branches because the policy samples themselves declare minimum capable versions via the `policies.kyverno.io/minversion` annotation.
+Ideally all changes will go to `main` and then be promoted to a release branch. However, occasionally we will need to fix documentation issues for already released versions. Rendered policies will always go to all branches because the policy samples themselves declare minimum capable versions via the `policies.kyverno.io/minversion` annotation.
+
+Use the cherry pick bot to request a PR be cherry picked to a target branch. Call for the bot with a comment on the desired PR with `/cherry-pick release-1-12-0` to cherry pick this PR to the `release-1-12-0` branch. A new PR will be opened with `release-1-12-0` as the target branch.
 
 There are several ways to create multiple PRs, but here is one easy flow:
 
