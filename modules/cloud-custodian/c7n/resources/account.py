@@ -2422,6 +2422,7 @@ class BedrockModelInvocationLogging(ListItemFilter):
         count_op={'$ref': '#/definitions/filters_common/comparison_operators'}
     )
     permissions = ('bedrock:GetModelInvocationLoggingConfiguration',)
+    annotation_key = 'c7n:BedrockModelInvocationLogging'
 
     def get_item_values(self, resource):
         item_values = []
@@ -2430,6 +2431,7 @@ class BedrockModelInvocationLogging(ListItemFilter):
                 .get_model_invocation_logging_configuration().get('loggingConfig')
         if invocation_logging_config is not None:
             item_values.append(invocation_logging_config)
+            resource[self.annotation_key] = invocation_logging_config
         return item_values
 
 

@@ -45,8 +45,8 @@
         <jboss.snapshots.repo.id>jboss-snapshots-repository</jboss.snapshots.repo.id>
         <jboss.snapshots.repo.url>https://s01.oss.sonatype.org/content/repositories/snapshots/</jboss.snapshots.repo.url>
 
-        <quarkus.version>3.8.1</quarkus.version>
-        <quarkus.build.version>3.8.1</quarkus.build.version>
+        <quarkus.version>3.8.2</quarkus.version>
+        <quarkus.build.version>3.8.2</quarkus.build.version>
 
         <project.build-time>${timestamp}</project.build-time>
 
@@ -1891,18 +1891,6 @@
             </activation>
             <modules>
                 <module>testsuite</module>
-            </modules>
-        </profile>
-
-        <profile>
-            <id>examples</id>
-            <activation>
-                <property>
-                    <name>!skipExamples</name>
-                </property>
-            </activation>
-            <modules>
-                <module>examples</module>
             </modules>
         </profile>
 
