@@ -523,7 +523,7 @@ var _ = SIGMigrationDescribe("VM Live Migration", func() {
 
 				dv, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(dv)).Create(context.Background(), dv, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
-				libstorage.EventuallyDV(dv, 240, Or(HaveSucceeded(), BeInPhase(cdiv1.WaitForFirstConsumer), BeInPhase(cdiv1.PendingPopulation)))
+				libstorage.EventuallyDV(dv, 240, Or(HaveSucceeded(), WaitForFirstConsumer()))
 				vmi := libvmi.New(
 					libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
 					libvmi.WithNetwork(v1.DefaultPodNetwork()),
@@ -1082,7 +1082,7 @@ var _ = SIGMigrationDescribe("VM Live Migration", func() {
 				dataVolume, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(nil)).Create(context.Background(), dataVolume, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
 
-				libstorage.EventuallyDV(dataVolume, 240, Or(HaveSucceeded(), BeInPhase(cdiv1.WaitForFirstConsumer)))
+				libstorage.EventuallyDV(dataVolume, 240, Or(HaveSucceeded(), WaitForFirstConsumer()))
 
 				vmi = tests.RunVMIAndExpectLaunch(vmi, 240)
 
@@ -1349,7 +1349,7 @@ var _ = SIGMigrationDescribe("VM Live Migration", func() {
 				Expect(loginFunc(vmi)).To(Succeed())
 
 				By("Checking that the launcher is running as root")
-				Expect(tests.GetIdOfLauncher(vmi)).To(Equal("0"))
+				Expect(getIdOfLauncher(vmi)).To(Equal("0"))
 
 				tests.DisableFeatureGate(virtconfig.Root)
 
@@ -1361,7 +1361,7 @@ var _ = SIGMigrationDescribe("VM Live Migration", func() {
 				libmigration.ConfirmVMIPostMigration(virtClient, vmi, migration)
 
 				By("Checking that the launcher is running as qemu")
-				Expect(tests.GetIdOfLauncher(vmi)).To(Equal("107"))
+				Expect(getIdOfLauncher(vmi)).To(Equal("107"))
 				By("Checking that the VirtualMachineInstance console has expected output")
 				Expect(loginFunc(vmi)).To(Succeed())
 
@@ -1439,7 +1439,7 @@ var _ = SIGMigrationDescribe("VM Live Migration", func() {
 				Expect(loginFunc(vmi)).To(Succeed())
 
 				By("Checking that the launcher is running as root")
-				Expect(tests.GetIdOfLauncher(vmi)).To(Equal("107"))
+				Expect(getIdOfLauncher(vmi)).To(Equal("107"))
 
 				tests.EnableFeatureGate(virtconfig.Root)
 
@@ -1451,7 +1451,7 @@ var _ = SIGMigrationDescribe("VM Live Migration", func() {
 				libmigration.ConfirmVMIPostMigration(virtClient, vmi, migration)
 
 				By("Checking that the launcher is running as qemu")
-				Expect(tests.GetIdOfLauncher(vmi)).To(Equal("0"))
+				Expect(getIdOfLauncher(vmi)).To(Equal("0"))
 				By("Checking that the VirtualMachineInstance console has expected output")
 				Expect(loginFunc(vmi)).To(Succeed())
 
@@ -2204,7 +2204,7 @@ var _ = SIGMigrationDescribe("VM Live Migration", func() {
 
 				dv, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(nil)).Create(context.Background(), dv, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
-				libstorage.EventuallyDV(dv, 600, HaveSucceeded())
+				libstorage.EventuallyDV(dv, 600, Or(HaveSucceeded(), PendingPopulation()))
 				vmi := libvmi.New(
 					libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
 					libvmi.WithNetwork(v1.DefaultPodNetwork()),
@@ -3642,4 +3642,21 @@ func runStressTest(vmi *v1.VirtualMachineInstance, vmsize string, stressTimeoutS
 	} else {
 		time.Sleep(15 * time.Second)
 	}
+}
+
+func getIdOfLauncher(vmi *v1.VirtualMachineInstance) string {
+	vmi, err := kubevirt.Client().VirtualMachineInstance(vmi.Namespace).Get(context.Background(), vmi.Name, metav1.GetOptions{})
+	Expect(err).ToNot(HaveOccurred())
+
+	vmiPod, err := libpod.GetPodByVirtualMachineInstance(vmi, vmi.Namespace)
+	Expect(err).ToNot(HaveOccurred())
+
+	podOutput, err := exec.ExecuteCommandOnPod(
+		vmiPod,
+		vmiPod.Spec.Containers[0].Name,
+		[]string{"id", "-u"},
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	return strings.TrimSpace(podOutput)
 }
