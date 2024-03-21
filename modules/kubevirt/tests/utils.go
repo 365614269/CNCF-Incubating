@@ -199,22 +199,6 @@ func getRunningPodByVirtualMachineInstance(vmi *v1.VirtualMachineInstance, names
 	return libpod.GetRunningPodByLabel(string(vmi.GetUID()), v1.CreatedByLabel, namespace, vmi.Status.NodeName)
 }
 
-func GetVcpuMask(pod *k8sv1.Pod, emulator, cpu string) (output string, err error) {
-	pscmd := `ps -LC ` + emulator + ` -o lwp,comm | grep "CPU ` + cpu + `"  | cut -f1 -dC`
-	args := []string{BinBash, "-c", pscmd}
-	Eventually(func() error {
-		output, err = exec.ExecuteCommandOnPod(pod, "compute", args)
-		return err
-	}).Should(Succeed())
-	vcpupid := strings.TrimSpace(strings.Trim(output, "\n"))
-	tasksetcmd := "taskset -c -p " + vcpupid + " | cut -f2 -d:"
-	args = []string{BinBash, "-c", tasksetcmd}
-	output, err = exec.ExecuteCommandOnPod(pod, "compute", args)
-	Expect(err).ToNot(HaveOccurred())
-
-	return strings.TrimSpace(output), err
-}
-
 func GetPodCPUSet(pod *k8sv1.Pod) (output string, err error) {
 	const (
 		cgroupV1cpusetPath = "/sys/fs/cgroup/cpuset/cpuset.cpus"
@@ -327,16 +311,6 @@ func NewRandomVMI() *v1.VirtualMachineInstance {
 	}
 
 	return vmi
-}
-
-// NewRandomVMWithEphemeralDisk
-//
-// Deprecated: Use libvmi directly
-func NewRandomVMWithEphemeralDisk(containerImage string) *v1.VirtualMachine {
-	vmi := NewRandomVMIWithEphemeralDisk(containerImage)
-	vm := libvmi.NewVirtualMachine(vmi)
-
-	return vm
 }
 
 // NewRandomVMWithDataVolumeWithRegistryImport
@@ -1334,15 +1308,14 @@ func ExecuteCommandOnNodeThroughVirtHandler(virtCli kubecli.KubevirtClient, node
 	return exec.ExecuteCommandOnPodWithResults(virtHandlerPod, components.VirtHandlerName, command)
 }
 
-func StartVMAndExpectRunning(virtClient kubecli.KubevirtClient, vm *v1.VirtualMachine) *v1.VirtualMachine {
-	runStrategyAlways := v1.RunStrategyAlways
+func RunVMAndExpectLaunchWithRunStrategy(virtClient kubecli.KubevirtClient, vm *v1.VirtualMachine, runStrategy v1.VirtualMachineRunStrategy) *v1.VirtualMachine {
 	By("Starting the VirtualMachine")
 
 	Eventually(func() error {
 		updatedVM, err := virtClient.VirtualMachine(vm.Namespace).Get(context.Background(), vm.Name, &metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		updatedVM.Spec.Running = nil
-		updatedVM.Spec.RunStrategy = &runStrategyAlways
+		updatedVM.Spec.RunStrategy = &runStrategy
 		_, err = virtClient.VirtualMachine(updatedVM.Namespace).Update(context.Background(), updatedVM)
 		return err
 	}, 300*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
