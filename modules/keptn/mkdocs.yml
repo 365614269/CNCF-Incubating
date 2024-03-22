@@ -152,6 +152,7 @@ nav:
               - Flow of deployment: docs/components/lifecycle-operator/deployment-flow.md
               - Keptn Applications and Keptn Workloads: docs/components/lifecycle-operator/keptn-apps.md
               - Keptn non-blocking application deployment: docs/components/lifecycle-operator/keptn-non-blocking.md
+              - Webhooks: docs/components/lifecycle-operator/webhook.md
           - Metrics Operator: docs/components/metrics-operator.md
           - Scheduler and Scheduling Gates: docs/components/scheduling.md
           - Keptn Certificate Manager: docs/components/certificate-operator.md
@@ -172,6 +173,7 @@ nav:
                   - v1alpha2: docs/reference/api-reference/metrics/v1alpha2/index.md
                   - v1alpha3: docs/reference/api-reference/metrics/v1alpha3/index.md
                   - v1beta1: docs/reference/api-reference/metrics/v1beta1/index.md
+                  - v1: docs/reference/api-reference/metrics/v1/index.md
               - Options API:
                   - docs/reference/api-reference/options/index.md
                   - v1alpha1: docs/reference/api-reference/options/v1alpha1/index.md
@@ -223,6 +225,7 @@ nav:
           - Source File Structure: docs/contribute/docs/source-file-structure.md
           - Coding the docs: docs/contribute/docs/code-docs.md
           - Spell Checker: docs/contribute/docs/spell-check.md
+          - Blogs: docs/contribute/docs/blog.md
           - Published Doc Structure: docs/contribute/docs/publish.md
           - Word list: docs/contribute/docs/word-list.md
   - Blog:

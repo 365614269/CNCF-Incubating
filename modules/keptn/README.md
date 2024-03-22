@@ -52,15 +52,15 @@ Status of the different features:
 
 - ![status](https://img.shields.io/badge/status-stable-brightgreen)
   Observability: expose [OTel](https://opentelemetry.io/) metrics and traces of your deployment.
-- ![status](https://img.shields.io/badge/status-beta-yellow)
+- ![status](https://img.shields.io/badge/status-stable-brightgreen)
   K8s Custom Metrics: expose your Observability platform via the [Custom Metric API](https://github.com/kubernetes/design-proposals-archive/blob/main/instrumentation/custom-metrics-api.md).
 - ![status](https://img.shields.io/badge/status-beta-yellow)
   Release lifecycle: handle pre- and post-checks of your Application deployment.
 - ![status](https://img.shields.io/badge/status-stable-brightgreen)
   Certificate Manager: automatically configure TLS certificates with the
-  [Keptn Certificate Manager](https://lifecycle.keptn.sh/docs/concepts/architecture/cert-manager/).
+  [Keptn Certificate Manager](https://keptn.sh/docs/concepts/architecture/cert-manager/).
   You can instead
-  [configure your own certificate manager](https://lifecycle.keptn.sh/docs/install/cert-manager/) to provide
+  [configure your own certificate manager](https://keptn.sh/docs/install/cert-manager/) to provide
   [secure communication with the Kube API](https://kubernetes.io/docs/concepts/security/controlling-access/#transport-security).
 
 <!---
@@ -98,7 +98,7 @@ running Kubernetes >=1.24.
 For users running [vCluster](https://www.vcluster.com/),
 please note that you may need to modify
 your configuration before installing Keptn; see
-[Running Keptn with vCluster](https://main.lifecycle.keptn.sh/docs/install/install//#running-keptn-with-vcluster)
+[Running Keptn with vCluster](https://keptn.sh/stable/docs/installation/configuration/vcluster/)
 for more information.
 
 Use the following command sequence
@@ -159,108 +159,13 @@ requires the helm installation to be updated by adding the name of the new names
 ## More information
 
 For more info about Keptn, please see our
-[documentation](https://lifecycle.keptn.sh/docs/), specifically:
-
-- [Introduction to Keptn](https://lifecycle.keptn.sh/docs/intro/)
-  gives an overview of the Keptn facilities.
-- [Getting started](https://lifecycle.keptn.sh/docs/getting-started/)
-  includes some short exercises to introduce you to Keptn.
-- [Installation and upgrade](https://lifecycle.keptn.sh/docs/install/)
-  provides information about preparing your Kubernetes cluster
-  then installing and enabling Keptn.
-- [Implementing Keptn applications](https://lifecycle.keptn.sh/docs/implementing/)
-  documents how to integrate Keptn to work with your existing deployment engine
-  and implement its various features.
-- [Architecture](https://lifecycle.keptn.sh/docs/concepts/architecture/) provides detailed technical information
-  about how Keptn works.
-- [CRD Reference](https://lifecycle.keptn.sh/docs/yaml-crd-ref/) and
-  [API Reference](https://lifecycle.keptn.sh/docs/crd-ref/)
-  provide detailed reference material for the custom resources
-  used to configure Keptn.
-- [Contributing to Keptn](https://lifecycle.keptn.sh/contribute/)
-  provides information about how to contribute to the Keptn project.
+[documentation](https://keptn.sh/docs/).
 
 You can also find a number of video presentations and demos
 about Keptn on the
 [YouTube Keptn channel](https://www.youtube.com/@keptn).
 Videos that refer to the "Keptn Lifecycle Controller"
 are relevant for the Keptn project.
-
-### Webhook
-
-Annotating a namespace subjects it to the effects of the mutating webhook:
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: podtato-kubectl
-  annotations:
-    keptn.sh/lifecycle-toolkit: "enabled"  # this line tells the webhook to handle the namespace
-```
-
-The mutating webhook only modifies specifically annotated resources in the annotated namespace.
-When the webhook receives a request for a new pod,
-it looks for the workload annotations:
-
-```yaml
-keptn.sh/workload: "some-workload-name"
-```
-
-The mutation consists in changing the scheduler used for the deployment
-with the Keptn Scheduler.
-The webhook then creates a workload and app resource per annotated resource.
-You can also specify a custom app definition with the annotation:
-
-```yaml
-keptn.sh/app: "your-app-name"
-```
-
-In this case the webhook does not generate an app,
-but it expects that the user will provide one.
-Additionally, it computes a version string,
-using a hash function that takes certain properties of the pod as parameters
-(e.g. the images of its containers).
-Next, it looks for an existing instance of a `Workload CRD`
-for the specified workload name:
-
-- If it finds the `Workload`,
-  it updates its version according to the previously computed version string.
-  In addition, it includes a reference to the ReplicaSet UID of the pod
-  (i.e. the Pods owner),
-  or the pod itself, if it does not have an owner.
-- If it does not find a workload instance,
-  it creates one containing the previously computed version string.
-  In addition, it includes a reference to the ReplicaSet UID of the pod
-  (i.e. the Pods owner), or the pod itself, if it does not have an owner.
-
-It uses the following annotations for the specification
-of the pre/post deployment checks that should be executed for the `Workload`:
-
-- `keptn.sh/pre-deployment-tasks: task1,task2`
-- `keptn.sh/post-deployment-tasks: task1,task2`
-
-and for the Evaluations:
-
-- `keptn.sh/pre-deployment-evaluations: my-evaluation-definition`
-- `keptn.sh/post-deployment-evaluations: my-eval-definition`
-
-After either one of those actions has been taken,
-the webhook sets the scheduler of the pod
-and allows the pod to be scheduled.
-
-### Scheduler
-
-After the Webhook mutation, the Keptn-Scheduler handles the annotated resources.
-The scheduling flow follows the default
-[scheduler](https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/)
-behavior,
-since it implements a scheduler plugin based on the
-[scheduling framework]( https://kubernetes.io/docs/concepts/scheduling-eviction/scheduling-framework/).
-For each pod, at the very end of the scheduling cycle,
-the plugin verifies that the pre deployment checks have terminated
-by retrieving the current status of the WorkloadInstance.
-Only when that is successful is the pod bound to a node.
 
 ## Contributing
 
