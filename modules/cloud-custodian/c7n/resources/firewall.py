@@ -54,6 +54,8 @@ class NetworkFirewall(QueryResourceManager):
         id = name = 'FirewallName'
         cfn_type = config_type = 'AWS::NetworkFirewall::Firewall'
         metrics_namespace = 'AWS/NetworkFirewall'
+        universal_taggable = object()
+        permissions_augment = ("network-firewall:ListTagsForResource",)
 
 
 @NetworkFirewall.filter_registry.register('vpc')
