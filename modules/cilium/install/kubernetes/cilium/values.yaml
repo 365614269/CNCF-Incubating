@@ -713,8 +713,8 @@ ingressController:
   default: false
   # -- Default ingress load balancer mode
   # Supported values: shared, dedicated
-  # For granular control, use the following annotations on the ingress resource
-  # ingress.cilium.io/loadbalancer-mode: shared|dedicated,
+  # For granular control, use the following annotations on the ingress resource:
+  # "ingress.cilium.io/loadbalancer-mode: dedicated" (or "shared").
   loadbalancerMode: dedicated
   # -- Enforce https for host having matching TLS host in Ingress.
   # Incoming traffic to http listener will return 308 http error code with respective location in header.
@@ -2779,6 +2779,11 @@ preflight:
   #     cpu: 100m
   #     memory: 512Mi
 
+  readinessProbe:
+    # -- For how long kubelet should wait before performing the first probe
+    initialDelaySeconds: 5
+    # -- interval between checks of the readiness probe
+    periodSeconds: 5
   # -- Security context to be added to preflight pods
   securityContext: {}
   #   runAsUser: 0
