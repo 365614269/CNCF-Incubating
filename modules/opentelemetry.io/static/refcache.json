@@ -499,6 +499,10 @@
     "StatusCode": 206,
     "LastSeen": "2024-01-18T19:55:24.935595-05:00"
   },
+  "https://code.jquery.com/jquery-3.7.1.min.js": {
+    "StatusCode": 206,
+    "LastSeen": "2024-03-12T15:13:41.080612-04:00"
+  },
   "https://code.visualstudio.com/": {
     "StatusCode": 206,
     "LastSeen": "2024-01-30T16:14:52.723964-05:00"
@@ -3038,6 +3042,10 @@
   "https://github.com/open-telemetry/opentelemetry-collector/releases/tag/cmd%2Fbuilder%2Fv0.96.0": {
     "StatusCode": 200,
     "LastSeen": "2024-03-12T08:09:00.086946856Z"
+  },
+  "https://github.com/open-telemetry/opentelemetry-collector/releases/tag/cmd%2Fbuilder%2Fv0.97.0": {
+    "StatusCode": 200,
+    "LastSeen": "2024-03-26T10:15:58.212097134Z"
   },
   "https://github.com/open-telemetry/opentelemetry-collector/releases/tag/v0.63.0": {
     "StatusCode": 200,

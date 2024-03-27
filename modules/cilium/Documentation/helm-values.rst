@@ -364,8 +364,12 @@
      - Configure the maximum number of entries for the neighbor table.
      - int
      - ``524288``
+   * - :spelling:ignore:`bpf.nodeMapMax`
+     - Configures the maximum number of entries for the node table.
+     - int
+     - ``nil``
    * - :spelling:ignore:`bpf.policyMapMax`
-     - Configure the maximum number of entries in endpoint policy map (per endpoint).
+     - Configure the maximum number of entries in endpoint policy map (per endpoint). @schema type: [null, integer] @schema
      - int
      - ``16384``
    * - :spelling:ignore:`bpf.preallocateMaps`
@@ -2884,10 +2888,6 @@
      - interval between checks of the readiness probe
      - int
      - ``30``
-   * - :spelling:ignore:`remoteNodeIdentity`
-     - Enable use of the remote node identity. ref: https://docs.cilium.io/en/v1.7/install/upgrade/#configmap-remote-node-identity
-     - bool
-     - ``true``
    * - :spelling:ignore:`resourceQuotas`
      - Enable resource quotas for priority classes used in the cluster.
      - object

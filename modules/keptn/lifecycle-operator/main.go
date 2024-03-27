@@ -30,6 +30,7 @@ import (
 	"github.com/keptn/lifecycle-toolkit/keptn-cert-manager/pkg/certificates"
 	certCommon "github.com/keptn/lifecycle-toolkit/keptn-cert-manager/pkg/common"
 	"github.com/keptn/lifecycle-toolkit/keptn-cert-manager/pkg/webhook"
+	lifecyclev1 "github.com/keptn/lifecycle-toolkit/lifecycle-operator/apis/lifecycle/v1"
 	lifecyclev1alpha1 "github.com/keptn/lifecycle-toolkit/lifecycle-operator/apis/lifecycle/v1alpha1"
 	lifecyclev1alpha2 "github.com/keptn/lifecycle-toolkit/lifecycle-operator/apis/lifecycle/v1alpha2"
 	lifecyclev1alpha3 "github.com/keptn/lifecycle-toolkit/lifecycle-operator/apis/lifecycle/v1alpha3"
@@ -82,6 +83,7 @@ func init() {
 	utilruntime.Must(argov1alpha1.AddToScheme(scheme))
 	utilruntime.Must(lifecyclev1alpha4.AddToScheme(scheme))
 	utilruntime.Must(lifecyclev1beta1.AddToScheme(scheme))
+	utilruntime.Must(lifecyclev1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -366,15 +368,15 @@ func main() {
 		}
 	}
 
-	if err = (&lifecyclev1beta1.KeptnApp{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&lifecyclev1.KeptnApp{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KeptnApp")
 		os.Exit(1)
 	}
-	if err = (&lifecyclev1beta1.KeptnAppVersion{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&lifecyclev1.KeptnAppVersion{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KeptnAppVersion")
 		os.Exit(1)
 	}
-	if err = (&lifecyclev1beta1.KeptnTaskDefinition{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&lifecyclev1.KeptnTaskDefinition{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "KeptnTaskDefinition")
 		os.Exit(1)
 	}

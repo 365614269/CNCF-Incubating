@@ -393,26 +393,6 @@ func (m *manager) backgroundSync(ctx context.Context) error {
 	}
 }
 
-// legacyNodeIpBehavior returns true if the agent is still running in legacy
-// mode regarding node IPs
-func (m *manager) legacyNodeIpBehavior() bool {
-	// Cilium < 1.7 only exposed the Cilium internalIP to the ipcache
-	// unless encryption was enabled. This meant that for the majority of
-	// node IPs, CIDR policy rules would apply. With the introduction of
-	// remote-node identities, all node IPs were suddenly added to the
-	// ipcache. This resulted in a behavioral change. New deployments will
-	// provide this behavior out of the gate, existing deployments will
-	// have to opt into this by enabling remote-node identities.
-	if m.conf.RemoteNodeIdentitiesEnabled() {
-		return false
-	}
-	// Needed to store the SPI for nodes in the ipcache.
-	if m.conf.NodeEncryptionEnabled() {
-		return false
-	}
-	return true
-}
-
 func (m *manager) nodeAddressHasTunnelIP(address nodeTypes.Address) bool {
 	// If the host firewall is enabled, all traffic to remote nodes must go
 	// through the tunnel to preserve the source identity as part of the
@@ -450,43 +430,36 @@ func (m *manager) endpointEncryptionKey(n *nodeTypes.Node) ipcacheTypes.EncryptK
 	return ipcacheTypes.EncryptKey(n.EncryptionKey)
 }
 
-func (m *manager) nodeAddressSkipsIPCache(address nodeTypes.Address) bool {
-	return m.legacyNodeIpBehavior() && address.Type != addressing.NodeCiliumInternalIP
-}
-
 func (m *manager) nodeIdentityLabels(n nodeTypes.Node) (nodeLabels labels.Labels, hasOverride bool) {
 	nodeLabels = labels.NewFrom(labels.LabelRemoteNode)
-	if m.conf.RemoteNodeIdentitiesEnabled() {
-		if n.IsLocal() {
-			nodeLabels = labels.NewFrom(labels.LabelHost)
-			if m.conf.PolicyCIDRMatchesNodes() {
-				for _, address := range n.IPAddresses {
-					addr, ok := ip.AddrFromIP(address.IP)
-					if ok {
-						bitLen := addr.BitLen()
-						if m.conf.EnableIPv4 && bitLen == net.IPv4len*8 ||
-							m.conf.EnableIPv6 && bitLen == net.IPv6len*8 {
-							prefix, err := addr.Prefix(bitLen)
-							if err == nil {
-								cidrLabels := labels.GetCIDRLabels(prefix)
-								nodeLabels.MergeLabels(cidrLabels)
-							}
+	if n.IsLocal() {
+		nodeLabels = labels.NewFrom(labels.LabelHost)
+		if m.conf.PolicyCIDRMatchesNodes() {
+			for _, address := range n.IPAddresses {
+				addr, ok := ip.AddrFromIP(address.IP)
+				if ok {
+					bitLen := addr.BitLen()
+					if m.conf.EnableIPv4 && bitLen == net.IPv4len*8 ||
+						m.conf.EnableIPv6 && bitLen == net.IPv6len*8 {
+						prefix, err := addr.Prefix(bitLen)
+						if err == nil {
+							cidrLabels := labels.GetCIDRLabels(prefix)
+							nodeLabels.MergeLabels(cidrLabels)
 						}
 					}
 				}
 			}
-		} else if !identity.NumericIdentity(n.NodeIdentity).IsReservedIdentity() {
-			// This needs to match clustermesh-apiserver's VMManager.AllocateNodeIdentity
-			nodeLabels = labels.Map2Labels(n.Labels, labels.LabelSourceK8s)
-			hasOverride = true
-		} else if !n.IsLocal() && option.Config.PerNodeLabelsEnabled() {
-			lbls := labels.Map2Labels(n.Labels, labels.LabelSourceNode)
-			filteredLbls, _ := labelsfilter.FilterNodeLabels(lbls)
-			nodeLabels.MergeLabels(filteredLbls)
 		}
-	} else {
-		nodeLabels = labels.NewFrom(labels.LabelHost)
+	} else if !identity.NumericIdentity(n.NodeIdentity).IsReservedIdentity() {
+		// This needs to match clustermesh-apiserver's VMManager.AllocateNodeIdentity
+		nodeLabels = labels.Map2Labels(n.Labels, labels.LabelSourceK8s)
+		hasOverride = true
+	} else if !n.IsLocal() && option.Config.PerNodeLabelsEnabled() {
+		lbls := labels.Map2Labels(n.Labels, labels.LabelSourceNode)
+		filteredLbls, _ := labelsfilter.FilterNodeLabels(lbls)
+		nodeLabels.MergeLabels(filteredLbls)
 	}
+
 	return nodeLabels, hasOverride
 }
 
@@ -527,10 +500,6 @@ func (m *manager) NodeUpdated(n nodeTypes.Node) {
 
 		if address.Type == addressing.NodeInternalIP && !m.ipsetFilter(&n) {
 			ipsetEntries = append(ipsetEntries, prefix)
-		}
-
-		if m.nodeAddressSkipsIPCache(address) {
-			continue
 		}
 
 		var tunnelIP netip.Addr
@@ -733,10 +702,6 @@ func (m *manager) removeNodeFromIPCache(oldNode nodeTypes.Node, resource ipcache
 			} else {
 				v4Addrs = append(v4Addrs, addr)
 			}
-		}
-
-		if m.nodeAddressSkipsIPCache(address) {
-			continue
 		}
 
 		var oldTunnelIP netip.Addr

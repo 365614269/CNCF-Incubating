@@ -589,6 +589,12 @@
             "integer"
           ]
         },
+        "nodeMapMax": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "policyMapMax": {
           "type": [
             "null",
@@ -4619,9 +4625,6 @@
         }
       },
       "type": "object"
-    },
-    "remoteNodeIdentity": {
-      "type": "boolean"
     },
     "resourceQuotas": {
       "properties": {

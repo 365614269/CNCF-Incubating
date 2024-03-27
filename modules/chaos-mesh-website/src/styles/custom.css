@@ -62,8 +62,16 @@
   background: center no-repeat url('/img/logos/cncf-white.svg');
 }
 
+.theme-doc-markdown a {
+  text-decoration: underline;
+}
+
+.theme-doc-markdown a:hover {
+  text-decoration-thickness: 2px;
+}
+
 .caption {
-  color: var(--ifm-color-emphasis-600);
+  color: var(--ifm-color-emphasis-700);
   font-style: italic;
   text-align: center;
 }
