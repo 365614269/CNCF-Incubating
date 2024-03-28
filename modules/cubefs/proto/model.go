@@ -366,7 +366,7 @@ func (vv *VolVersionInfo) String() string {
 }
 
 type VolVersionInfoList struct {
-	VerList         []*VolVersionInfo
+	VerList         []*VolVersionInfo // ascend
 	Strategy        VolumeVerStrategy
 	TemporaryVerMap map[uint64]*VolVersionInfo
 	RWLock          sync.RWMutex
@@ -440,4 +440,21 @@ type DecommissionDiskInfo struct {
 
 type DecommissionDisksResponse struct {
 	Infos []DecommissionDiskInfo
+}
+
+type DecommissionDataPartitionInfo struct {
+	PartitionId       uint64
+	Status            uint32
+	SpecialStep       uint32
+	Retry             int
+	RaftForce         bool
+	Recover           bool
+	SrcAddress        string
+	SrcDiskPath       string
+	DstAddress        string
+	Term              uint64
+	Replicas          []string
+	WaitTimes         int
+	ErrorMessage      string
+	NeedRollbackTimes uint32
 }

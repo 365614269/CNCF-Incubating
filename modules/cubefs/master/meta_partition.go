@@ -550,8 +550,6 @@ func (mp *MetaPartition) reportMissingReplicas(clusterID, leaderAddr string, sec
 					"miss time > :%v  vlocLastRepostTime:%v   dnodeLastReportTime:%v  nodeisActive:%v",
 					clusterID, mp.volName, mp.PartitionID, replica.Addr, seconds, replica.ReportTime, lastReportTime, isActive)
 				Warn(clusterID, msg)
-				// msg = fmt.Sprintf("decommissionMetaPartitionURL is http://%v/dataPartition/decommission?id=%v&addr=%v", leaderAddr, mp.PartitionID, replica.Addr)
-				// Warn(clusterID, msg)
 				if WarnMetrics != nil {
 					WarnMetrics.WarnMissingMp(clusterID, replica.Addr, mp.PartitionID, true)
 				}

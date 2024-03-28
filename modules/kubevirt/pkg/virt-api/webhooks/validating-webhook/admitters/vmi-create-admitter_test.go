@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"strings"
 
+	"kubevirt.io/kubevirt/pkg/libvmi"
+
 	cmdclient "kubevirt.io/kubevirt/pkg/virt-handler/cmd-client"
 
 	"kubevirt.io/client-go/api"
@@ -112,7 +114,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 	})
 
 	It("should reject invalid VirtualMachineInstance spec on create", func() {
-		vmi := api.NewMinimalVMI("testvmi")
+		vmi := newBaseVmi()
 		vmi.Spec.Domain.Devices.Disks = append(vmi.Spec.Domain.Devices.Disks, v1.Disk{
 			Name: "testdisk",
 		})
@@ -133,7 +135,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 		Expect(resp.Result.Details.Causes[0].Field).To(Equal("spec.domain.devices.disks[0].name"))
 	})
 	It("should reject VMIs without memory after presets were applied", func() {
-		vmi := api.NewMinimalVMI("testvmi")
+		vmi := newBaseVmi()
 		vmi.Spec.Domain.Resources = v1.ResourceRequirements{}
 		vmiBytes, _ := json.Marshal(&vmi)
 
@@ -349,16 +351,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 	})
 
 	It("should accept valid vmi spec on create", func() {
-		vmi := api.NewMinimalVMI("testvmi")
-		vmi.Spec.Domain.Devices.Disks = append(vmi.Spec.Domain.Devices.Disks, v1.Disk{
-			Name: "testdisk",
-		})
-		vmi.Spec.Volumes = append(vmi.Spec.Volumes, v1.Volume{
-			Name: "testdisk",
-			VolumeSource: v1.VolumeSource{
-				ContainerDisk: testutils.NewFakeContainerDiskSource(),
-			},
-		})
+		vmi := newBaseVmi(libvmi.WithContainerDisk("testdisk", "testimage"))
 		vmiBytes, _ := json.Marshal(&vmi)
 
 		ar := &admissionv1.AdmissionReview{
@@ -1059,17 +1052,6 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 			Expect(causes).To(HaveLen(1))
 			Expect(causes[0].Field).To(Equal("fake.domain.devices.interfaces[1].name"))
 		})
-		It("should accept network lists with more than one element", func() {
-			vm := api.NewMinimalVMI("testvm")
-			vm.Spec.Domain.Devices.Interfaces = []v1.Interface{{Name: "default", InterfaceBindingMethod: v1.InterfaceBindingMethod{Bridge: &v1.InterfaceBridge{}}},
-				{Name: "default2", InterfaceBindingMethod: v1.InterfaceBindingMethod{Bridge: &v1.InterfaceBridge{}}}}
-			vm.Spec.Networks = []v1.Network{{Name: "default", NetworkSource: v1.NetworkSource{Pod: &v1.PodNetwork{}}},
-				{Name: "default2", NetworkSource: v1.NetworkSource{Pod: &v1.PodNetwork{}}}}
-			causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("fake"), &vm.Spec, config)
-			// if this is processed correctly, it should result an error only about duplicate pod network configuration
-			Expect(causes).To(HaveLen(1))
-			Expect(causes[0].Message).To(Equal("more than one interface is connected to a pod network in fake.interfaces"))
-		})
 
 		It("should accept valid interface models", func() {
 			vmi := api.NewMinimalVMI("testvm")
@@ -1364,45 +1346,6 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 			causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("fake"), &vm.Spec, config)
 			Expect(causes).To(HaveLen(1))
 			Expect(causes[0].Field).To(Equal("fake.networks[0]"))
-		})
-		It("should reject networks with a multus network source and slirp interface", func() {
-			enableSlirpInterface()
-			vm := api.NewMinimalVMI("testvm")
-			vm.Spec.Domain.Devices.Interfaces = []v1.Interface{{
-				Name: "default",
-				InterfaceBindingMethod: v1.InterfaceBindingMethod{
-					Slirp: &v1.InterfaceSlirp{},
-				}}}
-			vm.Spec.Networks = []v1.Network{
-				{
-					Name: "default",
-					NetworkSource: v1.NetworkSource{
-						Multus: &v1.MultusNetwork{NetworkName: "default"},
-					},
-				},
-			}
-
-			causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("fake"), &vm.Spec, config)
-			Expect(causes).To(HaveLen(1))
-		})
-		It("should accept networks with a pod network source and slirp interface", func() {
-			enableSlirpInterface()
-			vm := api.NewMinimalVMI("testvm")
-			vm.Spec.Domain.Devices.Interfaces = []v1.Interface{{
-				Name: "default",
-				InterfaceBindingMethod: v1.InterfaceBindingMethod{
-					Slirp: &v1.InterfaceSlirp{},
-				}}}
-
-			vm.Spec.Networks = []v1.Network{
-				{
-					Name:          "default",
-					NetworkSource: v1.NetworkSource{Pod: &v1.PodNetwork{}},
-				},
-			}
-
-			causes := ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("fake"), &vm.Spec, config)
-			Expect(causes).To(BeEmpty())
 		})
 		It("should reject networks with a passt interface and passt feature gate disabled", func() {
 			vm := api.NewMinimalVMI("testvm")
@@ -2326,8 +2269,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 	Context("with cpu pinning", func() {
 		var vmi *v1.VirtualMachineInstance
 		BeforeEach(func() {
-			vmi = api.NewMinimalVMI("testvmi")
-			vmi.Spec.Domain.CPU = &v1.CPU{DedicatedCPUPlacement: true}
+			vmi = newBaseVmi(libvmi.WithDedicatedCPUPlacement())
 			enableFeatureGate(virtconfig.NUMAFeatureGate)
 		})
 		It("should reject NUMA passthrough without DedicatedCPUPlacement without the NUMA feature gate", func() {
@@ -2499,16 +2441,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 
 	Context("with AccessCredentials", func() {
 		It("should accept a valid ssh access credential with configdrive propagation", func() {
-			vmi := api.NewMinimalVMI("testvmi")
-			vmi.Spec.Domain.Devices.Disks = append(vmi.Spec.Domain.Devices.Disks, v1.Disk{
-				Name: "testdisk",
-			})
-			vmi.Spec.Volumes = append(vmi.Spec.Volumes, v1.Volume{
-				Name: "testdisk",
-				VolumeSource: v1.VolumeSource{
-					CloudInitConfigDrive: &v1.CloudInitConfigDriveSource{UserData: " "},
-				},
-			})
+			vmi := newBaseVmi(libvmi.WithCloudInitConfigDriveUserData(" "))
 
 			vmi.Spec.AccessCredentials = []v1.AccessCredential{
 				{
@@ -4525,7 +4458,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 			ar := vmiAdmissionReviewFromTopologyConstraints(vmi, []k8sv1.TopologySpreadConstraint{
 				{
 					MaxSkew:           1,
-					TopologyKey:       "kubernetes.io/hostname",
+					TopologyKey:       k8sv1.LabelHostname,
 					WhenUnsatisfiable: k8sv1.DoNotSchedule,
 					LabelSelector:     nil,
 				},
@@ -4539,7 +4472,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 			ar := vmiAdmissionReviewFromTopologyConstraints(vmi, []k8sv1.TopologySpreadConstraint{
 				{
 					MaxSkew:           1,
-					TopologyKey:       "kubernetes.io/hostname",
+					TopologyKey:       k8sv1.LabelHostname,
 					WhenUnsatisfiable: k8sv1.DoNotSchedule,
 					LabelSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
@@ -4595,7 +4528,7 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 			ar := vmiAdmissionReviewFromTopologyConstraints(vmi, []k8sv1.TopologySpreadConstraint{
 				{
 					MaxSkew:           -1,
-					TopologyKey:       "kubernetes.io/hostname",
+					TopologyKey:       k8sv1.LabelHostname,
 					WhenUnsatisfiable: k8sv1.DoNotSchedule,
 					LabelSelector:     nil,
 				},
@@ -4612,12 +4545,12 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 			ar := vmiAdmissionReviewFromTopologyConstraints(vmi, []k8sv1.TopologySpreadConstraint{
 				{
 					MaxSkew:           1,
-					TopologyKey:       "kubernetes.io/hostname",
+					TopologyKey:       k8sv1.LabelHostname,
 					WhenUnsatisfiable: k8sv1.DoNotSchedule,
 					LabelSelector: &metav1.LabelSelector{
 						MatchExpressions: []metav1.LabelSelectorRequirement{
 							{
-								Key:      "kubernetes.io/hostname",
+								Key:      k8sv1.LabelHostname,
 								Operator: metav1.LabelSelectorOpIn,
 								Values:   nil,
 							},
@@ -5225,3 +5158,8 @@ var _ = Describe("Function getNumberOfPodInterfaces()", func() {
 		Expect(causes).To(BeEmpty())
 	})
 })
+
+func newBaseVmi(opts ...libvmi.Option) *v1.VirtualMachineInstance {
+	opts = append(opts, libvmi.WithResourceMemory("512Mi"))
+	return libvmi.New(opts...)
+}

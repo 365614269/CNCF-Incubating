@@ -69,6 +69,8 @@ const (
 	OpReadTinyDeleteRecord           uint8 = 0x14
 	OpTinyExtentRepairRead           uint8 = 0x15
 	OpGetMaxExtentIDAndPartitionSize uint8 = 0x16
+	OpSnapshotExtentRepairRead       uint8 = 0x17
+	OpSnapshotExtentRepairRsp        uint8 = 0x18
 
 	// Operations: Client -> MetaNode.
 	OpMetaCreateInode   uint8 = 0x20
@@ -238,11 +240,11 @@ const (
 	OpTxCommitErr             uint8 = 0xEC
 	OpTxRollbackErr           uint8 = 0xED
 	OpTxUnknownOp             uint8 = 0xEE
-
 	// multiVersion to dp/mp
-	OpVersionOperation uint8 = 0xD5
-	OpSplitMarkDelete  uint8 = 0xD6
-	OpTryOtherExtent   uint8 = 0xD7
+	OpVersionOperation      uint8 = 0xD5
+	OpSplitMarkDelete       uint8 = 0xD6
+	OpTryOtherExtent        uint8 = 0xD7
+	OpReadRepairExtentAgain uint8 = 0xEF
 )
 
 const (
@@ -509,6 +511,8 @@ func (p *Packet) GetOpMsg() (m string) {
 		m = "OpPing"
 	case OpTinyExtentRepairRead:
 		m = "OpTinyExtentRepairRead"
+	case OpSnapshotExtentRepairRead:
+		m = "OpSnapshotExtentRepairRead"
 	case OpGetMaxExtentIDAndPartitionSize:
 		m = "OpGetMaxExtentIDAndPartitionSize"
 	case OpBroadcastMinAppliedID:
@@ -879,7 +883,8 @@ func (p *Packet) IsWriteOperation() bool {
 func (p *Packet) IsReadOperation() bool {
 	return p.Opcode == OpStreamRead || p.Opcode == OpRead ||
 		p.Opcode == OpExtentRepairRead || p.Opcode == OpReadTinyDeleteRecord ||
-		p.Opcode == OpTinyExtentRepairRead || p.Opcode == OpStreamFollowerRead
+		p.Opcode == OpTinyExtentRepairRead || p.Opcode == OpStreamFollowerRead ||
+		p.Opcode == OpSnapshotExtentRepairRead
 }
 
 // ReadFromConn reads the data from the given connection.

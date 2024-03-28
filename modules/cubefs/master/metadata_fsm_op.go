@@ -155,6 +155,7 @@ type dataPartitionValue struct {
 	RecoverLastConsumeTime         float64
 	Forbidden                      bool
 	DecommissionWaitTimes          int
+	DecommissionErrorMessage       string
 }
 
 func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
@@ -227,6 +228,7 @@ func newDataPartitionValue(dp *DataPartition) (dpv *dataPartitionValue) {
 		RecoverStartTime:               dp.RecoverStartTime.Unix(),
 		RecoverLastConsumeTime:         dp.RecoverLastConsumeTime.Seconds(),
 		DecommissionWaitTimes:          dp.DecommissionWaitTimes,
+		DecommissionErrorMessage:       dp.DecommissionErrorMessage,
 	}
 	for _, replica := range dp.Replicas {
 		rv := &replicaValue{Addr: replica.Addr, DiskPath: replica.DiskPath}
@@ -1382,7 +1384,13 @@ func (c *Cluster) loadDataNodes() (err error) {
 			}
 		}
 		c.dataNodes.Store(dataNode.Addr, dataNode)
-		log.LogInfof("action[loadDataNodes],dataNode[%v],dataNodeID[%v],zone[%v],ns[%v]", dataNode.Addr, dataNode.ID, dnv.ZoneName, dnv.NodeSetID)
+		log.LogInfof("action[loadDataNodes],dataNode[%v],dataNodeID[%v],zone[%v],ns[%v] DecommissionStatus [%v] "+
+			"DecommissionDstAddr[%v] DecommissionRaftForce[%v] DecommissionDpTotal[%v] DecommissionLimit[%v]  DecommissionRetry[%v] "+
+			"DecommissionCompleteTime [%v] ToBeOffline[%v]",
+			dataNode.Addr, dataNode.ID, dnv.ZoneName, dnv.NodeSetID, dataNode.DecommissionStatus, dataNode.DecommissionDstAddr,
+			dataNode.DecommissionRaftForce, dataNode.DecommissionDpTotal, dataNode.DecommissionLimit, dataNode.DecommissionRetry,
+			time.Unix(dataNode.DecommissionCompleteTime, 0).Format("2006-01-02 15:04:05"),
+			dataNode.ToBeOffline)
 	}
 	return
 }

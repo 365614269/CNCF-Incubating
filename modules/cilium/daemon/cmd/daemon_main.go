@@ -373,6 +373,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableIPsecKeyWatcher, defaults.EnableIPsecKeyWatcher, "Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations.")
 	option.BindEnv(vp, option.EnableIPsecKeyWatcher)
 
+	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPSec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host.")
+	option.BindEnv(vp, option.EnableIPSecEncryptedOverlay)
+
 	flags.Bool(option.EnableWireguard, false, "Enable WireGuard")
 	option.BindEnv(vp, option.EnableWireguard)
 
@@ -1345,6 +1348,10 @@ func initEnv(vp *viper.Viper) {
 		}
 	}
 
+	if option.Config.EnableIPSecEncryptedOverlay && !option.Config.EnableIPSec {
+		log.Warn("IPSec encrypted overlay is enabled but IPSec is not. Ignoring option.")
+	}
+
 	// IPAMENI IPSec is configured from Reinitialize() to pull in devices
 	// that may be added or removed at runtime.
 	if option.Config.EnableIPSec &&
@@ -1804,7 +1811,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 
 	d.startAgentHealthHTTPService()
 	if option.Config.KubeProxyReplacementHealthzBindAddr != "" {
-		if option.Config.KubeProxyReplacement != option.KubeProxyReplacementDisabled {
+		if option.Config.KubeProxyReplacement != option.KubeProxyReplacementFalse {
 			d.startKubeProxyHealthzHTTPService(option.Config.KubeProxyReplacementHealthzBindAddr)
 		}
 	}

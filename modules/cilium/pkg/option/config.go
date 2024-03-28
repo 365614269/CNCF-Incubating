@@ -711,6 +711,12 @@ const (
 	// IPSecKeyFileName is the name of the option for ipsec key file
 	IPSecKeyFileName = "ipsec-key-file"
 
+	// EnableIPSecEncrytpedOverlay is the name of the option which enables
+	// the EncryptedOverlay feature.
+	//
+	// This feature will encrypt overlay traffic before it leaves the cluster.
+	EnableIPSecEncryptedOverlay = "enable-ipsec-encrypted-overlay"
+
 	// EnableWireguard is the name of the option to enable WireGuard
 	EnableWireguard = "enable-wireguard"
 
@@ -1263,22 +1269,12 @@ const (
 	// NodePortAccelerationBestEffort means we accelerate NodePort via native XDP in the driver (preferred), but will skip devices without driver support
 	NodePortAccelerationBestEffort = XDPModeBestEffort
 
-	// KubeProxyReplacementPartial specifies to enable only selected kube-proxy
-	// replacement features (might panic)
-	KubeProxyReplacementPartial = "partial"
-
-	// KubeProxyReplacementStrict specifies to enable all kube-proxy replacement
-	// features (might panic)
-	KubeProxyReplacementStrict = "strict"
-
-	// KubeProxyReplacementDisabled specified to completely disable kube-proxy
-	// replacement
-	KubeProxyReplacementDisabled = "disabled"
-
-	// KubeProxyReplacementTrue has the same meaning as previous "strict".
+	// KubeProxyReplacementTrue specifies to enable all kube-proxy replacement
+	// features (might panic).
 	KubeProxyReplacementTrue = "true"
 
-	// KubeProxyReplacementTrue has the same meaning as previous "partial".
+	// KubeProxyReplacementFalse specifies to enable only selected kube-proxy
+	// replacement features (might panic).
 	KubeProxyReplacementFalse = "false"
 
 	// KubeProxyReplacement healthz server bind address
@@ -1568,6 +1564,9 @@ type DaemonConfig struct {
 	// Enable watcher for IPsec key. If disabled, a restart of the agent will
 	// be necessary on key rotations.
 	EnableIPsecKeyWatcher bool
+
+	// EnableIPSecEncryptedOverlay enables IPSec encryption for overlay traffic.
+	EnableIPSecEncryptedOverlay bool
 
 	// EnableWireguard enables Wireguard encryption
 	EnableWireguard bool
@@ -3031,6 +3030,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.BPFEventsDropEnabled = vp.GetBool(BPFEventsDropEnabled)
 	c.BPFEventsPolicyVerdictEnabled = vp.GetBool(BPFEventsPolicyVerdictEnabled)
 	c.BPFEventsTraceEnabled = vp.GetBool(BPFEventsTraceEnabled)
+	c.EnableIPSecEncryptedOverlay = vp.GetBool(EnableIPSecEncryptedOverlay)
 
 	c.ServiceNoBackendResponse = vp.GetString(ServiceNoBackendResponse)
 	switch c.ServiceNoBackendResponse {
@@ -4091,7 +4091,7 @@ func getDefaultMonitorQueueSize(numCPU int) int {
 func MightAutoDetectDevices() bool {
 	devices := Config.GetDevices()
 	return ((Config.EnableHostFirewall || Config.EnableWireguard || Config.EnableHighScaleIPcache) && len(devices) == 0) ||
-		(Config.KubeProxyReplacement != KubeProxyReplacementDisabled &&
+		(Config.KubeProxyReplacement != KubeProxyReplacementFalse &&
 			(len(devices) == 0 || Config.DirectRoutingDevice == ""))
 }
 
