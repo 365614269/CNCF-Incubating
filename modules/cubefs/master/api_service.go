@@ -171,6 +171,27 @@ func (m *Server) setMetaNodeThreshold(w http.ResponseWriter, r *http.Request) {
 	sendOkReply(w, r, newSuccessHTTPReply(fmt.Sprintf("set threshold to %v successfully", threshold)))
 }
 
+func (m *Server) setMasterVolDeletionDelayTime(w http.ResponseWriter, r *http.Request) {
+	var (
+		volDeletionDelayTimeHour int
+		err                      error
+	)
+	metric := exporter.NewTPCnt(apiToMetricsName(proto.AdminSetMasterVolDeletionDelayTime))
+	defer func() {
+		doStatAndMetric(proto.AdminSetMasterVolDeletionDelayTime, metric, err, nil)
+	}()
+
+	if volDeletionDelayTimeHour, err = parseAndExtractVolDeletionDelayTime(r); err != nil {
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
+		return
+	}
+	if err = m.cluster.setMasterVolDeletionDelayTime(volDeletionDelayTimeHour); err != nil {
+		sendErrReply(w, r, newErrHTTPReply(err))
+		return
+	}
+	sendOkReply(w, r, newSuccessHTTPReply(fmt.Sprintf("set volDeletionDelayTime to %v h successfully", volDeletionDelayTimeHour)))
+}
+
 // Turn on or off the automatic allocation of the data partitions.
 // If DisableAutoAllocate == off, then we WILL NOT automatically allocate new data partitions for the volume when:
 //  1. the used space is below the max capacity,
@@ -228,6 +249,11 @@ func (m *Server) forbidVolume(w http.ResponseWriter, r *http.Request) {
 		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeVolNotExists, Msg: err.Error()})
 		return
 	}
+	if vol.Status == proto.VolStatusMarkDelete {
+		err = errors.New("vol has been mark delete, freeze operation is not allowed")
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeVolHasDeleted, Msg: err.Error()})
+		return
+	}
 	oldForbiden := vol.Forbidden
 	vol.Forbidden = status
 	defer func() {
@@ -241,9 +267,9 @@ func (m *Server) forbidVolume(w http.ResponseWriter, r *http.Request) {
 	}
 	if status {
 		// set data partition status to write only
-		vol.setDpRdOnly()
+		vol.setDpForbid()
 		// set meta partition status to read only
-		vol.setMpRdOnly()
+		vol.setMpForbid()
 	}
 	sendOkReply(w, r, newSuccessHTTPReply(fmt.Sprintf("set volume forbidden to (%v) success", status)))
 }
@@ -746,22 +772,23 @@ func (m *Server) getCluster(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	cv := &proto.ClusterView{
-		Name:                 m.cluster.Name,
-		CreateTime:           time.Unix(m.cluster.CreateTime, 0).Format(proto.TimeFormat),
-		LeaderAddr:           m.leaderInfo.addr,
-		DisableAutoAlloc:     m.cluster.DisableAutoAllocate,
-		ForbidMpDecommission: m.cluster.ForbidMpDecommission,
-		MetaNodeThreshold:    m.cluster.cfg.MetaNodeThreshold,
-		Applied:              m.fsm.applied,
-		MaxDataPartitionID:   m.cluster.idAlloc.dataPartitionID,
-		MaxMetaNodeID:        m.cluster.idAlloc.commonID,
-		MaxMetaPartitionID:   m.cluster.idAlloc.metaPartitionID,
-		MasterNodes:          make([]proto.NodeView, 0),
-		MetaNodes:            make([]proto.NodeView, 0),
-		DataNodes:            make([]proto.NodeView, 0),
-		VolStatInfo:          make([]*proto.VolStatInfo, 0),
-		BadPartitionIDs:      make([]proto.BadPartitionView, 0),
-		BadMetaPartitionIDs:  make([]proto.BadPartitionView, 0),
+		Name:                     m.cluster.Name,
+		CreateTime:               time.Unix(m.cluster.CreateTime, 0).Format(proto.TimeFormat),
+		LeaderAddr:               m.leaderInfo.addr,
+		DisableAutoAlloc:         m.cluster.DisableAutoAllocate,
+		ForbidMpDecommission:     m.cluster.ForbidMpDecommission,
+		MetaNodeThreshold:        m.cluster.cfg.MetaNodeThreshold,
+		Applied:                  m.fsm.applied,
+		MaxDataPartitionID:       m.cluster.idAlloc.dataPartitionID,
+		MaxMetaNodeID:            m.cluster.idAlloc.commonID,
+		MaxMetaPartitionID:       m.cluster.idAlloc.metaPartitionID,
+		VolDeletionDelayTimeHour: m.cluster.cfg.volDelayDeleteTimeHour,
+		MasterNodes:              make([]proto.NodeView, 0),
+		MetaNodes:                make([]proto.NodeView, 0),
+		DataNodes:                make([]proto.NodeView, 0),
+		VolStatInfo:              make([]*proto.VolStatInfo, 0),
+		BadPartitionIDs:          make([]proto.BadPartitionView, 0),
+		BadMetaPartitionIDs:      make([]proto.BadPartitionView, 0),
 	}
 
 	vols := m.cluster.allVolNames()
@@ -2038,6 +2065,7 @@ func (m *Server) markDeleteVol(w http.ResponseWriter, r *http.Request) {
 	var (
 		name    string
 		authKey string
+		status  bool
 		// force   bool
 		err error
 		msg string
@@ -2047,20 +2075,120 @@ func (m *Server) markDeleteVol(w http.ResponseWriter, r *http.Request) {
 		doStatAndMetric(proto.AdminDeleteVol, metric, err, map[string]string{exporter.Vol: name})
 	}()
 
-	if name, authKey, _, err = parseRequestToDeleteVol(r); err != nil {
+	if name, authKey, status, _, err = parseRequestToDeleteVol(r); err != nil {
 		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
 		return
 	}
 
-	if err = m.cluster.markDeleteVol(name, authKey, false); err != nil {
+	if enableDirectDeleteVol {
+		if err = m.cluster.markDeleteVol(name, authKey, false, true); err != nil {
+			sendErrReply(w, r, newErrHTTPReply(err))
+			return
+		}
+		if err = m.user.deleteVolPolicy(name); err != nil {
+			sendErrReply(w, r, newErrHTTPReply(err))
+			return
+		}
+		msg = fmt.Sprintf("delete vol[%v] successfully,from[%v]", name, r.RemoteAddr)
+		log.LogWarn(msg)
+		sendOkReply(w, r, newSuccessHTTPReply(msg))
+		return
+	}
+	vol, err := m.cluster.getVol(name)
+	if err != nil {
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeVolNotExists, Msg: err.Error()})
+		return
+	}
+	if status {
+		if vol.Status == proto.VolStatusMarkDelete {
+			err = errors.New("vol has been mark delete, repeated deletions are not allowed")
+			sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeVolHasDeleted, Msg: err.Error()})
+			return
+		}
+		oldForbiden := vol.Forbidden
+		vol.Forbidden = true
+		vol.authKey = authKey
+		vol.DeleteExecTime = time.Now().Add(time.Duration(m.config.volDelayDeleteTimeHour) * time.Hour)
+		vol.user = m.user
+		m.cluster.deleteVolMutex.Lock()
+		m.cluster.delayDeleteVolsInfo = append(m.cluster.delayDeleteVolsInfo, &delayDeleteVolInfo{volName: name, authKey: authKey, execTime: vol.DeleteExecTime, user: m.user})
+		m.cluster.deleteVolMutex.Unlock()
+		defer func() {
+			if err != nil {
+				vol.Forbidden = oldForbiden
+				vol.authKey = ""
+				vol.DeleteExecTime = time.Time{}
+				vol.user = nil
+				var index int
+				var value *delayDeleteVolInfo
+				for index, value = range m.cluster.delayDeleteVolsInfo {
+					if value.volName == name {
+						break
+					}
+				}
+				m.cluster.delayDeleteVolsInfo = append(m.cluster.delayDeleteVolsInfo[:index], m.cluster.delayDeleteVolsInfo[index+1:]...)
+			}
+		}()
+
+		if err = m.cluster.markDeleteVol(name, authKey, false, true); err != nil {
+			sendErrReply(w, r, newErrHTTPReply(err))
+			return
+		}
+		vol.setDpForbid()
+		vol.setMpForbid()
+
+		log.LogDebugf("action[markDeleteVol] delayDeleteVolsInfo[%v]", m.cluster.delayDeleteVolsInfo)
+		msg = fmt.Sprintf("delete vol: forbid vol[%v] successfully,from[%v]", name, r.RemoteAddr)
+		log.LogWarn(msg)
+		sendOkReply(w, r, newSuccessHTTPReply(msg))
+		return
+	}
+	var index int
+	var value *delayDeleteVolInfo
+	if len(m.cluster.delayDeleteVolsInfo) == 0 {
+		msg := fmt.Sprintf("vol[%v] was not previously deleted or already deleted", name)
+		err = errors.New(msg)
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeVolNotDelete, Msg: err.Error()})
+		return
+	}
+	m.cluster.deleteVolMutex.RLock()
+	for index, value = range m.cluster.delayDeleteVolsInfo {
+		if value.volName == name {
+			break
+		}
+	}
+	m.cluster.deleteVolMutex.RUnlock()
+	if index == len(m.cluster.delayDeleteVolsInfo)-1 && value.volName != name {
+		msg := fmt.Sprintf("vol[%v] was not previously deleted or already deleted", name)
+		err = errors.New(msg)
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeVolNotDelete, Msg: err.Error()})
+		return
+	}
+
+	oldForbiden := vol.Forbidden
+	oldAuthKey := vol.authKey
+	oldDeleteExecTime := vol.DeleteExecTime
+	oldUser := vol.user
+	vol.Forbidden = false
+	vol.authKey = ""
+	vol.DeleteExecTime = time.Time{}
+	vol.user = nil
+	defer func() {
+		if err != nil {
+			vol.Forbidden = oldForbiden
+			vol.authKey = oldAuthKey
+			vol.DeleteExecTime = oldDeleteExecTime
+			vol.user = oldUser
+		}
+	}()
+	if err = m.cluster.markDeleteVol(name, authKey, false, false); err != nil {
 		sendErrReply(w, r, newErrHTTPReply(err))
 		return
 	}
-	if err = m.user.deleteVolPolicy(name); err != nil {
-		sendErrReply(w, r, newErrHTTPReply(err))
-		return
-	}
-	msg = fmt.Sprintf("delete vol[%v] successfully,from[%v]", name, r.RemoteAddr)
+	m.cluster.deleteVolMutex.Lock()
+	m.cluster.delayDeleteVolsInfo = append(m.cluster.delayDeleteVolsInfo[:index], m.cluster.delayDeleteVolsInfo[index+1:]...)
+	m.cluster.deleteVolMutex.Unlock()
+	msg = fmt.Sprintf("undelete vol: unforbid vol[%v] successfully,from[%v]", name, r.RemoteAddr)
 	log.LogWarn(msg)
 	sendOkReply(w, r, newSuccessHTTPReply(msg))
 }
@@ -2078,7 +2206,8 @@ func (m *Server) checkReplicaNum(r *http.Request, vol *Vol, req *updateVolReq) (
 		}
 		replicaNum = int(replicaNumInt64)
 	} else {
-		replicaNum = int(vol.dpReplicaNum)
+		req.replicaNum = int(vol.dpReplicaNum)
+		return
 	}
 	req.replicaNum = replicaNum
 	if replicaNum != 0 && replicaNum != int(vol.dpReplicaNum) {
@@ -2549,6 +2678,7 @@ func newSimpleView(vol *Vol) (view *proto.SimpleVolView) {
 		LatestVer:               vol.VersionMgr.getLatestVer(),
 		Forbidden:               vol.Forbidden,
 		EnableAuditLog:          vol.EnableAuditLog,
+		DeleteExecTime:          vol.DeleteExecTime,
 	}
 
 	vol.uidSpaceManager.RLock()

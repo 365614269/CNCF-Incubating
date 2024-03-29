@@ -61,6 +61,7 @@ type clusterValue struct {
 	DpRepairTimeOut             uint64
 	EnableAutoDecommissionDisk  bool
 	DecommissionDiskFactor      float64
+	VolDeletionDelayTimeHour    int64
 }
 
 func newClusterValue(c *Cluster) (cv *clusterValue) {
@@ -91,6 +92,7 @@ func newClusterValue(c *Cluster) (cv *clusterValue) {
 		DpRepairTimeOut:             c.cfg.DpRepairTimeOut,
 		EnableAutoDecommissionDisk:  c.EnableAutoDecommissionDisk,
 		DecommissionDiskFactor:      c.DecommissionDiskFactor,
+		VolDeletionDelayTimeHour:    c.cfg.volDelayDeleteTimeHour,
 	}
 	return cv
 }
@@ -250,6 +252,10 @@ type volValue struct {
 	Authenticate          bool
 	DpReadOnlyWhenVolFull bool
 
+	AuthKey        string
+	DeleteExecTime time.Time
+	User           *User
+
 	CrossZone       bool
 	DomainOn        bool
 	ZoneName        string
@@ -353,6 +359,9 @@ func newVolValue(vol *Vol) (vv *volValue) {
 		DpReadOnlyWhenVolFull: vol.DpReadOnlyWhenVolFull,
 		Forbidden:             vol.Forbidden,
 		EnableAuditLog:        vol.EnableAuditLog,
+		AuthKey:               vol.authKey,
+		DeleteExecTime:        vol.DeleteExecTime,
+		User:                  vol.user,
 	}
 
 	return
@@ -1127,6 +1136,7 @@ func (c *Cluster) loadClusterValue() (err error) {
 		c.DecommissionLimit = cv.DecommissionLimit
 		c.EnableAutoDecommissionDisk = cv.EnableAutoDecommissionDisk
 		c.DecommissionDiskFactor = cv.DecommissionDiskFactor
+		c.cfg.volDelayDeleteTimeHour = cv.VolDeletionDelayTimeHour
 		if c.cfg.QosMasterAcceptLimit < QosMasterAcceptCnt {
 			c.cfg.QosMasterAcceptLimit = QosMasterAcceptCnt
 		}
@@ -1478,6 +1488,10 @@ func (c *Cluster) loadVols() (err error) {
 
 		c.putVol(vol)
 		log.LogInfof("action[loadVols],vol[%v]", vol.Name)
+		if vol.Forbidden && vol.Status == bsProto.VolStatusMarkDelete {
+			c.delayDeleteVolsInfo = append(c.delayDeleteVolsInfo, &delayDeleteVolInfo{volName: vol.Name, authKey: vol.authKey, execTime: vol.DeleteExecTime, user: vol.user})
+			log.LogInfof("action[loadDelayDeleteVols],vol[%v]", vol.Name)
+		}
 	}
 	return
 }

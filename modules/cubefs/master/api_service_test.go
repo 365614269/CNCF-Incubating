@@ -125,6 +125,8 @@ func createDefaultMasterServerForTest() *Server {
 	}`
 
 	testServer, err := createMasterServer(cfgJSON)
+	testServer.cluster.cfg.volForceDeletion = true
+
 	if err != nil {
 		panic(err)
 	}
@@ -576,6 +578,8 @@ func TestUpdateVol(t *testing.T) {
 	assert.True(t, view.CacheRule == "")
 
 	delVol(volName, t)
+
+	time.Sleep(10 * time.Second)
 	// can't update vol after delete
 	checkParam(cacheLRUIntervalKey, proto.AdminUpdateVol, req, lru, lru, t)
 }

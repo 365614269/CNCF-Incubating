@@ -28,7 +28,7 @@
     "lodash-es": "^4.17.21",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-hook-form": "^7.51.1",
+    "react-hook-form": "^7.51.2",
     "react-i18next": "^14.1.0",
     "react-router-dom": "^6.22.3",
     "ui-shared": "workspace:*"
@@ -43,7 +43,7 @@
     "lightningcss": "^1.24.1",
     "vite": "^5.2.6",
     "vite-plugin-checker": "^0.6.4",
-    "vite-plugin-dts": "^3.7.3"
+    "vite-plugin-dts": "^3.8.1"
   },
   "wireit": {
     "dev": {

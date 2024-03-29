@@ -45,10 +45,13 @@ type Cluster struct {
 	Name                         string
 	CreateTime                   int64
 	vols                         map[string]*Vol
+	delayDeleteVolsInfo          []*delayDeleteVolInfo
+	stopc                        chan bool
 	dataNodes                    sync.Map
 	metaNodes                    sync.Map
 	volMutex                     sync.RWMutex // volume mutex
 	createVolMutex               sync.RWMutex // create volume mutex
+	deleteVolMutex               sync.RWMutex // delete volume mutex
 	mnMutex                      sync.RWMutex // meta node mutex
 	dnMutex                      sync.RWMutex // data node mutex
 	nsMutex                      sync.RWMutex // nodeset mutex
@@ -100,6 +103,13 @@ type Cluster struct {
 	snapshotMgr                  *snapshotDelManager
 	DecommissionDiskFactor       float64
 	S3ApiQosQuota                *sync.Map // (api,uid,limtType) -> limitQuota
+}
+
+type delayDeleteVolInfo struct {
+	volName  string
+	authKey  string
+	execTime time.Time
+	user     *User
 }
 
 type followerReadManager struct {
@@ -162,7 +172,7 @@ func (mgr *followerReadManager) getVolumeDpView() {
 	}
 
 	for _, vv := range volViews {
-		if vv.Status == proto.VolStatusMarkDelete {
+		if (vv.Status == proto.VolStatusMarkDelete && !vv.Forbidden) || (vv.Status == proto.VolStatusMarkDelete && vv.Forbidden && vv.DeleteExecTime.Sub(time.Now()) <= 0) {
 			mgr.rwMutex.Lock()
 			mgr.lastUpdateTick[vv.Name] = time.Now()
 			mgr.status[vv.Name] = false
@@ -184,7 +194,7 @@ func (mgr *followerReadManager) sendFollowerVolumeDpView() {
 	vols := mgr.c.copyVols()
 	for _, vol := range vols {
 		log.LogDebugf("followerReadManager.getVolumeDpView %v", vol.Name)
-		if vol.Status == proto.VolStatusMarkDelete {
+		if (vol.Status == proto.VolStatusMarkDelete && !vol.Forbidden) || (vol.Status == proto.VolStatusMarkDelete && vol.Forbidden && vol.DeleteExecTime.Sub(time.Now()) <= 0) {
 			continue
 		}
 		var body []byte
@@ -216,7 +226,7 @@ func (mgr *followerReadManager) isVolRecordObsolete(volName string) bool {
 		return true
 	}
 
-	if volView.Status == proto.VolStatusMarkDelete {
+	if (volView.Status == proto.VolStatusMarkDelete && !volView.Forbidden) || (volView.Status == proto.VolStatusMarkDelete && volView.Forbidden && volView.DeleteExecTime.Sub(time.Now()) <= 0) {
 		return true
 	}
 
@@ -323,6 +333,8 @@ func newCluster(name string, leaderInfo *LeaderInfo, fsm *MetadataFsm, partition
 	c.Name = name
 	c.leaderInfo = leaderInfo
 	c.vols = make(map[string]*Vol, 0)
+	c.delayDeleteVolsInfo = make([]*delayDeleteVolInfo, 0)
+	c.stopc = make(chan bool, 0)
 	c.cfg = cfg
 	if c.cfg.MaxDpCntLimit == 0 {
 		c.cfg.MaxDpCntLimit = defaultMaxDpCntLimit
@@ -356,6 +368,7 @@ func newCluster(name string, leaderInfo *LeaderInfo, fsm *MetadataFsm, partition
 }
 
 func (c *Cluster) scheduleTask() {
+	c.scheduleToCheckDelayDeleteVols()
 	c.scheduleToCheckDataPartitions()
 	c.scheduleToLoadDataPartitions()
 	c.scheduleToCheckReleaseDataPartitions()
@@ -454,6 +467,53 @@ func (c *Cluster) scheduleToManageDp() {
 			}
 
 			time.Sleep(2 * time.Minute)
+		}
+	}()
+}
+
+func (c *Cluster) scheduleToCheckDelayDeleteVols() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				if len(c.delayDeleteVolsInfo) == 0 {
+					continue
+				}
+				c.deleteVolMutex.Lock()
+				for index := 0; index < len(c.delayDeleteVolsInfo); index++ {
+					currentDeleteVol := c.delayDeleteVolsInfo[index]
+					log.LogDebugf("action[scheduleToCheckDelayDeleteVols] currentDeleteVol[%v]", currentDeleteVol)
+					if currentDeleteVol.execTime.Sub(time.Now()) > 0 {
+						continue
+					}
+					go func() {
+						if err := currentDeleteVol.user.deleteVolPolicy(currentDeleteVol.volName); err != nil {
+							msg := fmt.Sprintf("delete vol[%v] failed: err:[%v]", currentDeleteVol.volName, err)
+							log.LogError(msg)
+							return
+						}
+						msg := fmt.Sprintf("delete vol[%v] successfully", currentDeleteVol.volName)
+						log.LogWarn(msg)
+					}()
+					if len(c.delayDeleteVolsInfo) == 1 {
+						c.delayDeleteVolsInfo = make([]*delayDeleteVolInfo, 0)
+						continue
+					}
+					if index == 0 {
+						c.delayDeleteVolsInfo = c.delayDeleteVolsInfo[index+1:]
+					} else if index == len(c.delayDeleteVolsInfo)-1 {
+						c.delayDeleteVolsInfo = c.delayDeleteVolsInfo[:index]
+					} else {
+						c.delayDeleteVolsInfo = append(c.delayDeleteVolsInfo[:index], c.delayDeleteVolsInfo[index+1:]...)
+					}
+				}
+				c.deleteVolMutex.Unlock()
+
+			case <-c.stopc:
+				ticker.Stop()
+				return
+			}
 		}
 	}()
 }
@@ -578,7 +638,7 @@ func (c *Cluster) doLoadDataPartitions() {
 	}()
 	vols := c.allVols()
 	for _, vol := range vols {
-		if vol.Status == proto.VolStatusMarkDelete {
+		if (vol.Status == proto.VolStatusMarkDelete && !vol.Forbidden) || (vol.Status == proto.VolStatusMarkDelete && vol.Forbidden && vol.DeleteExecTime.Sub(time.Now()) <= 0) {
 			continue
 		}
 		vol.loadDataPartition(c)
@@ -1150,7 +1210,7 @@ func (c *Cluster) checkReplicaOfDataPartitions(ignoreDiscardDp bool) (
 				continue
 			}
 
-			if vol.Status == proto.VolStatusMarkDelete {
+			if (vol.Status == proto.VolStatusMarkDelete && !vol.Forbidden) || (vol.Status == proto.VolStatusMarkDelete && vol.Forbidden && vol.DeleteExecTime.Sub(time.Now()) <= 0) {
 				continue
 			}
 
@@ -1319,7 +1379,7 @@ func (c *Cluster) deleteVol(name string) {
 	return
 }
 
-func (c *Cluster) markDeleteVol(name, authKey string, force bool) (err error) {
+func (c *Cluster) markDeleteVol(name, authKey string, force bool, isNotCancel bool) (err error) {
 	var (
 		vol           *Vol
 		serverAuthKey string
@@ -1328,6 +1388,20 @@ func (c *Cluster) markDeleteVol(name, authKey string, force bool) (err error) {
 	if vol, err = c.getVol(name); err != nil {
 		log.LogErrorf("action[markDeleteVol] err[%v]", err)
 		return proto.ErrVolNotExists
+	}
+
+	if !isNotCancel {
+		serverAuthKey = vol.Owner
+		if !matchKey(serverAuthKey, authKey) {
+			return proto.ErrVolAuthKeyNotMatch
+		}
+
+		vol.Status = proto.VolStatusNormal
+		if err = c.syncUpdateVol(vol); err != nil {
+			vol.Status = proto.VolStatusMarkDelete
+			return proto.ErrPersistenceByRaft
+		}
+		return
 	}
 
 	if !c.cfg.volForceDeletion {
@@ -1365,7 +1439,6 @@ func (c *Cluster) markDeleteVol(name, authKey string, force bool) (err error) {
 		vol.Status = proto.VolStatusNormal
 		return proto.ErrPersistenceByRaft
 	}
-
 	return
 }
 
@@ -3565,7 +3638,7 @@ func (c *Cluster) allVols() (vols map[string]*Vol) {
 	c.volMutex.RLock()
 	defer c.volMutex.RUnlock()
 	for name, vol := range c.vols {
-		if vol.Status == proto.VolStatusNormal {
+		if vol.Status == proto.VolStatusNormal || (vol.Status == proto.VolStatusMarkDelete && vol.Forbidden) {
 			vols[name] = vol
 		}
 	}
@@ -3618,6 +3691,18 @@ func (c *Cluster) setMetaNodeThreshold(threshold float32) (err error) {
 	if err = c.syncPutCluster(); err != nil {
 		log.LogErrorf("action[setMetaNodeThreshold] err[%v]", err)
 		c.cfg.MetaNodeThreshold = oldThreshold
+		err = proto.ErrPersistenceByRaft
+		return
+	}
+	return
+}
+
+func (c *Cluster) setMasterVolDeletionDelayTime(volDeletionDelayTimeHour int) (err error) {
+	oldVolDeletionDelayTimeHour := c.cfg.volDelayDeleteTimeHour
+	c.cfg.volDelayDeleteTimeHour = int64(volDeletionDelayTimeHour)
+	if err = c.syncPutCluster(); err != nil {
+		log.LogErrorf("action[setMasterVolDeletionDelayTime] err[%v]", err)
+		c.cfg.volDelayDeleteTimeHour = oldVolDeletionDelayTimeHour
 		err = proto.ErrPersistenceByRaft
 		return
 	}

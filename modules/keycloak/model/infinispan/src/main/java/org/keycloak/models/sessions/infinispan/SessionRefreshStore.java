@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Red Hat, Inc. and/or its affiliates
+ * Copyright 2024 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,18 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.keycloak.client.admin.cli.aesh;
 
-import java.util.List;
+package org.keycloak.models.sessions.infinispan;
 
-/**
- * @author <a href="mailto:mstrukel@redhat.com">Marko Strukelj</a>
- */
-public class Globals {
+import org.keycloak.models.sessions.infinispan.changes.sessions.CrossDCLastSessionRefreshStore;
+import org.keycloak.models.sessions.infinispan.changes.sessions.PersisterLastSessionRefreshStore;
 
-    public static boolean dumpTrace = false;
+public interface SessionRefreshStore {
+    CrossDCLastSessionRefreshStore getLastSessionRefreshStore();
 
-    public static ValveInputStream stdin;
+    CrossDCLastSessionRefreshStore getOfflineLastSessionRefreshStore();
 
-    public static List<String> args;
+    PersisterLastSessionRefreshStore getPersisterLastSessionRefreshStore();
 }
