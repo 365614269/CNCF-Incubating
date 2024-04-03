@@ -1774,6 +1774,8 @@ spec:
                     MapCarrier is a TextMapCarrier that uses a map held in memory as a storage
                     medium for propagated key-value pairs.
                   type: object
+                description: PhaseTraceID is a map storing TraceIDs of OpenTelemetry
+                  spans in lifecycle phases
                 type: object
               postDeploymentEvaluationStatus:
                 default: Pending
@@ -13748,8 +13750,8 @@ spec:
                 type: string
               type:
                 description: Type represents the provider type. This can be one of
-                  prometheus, thanos, dynatrace, datadog, dql.
-                pattern: prometheus|thanos|dynatrace|datadog|dql
+                  cortex, datadog, dql, dynatrace, prometheus or thanos.
+                pattern: cortex|datadog|dql|dynatrace|prometheus|thanos
                 type: string
             required:
             - targetServer

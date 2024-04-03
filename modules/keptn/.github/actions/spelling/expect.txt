@@ -40,6 +40,7 @@ appcreationrequest
 APPNAME
 appv
 appversion
+applicationdeployment
 aquasecurity
 architecting
 ARCHS
@@ -103,6 +104,7 @@ controlleroptions
 controllerutil
 coredns
 CORS
+cortex
 coverpkg
 coverprofile
 cowsay
@@ -205,6 +207,7 @@ ghtoken
 ginkgotypes
 giscus
 Gitlab
+gitops
 gke
 glasskube
 gms
@@ -387,6 +390,7 @@ linenums
 linkedin
 linkedtrace
 livenessprobe
+loadtests
 LOCALBIN
 logf
 logr

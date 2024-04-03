@@ -136,13 +136,13 @@ nav:
           - Auto app discovery: docs/guides/auto-app-discovery.md
           - Integrate Keptn with your Applications: docs/guides/integrate.md
           - Keptn Metrics: docs/guides/evaluatemetrics.md
-          - Analysis: docs/guides/slo.md
-          - Deployment tasks: docs/guides/tasks.md
+          - Analysis with Keptn: docs/guides/slo.md
+          - Deployment Tasks with Keptn: docs/guides/tasks.md
           - Redeploy/Restart an Application: docs/guides/restart-application-deployment.md
-          - Evaluations: docs/guides/evaluations.md
-          - DORA metrics: docs/guides/dora.md
-          - OpenTelemetry observability: docs/guides/otel.md
-          - Context metadata: docs/guides/metadata.md
+          - Evaluations in Keptn: docs/guides/evaluations.md
+          - DORA Metrics: docs/guides/dora.md
+          - OpenTelemetry Observability: docs/guides/otel.md
+          - Context Metadata: docs/guides/metadata.md
           - Multi-stage Application delivery: docs/guides/multi-stage-application-delivery.md
       - Use Cases:
           - docs/use-cases/index.md
@@ -228,12 +228,12 @@ nav:
           - docs/contribute/docs/index.md
           - Contribution guidelines for documentation: docs/contribute/docs/contrib-guidelines-docs.md
           - Build Documentation Locally: docs/contribute/docs/local-building.md
-          - Using markdownlint: docs/contribute/docs/markdownlint.md
-          - Source File Structure: docs/contribute/docs/source-file-structure.md
+          - Markdownlint: docs/contribute/docs/markdownlint.md
+          - Source file structure: docs/contribute/docs/source-file-structure.md
           - Coding the docs: docs/contribute/docs/code-docs.md
-          - Spell Checker: docs/contribute/docs/spell-check.md
+          - Spell checker: docs/contribute/docs/spell-check.md
           - Blogs: docs/contribute/docs/blog.md
-          - Published Doc Structure: docs/contribute/docs/publish.md
+          - Published doc structure: docs/contribute/docs/publish.md
           - Word list: docs/contribute/docs/word-list.md
   - Blog:
       - blog/index.md
