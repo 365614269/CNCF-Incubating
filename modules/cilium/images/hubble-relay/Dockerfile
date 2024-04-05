@@ -10,9 +10,9 @@
 # $ cosign verify --key cosign.pub $BASE_IMAGE
 # The key may be found at the following address:
 # https://raw.githubusercontent.com/GoogleContainerTools/distroless/main/cosign.pub
-ARG BASE_IMAGE=gcr.io/distroless/static-debian11:nonroot@sha256:55c636171053dbc8ae07a280023bd787d2921f10e569f3e319f1539076dbba11
-ARG GOLANG_IMAGE=docker.io/library/golang:1.22.1@sha256:0b55ab82ac2a54a6f8f85ec8b943b9e470c39e32c109b766bbc1b801f3fa8d3b
-ARG CILIUM_BUILDER_IMAGE=quay.io/cilium/cilium-builder:162f5ef4fc1f306691f47ea59fd8ac8b58cb40ba@sha256:dfb73226fa3821ee514aa6a14d8fa450647a29c0a25692619a1680037eb89835
+ARG BASE_IMAGE=gcr.io/distroless/static-debian11:nonroot@sha256:6732c3975d97fac664a5ed15a81a5915e023a7b5a7b58195e733c60b8dc7e684
+ARG GOLANG_IMAGE=docker.io/library/golang:1.22.2@sha256:c4fb952e712efd8f787bcd8e53fd66d1d83b7dc26adabc218e9eac1dbf776bdf
+ARG CILIUM_BUILDER_IMAGE=quay.io/cilium/cilium-builder:874230be6e22cf9ff9c4515097b5aee80b76ee8d@sha256:940c75b1a94de9d5f529ef40fcea3f71fef592f8744984eae93862852f4870d9
 
 # BUILDPLATFORM is an automatic platform ARG enabled by Docker BuildKit.
 # Represents the plataform where the build is happening, do not mix with
