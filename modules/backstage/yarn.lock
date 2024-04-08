@@ -14498,8 +14498,8 @@ __metadata:
   linkType: hard
 
 "@openapitools/openapi-generator-cli@npm:^2.4.26, @openapitools/openapi-generator-cli@npm:^2.7.0":
-  version: 2.12.0
-  resolution: "@openapitools/openapi-generator-cli@npm:2.12.0"
+  version: 2.13.1
+  resolution: "@openapitools/openapi-generator-cli@npm:2.13.1"
   dependencies:
     "@nestjs/axios": 3.0.1
     "@nestjs/common": 10.3.0
@@ -14520,7 +14520,7 @@ __metadata:
     tslib: 2.6.2
   bin:
     openapi-generator-cli: main.js
-  checksum: 83c6a6f24b663bca5fd81d39d14af0565d20e317e139f697a96a0758e0b20ea96610de926542bb9447d3fc672f18b8c2068dc63a4d3157cb0f61d2739798fa9a
+  checksum: bbf56f88e47d6f234eac4fcba660e12b26b22f03ba3ff9252744137647ead0c3aa5974e8550c127ac13f619c8b32b968e3e72189f65f0350a38128a73b67695c
   languageName: node
   linkType: hard
 
@@ -14634,13 +14634,13 @@ __metadata:
   linkType: hard
 
 "@playwright/test@npm:^1.32.3":
-  version: 1.42.1
-  resolution: "@playwright/test@npm:1.42.1"
+  version: 1.43.0
+  resolution: "@playwright/test@npm:1.43.0"
   dependencies:
-    playwright: 1.42.1
+    playwright: 1.43.0
   bin:
     playwright: cli.js
-  checksum: a41505f02a4dac358e645452a190cac620b8d4eae79ab5d90ea1fb7ca06d86a9f5749b1a803dea789b662d1cbfd216380f722bed72093897e18b4238f4a07a4d
+  checksum: c7c0c6e8fde4e9dceea22d48384642b78c3d539fb0512edeaa581dc4dc07cedfd166dba92c5e9e69a378b7fd63362b142450dbdd5c9b65d76c4def162a5c470d
   languageName: node
   linkType: hard
 
@@ -18653,14 +18653,14 @@ __metadata:
   linkType: hard
 
 "@types/express-serve-static-core@npm:*, @types/express-serve-static-core@npm:^4.17.33, @types/express-serve-static-core@npm:^4.17.5":
-  version: 4.17.43
-  resolution: "@types/express-serve-static-core@npm:4.17.43"
+  version: 4.19.0
+  resolution: "@types/express-serve-static-core@npm:4.19.0"
   dependencies:
     "@types/node": "*"
     "@types/qs": "*"
     "@types/range-parser": "*"
     "@types/send": "*"
-  checksum: 08e940cae52eb1388a7b5f61d65f028e783add77d1854243ae920a6a2dfb5febb6acaafbcf38be9d678b0411253b9bc325893c463a93302405f24135664ab1e4
+  checksum: 39c09fcb3f61de96ed56d97273874cafe50e6675ac254af4d77014e569e4fdc29d1d0d1dd12e11f008cb9a52785b07c2801c6ba91397965392b20c75ee01fb4e
   languageName: node
   linkType: hard
 
@@ -19003,9 +19003,9 @@ __metadata:
   linkType: hard
 
 "@types/libsodium-wrappers@npm:^0.7.10":
-  version: 0.7.13
-  resolution: "@types/libsodium-wrappers@npm:0.7.13"
-  checksum: 94d608bed8ccd364754c3a7bf5d4c770b229efa33f0c475061b1b82bb8d5da8d57a72df0b8876b887077edbb6ff9594b7a1183029de4d1ad679821d1013f3db9
+  version: 0.7.14
+  resolution: "@types/libsodium-wrappers@npm:0.7.14"
+  checksum: 565d178cd12aa5f7abc03149e50a962450d797e995935368ca1abe1cb5a5b96d81f3115a91f6b6f7dcff210d25f104003708b4bfc5a34751f23460efeb169fa4
   languageName: node
   linkType: hard
 
@@ -31532,8 +31532,8 @@ __metadata:
   linkType: hard
 
 "isomorphic-git@npm:^1.23.0":
-  version: 1.25.6
-  resolution: "isomorphic-git@npm:1.25.6"
+  version: 1.25.7
+  resolution: "isomorphic-git@npm:1.25.7"
   dependencies:
     async-lock: ^1.1.0
     clean-git-ref: ^2.0.1
@@ -31548,7 +31548,7 @@ __metadata:
     simple-get: ^4.0.1
   bin:
     isogit: cli.cjs
-  checksum: d1fa30ede586f6bb36a526924dafa92d67a55b331ca1c2e95fe96bbd4b614302a87c1c016a1f7ca76c44cfa80b6c0e83c9df114417a6caabe82a8472d86346c3
+  checksum: 6655c70c8c9974c907f6ca864ca16b0aed113ca8b6f50de4858a624b2ed66633a83ce64ca8935f370e328a29bc37811447eb7494be379388123feb811e867459
   languageName: node
   linkType: hard
 
@@ -32286,9 +32286,9 @@ __metadata:
   linkType: hard
 
 "jose@npm:^5.0.0":
-  version: 5.2.3
-  resolution: "jose@npm:5.2.3"
-  checksum: 7c41025d3e449f654a4cbf0e18e3a4a3bcb74b242d716e2e665a20be5c93b3f68421032a4531fd984d4bad6aa225c7c517da18da6e0cf778b104cd7e30bde5de
+  version: 5.2.4
+  resolution: "jose@npm:5.2.4"
+  checksum: 81e1f4494f406debd14392975327f0daa8b88ff09c83f2fe94754dcd7cfdefdb1adf785b2ec7481751927e609d342581cd41cb444628ef62fca423facebcd280
   languageName: node
   linkType: hard
 
@@ -35187,7 +35187,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimatch@npm:9.0.3, minimatch@npm:^9.0.0, minimatch@npm:^9.0.1, minimatch@npm:^9.0.3":
+"minimatch@npm:9.0.3":
   version: 9.0.3
   resolution: "minimatch@npm:9.0.3"
   dependencies:
@@ -35220,6 +35220,15 @@ __metadata:
   dependencies:
     brace-expansion: ^2.0.1
   checksum: 1a6c8d22618df9d2a88aabeef1de5622eb7b558e9f8010be791cb6b0fa6e102d39b11c28d75b855a1e377b12edc7db8ff12a99c20353441caa6a05e78deb5da9
+  languageName: node
+  linkType: hard
+
+"minimatch@npm:^9.0.0, minimatch@npm:^9.0.1, minimatch@npm:^9.0.3":
+  version: 9.0.4
+  resolution: "minimatch@npm:9.0.4"
+  dependencies:
+    brace-expansion: ^2.0.1
+  checksum: cf717f597ec3eed7dabc33153482a2e8d49f4fd3c26e58fd9c71a94c5029a0838728841b93f46bf1263b65a8010e2ee800d0dc9b004ab8ba8b6d1ec07cc115b5
   languageName: node
   linkType: hard
 
@@ -36697,7 +36706,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"on-finished@npm:2.4.1, on-finished@npm:^2.3.0":
+"on-finished@npm:2.4.1, on-finished@npm:^2.3.0, on-finished@npm:^2.4.1":
   version: 2.4.1
   resolution: "on-finished@npm:2.4.1"
   dependencies:
@@ -37663,9 +37672,9 @@ __metadata:
   linkType: hard
 
 "path-to-regexp@npm:^6.2.0, path-to-regexp@npm:^6.2.1":
-  version: 6.2.1
-  resolution: "path-to-regexp@npm:6.2.1"
-  checksum: f0227af8284ea13300f4293ba111e3635142f976d4197f14d5ad1f124aebd9118783dd2e5f1fe16f7273743cc3dbeddfb7493f237bb27c10fdae07020cc9b698
+  version: 6.2.2
+  resolution: "path-to-regexp@npm:6.2.2"
+  checksum: b7b0005c36f5099f9ed1fb20a820d2e4ed1297ffe683ea1d678f5e976eb9544f01debb281369dabdc26da82e6453901bf71acf2c7ed14b9243536c2a45286c33
   languageName: node
   linkType: hard
 
@@ -37738,10 +37747,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pg-connection-string@npm:2.6.2, pg-connection-string@npm:^2.3.0, pg-connection-string@npm:^2.5.0, pg-connection-string@npm:^2.6.2":
+"pg-connection-string@npm:2.6.2":
   version: 2.6.2
   resolution: "pg-connection-string@npm:2.6.2"
   checksum: 22265882c3b6f2320785378d0760b051294a684989163d5a1cde4009e64e84448d7bf67d9a7b9e7f69440c3ee9e2212f9aa10dd17ad6773f6143c6020cebbcb5
+  languageName: node
+  linkType: hard
+
+"pg-connection-string@npm:^2.3.0, pg-connection-string@npm:^2.5.0, pg-connection-string@npm:^2.6.2":
+  version: 2.6.4
+  resolution: "pg-connection-string@npm:2.6.4"
+  checksum: 2c1d2ac1add1f93076f1594d217a0980f79add05dc48de6363e1c550827c78a6ee3e3b5420da9c54858f6b678cdb348aed49732ee68158b6cdb70f1d1c748cf9
   languageName: node
   linkType: hard
 
@@ -38021,27 +38037,27 @@ __metadata:
   languageName: node
   linkType: hard
 
-"playwright-core@npm:1.42.1":
-  version: 1.42.1
-  resolution: "playwright-core@npm:1.42.1"
+"playwright-core@npm:1.43.0":
+  version: 1.43.0
+  resolution: "playwright-core@npm:1.43.0"
   bin:
     playwright-core: cli.js
-  checksum: e7081ff0f43b4b9053255109eb1d82164b7c6b55c7d022e25fca935d0f4fc547cb2e02a7b64f0c2a9462729be7bb45edb082f8b038306415944f1061d00d9c90
+  checksum: b35265d356d87eb4114997e6af985ee3cb5a473f15a465d6e02834288a55f0cae4233a18178658389ff443f92405e020815fc165274d2262c3ca1c2b5be948cf
   languageName: node
   linkType: hard
 
-"playwright@npm:1.42.1":
-  version: 1.42.1
-  resolution: "playwright@npm:1.42.1"
+"playwright@npm:1.43.0":
+  version: 1.43.0
+  resolution: "playwright@npm:1.43.0"
   dependencies:
     fsevents: 2.3.2
-    playwright-core: 1.42.1
+    playwright-core: 1.43.0
   dependenciesMeta:
     fsevents:
       optional: true
   bin:
     playwright: cli.js
-  checksum: 06c16bcd07d03993126ee6c168bde28c59d3cab7f7d4721eaf57bd5c51e9c929e10a286758de062b5fc02874413ceae2684d14cbb7865c0a51fc8df6d9001ad1
+  checksum: edd4ef9644398c197d20e957cf2a5e5a95d7e0144f3c971923e709247f5b48551bf6168c74b34909f263ab96fac6e49466b65a9cd1349ad400dabd4b8b364acf
   languageName: node
   linkType: hard
 
@@ -39538,11 +39554,11 @@ __metadata:
   linkType: hard
 
 "react-hook-form@npm:^7.12.2, react-hook-form@npm:^7.13.0":
-  version: 7.51.1
-  resolution: "react-hook-form@npm:7.51.1"
+  version: 7.51.2
+  resolution: "react-hook-form@npm:7.51.2"
   peerDependencies:
     react: ^16.8.0 || ^17 || ^18
-  checksum: 6ed9060ac9230a7e9e6ca46fc001cc5f44f35e6485e0c951ab1a5e85bd698c200a7230c5514f0642875e4f45f6cb8f79479deac0253f1c2b8db1445d1c96d796
+  checksum: d725475587bc64c048927c0442693630fe1238e424d48996626a394811e495fb7019b20a657de6bb2e77385044592dd5d885fafb420d12bffc8a07c5a7d85872
   languageName: node
   linkType: hard
 
@@ -40233,8 +40249,8 @@ __metadata:
   linkType: hard
 
 "recharts@npm:^2.5.0":
-  version: 2.12.3
-  resolution: "recharts@npm:2.12.3"
+  version: 2.12.4
+  resolution: "recharts@npm:2.12.4"
   dependencies:
     clsx: ^2.0.0
     eventemitter3: ^4.0.1
@@ -40247,7 +40263,7 @@ __metadata:
   peerDependencies:
     react: ^16.0.0 || ^17.0.0 || ^18.0.0
     react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0
-  checksum: 2fbab7e6a9a68f16bd7ff9c70a4f12814c08bc33ed5d279ea1ba6212cdb911aa6211f994e23f442a3dcea27476d2bdf7d233158ee7f9cc999dabd1fb6ba32b22
+  checksum: b617ef44380d74d3664bb45ef725823bfb50faac94b93908ffd5b1b1a31128185acec8efcc7bce9eae260465335bb4d48152ce6fc8185b6ce61f033bd112a63c
   languageName: node
   linkType: hard
 
@@ -45603,13 +45619,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"webpack-dev-middleware@npm:^7.0.0":
-  version: 7.0.0
-  resolution: "webpack-dev-middleware@npm:7.0.0"
+"webpack-dev-middleware@npm:^7.1.0":
+  version: 7.2.1
+  resolution: "webpack-dev-middleware@npm:7.2.1"
   dependencies:
     colorette: ^2.0.10
     memfs: ^4.6.0
     mime-types: ^2.1.31
+    on-finished: ^2.4.1
     range-parser: ^1.2.1
     schema-utils: ^4.0.0
   peerDependencies:
@@ -45617,13 +45634,13 @@ __metadata:
   peerDependenciesMeta:
     webpack:
       optional: true
-  checksum: 90f6c87c80bd5849c34f3a1761ac7dc1b123def2e6e9922f55102ff4b7532538641fa8c7169ce8254b0d471c27d882cdf4a1c32979952474fc8eacc8b3447915
+  checksum: bb8c75f7ceabc13ee2c3bc9648190e05a0a8c6d40b940ef72b09ea858a63d16bcb434b49995f1025125a1c3a1c8d40274beb5d26ef2fb1458b19e7f6fe3a91fe
   languageName: node
   linkType: hard
 
 "webpack-dev-server@npm:^5.0.0":
-  version: 5.0.2
-  resolution: "webpack-dev-server@npm:5.0.2"
+  version: 5.0.4
+  resolution: "webpack-dev-server@npm:5.0.4"
   dependencies:
     "@types/bonjour": ^3.5.13
     "@types/connect-history-api-fallback": ^1.5.4
@@ -45653,7 +45670,7 @@ __metadata:
     serve-index: ^1.9.1
     sockjs: ^0.3.24
     spdy: ^4.0.2
-    webpack-dev-middleware: ^7.0.0
+    webpack-dev-middleware: ^7.1.0
     ws: ^8.16.0
   peerDependencies:
     webpack: ^5.0.0
@@ -45664,7 +45681,7 @@ __metadata:
       optional: true
   bin:
     webpack-dev-server: bin/webpack-dev-server.js
-  checksum: d10624915ed25772317a3bd5d487c5fa17c74c2dc30d3abf5514c531a561aa0eaf5bb5b6a12416ee7005e2eea3679dc1616daf2eac69442dd3c579ce9150378b
+  checksum: b3535d01e8d895f4ce6d74b5f76e29398b712476216cd6d459365e5cc2f2fb1e49240aef6c23b2b943b04dbf768d7d18301af3eb064038bde4e11d03c241202d
   languageName: node
   linkType: hard
 
