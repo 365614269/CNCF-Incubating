@@ -84,7 +84,7 @@ public class StartCommandDistTest {
     @Test
     @Launch({ "start", "--http-enabled=true" })
     void failNoHostnameNotSet(LaunchResult result) {
-        assertTrue(result.getErrorOutput().contains("ERROR: Strict hostname resolution configured but no hostname setting provided"),
+        assertTrue(result.getErrorOutput().contains("ERROR: hostname is not configured; either configure hostname, or set hostname-strict to false"),
                 () -> "The Output:\n" + result.getOutput() + "doesn't contains the expected string.");
     }
 
@@ -114,7 +114,7 @@ public class StartCommandDistTest {
     @Launch({ "start", "--optimized" })
     void testStartUsingOptimizedInvalidEnvOption(LaunchResult result) {
         CLIResult cliResult = (CLIResult) result;
-        cliResult.assertError("Invalid value for option 'kc.log': invalid. Expected values are: console, file, syslog, gelf. From ConfigSource KcEnvVarConfigSource");
+        cliResult.assertError("Invalid value for option 'KC_LOG': invalid. Expected values are: console, file, syslog, gelf");
     }
 
     @Test

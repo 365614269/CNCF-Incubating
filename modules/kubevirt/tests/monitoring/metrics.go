@@ -74,6 +74,12 @@ var _ = Describe("[sig-monitoring]Metrics", decorators.SigMonitoring, func() {
 			"kubevirt_vmi_migrations_in_running_phase":                           true,
 			"kubevirt_vmi_migration_succeeded":                                   true,
 			"kubevirt_vmi_migration_failed":                                      true,
+
+			// name do not follow the convention to be prefixed with 'kubevirt_'
+			// TODO: @machadovilaca - refactor the metric names
+			"rest_client_request_latency_seconds":       true,
+			"rest_client_rate_limiter_duration_seconds": true,
+			"rest_client_requests_total":                true,
 		}
 
 		It("should contain virt components metrics", func() {
@@ -128,7 +134,7 @@ func setupVM(virtClient kubecli.KubevirtClient) {
 	libmonitoring.WaitForMetricValue(virtClient, "kubevirt_number_of_vms", 1)
 
 	By("Deleting the VirtualMachine")
-	err := virtClient.VirtualMachine(vm.Namespace).Delete(context.Background(), vm.Name, &metav1.DeleteOptions{})
+	err := virtClient.VirtualMachine(vm.Namespace).Delete(context.Background(), vm.Name, metav1.DeleteOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
 	libmonitoring.WaitForMetricValue(virtClient, "kubevirt_number_of_vms", -1)
@@ -137,11 +143,11 @@ func setupVM(virtClient kubecli.KubevirtClient) {
 func createRunningVM(virtClient kubecli.KubevirtClient) *v1.VirtualMachine {
 	vmi := libvmifact.NewGuestless(libvmi.WithNamespace(testsuite.GetTestNamespace(nil)))
 	vm := libvmi.NewVirtualMachine(vmi, libvmi.WithRunning())
-	vm, err := virtClient.VirtualMachine(testsuite.GetTestNamespace(vm)).Create(context.Background(), vm)
+	vm, err := virtClient.VirtualMachine(testsuite.GetTestNamespace(vm)).Create(context.Background(), vm, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(func() bool {
-		vm, err := virtClient.VirtualMachine(testsuite.GetTestNamespace(vm)).Get(context.Background(), vm.Name, &metav1.GetOptions{})
+		vm, err := virtClient.VirtualMachine(testsuite.GetTestNamespace(vm)).Get(context.Background(), vm.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return vm.Status.Ready
 	}, 300*time.Second, 1*time.Second).Should(BeTrue())

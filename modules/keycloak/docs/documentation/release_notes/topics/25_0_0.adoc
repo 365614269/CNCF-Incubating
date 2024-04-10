@@ -11,6 +11,20 @@ better security, with almost the same CPU time as previous releases of {project_
 memory, which is a requirement to be resistant against GPU attacks. The defaults for Argon2 in {project_name} requires 7MB
 per-hashing request.
 
+= SameSite attribute set for all cookies
+
+The following cookies did not use to set the `SameSite` attribute, which in recent browser versions results in them
+defaulting to `SameSite=Lax`:
+
+* `KC_STATE_CHECKER` now sets `SameSite=Strict`
+* `KC_RESTART` now sets `SameSite=None`
+* `KC_AUTH_STATE` now sets `SameSite=Strict`
+* `KEYCLOAK_LOCALE` now sets `SameSite=None`
+* `KEYCLOAK_REMEMBER_ME` now sets `SameSite=None`
+
+The default value `SameSite=Lax` causes issues with POST based bindings, mostly applicable to SAML, but also used in
+some OpenID Connect / OAuth 2.0 flows.
+
 = Deprecated cookie methods removed
 
 The following methods for setting custom cookies have been removed:
@@ -39,6 +53,17 @@ This fix will break code that relied on casting the List or its contents to `Lis
 
 When exporting the authorization settings for a client, the IDs for resources, scopes, and policies are no longer set. As a
 result, you can now import the settings from a client to another client.
+
+= Management port for metrics and health endpoints
+
+Metrics and health checks endpoints are no longer accessible through the standard {project_name} server port.
+As these endpoints should be hidden from the outside world, they can be accessed on a separate default management port `9000`.
+
+It allows to not expose it to the users as standard Keycloak endpoints in Kubernetes environments.
+The new management interface provides a new set of options and is fully configurable.
+
+{project_name} Operator assumes the management interface is turned on by default.
+For more details, see https://www.keycloak.org/server/management-interface[Configuring the Management Interface].
 
 = Syslog for remote logging
 
