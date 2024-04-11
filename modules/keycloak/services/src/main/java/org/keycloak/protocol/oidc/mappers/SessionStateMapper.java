@@ -40,9 +40,13 @@ public class SessionStateMapper extends AbstractOIDCProtocolMapper implements OI
 
     public static final String PROVIDER_ID = "oidc-session-state-mapper";
 
-    private static final Logger logger = Logger.getLogger(AcrProtocolMapper.class);
+    private static final Logger logger = Logger.getLogger(SessionStateMapper.class);
 
     private static final List<ProviderConfigProperty> configProperties = new ArrayList<>();
+
+    static {
+        OIDCAttributeMapperHelper.addIncludeInTokensConfig(configProperties, SessionStateMapper.class);
+    }
 
     public List<ProviderConfigProperty> getConfigProperties() {
         return configProperties;
