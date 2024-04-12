@@ -57,7 +57,7 @@ require (
 	github.com/uber/jaeger-client-go v2.30.0+incompatible
 	github.com/weaveworks/common v0.0.0-20230728070032-dd9e68f319d5
 	go.etcd.io/etcd/api/v3 v3.5.12
-	go.etcd.io/etcd/client/pkg/v3 v3.5.12
+	go.etcd.io/etcd/client/pkg/v3 v3.5.13
 	go.etcd.io/etcd/client/v3 v3.5.12
 	go.opentelemetry.io/contrib/propagators/aws v1.22.0
 	go.opentelemetry.io/otel v1.24.0
@@ -81,6 +81,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/google/go-cmp v0.6.0
 	github.com/sercand/kuberesolver/v4 v4.0.0
+	go.opentelemetry.io/collector/pdata v1.3.0
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
 	google.golang.org/protobuf v1.33.0
 )
@@ -208,7 +209,6 @@ require (
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.3.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.3.0 // indirect
 	go.opentelemetry.io/collector/semconv v0.96.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect

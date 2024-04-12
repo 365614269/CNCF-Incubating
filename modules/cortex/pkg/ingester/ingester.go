@@ -154,6 +154,14 @@ func (cfg *Config) RegisterFlags(f *flag.FlagSet) {
 
 }
 
+func (cfg *Config) Validate() error {
+	if err := cfg.LifecyclerConfig.Validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (cfg *Config) getIgnoreSeriesLimitForMetricNamesMap() map[string]struct{} {
 	if cfg.IgnoreSeriesLimitForMetricNames == "" {
 		return nil
@@ -440,7 +448,7 @@ func (u *userTSDB) blocksToDelete(blocks []*tsdb.Block) map[ulid.ULID]struct{} {
 	return result
 }
 
-// updateCachedShipperBlocks reads the shipper meta file and updates the cached shipped blocks.
+// updateCachedShippedBlocks reads the shipper meta file and updates the cached shipped blocks.
 func (u *userTSDB) updateCachedShippedBlocks() error {
 	shipperMeta, err := shipper.ReadMetaFile(u.shipperMetadataFilePath)
 	if os.IsNotExist(err) || os.IsNotExist(errors.Cause(err)) {

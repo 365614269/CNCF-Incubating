@@ -858,7 +858,7 @@ var _ = Describe("[Serial][sig-operator]Operator", Serial, decorators.SigOperato
 			// the results
 			Eventually(func() error {
 				By("Verifying only a single successful migration took place for each vmi")
-				migrationList, err := virtClient.VirtualMachineInstanceMigration(testsuite.GetTestNamespace(nil)).List(&metav1.ListOptions{})
+				migrationList, err := virtClient.VirtualMachineInstanceMigration(testsuite.GetTestNamespace(nil)).List(context.Background(), metav1.ListOptions{})
 				Expect(err).ToNot(HaveOccurred(), "retrieving migrations")
 				for _, vmi := range vmis {
 					count := 0
@@ -1906,7 +1906,7 @@ spec:
 			if len(migratableVMIs) > 0 {
 				By("Verifying that a once migrated VMI after an update can be migrated again")
 				vmi := migratableVMIs[0]
-				migration, err := virtClient.VirtualMachineInstanceMigration(testsuite.GetTestNamespace(vmi)).Create(libmigration.New(vmi.Name, vmi.Namespace), &metav1.CreateOptions{})
+				migration, err := virtClient.VirtualMachineInstanceMigration(testsuite.GetTestNamespace(vmi)).Create(context.Background(), libmigration.New(vmi.Name, vmi.Namespace), metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(ThisMigration(migration), 180).Should(HaveSucceeded())
 			}
@@ -2972,10 +2972,20 @@ spec:
 	})
 
 	Context("[Serial] Deployment of common-instancetypes", Serial, func() {
-		var appComponent string
-		var labelSelector string
+		var (
+			fgEnabled     bool
+			appComponent  string
+			labelSelector string
+		)
 
 		BeforeEach(func() {
+			if fgEnabled = checks.HasFeature(virtconfig.PersistentReservation); fgEnabled {
+				// Disable feature gate for cases in which the feature gate was enabled
+				// prior to running any of these tests. (e.g. in downstream)
+				tests.DisableFeatureGate(virtconfig.CommonInstancetypesDeploymentGate)
+				testsuite.EnsureKubevirtReady()
+			}
+
 			appComponent = apply.GetAppComponent(util2.GetCurrentKv(virtClient))
 			labelSelector = labels.Set{
 				v1.AppComponentLabel: appComponent,
@@ -2984,7 +2994,12 @@ spec:
 		})
 
 		AfterEach(func() {
-			tests.DisableFeatureGate(virtconfig.CommonInstancetypesDeploymentGate)
+			// Reset the feature gate to its original value after running any of these tests.
+			if fgEnabled {
+				tests.EnableFeatureGate(virtconfig.CommonInstancetypesDeploymentGate)
+			} else {
+				tests.DisableFeatureGate(virtconfig.CommonInstancetypesDeploymentGate)
+			}
 			testsuite.EnsureKubevirtReady()
 		})
 
@@ -3033,8 +3048,10 @@ spec:
 		})
 
 		Context("Should take ownership", func() {
-			const appComponentChanged = "something"
-			const managedByChanged = "someone"
+			const (
+				appComponentChanged = "something"
+				managedByChanged    = "someone"
+			)
 
 			It("of instancetypes", func() {
 				By("Getting instancetypes to be deployed by virt-operator")
@@ -3152,9 +3169,11 @@ spec:
 		})
 
 		Context("Should revert changes", func() {
-			const keyTest = "test"
-			const valModified = "modified"
-			const cpu = uint32(1024)
+			const (
+				keyTest     = "test"
+				valModified = "modified"
+				cpu         = uint32(1024)
+			)
 
 			var preferredTopology = v1beta1.PreferThreads
 
