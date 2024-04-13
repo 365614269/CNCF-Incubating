@@ -487,7 +487,7 @@
    * - :spelling:ignore:`clustermesh.apiserver.etcd.securityContext`
      - Security context to be added to clustermesh-apiserver etcd containers
      - object
-     - ``{}``
+     - ``{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}``
    * - :spelling:ignore:`clustermesh.apiserver.extraArgs`
      - Additional clustermesh-apiserver arguments.
      - list
@@ -655,7 +655,7 @@
    * - :spelling:ignore:`clustermesh.apiserver.podSecurityContext`
      - Security context to be added to clustermesh-apiserver pods
      - object
-     - ``{"fsGroup":65532}``
+     - ``{"fsGroup":65532,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532}``
    * - :spelling:ignore:`clustermesh.apiserver.priorityClassName`
      - The priority class to use for clustermesh-apiserver
      - string
@@ -675,7 +675,7 @@
    * - :spelling:ignore:`clustermesh.apiserver.securityContext`
      - Security context to be added to clustermesh-apiserver containers
      - object
-     - ``{}``
+     - ``{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}``
    * - :spelling:ignore:`clustermesh.apiserver.service.annotations`
      - Annotations for the clustermesh-apiserver For GKE LoadBalancer, use annotation cloud.google.com/load-balancer-type: "Internal" For EKS LoadBalancer, use annotation service.beta.kubernetes.io/aws-load-balancer-internal: "true"
      - object
@@ -2415,7 +2415,11 @@
    * - :spelling:ignore:`nodePort`
      - Configure N-S k8s service loadbalancing
      - object
-     - ``{"autoProtectPortRange":true,"bindProtection":true,"enableHealthCheck":true,"enableHealthCheckLoadBalancerIP":false,"enabled":false}``
+     - ``{"addresses":null,"autoProtectPortRange":true,"bindProtection":true,"enableHealthCheck":true,"enableHealthCheckLoadBalancerIP":false,"enabled":false}``
+   * - :spelling:ignore:`nodePort.addresses`
+     - List of CIDRs for choosing which IP addresses assigned to native devices are used for NodePort load-balancing. By default this is empty and the first suitable, preferably private, IPv4 and IPv6 address assigned to each device is used.  Example:    addresses: ["192.168.1.0/24", "2001::/64"]
+     - string
+     - ``nil``
    * - :spelling:ignore:`nodePort.autoProtectPortRange`
      - Append NodePort range to ip_local_reserved_ports if clash with ephemeral ports is detected.
      - bool

@@ -63,6 +63,12 @@ The module `org.keycloak:keycloak-model-legacy` module was deprecated in a previ
 
 The old behavior to preload offline sessions at startup is now removed after it has been deprecated in the previous release.
 
+= Specify `cache` options at runtime
+
+Options `cache`, `cache-stack`, and `cache-config-file` are no longer build options, and they can be specified only during runtime.
+This eliminates the need to execute the build phase and rebuild your image due to them.
+Be aware that they will not be recognized during the `build` phase, so you need to remove them.
+
 = kcadm Changes
 
 How kcadm parses and handles options and parameters has changed. Error messages from usage errors, the wrong option or parameter, may be slightly different than previous versions. Also usage errors will have an exit code of 2 instead of 1.
@@ -98,7 +104,9 @@ The `sub` claim, which was always added to the access token, is now added by def
 
 The `Subject (sub)` mapper is configured by default in the `basic` client scope. Therefore, no extra configuration is required after upgrading to this version.
 
-Only in the case you are using `Pairwise subject identifier` mapper to map `sub` claim for access token you should disable or remove `Subject (sub)` mapper.
+If you are using the `Pairwise subject identifier` mapper to map a `sub` claim for an access token, you can consider disabling or removing the `Subject (sub)` mapper, however it is not strictly needed
+as the `Subject (sub)` protocol mapper is executed before the `Pairwise subject identifier` mapper and hence the `pairwise` value will override the value added by `Subject (sub)` mapper.
+This may apply also to other custom protocol mapper implementations, which override the `sub` claim, as the `Subject (sub)` mapper is currently executed as first protocol mapper.
 
 You can use the `Subject (sub)` mapper to configure the `sub` claim only for access token, lightweight access token, and introspection response. IDToken and Userinfo always contain `sub` claim.
 
@@ -144,3 +152,16 @@ The management interface uses a different HTTP server than the default {project_
 Beware, if no values are supplied for the management interface properties, they are inherited from the default {project_name} HTTP server.
 
 For more details, see https://www.keycloak.org/server/management-interface[Configuring the Management Interface].
+
+= Escaping slashes in group paths
+
+{project_name} has never escaped slashes in the group paths. Because of that, a group named `group/slash` child of `top` uses the full path `/top/group/slash`, which is clearly misleading. Starting with this version, the server can be started to perform escaping of those slashes in the name:
+
+[source,bash]
+----
+bin/kc.[sh|bat] start --spi-group-jpa-escape-slashes-in-group-path=true
+----
+
+The escape char is the tilde character `~`. The previous example results in the path `/top/group~/slash`. The escape marks the last slash is part of the name and not a hierarchy separator.
+
+The escaping is currently disabled by default because it represents a change in behavior. Nevertheless enabling escaping is recommended and it can be the default in future versions.

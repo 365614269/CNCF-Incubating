@@ -99,8 +99,8 @@ importers:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
       react-hook-form:
-        specifier: ^7.51.2
-        version: 7.51.2(react@18.2.0)
+        specifier: ^7.51.3
+        version: 7.51.3(react@18.2.0)
       react-i18next:
         specifier: ^14.1.0
         version: 14.1.0(i18next@23.11.1)(react-dom@18.2.0)(react@18.2.0)
@@ -121,11 +121,11 @@ importers:
         specifier: ^4.17.12
         version: 4.17.12
       '@types/react':
-        specifier: ^18.2.75
-        version: 18.2.75
+        specifier: ^18.2.77
+        version: 18.2.77
       '@types/react-dom':
-        specifier: ^18.2.24
-        version: 18.2.24
+        specifier: ^18.2.25
+        version: 18.2.25
       '@vitejs/plugin-react-swc':
         specifier: ^3.6.0
         version: 3.6.0(vite@5.2.8)
@@ -167,7 +167,7 @@ importers:
         version: 5.2.4(react-dom@18.2.0)(react@18.2.0)
       admin-ui:
         specifier: 'file:'
-        version: file:js/apps/admin-ui(@types/react@18.2.75)
+        version: file:js/apps/admin-ui(@types/react@18.2.77)
       dagre:
         specifier: ^0.8.5
         version: 0.8.5
@@ -208,8 +208,8 @@ importers:
         specifier: ^14.2.3
         version: 14.2.3(react@18.2.0)
       react-hook-form:
-        specifier: ^7.51.2
-        version: 7.51.2(react@18.2.0)
+        specifier: ^7.51.3
+        version: 7.51.3(react@18.2.0)
       react-i18next:
         specifier: ^14.1.0
         version: 14.1.0(i18next@23.11.1)(react-dom@18.2.0)(react@18.2.0)
@@ -218,7 +218,7 @@ importers:
         version: 6.22.3(react-dom@18.2.0)(react@18.2.0)
       reactflow:
         specifier: ^11.11.1
-        version: 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+        version: 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       ui-shared:
         specifier: workspace:*
         version: link:../../libs/ui-shared
@@ -228,16 +228,16 @@ importers:
     devDependencies:
       '@4tw/cypress-drag-drop':
         specifier: ^2.2.5
-        version: 2.2.5(cypress@13.7.2)
+        version: 2.2.5(cypress@13.7.3)
       '@testing-library/cypress':
         specifier: ^10.0.1
-        version: 10.0.1(cypress@13.7.2)
+        version: 10.0.1(cypress@13.7.3)
       '@testing-library/jest-dom':
         specifier: ^6.4.2
-        version: 6.4.2(vitest@1.4.0)
+        version: 6.4.2(vitest@1.5.0)
       '@testing-library/react':
-        specifier: ^15.0.0
-        version: 15.0.0(react-dom@18.2.0)(react@18.2.0)
+        specifier: ^15.0.1
+        version: 15.0.1(react-dom@18.2.0)(react@18.2.0)
       '@types/dagre':
         specifier: ^0.7.52
         version: 0.7.52
@@ -248,11 +248,11 @@ importers:
         specifier: ^4.17.12
         version: 4.17.12
       '@types/react':
-        specifier: ^18.2.75
-        version: 18.2.75
+        specifier: ^18.2.77
+        version: 18.2.77
       '@types/react-dom':
-        specifier: ^18.2.24
-        version: 18.2.24
+        specifier: ^18.2.25
+        version: 18.2.25
       '@types/uuid':
         specifier: ^9.0.8
         version: 9.0.8
@@ -260,11 +260,11 @@ importers:
         specifier: ^3.6.0
         version: 3.6.0(vite@5.2.8)
       cypress:
-        specifier: ^13.7.2
-        version: 13.7.2
+        specifier: ^13.7.3
+        version: 13.7.3
       cypress-axe:
         specifier: ^1.5.0
-        version: 1.5.0(axe-core@4.9.0)(cypress@13.7.2)
+        version: 1.5.0(axe-core@4.9.0)(cypress@13.7.3)
       cypress-split:
         specifier: ^1.23.0
         version: 1.23.0(@babel/core@7.24.4)
@@ -290,8 +290,8 @@ importers:
         specifier: ^0.6.4
         version: 0.6.4(eslint@8.57.0)(typescript@5.4.5)(vite@5.2.8)
       vitest:
-        specifier: ^1.4.0
-        version: 1.4.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1)
+        specifier: ^1.5.0
+        version: 1.5.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1)
 
   js/apps/keycloak-server:
     dependencies:
@@ -407,11 +407,11 @@ importers:
         version: 18.2.0(react@18.2.0)
     devDependencies:
       '@types/react':
-        specifier: ^18.2.75
-        version: 18.2.75
+        specifier: ^18.2.77
+        version: 18.2.77
       '@types/react-dom':
-        specifier: ^18.2.24
-        version: 18.2.24
+        specifier: ^18.2.25
+        version: 18.2.25
       '@vitejs/plugin-react-swc':
         specifier: ^3.6.0
         version: 3.6.0(vite@5.2.8)
@@ -452,8 +452,8 @@ importers:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
       react-hook-form:
-        specifier: 7.51.2
-        version: 7.51.2(react@18.2.0)
+        specifier: 7.51.3
+        version: 7.51.3(react@18.2.0)
       react-i18next:
         specifier: ^14.1.0
         version: 14.1.0(i18next@23.11.1)(react-dom@18.2.0)(react@18.2.0)
@@ -462,11 +462,11 @@ importers:
         specifier: ^4.17.12
         version: 4.17.12
       '@types/react':
-        specifier: ^18.2.75
-        version: 18.2.75
+        specifier: ^18.2.77
+        version: 18.2.77
       '@types/react-dom':
-        specifier: ^18.2.24
-        version: 18.2.24
+        specifier: ^18.2.25
+        version: 18.2.25
       '@vitejs/plugin-react-swc':
         specifier: ^3.6.0
         version: 3.6.0(vite@5.2.8)
@@ -486,8 +486,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1(vite@5.2.8)
       vitest:
-        specifier: ^1.4.0
-        version: 1.4.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1)
+        specifier: ^1.5.0
+        version: 1.5.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1)
 
   themes/src/main/resources/theme/keycloak/common/resources:
     dependencies:
@@ -540,12 +540,12 @@ importers:
 
 packages:
 
-  /@4tw/cypress-drag-drop@2.2.5(cypress@13.7.2):
+  /@4tw/cypress-drag-drop@2.2.5(cypress@13.7.3):
     resolution: {integrity: sha512-3ghTmzhOmUqeN6U3QmUnKRUxI7OMLbJA4hHUY/eS/FhWJgxbiGgcaELbolWnBAOpajPXcsNQGYEj9brd59WH6A==}
     peerDependencies:
       cypress: 2 - 13
     dependencies:
-      cypress: 13.7.2
+      cypress: 13.7.3
     dev: true
 
   /@aashutoshrathi/word-wrap@1.2.6:
@@ -1725,39 +1725,39 @@ packages:
       playwright: 1.43.0
     dev: true
 
-  /@reactflow/background@11.3.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/background@11.3.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-27ahQyHuX2YTc1lABvAPpd5JWBH5P3qTHLGOO+Qfqq4mbicwQ0UGQ2bVDWDwoHOyep2EuMuphrLttaMr0hiviw==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.5
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.5.2(@types/react@18.2.75)(react@18.2.0)
+      zustand: 4.5.2(@types/react@18.2.77)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/controls@11.2.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/controls@11.2.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-FyqQv5pWEc2ycEGgIaLPmD5ezW3chsNwqMCjBMETxRj45R4uy6j+gDNi5EgURCan7T12uvoFeQopSZ96JL8XDQ==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.5
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.5.2(@types/react@18.2.75)(react@18.2.0)
+      zustand: 4.5.2(@types/react@18.2.77)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/core@11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/core@11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-O9f/q9SZ+29am/XdoZgm/LTdkgQdypcVj9a1yZZgcS6rVDkij1yIiOT3nkGxwnNkJz0rwCn2xtL5SkK038AQ7w==}
     peerDependencies:
       react: '>=17'
@@ -1773,19 +1773,19 @@ packages:
       d3-zoom: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.5.2(@types/react@18.2.75)(react@18.2.0)
+      zustand: 4.5.2(@types/react@18.2.77)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/minimap@11.7.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/minimap@11.7.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-zXxv+IExvWuaZ+gmRIfmU09A+slG9rMKTVfjqd+ewFV4LFcCyMNMIx3gZybdLZtgUDKIOoU/hAWIY+FbU7GTKw==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       '@types/d3-selection': 3.0.10
       '@types/d3-zoom': 3.0.8
       classcat: 5.0.5
@@ -1793,41 +1793,41 @@ packages:
       d3-zoom: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.5.2(@types/react@18.2.75)(react@18.2.0)
+      zustand: 4.5.2(@types/react@18.2.77)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/node-resizer@2.2.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/node-resizer@2.2.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-g/5iLo5vPBoFozU+2WXub+mbpNkQhR+PRX9o0YvH/lYs1pS7JYFSzCOHdHpLHAImoCGrKY1XN5scYly36jWkDw==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.5
       d3-drag: 3.0.0
       d3-selection: 3.0.0
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.5.2(@types/react@18.2.75)(react@18.2.0)
+      zustand: 4.5.2(@types/react@18.2.77)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
     dev: false
 
-  /@reactflow/node-toolbar@1.3.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0):
+  /@reactflow/node-toolbar@1.3.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-PKcTrtC88WZjNQz4ACnPgbNDBprsLJVDxyV1x8drGMNRePPrErkUNxsbhrr49L8ffmIavd4kxW5XVNOx8Kswmw==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/core': 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       classcat: 5.0.5
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      zustand: 4.5.2(@types/react@18.2.75)(react@18.2.0)
+      zustand: 4.5.2(@types/react@18.2.77)(react@18.2.0)
     transitivePeerDependencies:
       - '@types/react'
       - immer
@@ -2250,7 +2250,7 @@ packages:
       '@swc/counter': 0.1.3
     dev: true
 
-  /@testing-library/cypress@10.0.1(cypress@13.7.2):
+  /@testing-library/cypress@10.0.1(cypress@13.7.3):
     resolution: {integrity: sha512-e8uswjTZIBhaIXjzEcrQQ8nHRWHgZH7XBxKuIWxZ/T7FxfWhCR48nFhUX5nfPizjVOKSThEfOSv67jquc1ASkw==}
     engines: {node: '>=12', npm: '>=6'}
     peerDependencies:
@@ -2258,7 +2258,7 @@ packages:
     dependencies:
       '@babel/runtime': 7.24.4
       '@testing-library/dom': 9.3.4
-      cypress: 13.7.2
+      cypress: 13.7.3
     dev: true
 
   /@testing-library/dom@10.0.0:
@@ -2289,7 +2289,7 @@ packages:
       pretty-format: 27.5.1
     dev: true
 
-  /@testing-library/jest-dom@6.4.2(vitest@1.4.0):
+  /@testing-library/jest-dom@6.4.2(vitest@1.5.0):
     resolution: {integrity: sha512-CzqH0AFymEMG48CpzXFriYYkOjk6ZGPCLMhW9e9jg3KMCn5OfJecF8GtGW7yGfR/IgCe3SX8BSwjdzI6BBbZLw==}
     engines: {node: '>=14', npm: '>=6', yarn: '>=1'}
     peerDependencies:
@@ -2318,11 +2318,11 @@ packages:
       dom-accessibility-api: 0.6.3
       lodash: 4.17.21
       redent: 3.0.0
-      vitest: 1.4.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1)
+      vitest: 1.5.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1)
     dev: true
 
-  /@testing-library/react@15.0.0(react-dom@18.2.0)(react@18.2.0):
-    resolution: {integrity: sha512-Nb2Sq8MoSvGVdOGGppRqXeafLtvXCOwiOQtcbqCfkpVNZZNUqIjeSOwrfJ59zBfmZbAn8PitnWEzUKD1YwMrCg==}
+  /@testing-library/react@15.0.1(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-I8u4qqGAuBg7C1/kRB9n7Oz9Pc/UHEkmiQRbJziSG8B13eZfAcAUn8TSP26ZIvfSeb68CngmtZbKKcRqcQKa3g==}
     engines: {node: '>=18'}
     peerDependencies:
       react: ^18.0.0
@@ -2330,7 +2330,7 @@ packages:
     dependencies:
       '@babel/runtime': 7.24.4
       '@testing-library/dom': 10.0.0
-      '@types/react-dom': 18.2.24
+      '@types/react-dom': 18.2.25
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
     dev: true
@@ -2842,14 +2842,14 @@ packages:
   /@types/prop-types@15.7.12:
     resolution: {integrity: sha512-5zvhXYtRNRluoE/jAp4GVsSduVUzNWKkOZrCDBWYtE7biZywwdC2AcEzg+cSMLFRfVgeAFqpfNabiPjxFddV1Q==}
 
-  /@types/react-dom@18.2.24:
-    resolution: {integrity: sha512-cN6upcKd8zkGy4HU9F1+/s98Hrp6D4MOcippK4PoE8OZRngohHZpbJn1GsaDLz87MqvHNoT13nHvNqM9ocRHZg==}
+  /@types/react-dom@18.2.25:
+    resolution: {integrity: sha512-o/V48vf4MQh7juIKZU2QGDfli6p1+OOi5oXx36Hffpc9adsHeXjVp8rHuPkjd8VT8sOJ2Zp05HR7CdpGTIUFUA==}
     dependencies:
-      '@types/react': 18.2.75
+      '@types/react': 18.2.77
     dev: true
 
-  /@types/react@18.2.75:
-    resolution: {integrity: sha512-+DNnF7yc5y0bHkBTiLKqXFe+L4B3nvOphiMY3tuA5X10esmjqk7smyBZzbGTy2vsiy/Bnzj8yFIBL8xhRacoOg==}
+  /@types/react@18.2.77:
+    resolution: {integrity: sha512-CUT9KUUF+HytDM7WiXKLF9qUSg4tGImwy4FXTlfEDPEkkNUzJ7rVFolYweJ9fS1ljoIaP7M7Rdjc5eUm/Yu5AA==}
     dependencies:
       '@types/prop-types': 15.7.12
       csstype: 3.1.3
@@ -3076,38 +3076,38 @@ packages:
       - '@swc/helpers'
     dev: true
 
-  /@vitest/expect@1.4.0:
-    resolution: {integrity: sha512-Jths0sWCJZ8BxjKe+p+eKsoqev1/T8lYcrjavEaz8auEJ4jAVY0GwW3JKmdVU4mmNPLPHixh4GNXP7GFtAiDHA==}
+  /@vitest/expect@1.5.0:
+    resolution: {integrity: sha512-0pzuCI6KYi2SIC3LQezmxujU9RK/vwC1U9R0rLuGlNGcOuDWxqWKu6nUdFsX9tH1WU0SXtAxToOsEjeUn1s3hA==}
     dependencies:
-      '@vitest/spy': 1.4.0
-      '@vitest/utils': 1.4.0
+      '@vitest/spy': 1.5.0
+      '@vitest/utils': 1.5.0
       chai: 4.4.1
     dev: true
 
-  /@vitest/runner@1.4.0:
-    resolution: {integrity: sha512-EDYVSmesqlQ4RD2VvWo3hQgTJ7ZrFQ2VSJdfiJiArkCerDAGeyF1i6dHkmySqk573jLp6d/cfqCN+7wUB5tLgg==}
+  /@vitest/runner@1.5.0:
+    resolution: {integrity: sha512-7HWwdxXP5yDoe7DTpbif9l6ZmDwCzcSIK38kTSIt6CFEpMjX4EpCgT6wUmS0xTXqMI6E/ONmfgRKmaujpabjZQ==}
     dependencies:
-      '@vitest/utils': 1.4.0
+      '@vitest/utils': 1.5.0
       p-limit: 5.0.0
       pathe: 1.1.2
     dev: true
 
-  /@vitest/snapshot@1.4.0:
-    resolution: {integrity: sha512-saAFnt5pPIA5qDGxOHxJ/XxhMFKkUSBJmVt5VgDsAqPTX6JP326r5C/c9UuCMPoXNzuudTPsYDZCoJ5ilpqG2A==}
+  /@vitest/snapshot@1.5.0:
+    resolution: {integrity: sha512-qpv3fSEuNrhAO3FpH6YYRdaECnnRjg9VxbhdtPwPRnzSfHVXnNzzrpX4cJxqiwgRMo7uRMWDFBlsBq4Cr+rO3A==}
     dependencies:
       magic-string: 0.30.9
       pathe: 1.1.2
       pretty-format: 29.7.0
     dev: true
 
-  /@vitest/spy@1.4.0:
-    resolution: {integrity: sha512-Ywau/Qs1DzM/8Uc+yA77CwSegizMlcgTJuYGAi0jujOteJOUf1ujunHThYo243KG9nAyWT3L9ifPYZ5+As/+6Q==}
+  /@vitest/spy@1.5.0:
+    resolution: {integrity: sha512-vu6vi6ew5N5MMHJjD5PoakMRKYdmIrNJmyfkhRpQt5d9Ewhw9nZ5Aqynbi3N61bvk9UvZ5UysMT6ayIrZ8GA9w==}
     dependencies:
       tinyspy: 2.2.1
     dev: true
 
-  /@vitest/utils@1.4.0:
-    resolution: {integrity: sha512-mx3Yd1/6e2Vt/PUC98DcqTirtfxUyAZ32uK82r8rZzbtBeBo+nqgnjx/LvqQdWsrvNtm14VmurNgcf4nqY5gJg==}
+  /@vitest/utils@1.5.0:
+    resolution: {integrity: sha512-BDU0GNL8MWkRkSRdNFvCUCAVOeHaUlVJ9Tx0TYBZyXaaOTmGtUFObzchCivIBrIwKzvZA7A9sCejVhXM2aY98A==}
     dependencies:
       diff-sequences: 29.6.3
       estree-walker: 3.0.3
@@ -4050,7 +4050,7 @@ packages:
   /csstype@3.1.3:
     resolution: {integrity: sha512-M1uQkMl8rQK/szD0LNhtqxIPLpimGm8sOBwU7lLnCpSbTyY3yeU1Vc7l4KT5zT4s/yOxHH5O7tIuuLOCnLADRw==}
 
-  /cypress-axe@1.5.0(axe-core@4.9.0)(cypress@13.7.2):
+  /cypress-axe@1.5.0(axe-core@4.9.0)(cypress@13.7.3):
     resolution: {integrity: sha512-Hy/owCjfj+25KMsecvDgo4fC/781ccL+e8p+UUYoadGVM2ogZF9XIKbiM6KI8Y3cEaSreymdD6ZzccbI2bY0lQ==}
     engines: {node: '>=10'}
     peerDependencies:
@@ -4058,7 +4058,7 @@ packages:
       cypress: ^10 || ^11 || ^12 || ^13
     dependencies:
       axe-core: 4.9.0
-      cypress: 13.7.2
+      cypress: 13.7.3
     dev: true
 
   /cypress-split@1.23.0(@babel/core@7.24.4):
@@ -4078,8 +4078,8 @@ packages:
       - supports-color
     dev: true
 
-  /cypress@13.7.2:
-    resolution: {integrity: sha512-FF5hFI5wlRIHY8urLZjJjj/YvfCBrRpglbZCLr/cYcL9MdDe0+5usa8kTIrDHthlEc9lwihbkb5dmwqBDNS2yw==}
+  /cypress@13.7.3:
+    resolution: {integrity: sha512-uoecY6FTCAuIEqLUYkTrxamDBjMHTYak/1O7jtgwboHiTnS1NaMOoR08KcTrbRZFCBvYOiS4tEkQRmsV+xcrag==}
     engines: {node: ^16.0.0 || ^18.0.0 || >=20.0.0}
     hasBin: true
     requiresBuild: true
@@ -7432,8 +7432,8 @@ packages:
       react: 18.2.0
     dev: false
 
-  /react-hook-form@7.51.2(react@18.2.0):
-    resolution: {integrity: sha512-y++lwaWjtzDt/XNnyGDQy6goHskFualmDlf+jzEZvjvz6KWDf7EboL7pUvRCzPTJd0EOPpdekYaQLEvvG6m6HA==}
+  /react-hook-form@7.51.3(react@18.2.0):
+    resolution: {integrity: sha512-cvJ/wbHdhYx8aviSWh28w9ImjmVsb5Y05n1+FW786vEZQJV5STNM0pW6ujS+oiBecb0ARBxJFyAnXj9+GHXACQ==}
     engines: {node: '>=12.22.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18
@@ -7501,18 +7501,18 @@ packages:
     dependencies:
       loose-envify: 1.4.0
 
-  /reactflow@11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0):
+  /reactflow@11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-2GEh0bTkYR7rzAV3qdeN6C1o4qumtETZl7yQv1GVrfgr3c77nCUAOKsv5hetRejOGNnJudRwn6axeWFAY+IjNg==}
     peerDependencies:
       react: '>=17'
       react-dom: '>=17'
     dependencies:
-      '@reactflow/background': 11.3.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/controls': 11.2.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/core': 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/minimap': 11.7.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/node-resizer': 2.2.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
-      '@reactflow/node-toolbar': 1.3.11(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/background': 11.3.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/controls': 11.2.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/core': 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/minimap': 11.7.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/node-resizer': 2.2.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
+      '@reactflow/node-toolbar': 1.3.11(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
     transitivePeerDependencies:
@@ -8679,8 +8679,8 @@ packages:
       extsprintf: 1.4.1
     dev: true
 
-  /vite-node@1.4.0(@types/node@20.12.7)(lightningcss@1.24.1):
-    resolution: {integrity: sha512-VZDAseqjrHgNd4Kh8icYHWzTKSCZMhia7GyHfhtzLW33fZlG9SwsB6CEhgyVOWkJfJ2pFLrp/Gj1FSfAiqH9Lw==}
+  /vite-node@1.5.0(@types/node@20.12.7)(lightningcss@1.24.1):
+    resolution: {integrity: sha512-tV8h6gMj6vPzVCa7l+VGq9lwoJjW8Y79vst8QZZGiuRAfijU+EEWuc0kFpmndQrWhMMhet1jdSF+40KSZUqIIw==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
     dependencies:
@@ -8823,15 +8823,15 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /vitest@1.4.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1):
-    resolution: {integrity: sha512-gujzn0g7fmwf83/WzrDTnncZt2UiXP41mHuFYFrdwaLRVQ6JYQEiME2IfEjU3vcFL3VKa75XhI3lFgn+hfVsQw==}
+  /vitest@1.5.0(@types/node@20.12.7)(jsdom@24.0.0)(lightningcss@1.24.1):
+    resolution: {integrity: sha512-d8UKgR0m2kjdxDWX6911uwxout6GHS0XaGH1cksSIVVG8kRlE7G7aBw7myKQCvDI5dT4j7ZMa+l706BIORMDLw==}
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@types/node': ^18.0.0 || >=20.0.0
-      '@vitest/browser': 1.4.0
-      '@vitest/ui': 1.4.0
+      '@vitest/browser': 1.5.0
+      '@vitest/ui': 1.5.0
       happy-dom: '*'
       jsdom: '*'
     peerDependenciesMeta:
@@ -8849,11 +8849,11 @@ packages:
         optional: true
     dependencies:
       '@types/node': 20.12.7
-      '@vitest/expect': 1.4.0
-      '@vitest/runner': 1.4.0
-      '@vitest/snapshot': 1.4.0
-      '@vitest/spy': 1.4.0
-      '@vitest/utils': 1.4.0
+      '@vitest/expect': 1.5.0
+      '@vitest/runner': 1.5.0
+      '@vitest/snapshot': 1.5.0
+      '@vitest/spy': 1.5.0
+      '@vitest/utils': 1.5.0
       acorn-walk: 8.3.2
       chai: 4.4.1
       debug: 4.3.4(supports-color@8.1.1)
@@ -8868,7 +8868,7 @@ packages:
       tinybench: 2.6.0
       tinypool: 0.8.3
       vite: 5.2.8(@types/node@20.12.7)(lightningcss@1.24.1)
-      vite-node: 1.4.0(@types/node@20.12.7)(lightningcss@1.24.1)
+      vite-node: 1.5.0(@types/node@20.12.7)(lightningcss@1.24.1)
       why-is-node-running: 2.2.2
     transitivePeerDependencies:
       - less
@@ -9220,7 +9220,7 @@ packages:
       commander: 9.5.0
     dev: true
 
-  /zustand@4.5.2(@types/react@18.2.75)(react@18.2.0):
+  /zustand@4.5.2(@types/react@18.2.77)(react@18.2.0):
     resolution: {integrity: sha512-2cN1tPkDVkwCy5ickKrI7vijSjPksFRfqS6237NzT0vqSsztTNnQdHw9mmN7uBdk3gceVXU0a+21jFzFzAc9+g==}
     engines: {node: '>=12.7.0'}
     peerDependencies:
@@ -9235,12 +9235,12 @@ packages:
       react:
         optional: true
     dependencies:
-      '@types/react': 18.2.75
+      '@types/react': 18.2.77
       react: 18.2.0
       use-sync-external-store: 1.2.0(react@18.2.0)
     dev: false
 
-  file:js/apps/admin-ui(@types/react@18.2.75):
+  file:js/apps/admin-ui(@types/react@18.2.77):
     resolution: {directory: js/apps/admin-ui, type: directory}
     id: file:js/apps/admin-ui
     name: admin-ui
@@ -9265,10 +9265,10 @@ packages:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
       react-dropzone: 14.2.3(react@18.2.0)
-      react-hook-form: 7.51.2(react@18.2.0)
+      react-hook-form: 7.51.3(react@18.2.0)
       react-i18next: 14.1.0(i18next@23.11.1)(react-dom@18.2.0)(react@18.2.0)
       react-router-dom: 6.22.3(react-dom@18.2.0)(react@18.2.0)
-      reactflow: 11.11.1(@types/react@18.2.75)(react-dom@18.2.0)(react@18.2.0)
+      reactflow: 11.11.1(@types/react@18.2.77)(react-dom@18.2.0)(react@18.2.0)
       ui-shared: link:js/libs/ui-shared
       use-react-router-breadcrumbs: 4.0.1(react-router-dom@6.22.3)(react@18.2.0)
     transitivePeerDependencies:
