@@ -262,9 +262,9 @@ export async function createRouter(
       }
       opts.createdAfter = new Date(sinceEpoch);
     }
-    if (req.query.minimal_severity) {
+    if (req.query.minimumSeverity) {
       opts.minimumSeverity = normalizeSeverity(
-        req.query.minimal_severity.toString(),
+        req.query.minimumSeverity.toString(),
       );
     }
 
@@ -458,7 +458,7 @@ export async function createRouter(
 
       if (!recipients || !title) {
         logger.error(`Invalid notification request received`);
-        throw new InputError();
+        throw new InputError(`Invalid notification request received`);
       }
 
       const origin = credentials.principal.subject;
@@ -484,8 +484,10 @@ export async function createRouter(
         try {
           users = await getUsersForEntityRef(entityRef);
         } catch (e) {
-          throw new InputError();
+          logger.error(`Failed to resolve notification receivers: ${e}`);
+          throw new InputError('Failed to resolve notification receivers', e);
         }
+
         const userNotifications = await sendUserNotifications(
           baseNotification,
           users,
