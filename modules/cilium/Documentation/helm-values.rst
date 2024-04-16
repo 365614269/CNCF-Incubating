@@ -1049,7 +1049,7 @@
      - string
      - ``"0s"``
    * - :spelling:ignore:`encryption.wireguard.userspaceFallback`
-     - Enables the fallback to the user-space implementation.
+     - Enables the fallback to the user-space implementation (deprecated).
      - bool
      - ``false``
    * - :spelling:ignore:`endpointHealthChecking.enabled`
@@ -2289,7 +2289,7 @@
      - bool
      - ``true``
    * - :spelling:ignore:`k8sServiceHost`
-     - Kubernetes service host
+     - Kubernetes service host - use "auto" for automatic lookup from the cluster-info ConfigMap (kubeadm-based clusters only)
      - string
      - ``""``
    * - :spelling:ignore:`k8sServicePort`

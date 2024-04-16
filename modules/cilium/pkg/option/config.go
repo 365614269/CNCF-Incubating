@@ -1339,20 +1339,18 @@ func LogRegisteredOptions(vp *viper.Viper, entry *logrus.Entry) {
 // DaemonConfig is the configuration used by Daemon.
 type DaemonConfig struct {
 	CreationTime        time.Time
-	BpfDir              string       // BPF template files directory
-	LibDir              string       // Cilium library files directory
-	RunDir              string       // Cilium runtime directory
-	ExternalEnvoyProxy  bool         // Whether Envoy is deployed as external DaemonSet or not
-	devicesMu           lock.RWMutex // Protects devices
-	devices             []string     // bpf_host device
-	DirectRoutingDevice string       // Direct routing device (used by BPF NodePort and BPF Host Routing)
-	LBDevInheritIPAddr  string       // Device which IP addr used by bpf_host devices
-	EnableXDPPrefilter  bool         // Enable XDP-based prefiltering
-	XDPMode             string       // XDP mode, values: { xdpdrv | xdpgeneric | none }
-	HostV4Addr          net.IP       // Host v4 address of the snooping device
-	HostV6Addr          net.IP       // Host v6 address of the snooping device
-	EncryptInterface    []string     // Set of network facing interface to encrypt over
-	EncryptNode         bool         // Set to true for encrypting node IP traffic
+	BpfDir              string   // BPF template files directory
+	LibDir              string   // Cilium library files directory
+	RunDir              string   // Cilium runtime directory
+	ExternalEnvoyProxy  bool     // Whether Envoy is deployed as external DaemonSet or not
+	DirectRoutingDevice string   // Direct routing device (used by BPF NodePort and BPF Host Routing)
+	LBDevInheritIPAddr  string   // Device which IP addr used by bpf_host devices
+	EnableXDPPrefilter  bool     // Enable XDP-based prefiltering
+	XDPMode             string   // XDP mode, values: { xdpdrv | xdpgeneric | none }
+	HostV4Addr          net.IP   // Host v4 address of the snooping device
+	HostV6Addr          net.IP   // Host v6 address of the snooping device
+	EncryptInterface    []string // Set of network facing interface to encrypt over
+	EncryptNode         bool     // Set to true for encrypting node IP traffic
 
 	// If set to true the daemon will detect new and deleted datapath devices
 	// at runtime and reconfigure the datapath to load programs onto the new
@@ -2406,24 +2404,6 @@ func (c *DaemonConfig) SetIPv6NativeRoutingCIDR(cidr *cidr.CIDR) {
 	c.ConfigPatchMutex.Unlock()
 }
 
-func (c *DaemonConfig) SetDevices(devices []string) {
-	c.devicesMu.Lock()
-	c.devices = devices
-	c.devicesMu.Unlock()
-}
-
-func (c *DaemonConfig) GetDevices() []string {
-	c.devicesMu.RLock()
-	defer c.devicesMu.RUnlock()
-	return c.devices
-}
-
-func (c *DaemonConfig) AppendDevice(dev string) {
-	c.devicesMu.Lock()
-	c.devices = append(c.devices, dev)
-	c.devicesMu.Unlock()
-}
-
 // IsExcludedLocalAddress returns true if the specified IP matches one of the
 // excluded local IP ranges
 func (c *DaemonConfig) IsExcludedLocalAddress(ip net.IP) bool {
@@ -2482,6 +2462,16 @@ func (c *DaemonConfig) TunnelingEnabled() bool {
 func (c *DaemonConfig) AreDevicesRequired() bool {
 	return c.EnableNodePort || c.EnableHostFirewall || c.EnableWireguard ||
 		c.EnableHighScaleIPcache || c.EnableL2Announcements || c.ForceDeviceRequired
+}
+
+// When WG & encrypt-node are on, a NodePort BPF to-be forwarded request
+// to a remote node running a selected service endpoint must be encrypted.
+// To make the NodePort's rev-{S,D}NAT translations to happen for a reply
+// from the remote node, we need to attach bpf_host to the Cilium's WG
+// netdev (otherwise, the WG netdev after decrypting the reply will pass
+// it to the stack which drops the packet).
+func (c *DaemonConfig) NeedBPFHostOnWireGuardDevice() bool {
+	return c.EnableNodePort && c.EnableWireguard && c.EncryptNode
 }
 
 // MasqueradingEnabled returns true if either IPv4 or IPv6 masquerading is enabled.
@@ -2710,7 +2700,7 @@ func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 		if !c.EnableIPv6 {
 			return fmt.Errorf("IPv6NDP cannot be enabled when IPv6 is not enabled")
 		}
-		if len(c.IPv6MCastDevice) == 0 && !MightAutoDetectDevices() {
+		if len(c.IPv6MCastDevice) == 0 {
 			return fmt.Errorf("IPv6NDP cannot be enabled without %s", IPv6MCastDevice)
 		}
 	}
@@ -3042,7 +3032,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	}
 
 	c.populateLoadBalancerSettings(vp)
-	c.populateDevices(vp)
 	c.EnableRuntimeDeviceDetection = vp.GetBool(EnableRuntimeDeviceDetection)
 	c.EgressMultiHomeIPRuleCompat = vp.GetBool(EgressMultiHomeIPRuleCompat)
 
@@ -3407,23 +3396,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 			continue
 		}
 		c.ExcludeNodeLabelPatterns = append(c.ExcludeNodeLabelPatterns, r)
-	}
-}
-
-func (c *DaemonConfig) populateDevices(vp *viper.Viper) {
-	c.devices = vp.GetStringSlice(Devices)
-
-	// Make sure that devices are unique
-	if len(c.devices) <= 1 {
-		return
-	}
-	devSet := map[string]struct{}{}
-	for _, dev := range c.devices {
-		devSet[dev] = struct{}{}
-	}
-	c.devices = make([]string, 0, len(devSet))
-	for dev := range devSet {
-		c.devices = append(c.devices, dev)
 	}
 }
 
@@ -4084,15 +4056,6 @@ func getDefaultMonitorQueueSize(numCPU int) int {
 		monitorQueueSize = defaults.MonitorQueueSizePerCPUMaximum
 	}
 	return monitorQueueSize
-}
-
-// MightAutoDetectDevices returns true if the device auto-detection might take
-// place.
-func MightAutoDetectDevices() bool {
-	devices := Config.GetDevices()
-	return ((Config.EnableHostFirewall || Config.EnableWireguard || Config.EnableHighScaleIPcache) && len(devices) == 0) ||
-		(Config.KubeProxyReplacement != KubeProxyReplacementFalse &&
-			(len(devices) == 0 || Config.DirectRoutingDevice == ""))
 }
 
 // BPFEventBufferConfig contains parsed configuration for a bpf map event buffer.

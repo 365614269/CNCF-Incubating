@@ -37,7 +37,7 @@ imagePullSecrets: []
 # -- (string) Kubernetes config path
 # @default -- `"~/.kube/config"`
 kubeConfigPath: ""
-# -- (string) Kubernetes service host
+# -- (string) Kubernetes service host - use "auto" for automatic lookup from the cluster-info ConfigMap (kubeadm-based clusters only)
 k8sServiceHost: ""
 # @schema
 # type: [string, integer]
@@ -870,7 +870,7 @@ encryption:
     # -- Enable IPSec encrypted overlay
     encryptedOverlay: false
   wireguard:
-    # -- Enables the fallback to the user-space implementation.
+    # -- Enables the fallback to the user-space implementation (deprecated).
     userspaceFallback: false
     # -- Controls Wireguard PersistentKeepalive option. Set 0s to disable.
     persistentKeepalive: 0s

@@ -18,24 +18,18 @@
 
 package org.keycloak.testsuite.client;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.stream.Collectors;
-
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.Response;
-
 import org.junit.Test;
+import org.keycloak.client.clienttype.ClientTypeManager;
 import org.keycloak.common.util.ObjectUtil;
 import org.keycloak.models.ClientModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ClientTypeRepresentation;
-
 import org.keycloak.representations.idm.ClientTypesRepresentation;
+import org.keycloak.representations.idm.ErrorRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
-import org.keycloak.client.clienttype.ClientTypeManager;
 import org.keycloak.services.clienttype.impl.DefaultClientTypeProviderFactory;
 import org.keycloak.testsuite.AbstractTestRealmKeycloakTest;
 import org.keycloak.testsuite.Assert;
@@ -45,7 +39,14 @@ import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
 import org.keycloak.testsuite.arquillian.annotation.UncaughtServerErrorExpected;
 import org.keycloak.testsuite.util.ClientBuilder;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.keycloak.common.Profile.Feature.CLIENT_TYPES;
 
@@ -75,9 +76,9 @@ public class ClientTypesTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testCreateClientWithClientType() {
         ClientRepresentation clientRep = createClientWithType("foo", ClientTypeManager.SERVICE_ACCOUNT);
-        Assert.assertEquals("foo", clientRep.getClientId());
-        Assert.assertEquals(ClientTypeManager.SERVICE_ACCOUNT, clientRep.getType());
-        Assert.assertEquals(OIDCLoginProtocol.LOGIN_PROTOCOL, clientRep.getProtocol());
+        assertEquals("foo", clientRep.getClientId());
+        assertEquals(ClientTypeManager.SERVICE_ACCOUNT, clientRep.getType());
+        assertEquals(OIDCLoginProtocol.LOGIN_PROTOCOL, clientRep.getProtocol());
         Assert.assertFalse(clientRep.isStandardFlowEnabled());
         Assert.assertFalse(clientRep.isImplicitFlowEnabled());
         Assert.assertFalse(clientRep.isDirectAccessGrantsEnabled());
@@ -87,6 +88,17 @@ public class ClientTypesTest extends AbstractTestRealmKeycloakTest {
 
         // Check type not included as client attribute
         Assert.assertFalse(clientRep.getAttributes().containsKey(ClientModel.TYPE));
+    }
+
+    @Test
+    public void testThatCreateClientWithWrongClientTypeFails() {
+        ClientRepresentation clientRep = ClientBuilder.create()
+                .clientId("client-type-does-not-exist-request")
+                .type("DNE")
+                .build();
+
+        Response response = testRealm().clients().create(clientRep);
+        assertEquals(Response.Status.BAD_REQUEST, response.getStatusInfo());
     }
 
     @Test
@@ -109,17 +121,18 @@ public class ClientTypesTest extends AbstractTestRealmKeycloakTest {
             testRealm().clients().get(clientRep.getId()).update(clientRep);
             Assert.fail("Not expected to update client");
         } catch (BadRequestException bre) {
-            // Expected
+            assertErrorResponseContainsParams(bre.getResponse(), "serviceAccountsEnabled");
         }
 
-        // Adding non-applicable attribute should fail
         clientRep.setServiceAccountsEnabled(true);
+
+        // Adding non-applicable attribute should not fail
         clientRep.getAttributes().put(ClientModel.LOGO_URI, "https://foo");
         try {
             testRealm().clients().get(clientRep.getId()).update(clientRep);
             Assert.fail("Not expected to update client");
         } catch (BadRequestException bre) {
-            // Expected
+            assertErrorResponseContainsParams(bre.getResponse(), "logoUri");
         }
 
         // Update of supported attribute should be successful
@@ -128,12 +141,32 @@ public class ClientTypesTest extends AbstractTestRealmKeycloakTest {
         testRealm().clients().get(clientRep.getId()).update(clientRep);
     }
 
+    @Test
+    public void testCreateClientFailsWithMultipleInvalidClientTypeOverrides() {
+        ClientRepresentation clientRep = ClientBuilder.create()
+                .clientId("service-account-client-type-required-to-be-confidential-and-service-accounts-enabled")
+                .type(ClientTypeManager.SERVICE_ACCOUNT)
+                .serviceAccountsEnabled(false)
+                .publicClient()
+                .build();
+
+        Response response = testRealm().clients().create(clientRep);
+        assertErrorResponseContainsParams(response, "publicClient", "serviceAccountsEnabled");
+    }
+
+    private void assertErrorResponseContainsParams(Response response, String... items) {
+        assertEquals(Response.Status.BAD_REQUEST, response.getStatusInfo());
+        ErrorRepresentation errorRepresentation = response.readEntity(ErrorRepresentation.class);
+        assertThat(
+                List.of(errorRepresentation.getParams()),
+                containsInAnyOrder(items));
+    }
 
     @Test
     public void testClientTypesAdminRestAPI_globalTypes() {
         ClientTypesRepresentation clientTypes = testRealm().clientTypes().getClientTypes();
 
-        Assert.assertEquals(0, clientTypes.getRealmClientTypes().size());
+        assertEquals(0, clientTypes.getRealmClientTypes().size());
 
         List<String> globalClientTypeNames = clientTypes.getGlobalClientTypes().stream()
                 .map(ClientTypeRepresentation::getName)
@@ -144,7 +177,7 @@ public class ClientTypesTest extends AbstractTestRealmKeycloakTest {
                 .filter(clientType -> "service-account".equals(clientType.getName()))
                 .findFirst()
                 .get();
-        Assert.assertEquals("default", serviceAccountType.getProvider());
+        assertEquals("default", serviceAccountType.getProvider());
 
         ClientTypeRepresentation.PropertyConfig cfg = serviceAccountType.getConfig().get("standardFlowEnabled");
         assertPropertyConfig("standardFlowEnabled", cfg, true, true, false);
