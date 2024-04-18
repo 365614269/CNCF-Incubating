@@ -3,19 +3,19 @@ module github.com/keptn/lifecycle-toolkit/metrics-operator
 go 1.21
 
 require (
-	github.com/DataDog/datadog-api-client-go/v2 v2.24.0
+	github.com/DataDog/datadog-api-client-go/v2 v2.25.0
 	github.com/benbjohnson/clock v1.3.5
 	github.com/go-logr/logr v1.4.1
 	github.com/gorilla/mux v1.8.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/keptn/lifecycle-toolkit/keptn-cert-manager v0.0.0-20240319133656-ce8192f64000
-	github.com/open-feature/go-sdk v1.10.0
+	github.com/open-feature/go-sdk v1.11.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.47.0
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8
+	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/net v0.24.0
 	gopkg.in/inf.v0 v0.9.1
 	k8s.io/api v0.28.8
