@@ -23,6 +23,7 @@ import static org.hamcrest.Matchers.nullValue;
 
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
+import org.junit.Assert;
 import org.junit.Test;
 import org.keycloak.admin.client.resource.OrganizationIdentityProviderResource;
 import org.keycloak.admin.client.resource.OrganizationResource;
@@ -38,16 +39,19 @@ public class OrganizationIdentityProviderTest extends AbstractOrganizationTest {
     public void testUpdate() {
         OrganizationRepresentation organization = createOrganization();
         OrganizationIdentityProviderResource orgIdPResource = testRealm().organizations().get(organization.getId()).identityProvider();
-        IdentityProviderRepresentation idpRepresentation = orgIdPResource.toRepresentation();
-        assertThat(idpRepresentation.getAlias(), equalTo(bc.getIDPAlias()));
+        IdentityProviderRepresentation actual = orgIdPResource.toRepresentation();
+        IdentityProviderRepresentation expected = actual;
+        assertThat(expected.getAlias(), equalTo(bc.getIDPAlias()));
 
-        String displayName = "My Org Broker";
         //update
-        idpRepresentation.setDisplayName(displayName);
-        try (Response response = orgIdPResource.update(idpRepresentation)) {
+        expected.setDisplayName("My Org Broker");
+        expected.getConfig().put("test", "value");
+        try (Response response = orgIdPResource.update(expected)) {
             assertThat(response.getStatus(), equalTo(Response.Status.NO_CONTENT.getStatusCode()));
         }
-        assertThat(orgIdPResource.toRepresentation().getDisplayName(), equalTo(displayName));
+        actual = orgIdPResource.toRepresentation();
+        assertThat(expected.getDisplayName(), equalTo(actual.getDisplayName()));
+        Assert.assertEquals(expected.getConfig().get("test"), actual.getConfig().get("test"));
     }
 
     @Test
@@ -118,6 +122,26 @@ public class OrganizationIdentityProviderTest extends AbstractOrganizationTest {
         }
         try (Response response = orgIdPResource.delete()) {
             assertThat(response.getStatus(), equalTo(Status.NOT_FOUND.getStatusCode()));
+        }
+    }
+
+    @Test
+    public void tryUpdateIdPWithValidAliasInvalidInternalId() {
+        OrganizationRepresentation orgRep = createOrganization();
+        OrganizationResource orgResource = testRealm().organizations().get(orgRep.getId());
+
+        OrganizationIdentityProviderResource orgIdPResource = orgResource.identityProvider();
+
+        IdentityProviderRepresentation idpRepresentation = createRep("some-broker", "oidc");
+        //create IdP in realm not bound to Org and get created internalId
+        testRealm().identityProviders().create(idpRepresentation).close();
+        String internalId = testRealm().identityProviders().get("some-broker").toRepresentation().getInternalId();
+
+        IdentityProviderRepresentation orgIdPRep = orgIdPResource.toRepresentation();
+        orgIdPRep.setInternalId(internalId);
+
+        try (Response response = orgIdPResource.update(orgIdPRep)) {
+            assertThat(response.getStatus(), equalTo(Response.Status.NOT_FOUND.getStatusCode()));
         }
     }
 

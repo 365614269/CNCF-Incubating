@@ -17,6 +17,8 @@
 
 package org.keycloak.models.utils;
 
+import static org.keycloak.models.utils.StripSecretsUtils.stripSecrets;
+
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.otp.OTPApplicationProvider;
 import org.keycloak.authorization.AuthorizationProvider;
@@ -518,7 +520,7 @@ public class ModelToRepresentation {
         rep.getAttributes().putAll(stripRealmAttributesIncludedAsFields(realm.getAttributes()));
 
         if (!internal) {
-            rep = StripSecretsUtils.strip(rep);
+            rep = stripSecrets(session, rep);
         }
 
         return rep;
@@ -936,7 +938,7 @@ public class ModelToRepresentation {
     public static ComponentRepresentation toRepresentation(KeycloakSession session, ComponentModel component, boolean internal) {
         ComponentRepresentation rep = toRepresentationWithoutConfig(component);
         if (!internal) {
-            rep = StripSecretsUtils.strip(session, rep);
+            return stripSecrets(session, rep);
         }
         return rep;
     }

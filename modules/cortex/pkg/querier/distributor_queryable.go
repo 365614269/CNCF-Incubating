@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
 
 	"github.com/cortexproject/cortex/pkg/cortexpb"
@@ -19,7 +20,6 @@ import (
 	"github.com/cortexproject/cortex/pkg/querier/series"
 	"github.com/cortexproject/cortex/pkg/util"
 	"github.com/cortexproject/cortex/pkg/util/chunkcompat"
-	"github.com/cortexproject/cortex/pkg/util/math"
 	"github.com/cortexproject/cortex/pkg/util/spanlogger"
 )
 
@@ -107,7 +107,7 @@ func (q *distributorQuerier) Select(ctx context.Context, sortSeries bool, sp *st
 	if q.queryIngestersWithin > 0 && !shouldNotQueryStoreForMetadata {
 		now := time.Now()
 		origMinT := minT
-		minT = math.Max64(minT, util.TimeToMillis(now.Add(-q.queryIngestersWithin)))
+		minT = max(minT, util.TimeToMillis(now.Add(-q.queryIngestersWithin)))
 
 		if origMinT != minT {
 			level.Debug(log).Log("msg", "the min time of the query to ingesters has been manipulated", "original", origMinT, "updated", minT)
@@ -169,12 +169,11 @@ func (q *distributorQuerier) streamingSelect(ctx context.Context, sortSeries boo
 			return storage.ErrSeriesSet(err)
 		}
 
-		serieses = append(serieses, &chunkSeries{
-			labels:            ls,
-			chunks:            chunks,
-			chunkIteratorFunc: q.chunkIterFn,
-			mint:              minT,
-			maxt:              maxT,
+		serieses = append(serieses, &storage.SeriesEntry{
+			Lset: ls,
+			SampleIteratorFn: func(_ chunkenc.Iterator) chunkenc.Iterator {
+				return q.chunkIterFn(chunks, model.Time(minT), model.Time(maxT))
+			},
 		})
 	}
 
