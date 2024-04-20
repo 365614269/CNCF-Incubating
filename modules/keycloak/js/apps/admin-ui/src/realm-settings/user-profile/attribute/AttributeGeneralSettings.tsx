@@ -22,7 +22,7 @@ import { isEqual } from "lodash-es";
 import { useEffect, useRef, useState } from "react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { FormErrorText, HelpItem } from "ui-shared";
+import { FormErrorText, HelpItem } from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../../../admin-client";
 import { FormAccess } from "../../../components/form/FormAccess";
@@ -171,15 +171,21 @@ export const AttributeGeneralSettings = ({
     handleGeneratedDisplayName(generatedDisplayName);
   };
 
+  const formattedAttributeDisplayName = attributeDisplayName?.substring(
+    2,
+    attributeDisplayName.length - 1,
+  );
+
   return (
     <>
       {addTranslationsModalOpen && (
         <AddTranslationsDialog
           translationKey={
             editMode
-              ? attributeDisplayName
+              ? formattedAttributeDisplayName
               : `profile.attributes.${newAttributeName}`
           }
+          translations={translationsData}
           onTranslationsAdded={handleTranslationsAdded}
           toggleDialog={handleToggleDialog}
           onCancel={() => {
