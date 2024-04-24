@@ -296,7 +296,7 @@ contributors across the globe, there is almost always someone available to help.
 | enableRuntimeDeviceDetection | bool | `false` | Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered. |
 | enableXTSocketFallback | bool | `true` | Enables the fallback compatibility solution for when the xt_socket kernel module is missing and it is needed for the datapath L7 redirection to work properly. See documentation for details on when this can be disabled: https://docs.cilium.io/en/stable/operations/system_requirements/#linux-kernel. |
 | encryption.enabled | bool | `false` | Enable transparent network encryption. |
-| encryption.ipsec.encryptedOverlay | bool | `false` | Enable IPSec encrypted overlay |
+| encryption.ipsec.encryptedOverlay | bool | `false` | Enable IPsec encrypted overlay |
 | encryption.ipsec.interface | string | `""` | The interface to use for encrypted traffic. |
 | encryption.ipsec.keyFile | string | `"keys"` | Name of the key file inside the Kubernetes secret configured via secretName. |
 | encryption.ipsec.keyRotationDuration | string | `"5m"` | Maximum duration of the IPsec key rotation. The previous key will be removed after that delay. |
@@ -309,7 +309,7 @@ contributors across the globe, there is almost always someone available to help.
 | encryption.strictMode.cidr | string | `""` | CIDR for the WireGuard Pod2Pod strict mode. |
 | encryption.strictMode.enabled | bool | `false` | Enable WireGuard Pod2Pod strict mode. |
 | encryption.type | string | `"ipsec"` | Encryption method. Can be either ipsec or wireguard. |
-| encryption.wireguard.persistentKeepalive | string | `"0s"` | Controls Wireguard PersistentKeepalive option. Set 0s to disable. |
+| encryption.wireguard.persistentKeepalive | string | `"0s"` | Controls WireGuard PersistentKeepalive option. Set 0s to disable. |
 | encryption.wireguard.userspaceFallback | bool | `false` | Enables the fallback to the user-space implementation (deprecated). |
 | endpointHealthChecking.enabled | bool | `true` | Enable connectivity health checking between virtual endpoints. |
 | endpointRoutes.enabled | bool | `false` | Enable use of per endpoint routes instead of routing via the cilium_host interface. |
@@ -341,7 +341,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:40a69964865ac7005488e5b4263894221c24cdb1b2e10da5193bd2e460ce6529","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.3-2c7164c53e26902bba2ab8ba25ae365460d48a58","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:f48e6e65252f2ff53e8ae91e6521c2ae9ed747e8998e1b9dfc83a2664de3dc35","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.4-fe3f52ea52e1a28e4c2cd295b0884fd697bb9e69","useDigest":true}` | Envoy container image. |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
 | envoy.log.format | string | `"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"` | The format string to use for laying out the log message metadata of Envoy. |

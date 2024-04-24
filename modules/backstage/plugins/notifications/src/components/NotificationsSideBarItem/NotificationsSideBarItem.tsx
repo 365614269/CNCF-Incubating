@@ -17,7 +17,7 @@ import React, { useEffect } from 'react';
 import { useNotificationsApi } from '../../hooks';
 import { SidebarItem } from '@backstage/core-components';
 import NotificationsIcon from '@material-ui/icons/Notifications';
-import { useApi, useRouteRef } from '@backstage/core-plugin-api';
+import { IconComponent, useApi, useRouteRef } from '@backstage/core-plugin-api';
 import { rootRouteRef } from '../../routes';
 import { useSignal } from '@backstage/plugin-signals-react';
 import { NotificationSignal } from '@backstage/plugin-notifications-common';
@@ -29,9 +29,19 @@ import { notificationsApiRef } from '../../api';
 export const NotificationsSidebarItem = (props?: {
   webNotificationsEnabled?: boolean;
   titleCounterEnabled?: boolean;
+  className?: string;
+  icon?: IconComponent;
+  text?: string;
+  disableHighlight?: boolean;
+  noTrack?: boolean;
 }) => {
-  const { webNotificationsEnabled = false, titleCounterEnabled = true } =
-    props ?? { webNotificationsEnabled: false, titleCounterEnabled: true };
+  const {
+    webNotificationsEnabled = false,
+    titleCounterEnabled = true,
+    icon = NotificationsIcon,
+    text = 'Notifications',
+    ...restProps
+  } = props ?? { webNotificationsEnabled: false, titleCounterEnabled: true };
 
   const { loading, error, value, retry } = useNotificationsApi(api =>
     api.getStatus(),
@@ -41,7 +51,7 @@ export const NotificationsSidebarItem = (props?: {
   const notificationsRoute = useRouteRef(rootRouteRef);
   // TODO: Do we want to add long polling in case signals are not available
   const { lastSignal } = useSignal<NotificationSignal>('notifications');
-  const { sendWebNotification } = useWebNotifications();
+  const { sendWebNotification } = useWebNotifications(webNotificationsEnabled);
   const [refresh, setRefresh] = React.useState(false);
   const { setNotificationCount } = useTitleCounter();
 
@@ -65,6 +75,7 @@ export const NotificationsSidebarItem = (props?: {
             return;
           }
           sendWebNotification({
+            id: notification.id,
             title: notification.payload.title,
             description: notification.payload.description ?? '',
             link: notification.payload.link,
@@ -86,19 +97,23 @@ export const NotificationsSidebarItem = (props?: {
   useEffect(() => {
     if (!loading && !error && value) {
       setUnreadCount(value.unread);
-      if (titleCounterEnabled) {
-        setNotificationCount(value.unread);
-      }
     }
-  }, [loading, error, value, titleCounterEnabled, setNotificationCount]);
+  }, [loading, error, value]);
+
+  useEffect(() => {
+    if (titleCounterEnabled) {
+      setNotificationCount(unreadCount);
+    }
+  }, [titleCounterEnabled, unreadCount, setNotificationCount]);
 
   // TODO: Figure out if the count can be added to hasNotifications
   return (
     <SidebarItem
-      icon={NotificationsIcon}
       to={notificationsRoute()}
-      text="Notifications"
       hasNotifications={!error && !!unreadCount}
+      text={text}
+      icon={icon}
+      {...restProps}
     />
   );
 };
