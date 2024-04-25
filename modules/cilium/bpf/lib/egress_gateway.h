@@ -69,52 +69,30 @@ struct egress_gw_policy_entry *lookup_ip4_egress_gw_policy(__be32 saddr, __be32 
 }
 #endif /* ENABLE_EGRESS_GATEWAY */
 
-static __always_inline
-bool egress_gw_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
-				      enum ct_status ct_status __maybe_unused,
-				      __u32 *tunnel_endpoint __maybe_unused)
+static __always_inline int
+egress_gw_request_needs_redirect(struct ipv4_ct_tuple *rtuple __maybe_unused,
+				 __be32 *gateway_ip __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY)
 	struct egress_gw_policy_entry *egress_gw_policy;
-	struct endpoint_info *gateway_node_ep;
-
-	/* If the packet is a reply or is related, it means that outside
-	* has initiated the connection, and so we should skip egress
-	* gateway, since an egress policy is only matching connections
-	* originating from a pod.
-	*/
-	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
-		return false;
 
 	egress_gw_policy = lookup_ip4_egress_gw_policy(ipv4_ct_reverse_tuple_saddr(rtuple),
 						       ipv4_ct_reverse_tuple_daddr(rtuple));
 	if (!egress_gw_policy)
-		return false;
+		return CTX_ACT_OK;
 
 	switch (egress_gw_policy->gateway_ip) {
 	case EGRESS_GATEWAY_NO_GATEWAY:
-		/* If no gateway is found we return that the connection is
-		 * "redirected" and the caller will handle this special case
-		 * and drop the traffic.
-		 */
-		*tunnel_endpoint = EGRESS_GATEWAY_NO_GATEWAY;
-		return true;
+		/* If no gateway is found, drop the packet. */
+		return DROP_NO_EGRESS_GATEWAY;
 	case EGRESS_GATEWAY_EXCLUDED_CIDR:
-		return false;
+		return CTX_ACT_OK;
 	}
 
-	/* If the gateway node is the local node, then just let the
-	 * packet go through, as it will be SNATed later on by
-	 * handle_nat_fwd().
-	 */
-	gateway_node_ep = __lookup_ip4_endpoint(egress_gw_policy->gateway_ip);
-	if (gateway_node_ep && (gateway_node_ep->flags & ENDPOINT_F_HOST))
-		return false;
-
-	*tunnel_endpoint = egress_gw_policy->gateway_ip;
-	return true;
+	*gateway_ip = egress_gw_policy->gateway_ip;
+	return CTX_ACT_REDIRECT;
 #else
-	return false;
+	return CTX_ACT_OK;
 #endif /* ENABLE_EGRESS_GATEWAY */
 }
 
@@ -142,13 +120,10 @@ bool egress_gw_snat_needed(__be32 saddr __maybe_unused,
 }
 
 static __always_inline
-bool egress_gw_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
-				    __u32 *tunnel_endpoint __maybe_unused,
-				    __u32 *dst_sec_identity __maybe_unused)
+bool egress_gw_reply_matches_policy(struct iphdr *ip4 __maybe_unused)
 {
 #if defined(ENABLE_EGRESS_GATEWAY)
 	struct egress_gw_policy_entry *egress_policy;
-	struct remote_endpoint_info *info;
 
 	/* Find a matching policy by looking up the reverse address tuple: */
 	egress_policy = lookup_ip4_egress_gw_policy(ip4->daddr, ip4->saddr);
@@ -159,24 +134,36 @@ bool egress_gw_reply_needs_redirect(struct iphdr *ip4 __maybe_unused,
 	    egress_policy->gateway_ip == EGRESS_GATEWAY_EXCLUDED_CIDR)
 		return false;
 
-	info = lookup_ip4_remote_endpoint(ip4->daddr, 0);
-	if (!info || info->tunnel_endpoint == 0)
-		return false;
-
-	*tunnel_endpoint = info->tunnel_endpoint;
-	*dst_sec_identity = info->sec_identity;
 	return true;
 #else
 	return false;
 #endif /* ENABLE_EGRESS_GATEWAY */
 }
 
-static __always_inline
-bool egress_gw_request_needs_redirect_hook(struct ipv4_ct_tuple *rtuple,
-					   enum ct_status ct_status,
-					   __u32 *tunnel_endpoint)
+/** Match a packet against EGW policy map, and return the gateway's IP.
+ * @arg rtuple		CT tuple for the packet
+ * @arg ct_status	CT result, to identify egressing connections
+ * @arg gateway_ip	returns the gateway node's IP
+ *
+ * Returns
+ * * CTX_ACT_REDIRECT if a matching policy entry was found,
+ * * CTX_ACT_OK if no EGW logic should be applied,
+ * * DROP_* for error conditions.
+ */
+static __always_inline int
+egress_gw_request_needs_redirect_hook(struct ipv4_ct_tuple *rtuple,
+				      enum ct_status ct_status,
+				      __be32 *gateway_ip)
 {
-	return egress_gw_request_needs_redirect(rtuple, ct_status, tunnel_endpoint);
+	/* If the packet is a reply or is related, it means that outside
+	 * has initiated the connection, and so we should skip egress
+	 * gateway, since an egress policy is only matching connections
+	 * originating from a pod.
+	 */
+	if (ct_status == CT_REPLY || ct_status == CT_RELATED)
+		return CTX_ACT_OK;
+
+	return egress_gw_request_needs_redirect(rtuple, gateway_ip);
 }
 
 static __always_inline
@@ -200,7 +187,20 @@ static __always_inline
 bool egress_gw_reply_needs_redirect_hook(struct iphdr *ip4, __u32 *tunnel_endpoint,
 					 __u32 *dst_sec_identity)
 {
-	return egress_gw_reply_needs_redirect(ip4, tunnel_endpoint, dst_sec_identity);
+	if (egress_gw_reply_matches_policy(ip4)) {
+		struct remote_endpoint_info *info;
+
+		info = lookup_ip4_remote_endpoint(ip4->daddr, 0);
+		if (!info || info->tunnel_endpoint == 0)
+			return false;
+
+		*tunnel_endpoint = info->tunnel_endpoint;
+		*dst_sec_identity = info->sec_identity;
+
+		return true;
+	}
+
+	return false;
 }
 
 #endif /* ENABLE_EGRESS_GATEWAY_COMMON */
