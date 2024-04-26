@@ -97,6 +97,5 @@ func (s *Service) syncDiskStatus(ctx context.Context, diskInfosRet []*cmapi.Disk
 			s.handleDiskIOError(ctx, diskId, bloberr.ErrDiskBroken)
 			continue
 		}
-
 	}
 }

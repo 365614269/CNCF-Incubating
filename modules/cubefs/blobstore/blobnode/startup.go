@@ -17,7 +17,6 @@ package blobnode
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sync"
 	"time"
@@ -50,7 +49,7 @@ func readFormatInfo(ctx context.Context, diskRootPath string) (
 	formatInfo *core.FormatInfo, err error,
 ) {
 	span := trace.SpanFromContextSafe(ctx)
-	_, err = ioutil.ReadDir(diskRootPath)
+	_, err = os.ReadDir(diskRootPath)
 	if err != nil {
 		span.Errorf("read disk root path error:%s", diskRootPath)
 		return nil, err
@@ -159,21 +158,29 @@ func (s *Service) waitRepairAndClose(ctx context.Context, disk core.DiskAPI) {
 
 	diskId := disk.ID()
 	for {
-		info, err := s.ClusterMgrClient.DiskInfo(ctx, diskId)
-		if err != nil {
-			span.Errorf("Failed get clustermgr diskinfo %v, err:%v", diskId, err)
-			continue
-		}
-		if info.Status >= proto.DiskStatusRepairing {
-			span.Infof("disk:%v path:%s status:%v", diskId, info.Path, info.Status)
-			break
-		}
-
 		select {
 		case <-s.closeCh:
 			span.Warnf("service is closed. return")
 			return
 		case <-ticker.C:
+		}
+
+		info, err := s.ClusterMgrClient.DiskInfo(ctx, diskId)
+		if err != nil {
+			span.Errorf("Failed get clustermgr diskinfo %v, err:%v", diskId, err)
+			continue
+		}
+
+		if info.Status == proto.DiskStatusDropped {
+			if disk.IsCleanUp(ctx) {
+				break // is clean, need to delete disk handler
+			}
+			continue // not clean, wait it, next check
+		}
+
+		if info.Status >= proto.DiskStatusRepairing {
+			span.Infof("disk:%v path:%s status:%v", diskId, info.Path, info.Status)
+			break
 		}
 	}
 

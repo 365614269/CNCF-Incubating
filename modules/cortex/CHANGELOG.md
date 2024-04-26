@@ -1,6 +1,9 @@
 # Changelog
 
 ## master / unreleased
+
+## 1.17.0 in progress
+
 * [CHANGE] Azure Storage: Upgraded objstore dependency and support Azure Workload Identity Authentication. Added `connection_string` to support authenticating via SAS token. Marked `msi_resource` config as deprecating. #5645
 * [CHANGE] Store Gateway: Add a new fastcache based inmemory index cache. #5619
 * [CHANGE] Index Cache: Multi level cache backfilling operation becomes async. Added `-blocks-storage.bucket-store.index-cache.multilevel.max-async-concurrency` and `-blocks-storage.bucket-store.index-cache.multilevel.max-async-buffer-size` configs and metric `cortex_store_multilevel_index_cache_backfill_dropped_items_total` for number of dropped items. #5661
@@ -24,13 +27,11 @@
 * [FEATURE] Ruler: Add experimental `experimental.ruler.api-deduplicate-rules` flag to remove duplicate rule groups from the Prometheus compatible rules API endpoint. Add experimental `ruler.ring.replication-factor` and `ruler.ring.zone-awareness-enabled` flags to configure rule group replication, but only the first ruler in the replicaset evaluates the rule group, the rest will just hold a copy as backup. Add experimental `experimental.ruler.api-enable-rules-backup` flag to configure rulers to send the rule group backups stored in the replicaset to handle events when a ruler is down during an API request to list rules. #5782
 * [ENHANCEMENT] Store Gateway: Added `-store-gateway.enabled-tenants` and `-store-gateway.disabled-tenants` to explicitly enable or disable store-gateway for specific tenants. #5638
 * [ENHANCEMENT] Compactor: Add new compactor metric `cortex_compactor_start_duration_seconds`. #5683
-* [ENHANCEMENT] Upgraded Docker base images to `alpine:3.18`. #5684
 * [ENHANCEMENT] Index Cache: Multi level cache adds config `max_backfill_items` to cap max items to backfill per async operation. #5686
 * [ENHANCEMENT] Query Frontend: Log number of split queries in `query stats` log. #5703
 * [ENHANCEMENT] Logging: Added new options for logging HTTP request headers: `-server.log-request-headers` enables logging HTTP request headers, `-server.log-request-headers-exclude-list` allows users to specify headers which should not be logged. #5744
 * [ENHANCEMENT] Query Frontend/Scheduler: Time check in query priority now considers overall data select time window (including range selectors, modifiers and lookback delta). #5758
 * [ENHANCEMENT] Querier: Added `querier.store-gateway-query-stats-enabled` to enable or disable store gateway query stats log. #5749
-* [ENHANCEMENT] Upgrade to go 1.21.9 #5765 #5879
 * [ENHANCEMENT] AlertManager: Retrying AlertManager Delete Silence on error #5794
 * [ENHANCEMENT] Ingester: Add new ingester metric `cortex_ingester_max_inflight_query_requests`. #5798
 * [ENHANCEMENT] Query: Added `query_storage_wall_time` to Query Frontend and Ruler query stats log for wall time spent on fetching data from storage. Query evaluation is not included. #5799
@@ -40,6 +41,7 @@
 * [ENHANCEMENT] Querier: Add context error check when merging slices from ingesters for GetLabel operations. #5837
 * [ENHANCEMENT] Ring: Add experimental `-ingester.tokens-generator-strategy=minimize-spread` flag to enable the new minimize spread token generator strategy. #5855
 * [ENHANCEMENT] Query Frontend: Ensure error response returned by Query Frontend follows Prometheus API error response format. #5811
+* [ENHANCEMENT] Ring Status Page: Add `Ownership Diff From Expected` column in the ring table to indicate the extent to which the ownership of a specific ingester differs from the expected ownership. #5889
 * [BUGFIX] Distributor: Do not use label with empty values for sharding #5717
 * [BUGFIX] Query Frontend: queries with negative offset should check whether it is cacheable or not. #5719
 * [BUGFIX] Redis Cache: pass `cache_size` config correctly. #5734
@@ -47,6 +49,11 @@
 * [BUGFIX] Cortex: Fix GRPC stream clients not honoring overrides for call options. #5797
 * [BUGFIX] Ring DDB: Fix lifecycle for ring counting unhealthy pods as healthy. #5838
 * [BUGFIX] Ring DDB: Fix region assignment. #5842
+
+## 1.16.1 2024-04-23
+
+* [ENHANCEMENT] Upgraded Docker base images to `alpine:3.18`. #5684
+* [ENHANCEMENT] Upgrade to go 1.21.9 #5879 #5882
 
 ## 1.16.0 2023-11-20
 
