@@ -113,7 +113,7 @@ jobs:
 
       - name: Download tag
         id: download_manifests
-        uses: actions/download-artifact@9c19ed7fe5d278cd354c7dfd5d3b88589c7e2395 # v4
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4
         with:
           name: tag
           path: tag
@@ -148,7 +148,7 @@ jobs:
 
       - name: KICS Scan
         if: matrix.tool == 'kics'
-        uses: Checkmarx/kics-github-action@8a44970e3d2eca668be41abe9d4e06709c3b3609 # v1.7.0
+        uses: Checkmarx/kics-github-action@d1b692d84c536f4e8696954ce7aab6818f95f5bc # v2.0.0
         with:
           path: scans
           config_path: .github/kics-config.yml
@@ -231,7 +231,7 @@ jobs:
 
       - name: Download images
         id: download_images
-        uses: actions/download-artifact@9c19ed7fe5d278cd354c7dfd5d3b88589c7e2395 # v4
+        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4
         with:
           name: images
           path: images

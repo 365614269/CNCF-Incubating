@@ -23,6 +23,7 @@ We use *breaking :warning:* to mark changes that are not backward compatible (re
 - [#7248](https://github.com/thanos-io/thanos/pull/7248) Receive: Fix RemoteWriteAsync was sequentially executed causing high latency in the ingestion path.
 - [#7271](https://github.com/thanos-io/thanos/pull/7271) Query: fixing dedup iterator when working on mixed sample types.
 - [#7289](https://github.com/thanos-io/thanos/pull/7289) Query Frontend: show warnings from downstream queries.
+- [#7308](https://github.com/thanos-io/thanos/pull/7308) Store: Batch TSDB Infos for blocks.
 
 ### Added
 
@@ -44,6 +45,7 @@ We use *breaking :warning:* to mark changes that are not backward compatible (re
 - [#7123](https://github.com/thanos-io/thanos/pull/7123) Rule: Change default Alertmanager API version to v2.
 - [#7223](https://github.com/thanos-io/thanos/pull/7223) Automatic detection of memory limits and configure GOMEMLIMIT to match.
 - [#7283](https://github.com/thanos-io/thanos/pull/7283) Compact: *breaking :warning:* Replace group with resolution in compact downsample metrics to avoid cardinality explosion with large numbers of groups.
+- [#7305](https://github.com/thanos-io/thanos/pull/7305) Query|Receiver: Do not log full request on ProxyStore by default.
 
 ### Removed
 

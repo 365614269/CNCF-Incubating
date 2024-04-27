@@ -274,7 +274,7 @@ export IMAGE_PREFIX_ALT=${IMAGE_PREFIX_ALT:-kv-}
 
 build_images
 
-trap '{ collect_debug_logs; echo "Dump kubevirt state:"; make dump; }' ERR
+trap '{ collect_debug_logs; }' ERR
 make cluster-up
 trap - ERR
 
@@ -456,6 +456,11 @@ add_to_label_filter '(!exclude-native-ssh)' '&&'
 # but also currently lack the requirements for SRIOV, GPU, Macvtap and MDEVs.
 if [[ $KUBEVIRT_NUM_NODES = "1" && $KUBEVIRT_INFRA_REPLICAS = "1" ]]; then
   add_to_label_filter '(!(SRIOV,GPU,Macvtap,VGPU,sig-compute-migrations,requires-two-schedulable-nodes))' '&&'
+fi
+
+# Single stack IPv6 cluster should skip tests that require dual stack cluster
+if [[ ${KUBEVIRT_SINGLE_STACK} == "true" ]]; then
+  add_to_label_filter '(!requires-dual-stack-cluster)' '&&'
 fi
 
 # If KUBEVIRT_QUARANTINE is not set, do not run quarantined tests. When it is
