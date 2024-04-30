@@ -14,10 +14,11 @@ import (
 	"time"
 
 	check "github.com/cilium/checkmate"
+	"github.com/cilium/ebpf/rlimit"
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
 	"github.com/spf13/afero"
 	"github.com/vishvananda/netlink"
-
-	"github.com/cilium/ebpf/rlimit"
 
 	"github.com/cilium/cilium/pkg/cidr"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
@@ -28,7 +29,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
 	nodemapfake "github.com/cilium/cilium/pkg/maps/nodemap/fake"
 	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/mtu"
@@ -216,17 +216,16 @@ func (s *linuxPrivilegedBaseTestSuite) TestUpdateNodeRoute(c *check.C) {
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 
-	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 	nodeConfig := datapath.LocalNodeConfiguration{
 		EnableIPv4: s.enableIPv4,
 		EnableIPv6: s.enableIPv6,
@@ -277,15 +276,15 @@ func (s *linuxPrivilegedBaseTestSuite) TestAuxiliaryPrefixes(c *check.C) {
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 	nodeConfig := datapath.LocalNodeConfiguration{
@@ -372,15 +371,15 @@ func (s *linuxPrivilegedBaseTestSuite) commonNodeUpdateEncapsulation(c *check.C,
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 	linuxNodeHandler.OverrideEnableEncapsulation(override)
@@ -652,15 +651,16 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateIDs(c *check.C) {
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodeMap, &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodeMap, &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err := linuxNodeHandler.NodeConfigurationChanged(datapath.LocalNodeConfiguration{
@@ -811,15 +811,16 @@ func (s *linuxPrivilegedBaseTestSuite) testNodeChurnXFRMLeaksWithConfig(c *check
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err = linuxNodeHandler.NodeConfigurationChanged(config)
@@ -911,15 +912,16 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(c *check.C) {
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 	nodeConfig := datapath.LocalNodeConfiguration{
@@ -1137,15 +1139,16 @@ func (s *linuxPrivilegedBaseTestSuite) TestAgentRestartOptionChanges(c *check.C)
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 	nodeConfig := datapath.LocalNodeConfiguration{
@@ -1258,15 +1261,16 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeValidationDirectRouting(c *check.
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	if s.enableIPv4 {
@@ -1428,11 +1432,10 @@ func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandling(c *check.C) {
 	var linuxNodeHandler *linuxNodeHandler
 	mq := new(mockEnqueuer)
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
 			mq.nh = linuxNodeHandler
 		}),
 	)
@@ -1440,8 +1443,9 @@ func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandling(c *check.C) {
 		c.Devices = []string{"veth0"}
 	})
 
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err = linuxNodeHandler.NodeConfigurationChanged(datapath.LocalNodeConfiguration{
@@ -2188,11 +2192,10 @@ func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandlingForMultiDevice(c *
 	mq := new(mockEnqueuer)
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
 			mq.nh = linuxNodeHandler
 		}),
 	)
@@ -2200,8 +2203,9 @@ func (s *linuxPrivilegedIPv6OnlyTestSuite) TestArpPingHandlingForMultiDevice(c *
 		c.Devices = []string{"veth0", "veth2", "veth4"}
 	})
 
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err = linuxNodeHandler.NodeConfigurationChanged(datapath.LocalNodeConfiguration{
@@ -2473,16 +2477,17 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) TestArpPingHandling(c *check.C) {
 	mq := new(mockEnqueuer)
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
 			mq.nh = linuxNodeHandler
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err = linuxNodeHandler.NodeConfigurationChanged(datapath.LocalNodeConfiguration{
@@ -3230,11 +3235,10 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) TestArpPingHandlingForMultiDevice(c *
 	mq := new(mockEnqueuer)
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: "veth0"}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, mq, db, devices)
 			mq.nh = linuxNodeHandler
 		}),
 	)
@@ -3242,8 +3246,9 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) TestArpPingHandlingForMultiDevice(c *
 		c.Devices = []string{"veth0", "veth2", "veth4"}
 	})
 
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err = linuxNodeHandler.NodeConfigurationChanged(datapath.LocalNodeConfiguration{
@@ -3430,15 +3435,16 @@ func (s *linuxPrivilegedBaseTestSuite) benchmarkNodeUpdate(c *check.C, config da
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err := linuxNodeHandler.NodeConfigurationChanged(config)
@@ -3536,15 +3542,16 @@ func (s *linuxPrivilegedBaseTestSuite) benchmarkNodeUpdateNOP(c *check.C, config
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err := linuxNodeHandler.NodeConfigurationChanged(config)
@@ -3614,15 +3621,16 @@ func (s *linuxPrivilegedBaseTestSuite) benchmarkNodeValidateImplementation(c *ch
 
 	var linuxNodeHandler *linuxNodeHandler
 	h := hive.New(
-		statedb.Cell,
 		DevicesControllerCell,
 		cell.Invoke(func(db *statedb.DB, devices statedb.Table[*tables.Device]) {
 			dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-			linuxNodeHandler = NewNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
+			linuxNodeHandler = newNodeHandler(dpConfig, s.nodeAddressing, nodemapfake.NewFakeNodeMapV2(), &s.mtuConfig, new(mockEnqueuer), db, devices)
 		}),
 	)
-	c.Assert(h.Start(context.TODO()), check.IsNil)
-	defer func() { c.Assert(h.Stop(context.TODO()), check.IsNil) }()
+
+	tlog := hivetest.Logger(c)
+	c.Assert(h.Start(tlog, context.TODO()), check.IsNil)
+	defer func() { c.Assert(h.Stop(tlog, context.TODO()), check.IsNil) }()
 	c.Assert(linuxNodeHandler, check.Not(check.IsNil))
 
 	err := linuxNodeHandler.NodeConfigurationChanged(config)

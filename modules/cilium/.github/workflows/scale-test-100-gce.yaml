@@ -65,6 +65,7 @@ jobs:
 
           # Setup Cilium install options
           CILIUM_INSTALL_DEFAULTS="${{ steps.default_vars.outputs.cilium_install_defaults }} \
+            --set pprof.enabled=true \
             --wait=false"
 
           CLUSTER_NAME="${{ env.test_name }}-${{ env.cluster_base_name }}"
@@ -113,7 +114,12 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           repository: kubernetes/perf-tests
-          ref: 82036a7e9bdb803b5b133c2d83cfec710819f9ab # master
+          # Avoid using renovate to update this dependency because: (1)
+          # perf-tests does not tag or release, so renovate will pull
+          # all updates to the default branch and (2) continually
+          # updating CL2 may impact the stability of the scale test
+          # results.
+          ref: 920c39ef245a81bd8fb39d7fecf39eb35820d9ef
           persist-credentials: false
           sparse-checkout: clusterloader2
           path: perf-tests
@@ -185,6 +191,13 @@ jobs:
           export CL2_ALLOWED_SLOW_API_CALLS=1
           export CL2_SCHEDULER_THROUGHPUT_THRESHOLD=0
 
+          # CL2 hardcodes module paths to live in ./testing/load, even
+          # if the path given is relative.
+          cp ../../.github/actions/cl2-modules/cilium-agent-pprofs.yaml ./testing/load/
+          echo \
+            '{"CL2_ADDITIONAL_MEASUREMENT_MODULES": ["./cilium-agent-pprofs.yaml"]}' \
+            > modules.yaml
+
           # CL2 needs ssh access to control plane nodes
           gcloud compute config-ssh
 
@@ -201,6 +214,7 @@ jobs:
             --testoverrides=./testing/overrides/load_throughput.yaml \
             --testoverrides=./testing/experiments/use_simple_latency_query.yaml \
             --testoverrides=./testing/prometheus/not-scrape-kube-proxy.yaml \
+            --testoverrides=./modules.yaml \
             2>&1 | tee cl2-output.txt
 
       - name: Get sysdump

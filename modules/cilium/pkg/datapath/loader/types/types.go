@@ -6,11 +6,11 @@ package types
 import (
 	"context"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/cilium/cilium/pkg/datapath/loader/metrics"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/datapath/types"
-
-	"github.com/vishvananda/netlink"
 )
 
 type Loader interface {
@@ -22,8 +22,8 @@ type Loader interface {
 	ELFSubstitutions(ep types.Endpoint) (map[string]uint64, map[string]string)
 	EndpointHash(cfg types.EndpointConfiguration) (string, error)
 	HostDatapathInitialized() <-chan struct{}
-	Reinitialize(ctx context.Context, o types.BaseProgramOwner, tunnelConfig tunnel.Config, deviceMTU int, iptMgr types.IptablesManager, p types.Proxy) error
-	ReinitializeXDP(ctx context.Context, o types.BaseProgramOwner, extraCArgs []string) error
+	Reinitialize(ctx context.Context, tunnelConfig tunnel.Config, deviceMTU int, iptMgr types.IptablesManager, p types.Proxy) error
+	ReinitializeXDP(ctx context.Context, extraCArgs []string) error
 	ReloadDatapath(ctx context.Context, ep types.Endpoint, stats *metrics.SpanStat) (err error)
 	RestoreTemplates(stateDir string) error
 	Unload(ep types.Endpoint)

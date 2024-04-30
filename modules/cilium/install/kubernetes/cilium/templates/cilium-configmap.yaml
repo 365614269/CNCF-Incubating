@@ -277,6 +277,7 @@ data:
   enable-gateway-api: "true"
   enable-gateway-api-secrets-sync: {{ .Values.gatewayAPI.secretsNamespace.sync | quote }}
   enable-gateway-api-proxy-protocol: {{ .Values.gatewayAPI.enableProxyProtocol | quote }}
+  enable-gateway-api-app-protocol: {{ .Values.gatewayAPI.enableAppProtocol | quote }}
   gateway-api-xff-num-trusted-hops: {{ .Values.gatewayAPI.xffNumTrustedHops | quote }}
   gateway-api-secrets-namespace: {{ .Values.gatewayAPI.secretsNamespace.name | quote }}
   gateway-api-hostnetwork-enabled: {{ .Values.gatewayAPI.hostNetwork.enabled | quote }}
@@ -888,6 +889,14 @@ data:
   # Address to expose Hubble metrics (e.g. ":7070"). Metrics server will be disabled if this
   # field is not set.
   hubble-metrics-server: ":{{ .Values.hubble.metrics.port }}"
+  hubble-metrics-server-enable-tls: "{{ .Values.hubble.metrics.tls.enabled }}"
+  {{- if .Values.hubble.metrics.tls.enabled }}
+  hubble-metrics-server-tls-cert-file: /var/lib/cilium/tls/hubble-metrics/server.crt
+  hubble-metrics-server-tls-key-file: /var/lib/cilium/tls/hubble-metrics/server.key
+  {{- if .Values.hubble.metrics.tls.server.mtls.enabled }}
+  hubble-metrics-server-tls-client-ca-files: /var/lib/cilium/tls/hubble-metrics/client-ca.crt
+  {{- end }}
+  {{- end }}
   # A space separated list of metrics to enable. See [0] for available metrics.
   #
   # https://github.com/cilium/hubble/blob/master/Documentation/metrics.md
@@ -1253,6 +1262,8 @@ data:
 {{- if .Values.envoy.log.path }}
   envoy-log: {{ .Values.envoy.log.path | quote }}
 {{- end }}
+
+  envoy-keep-cap-netbindservice: {{ .Values.envoy.securityContext.capabilities.keepCapNetBindService | quote }}
 
 {{- if hasKey .Values.clustermesh "maxConnectedClusters" }}
   max-connected-clusters: {{ .Values.clustermesh.maxConnectedClusters | quote }}

@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	. "github.com/cilium/checkmate"
+	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/hivetest"
 	"github.com/spf13/cobra"
 
 	"github.com/cilium/cilium/api/v1/models"
@@ -19,19 +22,18 @@ import (
 	fakecni "github.com/cilium/cilium/daemon/cmd/cni/fake"
 	"github.com/cilium/cilium/pkg/controller"
 	fakeDatapath "github.com/cilium/cilium/pkg/datapath/fake"
+	"github.com/cilium/cilium/pkg/datapath/loader"
+	"github.com/cilium/cilium/pkg/datapath/prefilter"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/envoy"
 	fqdnproxy "github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/hive"
-	"github.com/cilium/cilium/pkg/hive/cell"
-	"github.com/cilium/cilium/pkg/hive/job"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/labelsfilter"
-	"github.com/cilium/cilium/pkg/lock"
 	ctmapgc "github.com/cilium/cilium/pkg/maps/ctmap/gc"
 	"github.com/cilium/cilium/pkg/metrics"
 	monitorAgent "github.com/cilium/cilium/pkg/monitor/agent"
@@ -40,13 +42,13 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"
-	"github.com/cilium/cilium/pkg/statedb"
 	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/types"
 )
 
 type DaemonSuite struct {
 	hive *hive.Hive
+	log  *slog.Logger
 
 	d *Daemon
 
@@ -58,7 +60,7 @@ type DaemonSuite struct {
 	OnGetPolicyRepository  func() *policy.Repository
 	OnGetNamedPorts        func() (npm types.NamedPortMultiMap)
 	OnQueueEndpointBuild   func(ctx context.Context, epID uint64) (func(), error)
-	OnGetCompilationLock   func() *lock.RWMutex
+	OnGetCompilationLock   func() datapath.CompilationLock
 	OnSendNotification     func(typ monitorAPI.AgentNotifyMessage) error
 	OnGetCIDRPrefixLengths func() ([]int, []int)
 }
@@ -99,7 +101,7 @@ func TestMain(m *testing.M) {
 
 type dummyEpSyncher struct{}
 
-func (epSync *dummyEpSyncher) RunK8sCiliumEndpointSync(e *endpoint.Endpoint, hr cell.HealthReporter) {
+func (epSync *dummyEpSyncher) RunK8sCiliumEndpointSync(e *endpoint.Endpoint, h cell.Health) {
 }
 
 func (epSync *dummyEpSyncher) DeleteK8sCiliumEndpointSync(e *endpoint.Endpoint) {
@@ -153,10 +155,10 @@ func (ds *DaemonSuite) SetUpTest(c *C) {
 			func() ctmapgc.Enabler { return ctmapgc.NewFake() },
 		),
 		fakeDatapath.Cell,
+		prefilter.Cell,
+		loader.Cell,
 		monitorAgent.Cell,
 		ControlPlane,
-		statedb.Cell,
-		job.Cell,
 		metrics.Cell,
 		store.Cell,
 		cell.Invoke(func(p promise.Promise[*Daemon]) {
@@ -172,7 +174,8 @@ func (ds *DaemonSuite) SetUpTest(c *C) {
 	option.Config.RunDir = testRunDir
 	option.Config.StateDir = testRunDir
 
-	err := ds.hive.Start(ctx)
+	ds.log = hivetest.Logger(c)
+	err := ds.hive.Start(ds.log, ctx)
 	c.Assert(err, IsNil)
 
 	ds.d, err = daemonPromise.Await(ctx)
@@ -210,7 +213,7 @@ func (ds *DaemonSuite) TearDownTest(c *C) {
 	// Restore the policy enforcement mode.
 	policy.SetPolicyEnabled(ds.oldPolicyEnabled)
 
-	err := ds.hive.Stop(ctx)
+	err := ds.hive.Stop(ds.log, ctx)
 	c.Assert(err, IsNil)
 
 	ds.d.Close()
@@ -281,7 +284,7 @@ func (ds *DaemonSuite) QueueEndpointBuild(ctx context.Context, epID uint64) (fun
 	return nil, nil
 }
 
-func (ds *DaemonSuite) GetCompilationLock() *lock.RWMutex {
+func (ds *DaemonSuite) GetCompilationLock() datapath.CompilationLock {
 	if ds.OnGetCompilationLock != nil {
 		return ds.OnGetCompilationLock()
 	}
