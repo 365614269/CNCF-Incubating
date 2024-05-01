@@ -22,7 +22,7 @@ import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessi
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  */
-public abstract class ClientSessionUpdateTask implements SessionUpdateTask<AuthenticatedClientSessionEntity> {
+public abstract class ClientSessionUpdateTask implements PersistentSessionUpdateTask<AuthenticatedClientSessionEntity> {
 
     @Override
     public CacheOperation getOperation(AuthenticatedClientSessionEntity session) {

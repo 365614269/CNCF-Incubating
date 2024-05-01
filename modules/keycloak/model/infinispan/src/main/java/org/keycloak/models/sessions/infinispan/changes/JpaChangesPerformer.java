@@ -18,7 +18,7 @@
 package org.keycloak.models.sessions.infinispan.changes;
 
 import org.infinispan.util.function.TriConsumer;
-import org.keycloak.common.util.Retry;
+import org.jboss.logging.Logger;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -33,11 +33,11 @@ import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessi
 import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessionStore;
 import org.keycloak.models.sessions.infinispan.entities.SessionEntity;
 import org.keycloak.models.sessions.infinispan.entities.UserSessionEntity;
-import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.RealmModelDelegate;
 import org.keycloak.models.utils.UserModelDelegate;
 import org.keycloak.models.utils.UserSessionModelDelegate;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -45,7 +45,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 import static org.keycloak.connections.infinispan.InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME;
 import static org.keycloak.connections.infinispan.InfinispanConnectionProvider.OFFLINE_CLIENT_SESSION_CACHE_NAME;
@@ -53,23 +54,22 @@ import static org.keycloak.connections.infinispan.InfinispanConnectionProvider.O
 import static org.keycloak.connections.infinispan.InfinispanConnectionProvider.USER_SESSION_CACHE_NAME;
 
 public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionChangesPerformer<K, V> {
+    private static final Logger LOG = Logger.getLogger(JpaChangesPerformer.class);
 
-    private final KeycloakSession session;
     private final String cacheName;
-    private final boolean offline;
-    private final List<Consumer<KeycloakSession>> changes = new LinkedList<>();
+    private final List<PersistentUpdate> changes = new LinkedList<>();
     private final TriConsumer<KeycloakSession, Map.Entry<K, SessionUpdatesList<V>>, MergedUpdate<V>> processor;
+    private final ArrayBlockingQueue<PersistentUpdate> batchingQueue;
 
-    public JpaChangesPerformer(KeycloakSession session, String cacheName, boolean offline) {
-        this.session = session;
+    public JpaChangesPerformer(String cacheName, ArrayBlockingQueue<PersistentUpdate> batchingQueue) {
         this.cacheName = cacheName;
-        this.offline = offline;
+        this.batchingQueue = batchingQueue;
         processor = processor();
     }
 
     @Override
     public void registerChange(Map.Entry<K, SessionUpdatesList<V>> entry, MergedUpdate<V> merged) {
-        changes.add(innerSession -> processor.accept(innerSession, entry, merged));
+        changes.add(new PersistentUpdate(innerSession -> processor.accept(innerSession, entry, merged)));
     }
 
     private TriConsumer<KeycloakSession, Map.Entry<K, SessionUpdatesList<V>>, MergedUpdate<V>> processor() {
@@ -80,12 +80,39 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
         };
     }
 
+    private boolean warningShown = false;
+
+    private void offer(PersistentUpdate update) {
+        if (!batchingQueue.offer(update)) {
+            if (!warningShown) {
+                warningShown = true;
+                LOG.warn("Queue is full, will block");
+            }
+            try {
+                // this will block until there is a free spot in the queue
+                batchingQueue.put(update);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
     @Override
     public void applyChanges() {
-        if (changes.size() > 0) {
-            Retry.executeWithBackoff(iteration -> KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(),
-                            innerSession -> changes.forEach(c -> c.accept(innerSession))),
-                    10, 10);
+        if (!changes.isEmpty()) {
+            changes.forEach(this::offer);
+            List<Throwable> exceptions = new ArrayList<>();
+            CompletableFuture.allOf(changes.stream().map(f -> f.future().exceptionally(throwable -> {
+                exceptions.add(throwable);
+                return null;
+            })).toArray(CompletableFuture[]::new)).join();
+            // If any of those futures has failed, add the exceptions as suppressed exceptions to our runtime exception
+            if (!exceptions.isEmpty()) {
+                RuntimeException ex = new RuntimeException("unable to complete the session updates");
+                exceptions.forEach(ex::addSuppressed);
+                throw ex;
+            }
         }
     }
 
@@ -97,7 +124,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
 
         if (merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.REMOVE) {
             AuthenticatedClientSessionEntity entity = (AuthenticatedClientSessionEntity) sessionWrapper.getEntity();
-            userSessionPersister.removeClientSession(entity.getUserSessionId(), entity.getClientId(), offline);
+            userSessionPersister.removeClientSession(entity.getUserSessionId(), entity.getClientId(), entity.isOffline());
         } else if (merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD || merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD_IF_ABSENT){
             AuthenticatedClientSessionEntity entity = (AuthenticatedClientSessionEntity) sessionWrapper.getEntity();
             userSessionPersister.createClientSession(new AuthenticatedClientSessionModel() {
@@ -230,7 +257,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                 public void setProtocol(String method) {
                     throw new IllegalStateException("not implemented");
                 }
-            }, offline);
+            }, entity.isOffline());
         } else {
             AuthenticatedClientSessionEntity entity = (AuthenticatedClientSessionEntity) sessionWrapper.getEntity();
             ClientModel client = new ClientModelLazyDelegate(null) {
@@ -245,7 +272,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                     return entity.getUserSessionId();
                 }
             };
-            PersistentAuthenticatedClientSessionAdapter clientSessionModel = (PersistentAuthenticatedClientSessionAdapter) userSessionPersister.loadClientSession(realm, client, userSession, offline);
+            PersistentAuthenticatedClientSessionAdapter clientSessionModel = (PersistentAuthenticatedClientSessionAdapter) userSessionPersister.loadClientSession(realm, client, userSession, entity.isOffline());
             if (clientSessionModel != null) {
                 AuthenticatedClientSessionEntity authenticatedClientSessionEntity = new AuthenticatedClientSessionEntity(entity.getId()) {
                     @Override
@@ -379,7 +406,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                 sessionUpdates.getUpdateTasks().forEach(vSessionUpdateTask -> {
                     vSessionUpdateTask.runUpdate((V) authenticatedClientSessionEntity);
                     if (vSessionUpdateTask.getOperation((V) authenticatedClientSessionEntity) == SessionUpdateTask.CacheOperation.REMOVE) {
-                        userSessionPersister.removeClientSession(entity.getUserSessionId(), entity.getClientId(), offline);
+                        userSessionPersister.removeClientSession(entity.getUserSessionId(), entity.getClientId(), entity.isOffline());
                     }
                 });
                 clientSessionModel.getUpdatedModel();
@@ -393,11 +420,11 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
         SessionEntityWrapper<V> sessionWrapper = sessionUpdates.getEntityWrapper();
         RealmModel realm = sessionUpdates.getRealm();
         UserSessionPersisterProvider userSessionPersister = innerSession.getProvider(UserSessionPersisterProvider.class);
+        UserSessionEntity entity = (UserSessionEntity) sessionWrapper.getEntity();
 
-        if (merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.REMOVE) {
-            userSessionPersister.removeUserSession(entry.getKey().toString(), offline);
+        if (merged.getOperation((V) entity) == SessionUpdateTask.CacheOperation.REMOVE) {
+            userSessionPersister.removeUserSession(entry.getKey().toString(), entity.isOffline());
         } else if (merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD || merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD_IF_ABSENT){
-            UserSessionEntity entity = (UserSessionEntity) sessionWrapper.getEntity();
             userSessionPersister.createUserSession(new UserSessionModel() {
                 @Override
                 public String getId() {
@@ -471,7 +498,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
 
                 @Override
                 public boolean isOffline() {
-                    return offline;
+                    return entity.isOffline();
                 }
 
                 @Override
@@ -519,9 +546,9 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                 public void restartSession(RealmModel realm, UserModel user, String loginUsername, String ipAddress, String authMethod, boolean rememberMe, String brokerSessionId, String brokerUserId) {
                     throw new IllegalStateException("not implemented");
                 }
-            }, offline);
+            }, entity.isOffline());
         } else {
-            PersistentUserSessionAdapter userSessionModel = (PersistentUserSessionAdapter) userSessionPersister.loadUserSession(realm, entry.getKey().toString(), offline);
+            PersistentUserSessionAdapter userSessionModel = (PersistentUserSessionAdapter) userSessionPersister.loadUserSession(realm, entry.getKey().toString(), entity.isOffline());
             if (userSessionModel != null) {
                 UserSessionEntity userSessionEntity = new UserSessionEntity() {
                     @Override
@@ -703,7 +730,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                 sessionUpdates.getUpdateTasks().forEach(vSessionUpdateTask -> {
                     vSessionUpdateTask.runUpdate((V) userSessionEntity);
                     if (vSessionUpdateTask.getOperation((V)userSessionEntity) == SessionUpdateTask.CacheOperation.REMOVE) {
-                        userSessionPersister.removeUserSession(entry.getKey().toString(), offline);
+                        userSessionPersister.removeUserSession(entry.getKey().toString(), entity.isOffline());
                     }
                 });
                 userSessionModel.getUpdatedModel();
