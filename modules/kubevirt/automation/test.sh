@@ -29,7 +29,7 @@ readonly BAZEL_CACHE="${BAZEL_CACHE:-http://bazel-cache.kubevirt-prow.svc.cluste
 
 # Skip if it's docs changes only
 # Only if we are in CI, and this is a non-batch change
-if [[ ${CI} == "true" && -n "$PULL_BASE_SHA" && -n "$PULL_PULL_SHA" ]]; then
+if [[ ${CI} == "true" && -n "$PULL_BASE_SHA" && -n "$PULL_PULL_SHA" && "$JOB_NAME" != *"rehearsal"* ]]; then
     SKIP_PATTERN="^(docs/)|(OWNERS|OWNERS_ALIASES|.*\.(md|txt))$"
     CI_GIT_ALL_CHANGES=$(git diff --name-only ${PULL_BASE_SHA}...${PULL_PULL_SHA})
     CI_GIT_NO_DOCS_CHANGES=$(cat <<<$CI_GIT_ALL_CHANGES | grep -vE "$SKIP_PATTERN" || :)
@@ -84,6 +84,10 @@ elif [[ $TARGET =~ sig-compute-migrations ]]; then
   export KUBEVIRT_WITH_CNAO=true
   export KUBEVIRT_NUM_SECONDARY_NICS=1
   export KUBEVIRT_DEPLOY_NFS_CSI=true
+elif [[ $TARGET =~ sig-compute-serial ]]; then
+  export KUBEVIRT_PROVIDER=${TARGET/-sig-compute-serial/}
+elif [[ $TARGET =~ sig-compute-parallel ]]; then
+  export KUBEVIRT_PROVIDER=${TARGET/-sig-compute-parallel/}
 elif [[ $TARGET =~ sig-compute ]]; then
   export KUBEVIRT_PROVIDER=${TARGET/-sig-compute/}
 elif [[ $TARGET =~ sig-operator ]]; then
@@ -423,6 +427,13 @@ if [[ -z ${KUBEVIRT_E2E_FOCUS} && -z ${KUBEVIRT_E2E_SKIP} && -z ${label_filter} 
     label_filter='(sig-compute-realtime)'
   elif [[ $TARGET =~ sig-compute-migrations ]]; then
     label_filter='(sig-compute-migrations && !(GPU,VGPU))'
+  elif [[ $TARGET =~ sig-compute-serial ]]; then
+    export KUBEVIRT_E2E_PARALLEL=false
+    ginko_params="${ginko_params} --focus=\\[Serial\\]"
+    label_filter='((sig-compute) && !(GPU,VGPU,sig-compute-migrations))'
+  elif [[ $TARGET =~ sig-compute-parallel ]]; then
+    ginko_params="${ginko_params} --skip=\\[Serial\\]"
+    label_filter='(sig-compute && !(GPU,VGPU,sig-compute-migrations))'
   elif [[ $TARGET =~ sig-compute ]]; then
     label_filter='(sig-compute && !(GPU,VGPU,sig-compute-migrations))'
   elif [[ $TARGET =~ sig-monitoring ]]; then
