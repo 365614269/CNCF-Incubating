@@ -2830,6 +2830,13 @@ lifecycler:
     # CLI flag: -distributor.excluded-zones
     [excluded_zones: <string> | default = ""]
 
+    # Set to true to enable ring detailed metrics. These metrics provide
+    # detailed information, such as token count and ownership per tenant.
+    # Disabling them can significantly decrease the number of metrics emitted by
+    # the distributors.
+    # CLI flag: -ring.detailed-metrics-enabled
+    [detailed_metrics_enabled: <boolean> | default = true]
+
   # Number of tokens for each ingester.
   # CLI flag: -ingester.num-tokens
   [num_tokens: <int> | default = 128]
@@ -3026,6 +3033,11 @@ grpc_client_config:
   # Skip validating server certificate.
   # CLI flag: -ingester.client.tls-insecure-skip-verify
   [tls_insecure_skip_verify: <boolean> | default = false]
+
+# Max inflight push requests that this ingester client can handle. This limit is
+# per-ingester-client. Additional requests will be rejected. 0 = unlimited.
+# CLI flag: -ingester.client.max-inflight-push-requests
+[max_inflight_push_requests: <int> | default = 0]
 ```
 
 ### `limits_config`
