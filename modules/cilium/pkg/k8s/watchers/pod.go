@@ -66,8 +66,7 @@ const podApiGroup = resources.K8sAPIGroupPodV1Core
 var ciliumEndpointSyncPodLabelsControllerGroup = controller.NewGroup("sync-pod-labels-with-cilium-endpoint")
 
 // createAllPodsController is used in the rare configurations where CiliumEndpointCRD is disabled.
-// If kvstore and K8sEventHandover is enabled then we fall back to watching only local pods when
-// kvstore connects.
+// If kvstore is enabled then we fall back to watching only local pods when kvstore connects.
 func (k *K8sWatcher) createAllPodsController(slimClient slimclientset.Interface) (cache.Store, cache.Controller) {
 	return informer.NewInformer(
 		k8sUtils.ListerWatcherWithFields(
@@ -173,9 +172,7 @@ func (k *K8sWatcher) podsInit(slimClient slimclientset.Interface, asyncControlle
 		return
 	}
 
-	// If CiliumEndpointCRD is disabled, we will fallback on watching all pods
-	// and then watching on the pods created for this node if the
-	// K8sEventHandover is enabled.
+	// If CiliumEndpointCRD is disabled, we will fallback on watching all pods.
 	for {
 		podStore, podController := k.createAllPodsController(slimClient)
 
@@ -347,21 +344,14 @@ func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error
 	newK8sPodLabels, _ := labelsfilter.Filter(labels.Map2Labels(strippedNewLabels, labels.LabelSourceK8s))
 	newPodLabels := newK8sPodLabels.K8sStringMap()
 	labelsChanged := !maps.Equal(oldPodLabels, newPodLabels)
+	uidChanged := oldK8sPod.UID != newK8sPod.UID
 
-	lrpNeedsReassign := false
 	// The relevant updates are : podIPs and label updates.
-	oldPodIPLen := len(oldK8sPod.Status.PodIP)
-	newPodIPLen := len(newK8sPod.Status.PodIP)
-	switch {
-	case oldPodIPLen == 0 && newPodIPLen > 0:
-		// PodIPs assigned update
-		fallthrough
-	case oldPodIPLen > 0 && newPodIPLen > 0 && oldPodIPLen != newPodIPLen:
-		// PodIPs update
-		fallthrough
-	case labelsChanged:
-		lrpNeedsReassign = true
-	}
+	// Consider a UID change the same as a label change in case the pod's
+	// identity needs to be updated, see GH-30409.
+	oldPodIPsSlice := k8sTypes.IPSlice(oldPodIPs)
+	newPodIPsSlice := k8sTypes.IPSlice(newPodIPs)
+	lrpNeedsReassign := !maps.Equal(oldPodLabels, newPodLabels) || !(&oldPodIPsSlice).DeepEqual(&newPodIPsSlice) || uidChanged
 
 	if option.Config.EnableLocalRedirectPolicy {
 		oldPodReady := k8sUtils.GetLatestPodReadiness(oldK8sPod.Status)
@@ -392,7 +382,10 @@ func (k *K8sWatcher) updateK8sPodV1(oldK8sPod, newK8sPod *slim_corev1.Pod) error
 	}
 
 	for _, podEP := range podEPs {
-		if labelsChanged {
+		if labelsChanged || uidChanged {
+			// Consider a UID change the same as a label change in case the pod's
+			// identity needs to be updated, see GH-30409. Annotations are not
+			// checked for because annotations don't impact identities.
 			err := podEP.UpdateLabelsFrom(oldPodLabels, newPodLabels, labels.LabelSourceK8s)
 			if err != nil {
 				log.WithFields(logrus.Fields{
@@ -982,12 +975,7 @@ func (k *K8sWatcher) deletePodHostData(pod *slim_corev1.Pod) (bool, error) {
 	return skipped, nil
 }
 
-// GetCachedPod returns a pod from the local store. Depending if the Cilium
-// agent flag `option.Config.K8sEventHandover` this function might only return
-// local pods.
-// If `option.Config.K8sEventHandover` is:
-//   - true: returns only local pods received by the pod watcher.
-//   - false: returns any pod in the cluster received by the pod watcher.
+// GetCachedPod returns a pod from the local store.
 func (k *K8sWatcher) GetCachedPod(namespace, name string) (*slim_corev1.Pod, error) {
 	<-k.controllersStarted
 	k.WaitForCacheSync(resources.K8sAPIGroupPodV1Core)

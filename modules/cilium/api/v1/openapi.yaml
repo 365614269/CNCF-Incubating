@@ -1479,6 +1479,9 @@ definitions:
       k8s-namespace:
         description: Kubernetes namespace name
         type: string
+      k8s-uid:
+        description: Kubernetes pod UID
+        type: string
       datapath-map-id:
         description: ID of datapath tail call map
         type: integer
@@ -3042,6 +3045,9 @@ definitions:
         type: integer
         format: uint16
         x-nullable: true
+      zone:
+        description: Optional name of the zone in which this backend runs
+        type: string
   LRPBackend:
     description: Pod backend of an LRP
     type: object

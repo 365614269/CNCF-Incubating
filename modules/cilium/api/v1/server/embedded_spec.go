@@ -1987,6 +1987,10 @@ func init() {
           "type": "integer",
           "format": "uint16",
           "x-nullable": true
+        },
+        "zone": {
+          "description": "Optional name of the zone in which this backend runs",
+          "type": "string"
         }
       }
     },
@@ -2919,6 +2923,10 @@ func init() {
         },
         "k8s-pod-name": {
           "description": "Kubernetes pod name",
+          "type": "string"
+        },
+        "k8s-uid": {
+          "description": "Kubernetes pod UID",
           "type": "string"
         },
         "labels": {
@@ -7751,6 +7759,10 @@ func init() {
           "type": "integer",
           "format": "uint16",
           "x-nullable": true
+        },
+        "zone": {
+          "description": "Optional name of the zone in which this backend runs",
+          "type": "string"
         }
       }
     },
@@ -8758,6 +8770,10 @@ func init() {
         },
         "k8s-pod-name": {
           "description": "Kubernetes pod name",
+          "type": "string"
+        },
+        "k8s-uid": {
+          "description": "Kubernetes pod UID",
           "type": "string"
         },
         "labels": {
