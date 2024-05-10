@@ -16,7 +16,6 @@ import (
 	"github.com/cilium/hive/job"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
-	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/cilium/cilium/pkg/cidr"
@@ -62,6 +61,12 @@ func (n *NodeAddress) IP() net.IP {
 
 func (n *NodeAddress) String() string {
 	return fmt.Sprintf("%s (%s)", n.Addr, n.DeviceName)
+}
+
+// GetAddr returns the address. Useful when mapping over NodeAddress's with
+// e.g. statedb.Map.
+func (n NodeAddress) GetAddr() netip.Addr {
+	return n.Addr
 }
 
 func (n NodeAddress) TableHeader() []string {
@@ -164,8 +169,7 @@ const (
 // AddressScopeMax sets the maximum scope an IP address can have. A scope
 // is defined in rtnetlink(7) as the distance to the destination where a
 // lower number signifies a wider scope with RT_SCOPE_UNIVERSE (0) being
-// the widest. Definitions in Go are in unix package, e.g.
-// unix.RT_SCOPE_UNIVERSE and so on.
+// the widest.
 //
 // This defaults to RT_SCOPE_LINK-1 (defaults.AddressScopeMax) and can be
 // set by the user with --local-max-addr-scope.
@@ -417,11 +421,11 @@ func (n *nodeAddressController) getAddressesFromDevice(dev *Device) sets.Set[Nod
 	for i, addr := range SortedAddresses(dev.Addrs) {
 		// We keep the scope-based address filtering as was introduced
 		// in 080857bdedca67d58ec39f8f96c5f38b22f6dc0b.
-		skip := addr.Scope > uint8(n.AddressScopeMax) || addr.Addr.IsLoopback()
+		skip := addr.Scope > RouteScope(n.AddressScopeMax) || addr.Addr.IsLoopback()
 
 		// Always include LINK scope'd addresses for cilium_host device, regardless
 		// of what the maximum scope is.
-		skip = skip && !(dev.Name == defaults.HostDevice && addr.Scope == unix.RT_SCOPE_LINK)
+		skip = skip && !(dev.Name == defaults.HostDevice && addr.Scope == RT_SCOPE_LINK)
 
 		if skip {
 			continue
@@ -601,3 +605,38 @@ func (f *fallbackAddresses) update(dev *Device) (updated bool) {
 	}
 	return
 }
+
+// Shared test address definitions
+var (
+	TestIPv4InternalAddress = netip.MustParseAddr("10.0.0.2")
+	TestIPv4NodePortAddress = netip.MustParseAddr("10.0.0.3")
+	TestIPv6InternalAddress = netip.MustParseAddr("f00d::1")
+	TestIPv6NodePortAddress = netip.MustParseAddr("f00d::2")
+
+	TestAddresses = []NodeAddress{
+		{
+			Addr:       TestIPv4InternalAddress,
+			NodePort:   true,
+			Primary:    true,
+			DeviceName: "test",
+		},
+		{
+			Addr:       TestIPv4NodePortAddress,
+			NodePort:   true,
+			Primary:    false,
+			DeviceName: "test",
+		},
+		{
+			Addr:       TestIPv6InternalAddress,
+			NodePort:   true,
+			Primary:    true,
+			DeviceName: "test",
+		},
+		{
+			Addr:       TestIPv6NodePortAddress,
+			NodePort:   true,
+			Primary:    false,
+			DeviceName: "test",
+		},
+	}
+)

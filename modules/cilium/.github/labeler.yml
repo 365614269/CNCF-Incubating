@@ -3,3 +3,13 @@ hubble-cli:
 - changed-files:
   - any-glob-to-any-file:
     - hubble/**
+sig/policy:
+- changed-files:
+  - any-glob-to-any-file:
+    - daemon/cmd/policy*
+    - daemon/cmd/fqdn*
+    - pkg/fqdn/**
+    - pkg/policy/**
+    - pkg/identity/**
+    - pkg/proxy/dns.go
+    - test/**/net_policies.go

@@ -20,7 +20,7 @@ var ingesterClientRequestDuration = promauto.NewHistogramVec(prometheus.Histogra
 	Namespace: "cortex",
 	Name:      "ingester_client_request_duration_seconds",
 	Help:      "Time spent doing Ingester requests.",
-	Buckets:   prometheus.ExponentialBuckets(0.001, 4, 6),
+	Buckets:   prometheus.ExponentialBuckets(0.001, 4, 7),
 }, []string{"operation", "status_code"})
 var ingesterClientInflightPushRequests = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: "cortex",
@@ -73,10 +73,9 @@ func (c *closableHealthAndIngesterClient) Push(ctx context.Context, in *cortexpb
 
 func (c *closableHealthAndIngesterClient) handlePushRequest(mainFunc func() (*cortexpb.WriteResponse, error)) (*cortexpb.WriteResponse, error) {
 	currentInflight := c.inflightRequests.Inc()
-	c.inflightPushRequests.WithLabelValues(c.addr).Inc()
+	c.inflightPushRequests.WithLabelValues(c.addr).Set(float64(currentInflight))
 	defer func() {
-		c.inflightPushRequests.WithLabelValues(c.addr).Dec()
-		c.inflightRequests.Dec()
+		c.inflightPushRequests.WithLabelValues(c.addr).Set(float64(c.inflightRequests.Dec()))
 	}()
 	if c.maxInflightPushRequests > 0 && currentInflight > c.maxInflightPushRequests {
 		return nil, errTooManyInflightPushRequests
