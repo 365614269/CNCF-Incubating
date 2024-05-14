@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
         with:
           persist-credentials: false
           # hard-code the path instead of using ${{ github.repository }} to make sure it works for forked repo as well
@@ -148,7 +148,7 @@ jobs:
       - name: Install yamela
         run: pip install yamale
       - name: Checkout code
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
         with:
           persist-credentials: false
           # hard-code the path instead of using ${{ github.repository }} to make sure it works for forked repo as well
@@ -173,7 +173,7 @@ jobs:
       - name: Install yamela
         run: pip install yamale
       - name: Checkout code
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
         with:
           persist-credentials: false
           # hard-code the path instead of using ${{ github.repository }} to make sure it works for forked repo as well
@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
         with:
           persist-credentials: false
           # hard-code the path instead of using ${{ github.repository }} to make sure it works for forked repo as well
@@ -222,6 +222,30 @@ jobs:
               echo Steps are missing name field, under these Jobs in file $FILE
               echo "${STEPS}" | awk '{for (i=1; i<=NF; i++) print "  " $i}'
               EXIT=1
+            fi
+          done
+          exit ${EXIT}
+
+      - name: Validate Commit Status Start Job
+        shell: bash
+        run: |
+          EXIT=0
+          cd src/github.com/cilium/cilium/.github/workflows
+          for FILE in *.yaml; do
+            # we only care about workflows that has ariane workflow_dispatch events
+            IS_ARIANE_DISPATCH=$(yq '.on.workflow_dispatch.inputs.PR-number' $FILE)
+            if [ "$IS_ARIANE_DISPATCH" == "null" ]; then
+                continue
+            fi
+            JOB=$(yq '.jobs | to_entries | .[] | select(.key == "commit-status-start")' $FILE)
+            if [ "$JOB" == "" ]; then
+                echo "commit-status-start job is missing in file $FILE"
+                EXIT=1
+            fi
+            JOB_NAME=$(echo "${JOB}" | yq '.value.name')
+            if [ "$JOB_NAME" != "Commit Status Start" ]; then
+                echo "commit-status-start job name must be set as 'Commit Status Start' in file $FILE"
+                EXIT=1
             fi
           done
           exit ${EXIT}

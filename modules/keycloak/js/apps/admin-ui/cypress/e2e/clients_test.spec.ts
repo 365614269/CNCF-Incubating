@@ -571,7 +571,9 @@ describe("Clients test", () => {
       cy.findByTestId("importClient").click();
       cy.findByTestId("realm-file").selectFile(
         "cypress/fixtures/partial-import-test-data/import-identical-client.json",
-        { action: "drag-drop" },
+        {
+          action: "drag-drop",
+        },
       );
 
       cy.wait(1000);
@@ -932,6 +934,7 @@ describe("Clients test", () => {
     const serviceAccountTab = new RoleMappingTab("user");
     const serviceAccountName = "service-account-client";
     const createRealmRoleName = `create-realm-${uuid()}`;
+    const createRealmRoleType = `roles`;
 
     before(async () => {
       await adminClient.inRealm(realmName, () =>
@@ -1008,6 +1011,7 @@ describe("Clients test", () => {
       serviceAccountTab
         .goToServiceAccountTab()
         .assignRole(false)
+        .changeRoleTypeFilter(createRealmRoleType)
         .selectRow(createRealmRoleName, true)
         .assign();
       commonPage.masthead().checkNotificationMessage("Role mapping updated");
@@ -1029,6 +1033,7 @@ describe("Clients test", () => {
       commonPage.sidebar().waitForPageLoad();
 
       serviceAccountTab
+        .changeRoleTypeFilter("roles")
         .selectRow("offline_access", true)
         .selectRow(createRealmRoleName, true)
         .assign();

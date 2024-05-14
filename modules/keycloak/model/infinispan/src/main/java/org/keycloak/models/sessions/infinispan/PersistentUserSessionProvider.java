@@ -68,7 +68,6 @@ import org.keycloak.models.utils.UserModelDelegate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -238,8 +237,7 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
             id = keyGenerator.generateKeyString(session, sessionCache);
         }
 
-        UserSessionEntity entity = new UserSessionEntity();
-        entity.setId(id);
+        UserSessionEntity entity = new UserSessionEntity(id);
         updateSessionEntity(entity, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
 
         SessionUpdateTask<UserSessionEntity> createSessionTask = Tasks.addIfAbsentSync();
@@ -398,8 +396,7 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
     protected Stream<UserSessionModel> getUserSessionsStream(final RealmModel realm, ClientModel client, Integer firstResult, Integer maxResults, final boolean offline) {
         UserSessionPredicate predicate = UserSessionPredicate.create(realm.getId()).client(client.getId());
 
-        return paginatedStream(getUserSessionsStream(realm, predicate, offline)
-                .sorted(Comparator.comparing(UserSessionModel::getLastSessionRefresh)), firstResult, maxResults);
+        return paginatedStream(getUserSessionsStream(realm, predicate, offline), firstResult, maxResults);
     }
 
     @Override
@@ -852,8 +849,7 @@ public class PersistentUserSessionProvider implements UserSessionProvider, Sessi
     }
 
     private UserSessionEntity createUserSessionEntityInstance(UserSessionModel userSession) {
-        UserSessionEntity entity = new UserSessionEntity();
-        entity.setId(userSession.getId());
+        UserSessionEntity entity = new UserSessionEntity(userSession.getId());
         entity.setRealmId(userSession.getRealm().getId());
 
         entity.setAuthMethod(userSession.getAuthMethod());
