@@ -1,13 +1,13 @@
 module github.com/operator-framework/operator-lifecycle-manager
 
-go 1.22.0
+go 1.22
 
 toolchain go1.22.2
 
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/coreos/go-semver v0.3.1
-	github.com/distribution/distribution v2.7.1+incompatible
+	github.com/distribution/reference v0.6.0
 	github.com/evanphx/json-patch v5.7.0+incompatible
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/ghodss/yaml v1.0.0
@@ -36,9 +36,9 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	golang.org/x/net v0.23.0
-	golang.org/x/sync v0.6.0
+	golang.org/x/sync v0.7.0
 	golang.org/x/time v0.5.0
 	google.golang.org/grpc v1.61.1
 	gopkg.in/yaml.v2 v2.4.0
@@ -94,7 +94,6 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v25.0.5+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker v25.0.5+incompatible // indirect

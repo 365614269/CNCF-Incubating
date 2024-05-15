@@ -17,7 +17,9 @@
 
 package org.keycloak.organization.jpa;
 
+import static org.keycloak.models.OrganizationModel.BROKER_PUBLIC;
 import static org.keycloak.models.OrganizationModel.ORGANIZATION_ATTRIBUTE;
+import static org.keycloak.models.OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE;
 import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
 import static org.keycloak.utils.StreamsUtil.closing;
 
@@ -54,7 +56,6 @@ import org.keycloak.models.jpa.entities.GroupAttributeEntity;
 import org.keycloak.models.jpa.entities.GroupEntity;
 import org.keycloak.models.jpa.entities.OrganizationDomainEntity;
 import org.keycloak.models.jpa.entities.OrganizationEntity;
-import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.utils.StringUtil;
 
@@ -113,14 +114,21 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
         try {
             session.setAttribute(OrganizationModel.class.getName(), organization);
-            GroupModel group = getOrganizationGroup(entity);
+            RealmModel realm = session.realms().getRealm(this.realm.getId());
 
-            if (group != null) {
-                //TODO: won't scale, requires a better mechanism for bulk deleting users
-                userProvider.getGroupMembersStream(realm, group).forEach(userModel -> removeMember(organization, userModel));
-                groupProvider.removeGroup(realm, group);
+            // check if the realm is being removed so that we don't need to remove manually remove any other data but the org
+            if (realm != null) {
+                GroupModel group = getOrganizationGroup(entity);
+
+                if (group != null) {
+                    //TODO: won't scale, requires a better mechanism for bulk deleting users
+                    userProvider.getGroupMembersStream(this.realm, group).forEach(userModel -> removeMember(organization, userModel));
+                    groupProvider.removeGroup(this.realm, group);
+                }
+
                 organization.getIdentityProviders().forEach((model) -> removeIdentityProvider(organization, model));
             }
+
             em.remove(entity);
         } finally {
             session.removeAttribute(OrganizationModel.class.getName());
@@ -142,6 +150,11 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
         OrganizationEntity entity = getEntity(organization.getId());
         OrganizationModel current = (OrganizationModel) session.getAttribute(OrganizationModel.class.getName());
+
+        // check the user and the organization belongs to the same realm
+        if (session.users().getUserById(session.realms().getRealm(entity.getRealmId()), user.getId()) == null) {
+            return false;
+        }
 
         if (current == null) {
             session.setAttribute(OrganizationModel.class.getName(), organization);
@@ -276,6 +289,12 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         throwExceptionIfObjectIsNull(identityProvider, "Identity provider");
 
         OrganizationEntity organizationEntity = getEntity(organization.getId());
+
+        // check the identity provider and the organization belongs to the same realm
+        if (!checkOrgIdpAndRealm(organizationEntity, identityProvider)) {
+            return false;
+        }
+
         String orgId = identityProvider.getOrganizationId();
 
         if (organizationEntity.getId().equals(orgId)) {
@@ -310,7 +329,10 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             return false;
         }
 
+        // clear the organization id and any domain assigned to the IDP.
         identityProvider.setOrganizationId(null);
+        identityProvider.getConfig().remove(ORGANIZATION_DOMAIN_ATTRIBUTE);
+        identityProvider.getConfig().remove(BROKER_PUBLIC);
         realm.updateIdentityProvider(identityProvider);
 
         return true;
@@ -447,5 +469,13 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         } catch (NoResultException nre) {
             return null;
         }
+    }
+
+    // return true only if the organization realm and the identity provider realm is the same
+    private boolean checkOrgIdpAndRealm(OrganizationEntity orgEntity, IdentityProviderModel idp) {
+        RealmModel orgRealm = session.realms().getRealm(orgEntity.getRealmId());
+        IdentityProviderModel orgIdpByAlias = orgRealm.getIdentityProviderByAlias(idp.getAlias());
+
+        return orgIdpByAlias != null && orgIdpByAlias.getInternalId().equals(idp.getInternalId());
     }
 }

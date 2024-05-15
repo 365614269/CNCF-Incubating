@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"testing"
 
-	. "github.com/cilium/checkmate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
@@ -145,7 +144,6 @@ type ManagerTestSuite struct {
 }
 
 var (
-	_              = Suite(&ManagerTestSuite{})
 	surrogateFE    = *lb.NewL3n4AddrID(lb.TCP, cmtypes.MustParseAddrCluster("0.0.0.0"), 80, lb.ScopeExternal, 0)
 	surrogateFEv6  = *lb.NewL3n4AddrID(lb.TCP, cmtypes.MustParseAddrCluster("::"), 80, lb.ScopeExternal, 0)
 	frontend1      = *lb.NewL3n4AddrID(lb.TCP, cmtypes.MustParseAddrCluster("1.1.1.1"), 80, lb.ScopeExternal, 0)
