@@ -5,7 +5,7 @@ searchExclude: true
 
 ## Install Crossplane
 
-Crossplane installs into an existing Kubernetes cluster. 
+Crossplane installs into an existing Kubernetes cluster.
 
 {{< hint type="tip" >}}
 If you don't have a Kubernetes cluster create one locally with [Kind](https://kind.sigs.k8s.io/).
@@ -930,7 +930,7 @@ spec:
       serviceAccountName: crossplane
       hostNetwork: false
       initContainers:
-        - image: "crossplane/crossplane:v1.13.0"
+        - image: "crossplane/crossplane:v1.14.0"
           args:
           - core
           - init
@@ -978,7 +978,7 @@ spec:
           - name: "WEBHOOK_SERVICE_PORT"
             value: "9443"
       containers:
-      - image: "crossplane/crossplane:v1.13.0"
+      - image: "crossplane/crossplane:v1.14.0"
         args:
         - core
         - start
@@ -1086,7 +1086,7 @@ spec:
         {}
       serviceAccountName: rbac-manager
       initContainers:
-      - image: "crossplane/crossplane:v1.13.0"
+      - image: "crossplane/crossplane:v1.14.0"
         args:
         - rbac
         - init
@@ -1116,7 +1116,7 @@ spec:
                 containerName: crossplane-init
                 resource: limits.memory
       containers:
-      - image: "crossplane/crossplane:v1.13.0"
+      - image: "crossplane/crossplane:v1.14.0"
         args:
         - rbac
         - start
@@ -1180,7 +1180,7 @@ crossplane-d4cd8d784-ldcgb                1/1     Running   0          54s
 crossplane-rbac-manager-84769b574-6mw6f   1/1     Running   0          54s
 ```
 
-Installing Crossplane creates new Kubernetes API end-points.  
+Installing Crossplane creates new Kubernetes API end-points.
 Look at the new API end-points with `kubectl api-resources  | grep crossplane`.
 
 ```shell  {label="grep",copy-lines="1"}
