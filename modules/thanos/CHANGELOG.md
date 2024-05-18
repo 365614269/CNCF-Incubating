@@ -19,8 +19,11 @@ We use *breaking :warning:* to mark changes that are not backward compatible (re
 ### Added
 
 - [#7317](https://github.com/thanos-io/thanos/pull/7317) Tracing: allow specifying resource attributes for the OTLP configuration.
+- [#7367](https://github.com/thanos-io/thanos/pull/7367) Store Gateway: log request ID in request logs.
 
 ### Changed
+
+- [#7334](https://github.com/thanos-io/thanos/pull/7334) Compactor: do not vertically compact downsampled blocks. Such cases are now marked with `no-compact-mark.json`. Fixes panic `panic: unexpected seriesToChunkEncoder lack of iterations`.
 
 ### Removed
 

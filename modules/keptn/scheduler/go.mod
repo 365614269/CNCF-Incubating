@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/onsi/ginkgo/v2 v2.17.2
+	github.com/onsi/ginkgo/v2 v2.17.3
 	github.com/onsi/gomega v1.33.1
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
@@ -126,7 +126,7 @@ replace (
 	github.com/golang/protobuf => github.com/golang/protobuf v1.5.4
 	github.com/keptn/lifecycle-toolkit/scheduler/pkg/klcpermit => /pkg/klcpermit
 	golang.org/x/net => golang.org/x/net v0.24.0
-	google.golang.org/protobuf => google.golang.org/protobuf v1.34.0
+	google.golang.org/protobuf => google.golang.org/protobuf v1.34.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.16
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.25.16
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.25.16
