@@ -17,6 +17,7 @@ import (
 	k8score "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,11 +44,12 @@ import (
 
 	virtcontroller "kubevirt.io/kubevirt/pkg/controller"
 	"kubevirt.io/kubevirt/pkg/instancetype"
+	"kubevirt.io/kubevirt/pkg/libvmi"
 	kvpointer "kubevirt.io/kubevirt/pkg/pointer"
-	virtpointer "kubevirt.io/kubevirt/pkg/pointer"
 	"kubevirt.io/kubevirt/pkg/testutils"
 	virtconfig "kubevirt.io/kubevirt/pkg/virt-config"
 	watchutil "kubevirt.io/kubevirt/pkg/virt-controller/watch/util"
+	"kubevirt.io/kubevirt/tests/libvmifact"
 
 	gomegatypes "github.com/onsi/gomega/types"
 )
@@ -1957,10 +1959,10 @@ var _ = Describe("VirtualMachine", func() {
 				Expect(vm.Status.Created).To(BeFalse())
 				Expect(vm.Status.Ready).To(BeFalse())
 
-				if runStrategy == v1.RunStrategyRerunOnFailure {
-					Expect(vm.Status.StateChangeRequests).To(ContainElement(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
-						"Action": Equal(v1.StateChangeRequestAction("Start")),
-					})))
+				if runStrategy == v1.RunStrategyRerunOnFailure || runStrategy == v1.RunStrategyAlways {
+					vmi, err := virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+					Expect(err).To(Succeed())
+					Expect(vmi).ToNot(BeNil())
 				}
 
 				testutils.ExpectEvent(recorder, SuccessfulCreateVirtualMachineReason)
@@ -2484,10 +2486,10 @@ var _ = Describe("VirtualMachine", func() {
 			//TODO expect update status is called
 			Expect(vm.Status.Created).To(BeFalse())
 			Expect(vm.Status.Ready).To(BeFalse())
-			if runStrategy == v1.RunStrategyRerunOnFailure {
-				Expect(vm.Status.StateChangeRequests).To(ContainElement(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
-					"Action": Equal(v1.StateChangeRequestAction("Start")),
-				})))
+			if runStrategy == v1.RunStrategyRerunOnFailure || runStrategy == v1.RunStrategyAlways {
+				vmi, err := virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+				Expect(err).To(Succeed())
+				Expect(vmi).ToNot(BeNil())
 			}
 
 			testutils.ExpectEvent(recorder, SuccessfulCreateVirtualMachineReason)
@@ -3623,12 +3625,6 @@ var _ = Describe("VirtualMachine", func() {
 					Expect(vm.Status.PrintableStatus).To(Equal(v1.VirtualMachineStatusCrashLoopBackOff))
 				} else {
 					Expect(vm.Status.PrintableStatus).ToNot(Equal(v1.VirtualMachineStatusCrashLoopBackOff))
-				}
-
-				if runStrategy == v1.RunStrategyRerunOnFailure {
-					Expect(vm.Status.StateChangeRequests).To(ContainElement(gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
-						"Action": Equal(v1.StateChangeRequestAction("Start")),
-					})))
 				}
 			},
 
@@ -6155,7 +6151,49 @@ var _ = Describe("VirtualMachine", func() {
 				},
 					Entry("without the updateVolumeStrategy field", nil),
 					Entry("with the replacement updateVolumeStrategy",
-						virtpointer.P(v1.UpdateVolumesStrategyReplacement)),
+						kvpointer.P(v1.UpdateVolumesStrategyReplacement)),
+				)
+			})
+
+			Context("Instance Types and Preferences", func() {
+				BeforeEach(func() {
+					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+						Spec: v1.KubeVirtSpec{
+							Configuration: v1.KubeVirtConfiguration{
+								VMRolloutStrategy: &liveUpdate,
+								DeveloperConfiguration: &v1.DeveloperConfiguration{
+									FeatureGates: []string{virtconfig.VMLiveUpdateFeaturesGate},
+								},
+							},
+						},
+					})
+				})
+				DescribeTable("should add RestartRequired to VM when", func(originalVM, updatedVM *v1.VirtualMachine) {
+					_, required := controller.addRestartRequiredIfNeeded(&originalVM.Spec, updatedVM)
+					Expect(required).To(BeTrue())
+					vmConditionController := virtcontroller.NewVirtualMachineConditionManager()
+					Expect(vmConditionController.HasCondition(updatedVM, v1.VirtualMachineRestartRequired)).To(BeTrue())
+				},
+					Entry("instance type changed",
+						libvmi.NewVirtualMachine(
+							libvmifact.NewGuestless(),
+							libvmi.WithInstancetype("original"),
+						),
+						libvmi.NewVirtualMachine(
+							libvmifact.NewGuestless(),
+							libvmi.WithInstancetype("updated"),
+						),
+					),
+					Entry("preference changed",
+						libvmi.NewVirtualMachine(
+							libvmifact.NewGuestless(),
+							libvmi.WithPreference("original"),
+						),
+						libvmi.NewVirtualMachine(
+							libvmifact.NewGuestless(),
+							libvmi.WithPreference("updated"),
+						),
+					),
 				)
 			})
 		})
@@ -6239,10 +6277,6 @@ var _ = Describe("VirtualMachine", func() {
 
 			BeforeEach(func() {
 				vm, vmi = DefaultVirtualMachine(true)
-				vm.Status.Conditions = append(vm.Status.Conditions, v1.VirtualMachineCondition{
-					Type:   v1.VirtualMachineInitialized,
-					Status: k8sv1.ConditionTrue,
-				})
 				vm.ObjectMeta.UID = types.UID(uuid.NewString())
 				vmi.ObjectMeta.UID = vm.ObjectMeta.UID
 				vm.Generation = 1
@@ -6417,6 +6451,112 @@ var _ = Describe("VirtualMachine", func() {
 					[]string{virtconfig.VMLiveUpdateFeaturesGate}, &liveUpdate, Not(restartRequiredMatcher(k8sv1.ConditionTrue))),
 			)
 		})
+
+		Context("RunStrategy", func() {
+
+			It("when starting a VM with RerunOnFailure the VM should get started", func() {
+				vm, _ := DefaultVirtualMachine(true)
+				vm.Spec.Running = nil
+				vm.Spec.RunStrategy = kvpointer.P(v1.RunStrategyRerunOnFailure)
+
+				vm, err := virtFakeClient.KubevirtV1().VirtualMachines(vm.Namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				addVirtualMachine(vm)
+
+				sanityExecute(vm)
+
+				vmi, err := virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(vmi).ToNot(BeNil())
+			})
+
+			DescribeTable("The VM should get started when switching to RerunOnFailure from", func(runStrategy v1.VirtualMachineRunStrategy) {
+				vm, _ := DefaultVirtualMachine(true)
+				vm.Spec.Running = nil
+				vm.Spec.RunStrategy = kvpointer.P(runStrategy)
+
+				vm, err := virtFakeClient.KubevirtV1().VirtualMachines(vm.Namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				addVirtualMachine(vm)
+
+				sanityExecute(vm)
+
+				_, err = virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+				Expect(err).To(MatchError(k8serrors.IsNotFound, "IsNotFound"))
+
+				By("Change RunStrategy")
+				vm.Spec.RunStrategy = kvpointer.P(v1.RunStrategyRerunOnFailure)
+
+				vm, err = virtFakeClient.KubevirtV1().VirtualMachines(vm.Namespace).Update(context.TODO(), vm, metav1.UpdateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				addVirtualMachine(vm)
+
+				sanityExecute(vm)
+
+				vmi, err := virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(vmi).ToNot(BeNil())
+			},
+				Entry("Halted", v1.RunStrategyHalted),
+				Entry("Manual", v1.RunStrategyManual),
+			)
+
+			It("The VM should get restarted when doing RerunOnFailure -> Halted -> RerunOnFailure", func() {
+				vm, _ := DefaultVirtualMachine(true)
+				vm.Spec.Running = nil
+				vm.Spec.RunStrategy = kvpointer.P(v1.RunStrategyRerunOnFailure)
+
+				vm, err := virtFakeClient.KubevirtV1().VirtualMachines(vm.Namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				addVirtualMachine(vm)
+				sanityExecute(vm)
+
+				crSource.Add(createVMRevision(vm))
+				syncCache(controller.crIndexer)
+
+				vmi, err := virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(vmi).ToNot(BeNil())
+
+				// let the controller pick up the creation
+				vmiFeeder.Add(vmi)
+				sanityExecute(vm)
+
+				By("Change RunStrategy to Halted")
+				vm.Spec.RunStrategy = kvpointer.P(v1.RunStrategyHalted)
+
+				vm, err = virtFakeClient.KubevirtV1().VirtualMachines(vm.Namespace).Update(context.TODO(), vm, metav1.UpdateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				addVirtualMachine(vm)
+				sanityExecute(vm)
+
+				crSource.Delete(createVMRevision(vm))
+				syncCache(controller.crIndexer)
+
+				// let the controller pick up the deletion
+				vmiFeeder.Delete(vmi)
+				sanityExecute(vm)
+
+				vmi, err = virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+				Expect(err).To(MatchError(k8serrors.IsNotFound, "IsNotFound"))
+
+				By("Change RunStrategy back to RerunOnFailure")
+				vm.Spec.RunStrategy = kvpointer.P(v1.RunStrategyRerunOnFailure)
+
+				vm, err = virtFakeClient.KubevirtV1().VirtualMachines(vm.Namespace).Update(context.TODO(), vm, metav1.UpdateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				addVirtualMachine(vm)
+				sanityExecute(vm)
+
+				vmi, err = virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Get(context.TODO(), vm.Name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(vmi).ToNot(BeNil())
+			})
+		})
+
 	})
 	Context("syncConditions", func() {
 		var vm *v1.VirtualMachine
@@ -6453,8 +6593,8 @@ var _ = Describe("VirtualMachine", func() {
 
 		It("should sync appropriate conditions and ignore others", func() {
 			fromCondList := []v1.VirtualMachineConditionType{
-				v1.VirtualMachineReady, v1.VirtualMachineFailure, v1.VirtualMachinePaused,
-				v1.VirtualMachineInitialized, v1.VirtualMachineRestartRequired,
+				v1.VirtualMachineReady, v1.VirtualMachineFailure,
+				v1.VirtualMachinePaused, v1.VirtualMachineRestartRequired,
 			}
 			toCondList := []v1.VirtualMachineConditionType{
 				v1.VirtualMachineReady, v1.VirtualMachinePaused,

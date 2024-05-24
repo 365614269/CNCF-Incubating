@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout default branch (trusted)
-        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -101,7 +101,7 @@ jobs:
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.
       - name: Checkout pull request branch (NOT TRUSTED)
-        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
         with:
           persist-credentials: false
           ref: ${{ steps.tag.outputs.tag }}
@@ -177,7 +177,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:e985420dd5dd8ac000d579948515ba4cfec3181e@sha256:03b5082f32b8e3d9680b5ae004457be238b6972d7ca67abc88517bf77d03058c
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:ef8707c44a0bb45c79717c16d4ee19a928f5b8ac@sha256:115e71ad7c29c0853f6fef1a236e8a2dcaf26d44f90330b90f39578fa7f2e517
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
@@ -322,7 +322,7 @@ jobs:
             quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}-ci:${{ steps.tag.outputs.tag }}-race
           target: release
           build-args: |
-            BASE_IMAGE=quay.io/cilium/cilium-runtime:e985420dd5dd8ac000d579948515ba4cfec3181e@sha256:03b5082f32b8e3d9680b5ae004457be238b6972d7ca67abc88517bf77d03058c
+            BASE_IMAGE=quay.io/cilium/cilium-runtime:ef8707c44a0bb45c79717c16d4ee19a928f5b8ac@sha256:115e71ad7c29c0853f6fef1a236e8a2dcaf26d44f90330b90f39578fa7f2e517
             LOCKDEBUG=1
             RACE=1
             OPERATOR_VARIANT=${{ matrix.name }}
