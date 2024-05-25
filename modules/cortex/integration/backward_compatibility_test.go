@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,8 +22,14 @@ var (
 	// If you change the image tag, remember to update it in the preloading done
 	// by GitHub Actions too (see .github/workflows/test-build-deploy.yml).
 	previousVersionImages = map[string]func(map[string]string) map[string]string{
-		"quay.io/cortexproject/cortex:v1.13.1": nil,
-		"quay.io/cortexproject/cortex:v1.13.2": nil,
+		"quay.io/cortexproject/cortex:v1.13.1": func(m map[string]string) map[string]string {
+			m["-ingester.stream-chunks-when-using-blocks"] = "true"
+			return m
+		},
+		"quay.io/cortexproject/cortex:v1.13.2": func(m map[string]string) map[string]string {
+			m["-ingester.stream-chunks-when-using-blocks"] = "true"
+			return m
+		},
 		"quay.io/cortexproject/cortex:v1.14.0": nil,
 		"quay.io/cortexproject/cortex:v1.14.1": nil,
 		"quay.io/cortexproject/cortex:v1.15.0": nil,
@@ -32,6 +39,7 @@ var (
 		"quay.io/cortexproject/cortex:v1.16.0": nil,
 		"quay.io/cortexproject/cortex:v1.16.1": nil,
 		"quay.io/cortexproject/cortex:v1.17.0": nil,
+		"quay.io/cortexproject/cortex:v1.17.1": nil,
 	}
 )
 
@@ -203,6 +211,14 @@ func checkQueries(
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
+			// Start store gateway.
+			storeGateway := e2ecortex.NewStoreGateway("store-gateway", e2ecortex.RingStoreConsul, consul.NetworkHTTPEndpoint(), c.storeGatewayFlags, c.storeGatewayImage)
+
+			require.NoError(t, s.Start(storeGateway))
+			defer func() {
+				require.NoError(t, s.Stop(storeGateway))
+			}()
+
 			// Start query-frontend.
 			queryFrontend := e2ecortex.NewQueryFrontend("query-frontend", c.queryFrontendFlags, c.queryFrontendImage)
 			require.NoError(t, s.Start(queryFrontend))
@@ -220,18 +236,22 @@ func checkQueries(
 				require.NoError(t, s.Stop(querier))
 			}()
 
-			// Start store gateway.
-			storeGateway := e2ecortex.NewStoreGateway("store-gateway", e2ecortex.RingStoreConsul, consul.NetworkHTTPEndpoint(), c.storeGatewayFlags, c.storeGatewayImage)
-
-			require.NoError(t, s.Start(storeGateway))
-			defer func() {
-				require.NoError(t, s.Stop(storeGateway))
-			}()
-
 			// Wait until querier and query-frontend are ready, and the querier has updated the ring.
 			require.NoError(t, s.WaitReady(querier, queryFrontend, storeGateway))
 			expectedTokens := float64((numIngesters + 1) * 512) // Ingesters and Store Gateway.
 			require.NoError(t, querier.WaitSumMetrics(e2e.Equals(expectedTokens), "cortex_ring_tokens_total"))
+			require.NoError(t, storeGateway.WaitSumMetrics(e2e.Greater(0), "cortex_storegateway_bucket_sync_total"))
+
+			// Wait store-gateways and ingesters appears on querier ring
+			require.NoError(t, querier.WaitSumMetricsWithOptions(e2e.Equals(1), []string{"cortex_ring_members"}, e2e.WithLabelMatchers(
+				labels.MustNewMatcher(labels.MatchEqual, "name", "store-gateway-client"),
+				labels.MustNewMatcher(labels.MatchEqual, "state", "ACTIVE"),
+			)))
+
+			require.NoError(t, querier.WaitSumMetricsWithOptions(e2e.Greater(0), []string{"cortex_ring_members"}, e2e.WithLabelMatchers(
+				labels.MustNewMatcher(labels.MatchEqual, "name", "ingester"),
+				labels.MustNewMatcher(labels.MatchEqual, "state", "ACTIVE"),
+			)))
 
 			// Query the series.
 			for _, endpoint := range []string{queryFrontend.HTTPEndpoint(), querier.HTTPEndpoint()} {
