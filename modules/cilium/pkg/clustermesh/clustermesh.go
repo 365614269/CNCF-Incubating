@@ -62,10 +62,6 @@ type Configuration struct {
 	// ServiceIPGetter, if not nil, is used to create a custom dialer for service resolution.
 	ServiceIPGetter k8s.ServiceIPGetter
 
-	// ConfigValidationMode defines whether the CiliumClusterConfig is always
-	// expected to be exposed by remote clusters.
-	ConfigValidationMode cmtypes.ValidationMode `optional:"true"`
-
 	// IPCacheWatcherExtraOpts returns extra options for watching ipcache entries.
 	IPCacheWatcherExtraOpts IPCacheWatcherOptsFn `optional:"true"`
 
@@ -148,6 +144,7 @@ func NewClusterMesh(lifecycle cell.Lifecycle, c Configuration) *ClusterMesh {
 func (cm *ClusterMesh) NewRemoteCluster(name string, status common.StatusFunc) common.RemoteCluster {
 	rc := &remoteCluster{
 		name:         name,
+		clusterID:    cmtypes.ClusterIDUnset,
 		mesh:         cm,
 		usedIDs:      cm.conf.ClusterIDsManager,
 		status:       status,
