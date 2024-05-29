@@ -22,14 +22,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	cluster "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/config/cluster/v3"
-	core "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/config/core/v3"
 	endpoint "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/config/endpoint/v3"
 	listener "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/config/listener/v3"
 	route "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/config/route/v3"
-	auth "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/extensions/transport_sockets/tls/v3"
 	runtime "github.com/emissary-ingress/emissary/v3/pkg/api/envoy/service/runtime/v3"
 	"github.com/emissary-ingress/emissary/v3/pkg/envoy-control-plane/cache/types"
-	ratelimit "github.com/emissary-ingress/emissary/v3/pkg/envoy-control-plane/ratelimit/config/ratelimit/v3"
 	"github.com/emissary-ingress/emissary/v3/pkg/envoy-control-plane/resource/v3"
 )
 
@@ -93,24 +90,6 @@ func GetResourceName(res types.Resource) string {
 	switch v := res.(type) {
 	case *endpoint.ClusterLoadAssignment:
 		return v.GetClusterName()
-	case *cluster.Cluster:
-		return v.GetName()
-	case *route.RouteConfiguration:
-		return v.GetName()
-	case *route.ScopedRouteConfiguration:
-		return v.GetName()
-	case *route.VirtualHost:
-		return v.GetName()
-	case *listener.Listener:
-		return v.GetName()
-	case *auth.Secret:
-		return v.GetName()
-	case *runtime.Runtime:
-		return v.GetName()
-	case *core.TypedExtensionConfig:
-		return v.GetName()
-	case *ratelimit.RateLimitConfig:
-		return v.GetName()
 	case types.ResourceWithName:
 		return v.GetName()
 	default:
@@ -187,7 +166,7 @@ func getResourceReferences(resources map[string]types.ResourceWithTTL, out map[r
 	}
 }
 
-func mapMerge(dst map[string]bool, src map[string]bool) {
+func mapMerge(dst, src map[string]bool) {
 	for k, v := range src {
 		dst[k] = v
 	}
@@ -197,13 +176,13 @@ func mapMerge(dst map[string]bool, src map[string]bool) {
 func getClusterReferences(src *cluster.Cluster, out map[resource.Type]map[string]bool) {
 	endpoints := map[string]bool{}
 
-	switch typ := src.ClusterDiscoveryType.(type) {
+	switch typ := src.GetClusterDiscoveryType().(type) {
 	case *cluster.Cluster_Type:
 		if typ.Type == cluster.Cluster_EDS {
-			if src.EdsClusterConfig != nil && src.EdsClusterConfig.ServiceName != "" {
-				endpoints[src.EdsClusterConfig.ServiceName] = true
+			if src.GetEdsClusterConfig() != nil && src.GetEdsClusterConfig().GetServiceName() != "" {
+				endpoints[src.GetEdsClusterConfig().GetServiceName()] = true
 			} else {
-				endpoints[src.Name] = true
+				endpoints[src.GetName()] = true
 			}
 		}
 	}
@@ -222,8 +201,8 @@ func getListenerReferences(src *listener.Listener, out map[resource.Type]map[str
 	routes := map[string]bool{}
 
 	// Extract route configuration names from HTTP connection manager.
-	for _, chain := range src.FilterChains {
-		for _, filter := range chain.Filters {
+	for _, chain := range src.GetFilterChains() {
+		for _, filter := range chain.GetFilters() {
 			config := resource.GetHTTPConnectionManager(filter)
 			if config == nil {
 				continue
@@ -236,7 +215,7 @@ func getListenerReferences(src *listener.Listener, out map[resource.Type]map[str
 
 			// If the scoped route mapping is embedded, add the referenced route resource names.
 			for _, s := range config.GetScopedRoutes().GetScopedRouteConfigurationsList().GetScopedRouteConfigurations() {
-				routes[s.RouteConfigurationName] = true
+				routes[s.GetRouteConfigurationName()] = true
 			}
 		}
 	}
@@ -254,7 +233,7 @@ func getScopedRouteReferences(src *route.ScopedRouteConfiguration, out map[resou
 	routes := map[string]bool{}
 
 	// For a scoped route configuration, the dependent resource is the RouteConfigurationName.
-	routes[src.RouteConfigurationName] = true
+	routes[src.GetRouteConfigurationName()] = true
 
 	if len(routes) > 0 {
 		if _, ok := out[resource.RouteType]; !ok {

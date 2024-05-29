@@ -23,7 +23,6 @@ cilium-operator [flags]
       --azure-user-assigned-identity-id string               ID of the user assigned identity used to auth with the Azure API
       --bgp-announce-lb-ip                                   Announces service IPs of type LoadBalancer via BGP
       --bgp-config-path string                               Path to file containing the BGP configuration (default "/var/lib/cilium/bgp/config.yaml")
-      --bgp-v2-api-enabled                                   Enables BGPv2 APIs in Cilium
       --ces-max-ciliumendpoints-per-ces int                  Maximum number of CiliumEndpoints allowed in a CES (default 100)
       --ces-rate-limits string                               Configure rate limits for the CES controller. Accepts a list of rate limit configurations, must be a JSON formatted string. (default "[{\"nodes\":0,\"limit\":10,\"burst\":20}]")
       --ces-slice-mode string                                Slicing mode defines how CiliumEndpoints are grouped into CES: either batched by their Identity ("cesSliceModeIdentity") or batched on a "First Come, First Served" basis ("cesSliceModeFCFS") (default "cesSliceModeIdentity")
@@ -42,6 +41,7 @@ cilium-operator [flags]
       --clustermesh-enable-mcs-api                           Whether or not the MCS API support is enabled.
       --clustermesh-endpoint-updates-batch-period duration   The length of endpoint slice updates batching period for remote cluster services. Processing of pod changes will be delayed by this duration to join them with potential upcoming updates and reduce the overall number of endpoints updates. Larger number = higher endpoint programming latency, but lower number of endpoints revision generated. (default 500ms)
       --clustermesh-endpoints-per-slice int                  The maximum number of endpoints that will be added to a remote cluster's EndpointSlice . More endpoints per slice will result in less endpoint slices, but larger resources. (default 100)
+      --clustermesh-sync-timeout duration                    Timeout waiting for the initial synchronization of information from remote clusters (default 1m0s)
       --cnp-status-cleanup-burst int                         Maximum burst of requests to clean up status nodes updates in CNPs (default 20)
       --cnp-status-cleanup-qps float                         Rate used for limiting the clean up of the status nodes updates in CNP, expressed as qps (default 10)
       --config string                                        Configuration file (default "$HOME/ciliumd.yaml")
