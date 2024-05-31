@@ -466,7 +466,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	if option.Config.RestoreState && !option.Config.DryMode {
 		// this *must* be called before initMaps(), which will "hide"
 		// the "old" ipcache.
-		err := d.restoreIPCache()
+		err := d.restoreLocalIdentities()
 		if err != nil {
 			log.WithError(err).Warn("Failed to restore existing identities from the previous ipcache. This may cause policy interruptions during restart.")
 		}
@@ -803,8 +803,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 		// Launch the K8s watchers in parallel as we continue to process other
 		// daemon options.
-		resources, cacheOnly := d.k8sWatcher.ResourceGroups()
-		d.k8sWatcher.InitK8sSubsystem(d.ctx, resources, cacheOnly, params.CacheStatus)
+		d.k8sWatcher.InitK8sSubsystem(d.ctx, params.CacheStatus)
 		bootstrapStats.k8sInit.End(true)
 	} else {
 		close(params.CacheStatus)
