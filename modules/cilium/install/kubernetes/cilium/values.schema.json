@@ -1251,6 +1251,9 @@
                   },
                   "type": "object"
                 },
+                "enableSecrets": {
+                  "type": "boolean"
+                },
                 "remote": {
                   "properties": {
                     "cert": {
@@ -2368,6 +2371,9 @@
     },
     "gatewayAPI": {
       "properties": {
+        "enableAlpn": {
+          "type": "boolean"
+        },
         "enableAppProtocol": {
           "type": "boolean"
         },

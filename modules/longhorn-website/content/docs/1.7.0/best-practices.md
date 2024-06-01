@@ -64,7 +64,15 @@ The following Linux OS distributions and versions have been verified during the 
 | 7.  | Talos Linux                  | 1.6.1
 | 8.  | Container-Optimized OS (GKE) | 109
 
-Note: It's recommended to guarantee that the kernel version is at least 5.8 as there is filesystem optimization/improvement since this version. See [this issue](https://github.com/longhorn/longhorn/issues/2507#issuecomment-857195496) for details.
+Longhorn relies heavily on kernel functionality and performs better on some kernel versions. The following activities,
+in particular, benefit from usage of specific kernel versions.
+
+- Optimizing or improving the filesystem: Use a kernel with version `v5.8` or later. See [Issue
+  #2507](https://github.com/longhorn/longhorn/issues/2507#issuecomment-857195496) for details.
+- Enabling the [Freeze Filesystem for Snapshot](../references/settings#freeze-filesystem-for-snapshot) setting: Use a
+  kernel with version `5.17` or later to ensure that a volume crash during a filesystem freeze cannot lock up a node.
+- Enabling the [V2 Data Engine](../v2-data-engine/prerequisites): Use a kernel with version `5.19` or later to ensure
+  that volume-related I/O errors cannot reboot a node unexpectedly.
 
 ## Kubernetes Version
 

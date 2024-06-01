@@ -164,7 +164,7 @@ TIP: If the remote {jdgserver_name} is used in a multi-site setup, you can reduc
 In previous versions and when the feature is disabled, a restart of all {project_name} nodes logged out all users.
 To sign out all online users sessions of a realm with the `persistent-user-session` feature enabled, use the following steps as before:
 
-. Login to the Admin Console.
+. Log in to the Admin Console.
 . Select the menu entry *Sessions*.
 . Select the action *Sign out all active sessions*.
 
@@ -433,3 +433,8 @@ If the session is using the remember me feature, the idle timeout and max lifesp
 
 {project_name} now requires a {jdgserver_name} server version of at least 15.0.0 for external {jdgserver_name} deployments.
 An external {jdgserver_name} deployment is supported for multi-site setups as outlined in the HA guide.
+
+= Oracle Database driver not part of the distribution
+
+The Oracle Database JDBC driver is no longer part of the Keycloak distribution.
+If you wish to use Oracle DB, you must manually install a version of the Oracle Driver that is compatible with your specific environment. Instructions for this process can be found in the https://www.keycloak.org/server/db[Configuring the database] {section}.
