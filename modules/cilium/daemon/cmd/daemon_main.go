@@ -396,6 +396,10 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableIPsecKeyWatcher, defaults.EnableIPsecKeyWatcher, "Enable watcher for IPsec key. If disabled, a restart of the agent will be necessary on key rotations.")
 	option.BindEnv(vp, option.EnableIPsecKeyWatcher)
 
+	flags.Bool(option.EnableIPSecXfrmStateCaching, defaults.EnableIPSecXfrmStateCaching, "Enable XfrmState cache for IPSec. Significantly reduces CPU usage in large clusters.")
+	flags.MarkHidden(option.EnableIPSecXfrmStateCaching)
+	option.BindEnv(vp, option.EnableIPSecXfrmStateCaching)
+
 	flags.Bool(option.EnableIPSecEncryptedOverlay, defaults.EnableIPSecEncryptedOverlay, "Enable IPsec encrypted overlay. If enabled tunnel traffic will be encrypted before leaving the host.")
 	option.BindEnv(vp, option.EnableIPSecEncryptedOverlay)
 
@@ -1680,8 +1684,9 @@ type daemonParams struct {
 	MetalLBBgpSpeaker   speaker.MetalLBBgpSpeaker
 }
 
-func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
+func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Promise[*option.DaemonConfig]) {
 	daemonResolver, daemonPromise := promise.New[*Daemon]()
+	cfgResolver, cfgPromise := promise.New[*option.DaemonConfig]()
 
 	// daemonCtx is the daemon-wide context cancelled when stopping.
 	daemonCtx, cancelDaemonCtx := context.WithCancel(context.Background())
@@ -1711,10 +1716,12 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 					daemonResolver.Reject(err)
 					cancelDaemonCtx()
 					cleaner.Clean()
+					cfgResolver.Reject(err)
 					return err
 				}
 			}
 			daemonResolver.Resolve(daemon)
+			cfgResolver.Resolve(option.Config)
 			return nil
 		},
 		OnStop: func(cell.HookContext) error {
@@ -1724,7 +1731,7 @@ func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
 			return nil
 		},
 	})
-	return daemonPromise
+	return daemonPromise, cfgPromise
 }
 
 // startDaemon starts the old unmodular part of the cilium-agent.
