@@ -5,6 +5,7 @@
 DEFAULT_LANG="en"
 DEFAULT_TARGET="content"
 EXTRA_DIFF_ARGS="--numstat"
+FLAG_DIFF_DETAILS=""
 FLAG_UPDATE=""
 FLAG_VERBOSE=""
 I18N_DLC_KEY="default_lang_commit"
@@ -42,6 +43,7 @@ function process_CLI_args() {
         usage
         ;;
       d)
+        FLAG_DIFF_DETAILS=1
         EXTRA_DIFF_ARGS=""
         ;;
       u)
@@ -104,6 +106,9 @@ function main() {
     # if [[ -n $FLAG_VERBOSE ]]; then echo -e "All targets: $TARGETS"; fi
   fi
 
+  # set -x
+  # git branch -vv
+
   SYNCED=1
   for f in $TARGETS; do
     # if [[ -n $FLAG_VERBOSE ]]; then echo -e "Checking\t$f"; fi
@@ -114,6 +119,18 @@ function main() {
     if [[ -z $LASTCOMMIT ]]; then
       # Get commit hash from git commit info
       LASTCOMMIT=$(git log -n 1 --pretty=format:%h -- "$f")
+    fi
+    if [[ -z $LASTCOMMIT ]]; then
+      # Get last commit of `main` that this branch is rooted from.
+      LASTCOMMIT=$(git merge-base main HEAD)
+    # elif ! git branch --contains $LASTCOMMIT | grep -q "^\s*main\b"; then # HERE
+    #   # Get last commit of `main` that this branch is rooted from.
+    #   LASTCOMMIT=$(git merge-base main HEAD)
+    # fi
+
+    # if ! (git branch --contains $LASTCOMMIT | grep -q "^\s*main\b"); then
+    #   echo "Something is wrong, the hash is empty or isn't on 'main', aborting: $LASTCOMMIT - $f"
+    #   exit 2
     fi
 
     if [[ -n $FLAG_UPDATE ]]; then
@@ -128,14 +145,18 @@ function main() {
 
     DIFF=$(git diff --exit-code $EXTRA_DIFF_ARGS $LASTCOMMIT...HEAD "$EN_VERSION")
     if [[ -n "$DIFF" ]]; then # [[ $? -ne 0 ]]
-      echo "$DIFF - $f"
       SYNCED=0
+      if [[ -n "$FLAG_DIFF_DETAILS" ]]; then
+        echo -n "$DIFF"
+      else
+        echo "$DIFF - $f"
+      fi
     elif [[ -n $FLAG_VERBOSE ]]; then
       echo -e "File is in sync\t$f"
     fi
   done
   if [ $SYNCED -ne 1 ]; then
-    exit 1
+    exit
   fi
 
   echo "$TARGET_PATHS is still in sync"

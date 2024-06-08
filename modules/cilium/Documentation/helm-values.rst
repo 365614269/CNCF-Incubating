@@ -304,6 +304,10 @@
      - Configure the maximum number of entries in the TCP connection tracking table.
      - int
      - ``524288``
+   * - :spelling:ignore:`bpf.datapathMode`
+     - Mode for Pod devices for the core datapath (veth, netkit, netkit-l2, lb-only)
+     - string
+     - ``veth``
    * - :spelling:ignore:`bpf.disableExternalIPMitigation`
      - Disable ExternalIP mitigation (CVE-2020-8554)
      - bool
@@ -465,7 +469,7 @@
      - int
      - ``0``
    * - :spelling:ignore:`cluster.name`
-     - Name of the cluster. Only required for Cluster Mesh and mutual authentication with SPIRE.
+     - Name of the cluster. Only required for Cluster Mesh and mutual authentication with SPIRE. It must respect the following constraints: * It must contain at most 32 characters; * It must begin and end with a lower case alphanumeric character; * It may contain lower case alphanumeric characters and dashes between. The "default" name cannot be used if the Cluster ID is different from 0.
      - string
      - ``"default"``
    * - :spelling:ignore:`clustermesh.annotations`
@@ -3082,6 +3086,14 @@
      - ``true``
    * - :spelling:ignore:`synchronizeK8sNodes`
      - Synchronize Kubernetes nodes to kvstore and perform CNP GC.
+     - bool
+     - ``true``
+   * - :spelling:ignore:`sysctlfix`
+     - Configure sysctl override described in #20072.
+     - object
+     - ``{"enabled":true}``
+   * - :spelling:ignore:`sysctlfix.enabled`
+     - Enable the sysctl override. When enabled, the init container will mount the /proc of the host so that the ``sysctlfix`` utility can execute.
      - bool
      - ``true``
    * - :spelling:ignore:`terminationGracePeriodSeconds`

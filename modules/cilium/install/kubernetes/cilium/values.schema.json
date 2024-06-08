@@ -509,6 +509,9 @@
             "integer"
           ]
         },
+        "datapathMode": {
+          "type": "string"
+        },
         "disableExternalIPMitigation": {
           "type": "boolean"
         },
@@ -5217,6 +5220,14 @@
     },
     "synchronizeK8sNodes": {
       "type": "boolean"
+    },
+    "sysctlfix": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
     },
     "terminationGracePeriodSeconds": {
       "type": "integer"
