@@ -1618,13 +1618,14 @@ var daemonCell = cell.Module(
 
 	cell.Provide(
 		newDaemonPromise,
-		newRestorerPromise,
+		promise.New[endpointstate.Restorer],
 		func() k8s.CacheStatus { return make(k8s.CacheStatus) },
 		newSyncHostIPs,
 	),
 	// Provide a read-only copy of the current daemon settings to be consumed
 	// by the debuginfo API
 	cell.ProvidePrivate(daemonSettings),
+	cell.Invoke(registerEndpointStateResolver),
 	cell.Invoke(func(promise.Promise[*Daemon]) {}), // Force instantiation.
 	endpointBPFrogWatchdogCell,
 )
@@ -1759,6 +1760,12 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		<-params.CacheStatus
 	}
 	bootstrapStats.k8sInit.End(true)
+
+	// After K8s caches have been synced, IPCache can start label injection.
+	// Ensure that the initial labels are injected before we regenerate endpoints
+	log.Debug("Waiting for initial IPCache revision")
+	d.ipcache.WaitForRevision(1)
+
 	d.initRestore(restoredEndpoints, params.EndpointRegenerator)
 
 	bootstrapStats.enableConntrack.Start()
@@ -1917,8 +1924,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	return nil
 }
 
-func newRestorerPromise(lc cell.Lifecycle, daemonPromise promise.Promise[*Daemon]) promise.Promise[endpointstate.Restorer] {
-	resolver, promise := promise.New[endpointstate.Restorer]()
+func registerEndpointStateResolver(lc cell.Lifecycle, daemonPromise promise.Promise[*Daemon], resolver promise.Resolver[endpointstate.Restorer]) {
 	lc.Append(cell.Hook{
 		OnStart: func(ctx cell.HookContext) error {
 			daemon, err := daemonPromise.Await(context.Background())
@@ -1930,7 +1936,6 @@ func newRestorerPromise(lc cell.Lifecycle, daemonPromise promise.Promise[*Daemon
 			return nil
 		},
 	})
-	return promise
 }
 
 func initClockSourceOption() {

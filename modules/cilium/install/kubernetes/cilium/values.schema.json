@@ -2395,6 +2395,9 @@
         "enabled": {
           "type": "boolean"
         },
+        "externalTrafficPolicy": {
+          "type": "string"
+        },
         "hostNetwork": {
           "properties": {
             "enabled": {
@@ -3633,6 +3636,9 @@
             },
             "annotations": {
               "type": "object"
+            },
+            "externalTrafficPolicy": {
+              "type": "string"
             },
             "insecureNodePort": {
               "type": [

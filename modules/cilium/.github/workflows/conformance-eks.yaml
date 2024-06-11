@@ -58,7 +58,7 @@ env:
   clusterName: ${{ github.repository_owner }}-${{ github.event.repository.name }}-${{ github.run_id }}-${{ github.run_attempt }}
   cilium_cli_ci_version:
   # renovate: datasource=github-releases depName=eksctl-io/eksctl
-  eksctl_version: v0.180.0
+  eksctl_version: v0.182.0
   # renovate: datasource=github-releases depName=kubernetes/kubernetes
   kubectl_version: v1.30.1
 
@@ -211,7 +211,7 @@ jobs:
           echo owner=${OWNER} >> $GITHUB_OUTPUT
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@d86ae1ca5755139d6ca9423b9606cb047fc8e00f # v0.16.9
+        uses: cilium/cilium-cli@511f0173c21db1c3c959b96fd68eef18f83a0a9f # v0.16.10
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -342,14 +342,24 @@ jobs:
           --junit-file "cilium-junits/${{ env.job_name }} (${{ join(matrix.*, ', ') }}) - 1.xml" \
           --junit-property github_job_step="Run connectivity test (${{ join(matrix.*, ', ') }})"
 
+      - name: Setup conn-disrupt-test before rotating (${{ join(matrix.*, ', ') }})
+        if: ${{ matrix.ipsec == true }}
+        uses: ./.github/actions/conn-disrupt-test-setup
+
       - name: Run IPsec key rotation tests (${{ join(matrix.*, ', ') }})
         if: ${{ matrix.ipsec == true }}
         uses: ./.github/actions/ipsec-key-rotate
         with:
-          extra-connectivity-test-flags: ${{ steps.vars.outputs.connectivity_test_defaults }}
           key-algo: "gcm(aes)"
           key-type-one: ""
           key-type-two: ""
+
+      - name: Check conn-disrupt-test after rotating (${{ join(matrix.*, ', ') }})
+        if: ${{ matrix.ipsec == true }}
+        uses: ./.github/actions/conn-disrupt-test-check
+        with:
+          full-test: 'true'
+          extra-connectivity-test-flags: ${{ steps.vars.outputs.connectivity_test_defaults }}
 
       - name: Post-test information gathering
         if: ${{ !success() && steps.install-cilium.outcome != 'skipped' }}
