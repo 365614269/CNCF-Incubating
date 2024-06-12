@@ -358,6 +358,16 @@ Annotations:
 * Certain invalid CiliumNetworkPolicies that have always been ignored will now be rejected by the apiserver.
   Specifically, policies with multiple L7 protocols on the same port, over 40 port rules, or over
   40 ICMP rules will now have server-side validation.
+* Cilium could previously be run in a configuration where the Etcd instances
+  that distribute Cilium state between nodes would be managed in pod network by
+  Cilium itself. This support was complicated and error prone, so the support
+  is now deprecated. The following guide provides alternatives for running
+  Cilium with Etcd: :ref:`k8s_install_etcd`.
+* Cilium now respects the port specified as part of the etcd configuration, rather
+  than defaulting it to that of the service when the address matches a Kubernetes
+  service DNS name. Additionally, Kubernetes service DNS name to ClusterIP
+  translation is now automatically enabled for etcd (if necessary); the
+  ``etcd.operator`` ``kvstore-opt`` option is now a no-op and has been removed.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -401,6 +411,8 @@ Helm Options
   exposed NodePort services on the first (preferably private) IPv4 and IPv6 address of each device.
 * Helm option ``enableCiliumEndpointSlice`` has been deprecated and will be removed in a future release.
   The option has been replaced by ``ciliumEndpointSlice.enabled``.
+* The Helm option for deploying a managed etcd instance via ``etcd.managed``
+  and other related Helm configurations have been removed.
 
 Added Metrics
 ~~~~~~~~~~~~~

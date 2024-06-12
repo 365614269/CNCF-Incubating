@@ -310,11 +310,13 @@
     },
     {
       "matchPackageNames": [
-        "gcr.io/etcd-development/etcd"
+        "quay.io/cilium/certgen",
       ],
-      "allowedVersions": "<3.16",
+      "allowedVersions": "<0.2.0",
       "matchBaseBranches": [
-        "v1.15"
+        "v1.15",
+        "v1.14",
+        "v1.13"
       ]
     },
     {

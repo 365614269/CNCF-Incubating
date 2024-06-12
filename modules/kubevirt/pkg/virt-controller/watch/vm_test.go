@@ -168,19 +168,6 @@ var _ = Describe("VirtualMachine", func() {
 		})
 
 		// TODO: We need to make sure the action was triggered
-		shouldExpectGracePeriodPatched := func(expectedGracePeriod int64) {
-			patch := fmt.Sprintf(`{"spec":{"terminationGracePeriodSeconds": %d }}`, expectedGracePeriod)
-			virtFakeClient.PrependReactor("update", "virtualmachineinstance", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
-				switch action := action.(type) {
-				case testing.PatchActionImpl:
-					Expect(action.Patch).To(Equal([]byte(patch)))
-				default:
-					Fail("Expected to see patch")
-				}
-				return false, nil, nil
-			})
-		}
-		// TODO: We need to make sure the action was triggered
 		shouldExpectVMIFinalizerRemoval := func() {
 			virtFakeClient.PrependReactor("update", "virtualmachineinstance", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
 				switch action := action.(type) {
@@ -2601,7 +2588,6 @@ var _ = Describe("VirtualMachine", func() {
 		It("should delete VirtualMachineInstance when VirtualMachine marked for deletion", func() {
 			vm, vmi := DefaultVirtualMachine(true)
 			vm.DeletionTimestamp = now()
-			vm.DeletionGracePeriodSeconds = pointer.P(v1.DefaultGracePeriodSeconds)
 
 			vm, err := virtFakeClient.KubevirtV1().VirtualMachines(vm.Namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
 			Expect(err).To(Succeed())
@@ -2610,8 +2596,6 @@ var _ = Describe("VirtualMachine", func() {
 			_, err = virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Create(context.TODO(), vmi, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			controller.vmiIndexer.Add(vmi)
-
-			shouldExpectGracePeriodPatched(v1.DefaultGracePeriodSeconds)
 
 			sanityExecute(vm)
 
@@ -3975,7 +3959,6 @@ var _ = Describe("VirtualMachine", func() {
 					vm, vmi := DefaultVirtualMachine(true)
 
 					vm.ObjectMeta.DeletionTimestamp = &metav1.Time{Time: time.Now()}
-					vm.DeletionGracePeriodSeconds = pointer.P(v1.DefaultGracePeriodSeconds)
 					vmi.Status.Phase = phase
 
 					if condType != "" {
@@ -3992,8 +3975,6 @@ var _ = Describe("VirtualMachine", func() {
 					vmi, err = virtFakeClient.KubevirtV1().VirtualMachineInstances(vm.Namespace).Create(context.Background(), vmi, metav1.CreateOptions{})
 					Expect(err).NotTo(HaveOccurred())
 					controller.vmiIndexer.Add(vmi)
-
-					shouldExpectGracePeriodPatched(v1.DefaultGracePeriodSeconds)
 
 					sanityExecute(vm)
 
@@ -5461,7 +5442,7 @@ var _ = Describe("VirtualMachine", func() {
 			func(iface string, field gstruct.Fields) {
 				vm, _ := DefaultVirtualMachine(true)
 
-				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 					Spec: v1.KubeVirtSpec{
 						Configuration: v1.KubeVirtConfiguration{
 							NetworkConfiguration: &v1.NetworkConfiguration{
@@ -5494,7 +5475,7 @@ var _ = Describe("VirtualMachine", func() {
 		It("should reject adding a default deprecated slirp interface", func() {
 			vm, _ := DefaultVirtualMachine(true)
 
-			testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+			testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 				Spec: v1.KubeVirtSpec{
 					Configuration: v1.KubeVirtConfiguration{
 						NetworkConfiguration: &v1.NetworkConfiguration{
@@ -5617,7 +5598,7 @@ var _ = Describe("VirtualMachine", func() {
 				It("should prefer maximum CPU sockets from VM spec rather than from cluster config", func() {
 					vm, _ := DefaultVirtualMachine(true)
 					vm.Spec.Template.Spec.Domain.CPU = &v1.CPU{MaxSockets: maxSocketsFromSpec}
-					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 						Spec: v1.KubeVirtSpec{
 							Configuration: v1.KubeVirtConfiguration{
 								LiveUpdateConfiguration: &v1.LiveUpdateConfiguration{
@@ -5768,7 +5749,7 @@ var _ = Describe("VirtualMachine", func() {
 						Guest:    &guestMemory,
 						MaxGuest: &maxGuestFromSpec,
 					}
-					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 						Spec: v1.KubeVirtSpec{
 							Configuration: v1.KubeVirtConfiguration{
 								LiveUpdateConfiguration: &v1.LiveUpdateConfiguration{
@@ -5935,7 +5916,7 @@ var _ = Describe("VirtualMachine", func() {
 
 			Context("Affinity", func() {
 				It("should be live-updated", func() {
-					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 						Spec: v1.KubeVirtSpec{
 							Configuration: v1.KubeVirtConfiguration{
 								VMRolloutStrategy: &liveUpdate,
@@ -5985,7 +5966,7 @@ var _ = Describe("VirtualMachine", func() {
 
 			Context("Volumes", func() {
 				DescribeTable("should set the restart condition", func(strategy *v1.UpdateVolumesStrategy) {
-					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 						Spec: v1.KubeVirtSpec{
 							Configuration: v1.KubeVirtConfiguration{
 								VMRolloutStrategy: &liveUpdate,
@@ -6015,7 +5996,7 @@ var _ = Describe("VirtualMachine", func() {
 				)
 
 				It("should set the restart condition with the Migration updateVolumeStrategy if volumes cannot be migrated", func() {
-					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 						Spec: v1.KubeVirtSpec{
 							Configuration: v1.KubeVirtConfiguration{
 								VMRolloutStrategy: &liveUpdate,
@@ -6121,7 +6102,7 @@ var _ = Describe("VirtualMachine", func() {
 						Clientset:               virtClient,
 					}
 
-					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, &v1.KubeVirt{
+					testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), &v1.KubeVirt{
 						Spec: v1.KubeVirtSpec{
 							Configuration: v1.KubeVirtConfiguration{
 								VMRolloutStrategy: &liveUpdate,
@@ -6243,13 +6224,13 @@ var _ = Describe("VirtualMachine", func() {
 						},
 					},
 				}
-				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, kv)
+				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), kv)
 
 				var maxSockets uint32 = 8
 
 				By("Setting a cluster-wide CPU maxSockets value")
 				kv.Spec.Configuration.LiveUpdateConfiguration.MaxCpuSockets = pointer.P(maxSockets)
-				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, kv)
+				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), kv)
 
 				By("Creating a VM with CPU sockets set to the cluster maxiumum")
 				vm.Spec.Template.Spec.Domain.CPU.Sockets = maxSockets
@@ -6283,7 +6264,7 @@ var _ = Describe("VirtualMachine", func() {
 			})
 
 			It("should appear when changing a non-live-updatable field", func() {
-				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, kv)
+				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), kv)
 
 				By("Creating a VMI with hostname 'a'")
 				vm.Spec.Template.Spec.Hostname = "a"
@@ -6398,7 +6379,7 @@ var _ = Describe("VirtualMachine", func() {
 				})
 				kv.Spec.Configuration.DeveloperConfiguration.FeatureGates = fgs
 				kv.Spec.Configuration.VMRolloutStrategy = strat
-				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer, kv)
+				testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), kv)
 
 				By("Creating a VM with CPU sockets set to 2")
 				vm.Spec.Template.Spec.Domain.CPU.Sockets = 2

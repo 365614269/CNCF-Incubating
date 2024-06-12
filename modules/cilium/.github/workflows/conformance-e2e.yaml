@@ -162,6 +162,7 @@ jobs:
             egress-gateway: 'true'
             lb-acceleration: 'testing-only'
             ingress-controller: 'true'
+            local-redirect-policy: 'true'
 
           - name: '8'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -280,6 +281,7 @@ jobs:
             tunnel: 'disabled'
             devices: '{eth0,eth1}'
             secondary-network: 'true'
+            ingress-controller: 'true'
 
           - name: '18'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -291,6 +293,7 @@ jobs:
             tunnel: 'disabled'
             devices: '{eth0,eth1}'
             secondary-network: 'true'
+            ingress-controller: 'true'
 
           - name: '19'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -301,6 +304,7 @@ jobs:
             tunnel: 'vxlan'
             devices: '{eth0,eth1}'
             secondary-network: 'true'
+            ingress-controller: 'true'
 
           - name: '20'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -311,6 +315,7 @@ jobs:
             tunnel: 'vxlan'
             devices: '{eth0,eth1}'
             secondary-network: 'true'
+            ingress-controller: 'true'
 
           - name: '21'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -321,6 +326,7 @@ jobs:
             tunnel: 'geneve'
             devices: '{eth0,eth1}'
             secondary-network: 'true'
+            ingress-controller: 'true'
 
           - name: '22'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
@@ -331,6 +337,7 @@ jobs:
             tunnel: 'geneve'
             devices: '{eth0,eth1}'
             secondary-network: 'true'
+            ingress-controller: 'true'
 
     timeout-minutes: 60
     steps:
@@ -378,6 +385,7 @@ jobs:
           ingress-controller: ${{ matrix.ingress-controller }}
           misc: ${{ matrix.misc }}
           ciliumendpointslice: ${{ matrix.ciliumendpointslice }}
+          local-redirect-policy: ${{ matrix.local-redirect-policy }}
 
       - name: Install Cilium CLI
         uses: cilium/cilium-cli@511f0173c21db1c3c959b96fd68eef18f83a0a9f # v0.16.10
