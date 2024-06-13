@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import { WinstonLogger } from '@backstage/backend-app-api';
+// eslint-disable-next-line @backstage/no-relative-monorepo-imports
+import { WinstonLogger } from '../../../backend-app-api/src/logging/WinstonLogger';
 import { merge } from 'lodash';
 import * as winston from 'winston';
 import { format, LoggerOptions } from 'winston';
@@ -43,6 +44,8 @@ export const setRootLoggerRedactionList = (
  * and replaces them with the corresponding identifier.
  *
  * @public
+ * @deprecated This utility is being deprecated along with the {@link https://github.com/backstage/backstage/issues/24493 |legacy backend system}.
+ * Migrate your {@link https://backstage.io/docs/backend-system/building-backends/migrating | backend} and {@link https://backstage.io/docs/backend-system/building-plugins-and-modules/migrating | plugin} to the new system and use the {@link https://github.com/backstage/backstage/pull/24730 | RedactionsService} for customization instead.
  */
 export function redactWinstonLogLine(
   info: winston.Logform.TransformableInfo,

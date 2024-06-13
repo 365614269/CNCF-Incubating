@@ -54,6 +54,8 @@
 #include "lib/wireguard.h"
 #include "lib/vxlan.h"
 
+ #define host_egress_policy_hook(ctx, src_sec_identity, ext_err) CTX_ACT_OK
+
 /* Bit 0 is skipped for robustness, as it's used in some places to indicate from_host itself. */
 #define FROM_HOST_FLAG_NEED_HOSTFW (1 << 1)
 #define FROM_HOST_FLAG_HOST_ID (1 << 2)
@@ -1364,12 +1366,13 @@ __section_entry
 int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 {
 	__u32 magic = ctx->mark & MARK_MAGIC_HOST_MASK;
+	__u32 dst_sec_identity = UNKNOWN_ID;
+	__u32 src_sec_identity = UNKNOWN_ID;
 	struct trace_ctx trace = {
 		.reason = TRACE_REASON_UNKNOWN,
 		.monitor = 0,
 	};
 	__u32 __maybe_unused vlan_id;
-	__u32 src_sec_identity = 0;
 	int ret = CTX_ACT_OK;
 	__s8 ext_err = 0;
 #if defined(ENABLE_HOST_FIREWALL) || defined(ENABLE_EGRESS_GATEWAY_COMMON)
@@ -1446,6 +1449,10 @@ int cil_to_netdev(struct __ctx_buff *ctx __maybe_unused)
 skip_host_firewall:
 #endif /* ENABLE_HOST_FIREWALL */
 
+	ret = host_egress_policy_hook(ctx, src_sec_identity, &ext_err);
+	if (IS_ERR(ret))
+		goto drop_err;
+
 #if defined(ENABLE_BANDWIDTH_MANAGER)
 	ret = edt_sched_departure(ctx);
 	/* No send_drop_notify_error() here given we're rate-limiting. */
@@ -1466,7 +1473,8 @@ skip_host_firewall:
 			/* we are redirecting back into the stack, so TRACE_TO_STACK
 			 * for tracepoint
 			 */
-			send_trace_notify(ctx, TRACE_TO_STACK, UNKNOWN_ID, UNKNOWN_ID,
+			send_trace_notify(ctx, TRACE_TO_STACK, src_sec_identity,
+					  dst_sec_identity,
 					  TRACE_EP_ID_UNKNOWN, TRACE_IFINDEX_UNKNOWN,
 					  TRACE_REASON_ENCRYPT_OVERLAY, 0);
 			return ret;
@@ -1529,7 +1537,6 @@ skip_host_firewall:
 		int l4_off;
 		struct remote_endpoint_info *info;
 		struct endpoint_info *src_ep;
-		__u32 dst_sec_identity = UNKNOWN_ID;
 
 		if (!validate_ethertype(ctx, &proto) || proto != bpf_htons(ETH_P_IP))
 			goto skip_egress_gateway;
@@ -1605,7 +1612,7 @@ exit:
 	if (IS_ERR(ret))
 		goto drop_err;
 
-	send_trace_notify(ctx, TRACE_TO_NETWORK, UNKNOWN_ID, UNKNOWN_ID,
+	send_trace_notify(ctx, TRACE_TO_NETWORK, src_sec_identity, dst_sec_identity,
 			  TRACE_EP_ID_UNKNOWN,
 			  TRACE_IFINDEX_UNKNOWN, trace.reason, trace.monitor);
 
