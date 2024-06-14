@@ -216,11 +216,6 @@ func (d *Daemon) DebugEnabled() bool {
 	return option.Config.Opts.IsEnabled(option.Debug)
 }
 
-// GetOptions returns the datapath configuration options of the daemon.
-func (d *Daemon) GetOptions() *option.IntOptions {
-	return option.Config.Opts
-}
-
 // GetCompilationLock returns the mutex responsible for synchronizing compilation
 // of BPF programs.
 func (d *Daemon) GetCompilationLock() datapath.CompilationLock {
@@ -912,10 +907,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// has finished.
 	if err := params.SyncHostIPs.StartAndWaitFirst(ctx); err != nil {
 		return nil, nil, err
-	}
-
-	if err := d.datapath.Loader().RestoreTemplates(option.Config.StateDir); err != nil {
-		log.WithError(err).Error("Unable to restore previous BPF templates")
 	}
 
 	// Start watcher for endpoint IP --> identity mappings in key-value store.

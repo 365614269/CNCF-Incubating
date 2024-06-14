@@ -60,7 +60,7 @@ concurrency:
 env:
   cilium_cli_ci_version:
   kind_config: .github/kind-config.yaml
-  gateway_api_version: v1.0.0
+  gateway_api_version: v1.1.0
   timeout: 5m
 
 jobs:
@@ -104,7 +104,7 @@ jobs:
           comment_on_pr: false
 
       - name: Checkout context ref (trusted)
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
@@ -131,13 +131,14 @@ jobs:
         run: |
           echo sha=${{ steps.default_vars.outputs.sha }} >> $GITHUB_OUTPUT
           
-          EXEMPT_FEATURES="GatewayStaticAddresses,HTTPRouteParentRefPort,HTTPRouteResponseHeaderModification"
+          EXEMPT_FEATURES="GatewayStaticAddresses,HTTPRouteParentRefPort,MeshConsumerRoute"
           if [ ${{ matrix.crd-channel }} == "standard" ]; then
             EXEMPT_FEATURES+=",HTTPRouteDestinationPortMatching,HTTPRouteRequestTimeout,HTTPRouteBackendTimeout"
           fi
 
           CILIUM_INSTALL_DEFAULTS="${{ steps.default_vars.outputs.cilium_install_defaults }} \
             --helm-set=kubeProxyReplacement=true \
+            --helm-set=extraArgs={--envoy-config-retry-interval=5s} \
             --helm-set=gatewayAPI.enabled=true \
             --helm-set=l2announcements.enabled=true"
 
@@ -148,7 +149,7 @@ jobs:
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.
       - name: Checkout pull request branch (NOT TRUSTED)
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -192,9 +193,9 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/${{ matrix.crd-channel }}/gateway.networking.k8s.io_gateways.yaml
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/${{ matrix.crd-channel }}/gateway.networking.k8s.io_httproutes.yaml
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/${{ matrix.crd-channel }}/gateway.networking.k8s.io_referencegrants.yaml
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/${{ matrix.crd-channel }}/gateway.networking.k8s.io_grpcroutes.yaml
           ## TLSRoute is only available in experimental channel in v0.7.0
           kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
-          kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${{ env.gateway_api_version }}/config/crd/experimental/gateway.networking.k8s.io_grpcroutes.yaml
 
           # To make sure that Gateway API CRs are available
           kubectl wait --for condition=Established crd/gatewayclasses.gateway.networking.k8s.io --timeout=${{ env.timeout }}
@@ -263,7 +264,7 @@ jobs:
               --gateway-class cilium \
               --all-features \
               --exempt-features "${{ steps.vars.outputs.exempt-features }}" \
-              --conformance-profiles HTTP,TLS \
+              --conformance-profiles GATEWAY-HTTP,GATEWAY-TLS,GATEWAY-GRPC,MESH-HTTP,MESH-GRPC \
               --organization cilium \
               --project cilium \
               --url github.com/cilium/cilium \

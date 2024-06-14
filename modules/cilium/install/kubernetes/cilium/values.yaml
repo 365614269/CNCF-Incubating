@@ -998,8 +998,8 @@ certgen:
     # @schema
     override: ~
     repository: "quay.io/cilium/certgen"
-    tag: "v0.1.12"
-    digest: "sha256:bbc5e65e9dc65bc6b58967fe536b7f3b54e12332908aeb0a96a36866b4372b4e"
+    tag: "v0.2.0"
+    digest: "sha256:169d93fd8f2f9009db3b9d5ccd37c2b753d0989e1e7cd8fe79f9160c459eef4f"
     useDigest: true
     pullPolicy: "Always"
   # -- Seconds after which the completed job pod will be deleted
@@ -2915,7 +2915,7 @@ clustermesh:
     kvstoremesh:
       # -- Enable KVStoreMesh. KVStoreMesh caches the information retrieved
       # from the remote clusters in the local etcd instance.
-      enabled: false
+      enabled: true
       # -- TCP port for the KVStoreMesh health API.
       healthPort: 9881
       # -- Configuration for the KVStoreMesh readiness probe.
@@ -3048,11 +3048,13 @@ clustermesh:
     # -- Affinity for clustermesh.apiserver
     affinity:
       podAntiAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          - topologyKey: kubernetes.io/hostname
-            labelSelector:
-              matchLabels:
-                k8s-app: clustermesh-apiserver
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  k8s-app: clustermesh-apiserver
+              topologyKey: kubernetes.io/hostname
     # -- Pod topology spread constraints for clustermesh-apiserver
     topologySpreadConstraints: []
     #   - maxSkew: 1
@@ -3073,7 +3075,11 @@ clustermesh:
         # @schema
         # type: [integer, string]
         # @schema
-        maxUnavailable: 1
+        maxSurge: 1
+        # @schema
+        # type: [integer, string]
+        # @schema
+        maxUnavailable: 0
     # -- The priority class to use for clustermesh-apiserver
     priorityClassName: ""
     tls:

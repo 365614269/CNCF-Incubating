@@ -20,7 +20,7 @@ require (
 	github.com/efficientgo/tools/extkingpin v0.0.0-20220817170617-6c25e3b627dd
 	github.com/facette/natsort v0.0.0-20181210072756-2cd4dd1e2dcb
 	github.com/fatih/structtag v1.2.0
-	github.com/felixge/fgprof v0.9.2
+	github.com/felixge/fgprof v0.9.4
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/go-kit/log v0.2.1
@@ -36,7 +36,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.17.8
+	github.com/klauspost/compress v1.17.9
 	github.com/leanovate/gopter v0.2.9
 	github.com/lightstep/lightstep-tracer-go v0.25.0
 	github.com/lovoo/gcloud-opentracing v0.3.0
@@ -116,7 +116,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mitchellh/go-ps v1.0.0
-	github.com/onsi/gomega v1.29.0
+	github.com/onsi/gomega v1.33.1
 	github.com/prometheus-community/prom-label-proxy v0.8.1-0.20240127162815-c1195f9aabc0
 	go.opentelemetry.io/contrib/propagators/autoprop v0.38.0
 	go4.org/intern v0.0.0-20230525184215-6c62f75575cb

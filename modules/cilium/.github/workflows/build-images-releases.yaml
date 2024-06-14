@@ -50,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout main branch to access local actions
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
@@ -87,7 +87,7 @@ jobs:
           fi
 
       - name: Checkout Source Code
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
 
@@ -120,7 +120,8 @@ jobs:
         with:
           artifact-name: sbom_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
           output-file: ./sbom_${{ matrix.name }}_${{ steps.tag.outputs.tag }}.spdx.json
-          image: quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/${{ matrix.name }}:${{ steps.tag.outputs.tag }}
+          image: quay.io/${{ env.QUAY_ORGANIZATION }}/${{ matrix.name }}:${{ steps.tag.outputs.tag }}
+          upload-release-assets: false
 
       - name: Attach SBOM to container images
         run: |

@@ -89,7 +89,7 @@ jobs:
           # Define three config sets
           - config: '5.4'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.4-20240515.073534'
+            kernel: '5.4-20240612.090637'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -97,7 +97,7 @@ jobs:
 
           - config: '5.10'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.10-20240515.073534'
+            kernel: '5.10-20240612.090637'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'disabled'
@@ -106,7 +106,7 @@ jobs:
 
           - config: '5.15'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '5.15-20240515.073534'
+            kernel: '5.15-20240612.090637'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'vxlan'
@@ -116,7 +116,7 @@ jobs:
 
           - config: '6.1'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: '6.1-20240515.073534'
+            kernel: '6.1-20240612.090637'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'vxlan'
@@ -125,7 +125,7 @@ jobs:
 
           - config: 'bpf-next'
             # renovate: datasource=docker depName=quay.io/lvh-images/kind
-            kernel: 'bpf-next-20240529.013128'
+            kernel: 'bpf-next-20240613.013105'
             kube-proxy: 'iptables'
             kpr: 'false'
             tunnel: 'vxlan'
@@ -181,7 +181,7 @@ jobs:
           comment_on_pr: false
 
       - name: Checkout context ref (trusted)
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ inputs.context-ref || github.sha }}
           # We keep the credentials here, to make sure we're able to run
@@ -228,7 +228,7 @@ jobs:
           echo image_tag=${IMAGE_TAG} >> $GITHUB_OUTPUT
 
       - name: Call actions/checkout again to remove credentials
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ inputs.context-ref || github.sha }}
           persist-credentials: false
@@ -327,7 +327,7 @@ jobs:
       # steps must take care not to execute untrusted code.
       - name: Checkout pull request branch (NOT TRUSTED)
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ steps.vars.outputs.sha }}
           persist-credentials: false
@@ -337,7 +337,7 @@ jobs:
 
       - name: Checkout ${{ steps.vars.outputs.downgrade_version }} branch to get the Helm chart
         if: ${{ steps.vars.outputs.downgrade_version != '' }}
-        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: ${{ steps.vars.outputs.downgrade_version }}
           persist-credentials: false

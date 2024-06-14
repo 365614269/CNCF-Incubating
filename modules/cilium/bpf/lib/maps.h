@@ -35,7 +35,7 @@ struct bpf_elf_map __section_maps POLICY_CALL_MAP = {
 	.id		= CILIUM_MAP_POLICY,
 	.size_key	= sizeof(__u32),
 	.size_value	= sizeof(__u32),
-	.pinning	= PIN_GLOBAL_NS,
+	.pinning	= LIBBPF_PIN_BY_NAME,
 	.max_elem	= POLICY_PROG_MAP_SIZE,
 };
 
@@ -64,7 +64,7 @@ struct bpf_elf_map __section_maps POLICY_EGRESSCALL_MAP = {
 	.id		= CILIUM_MAP_EGRESSPOLICY,
 	.size_key	= sizeof(__u32),
 	.size_value	= sizeof(__u32),
-	.pinning	= PIN_GLOBAL_NS,
+	.pinning	= LIBBPF_PIN_BY_NAME,
 	.max_elem	= POLICY_PROG_MAP_SIZE,
 };
 
@@ -129,13 +129,15 @@ struct {
 #endif
 
 #ifndef SKIP_CALLS_MAP
-/* Private per EP map for internal tail calls */
+/* Private per-EP map for internal tail calls. Its bpffs pin is replaced every
+ * time the BPF object is loaded. An existing pinned map is never reused.
+ */
 struct bpf_elf_map __section_maps CALLS_MAP = {
 	.type		= BPF_MAP_TYPE_PROG_ARRAY,
 	.id		= CILIUM_MAP_CALLS,
 	.size_key	= sizeof(__u32),
 	.size_value	= sizeof(__u32),
-	.pinning	= PIN_GLOBAL_NS,
+	.pinning	= CILIUM_PIN_REPLACE,
 	.max_elem	= CILIUM_CALL_SIZE,
 };
 #endif /* SKIP_CALLS_MAP */
@@ -164,7 +166,7 @@ struct bpf_elf_map __section_maps CUSTOM_CALLS_MAP = {
 	.id		= CILIUM_MAP_CUSTOM_CALLS,
 	.size_key	= sizeof(__u32),
 	.size_value	= sizeof(__u32),
-	.pinning	= PIN_GLOBAL_NS,
+	.pinning	= LIBBPF_PIN_BY_NAME,
 	.max_elem	= 4,	/* ingress and egress, IPv4 and IPv6 */
 };
 

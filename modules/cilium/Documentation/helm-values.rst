@@ -403,7 +403,7 @@
    * - :spelling:ignore:`certgen`
      - Configure certificate generation for Hubble integration. If hubble.tls.auto.method=cronJob, these values are used for the Kubernetes CronJob which will be scheduled regularly to (re)generate any certificates not provided manually.
      - object
-     - ``{"affinity":{},"annotations":{"cronJob":{},"job":{}},"extraVolumeMounts":[],"extraVolumes":[],"image":{"digest":"sha256:bbc5e65e9dc65bc6b58967fe536b7f3b54e12332908aeb0a96a36866b4372b4e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/certgen","tag":"v0.1.12","useDigest":true},"podLabels":{},"tolerations":[],"ttlSecondsAfterFinished":1800}``
+     - ``{"affinity":{},"annotations":{"cronJob":{},"job":{}},"extraVolumeMounts":[],"extraVolumes":[],"image":{"digest":"sha256:169d93fd8f2f9009db3b9d5ccd37c2b753d0989e1e7cd8fe79f9160c459eef4f","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/certgen","tag":"v0.2.0","useDigest":true},"podLabels":{},"tolerations":[],"ttlSecondsAfterFinished":1800}``
    * - :spelling:ignore:`certgen.affinity`
      - Affinity for certgen
      - object
@@ -479,7 +479,7 @@
    * - :spelling:ignore:`clustermesh.apiserver.affinity`
      - Affinity for clustermesh.apiserver
      - object
-     - ``{"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"k8s-app":"clustermesh-apiserver"}},"topologyKey":"kubernetes.io/hostname"}]}}``
+     - ``{"podAntiAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"podAffinityTerm":{"labelSelector":{"matchLabels":{"k8s-app":"clustermesh-apiserver"}},"topologyKey":"kubernetes.io/hostname"},"weight":100}]}}``
    * - :spelling:ignore:`clustermesh.apiserver.etcd.init.extraArgs`
      - Additional arguments to ``clustermesh-apiserver etcdinit``.
      - list
@@ -535,7 +535,7 @@
    * - :spelling:ignore:`clustermesh.apiserver.kvstoremesh.enabled`
      - Enable KVStoreMesh. KVStoreMesh caches the information retrieved from the remote clusters in the local etcd instance.
      - bool
-     - ``false``
+     - ``true``
    * - :spelling:ignore:`clustermesh.apiserver.kvstoremesh.extraArgs`
      - Additional KVStoreMesh arguments.
      - list
@@ -783,7 +783,7 @@
    * - :spelling:ignore:`clustermesh.apiserver.updateStrategy`
      - clustermesh-apiserver update strategy
      - object
-     - ``{"rollingUpdate":{"maxUnavailable":1},"type":"RollingUpdate"}``
+     - ``{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"}``
    * - :spelling:ignore:`clustermesh.config`
      - Clustermesh explicit configuration.
      - object

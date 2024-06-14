@@ -145,6 +145,17 @@ func reconciliationLoop(
 
 	firstInit := true
 
+	// Run an initial full reconciliation before listening on partial reconciliation
+	// request channels (like proxies and no track rules).
+	if err := updateRules(state, firstInit); err != nil {
+		health.Degraded("iptables rules update failed", err)
+		// Keep stateChanged=true and firstInit=true to try again on the next tick.
+	} else {
+		health.OK("iptables rules update completed")
+		firstInit = false
+		stateChanged = false
+	}
+
 	// list of pending channels waiting for reconciliation
 	var updatedChs []chan<- struct{}
 
@@ -183,7 +194,7 @@ stop:
 			// will be deleted by the manager (see Manager.addProxyRules)
 			state.proxies[req.info.name] = req.info
 
-			if !firstInit {
+			if firstInit {
 				// first init not yet completed, proxy rules will be updated as part of that
 				stateChanged = true
 				updatedChs = append(updatedChs, req.updated)
@@ -210,7 +221,7 @@ stop:
 			}
 			state.noTrackPods.Insert(req.info)
 
-			if !firstInit {
+			if firstInit {
 				// first init not yet completed, no track pod rules will be updated as part of that
 				stateChanged = true
 				updatedChs = append(updatedChs, req.updated)
@@ -237,7 +248,7 @@ stop:
 			}
 			state.noTrackPods.Delete(req.info)
 
-			if !firstInit {
+			if firstInit {
 				// first init not yet completed, no track pod rules will be updated as part of that
 				stateChanged = true
 				updatedChs = append(updatedChs, req.updated)
