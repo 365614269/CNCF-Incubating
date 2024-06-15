@@ -6197,7 +6197,7 @@ __metadata:
     "@backstage/core-plugin-api": "workspace:^"
     "@material-ui/core": ^4.12.2
     "@material-ui/icons": ^4.9.1
-    "@rjsf/utils": 5.18.2
+    "@rjsf/utils": 5.18.4
     "@types/react": ^16.13.1 || ^17.0.0
     "@types/react-grid-layout": ^1.3.2
   peerDependencies:
@@ -6228,10 +6228,10 @@ __metadata:
     "@material-ui/core": ^4.12.2
     "@material-ui/icons": ^4.9.1
     "@material-ui/lab": 4.0.0-alpha.61
-    "@rjsf/core": 5.18.2
-    "@rjsf/material-ui": 5.18.2
-    "@rjsf/utils": 5.18.2
-    "@rjsf/validator-ajv8": 5.18.2
+    "@rjsf/core": 5.18.4
+    "@rjsf/material-ui": 5.18.4
+    "@rjsf/utils": 5.18.4
+    "@rjsf/validator-ajv8": 5.18.4
     "@testing-library/dom": ^10.0.0
     "@testing-library/jest-dom": ^6.0.0
     "@testing-library/react": ^15.0.0
@@ -7219,10 +7219,10 @@ __metadata:
     "@material-ui/icons": ^4.9.1
     "@material-ui/lab": 4.0.0-alpha.61
     "@react-hookz/web": ^24.0.0
-    "@rjsf/core": 5.18.2
-    "@rjsf/material-ui": 5.18.2
-    "@rjsf/utils": 5.18.2
-    "@rjsf/validator-ajv8": 5.18.2
+    "@rjsf/core": 5.18.4
+    "@rjsf/material-ui": 5.18.4
+    "@rjsf/utils": 5.18.4
+    "@rjsf/validator-ajv8": 5.18.4
     "@testing-library/dom": ^10.0.0
     "@testing-library/jest-dom": ^6.0.0
     "@testing-library/react": ^15.0.0
@@ -7285,10 +7285,10 @@ __metadata:
     "@material-ui/lab": 4.0.0-alpha.61
     "@microsoft/fetch-event-source": ^2.0.1
     "@react-hookz/web": ^24.0.0
-    "@rjsf/core": 5.18.2
-    "@rjsf/material-ui": 5.18.2
-    "@rjsf/utils": 5.18.2
-    "@rjsf/validator-ajv8": 5.18.2
+    "@rjsf/core": 5.18.4
+    "@rjsf/material-ui": 5.18.4
+    "@rjsf/utils": 5.18.4
+    "@rjsf/validator-ajv8": 5.18.4
     "@testing-library/dom": ^10.0.0
     "@testing-library/jest-dom": ^6.0.0
     "@testing-library/react": ^15.0.0
@@ -14329,9 +14329,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@rjsf/core@npm:5.18.2":
-  version: 5.18.2
-  resolution: "@rjsf/core@npm:5.18.2"
+"@rjsf/core@npm:5.18.4":
+  version: 5.18.4
+  resolution: "@rjsf/core@npm:5.18.4"
   dependencies:
     lodash: ^4.17.21
     lodash-es: ^4.17.21
@@ -14341,26 +14341,26 @@ __metadata:
   peerDependencies:
     "@rjsf/utils": ^5.18.x
     react: ^16.14.0 || >=17
-  checksum: b8b20bd75090b15b19e176aa766c037f3a7f1a27dbbde07ab095376a85e0027fd441b6e37355c8d3b389393db1f1b27699769034146040864c63a8f110d5e2d7
+  checksum: 8c3f49914be396595ce67dc4c36ac25c5cb6673917ec82c47f79321f5bb78d02741e8dca39287d0435270e7c9ccb06f7d40e396bdf71a3e9eb1371ef16954817
   languageName: node
   linkType: hard
 
-"@rjsf/material-ui@npm:5.18.2":
-  version: 5.18.2
-  resolution: "@rjsf/material-ui@npm:5.18.2"
+"@rjsf/material-ui@npm:5.18.4":
+  version: 5.18.4
+  resolution: "@rjsf/material-ui@npm:5.18.4"
   peerDependencies:
     "@material-ui/core": ^4.12.3
     "@material-ui/icons": ^4.11.2
     "@rjsf/core": ^5.18.x
     "@rjsf/utils": ^5.18.x
     react: ^16.14.0 || >=17
-  checksum: fc898efa7834e32c59e9f607c8650e39689252c6bc7e84f081ab131c90b92c28787288c647b81841b2cfab40231660324b8cc35bf7d05649f31bf70e207d4a7e
+  checksum: 2bb0eeb0603bd11b034785ac1902cfcf3630cb4d04161728adff86b2629ca4d21bbb42beb9e6acdd4c9a6a4d84cce1ca325413a9bd1fd94eda47f58d62eb3164
   languageName: node
   linkType: hard
 
-"@rjsf/utils@npm:5.18.2":
-  version: 5.18.2
-  resolution: "@rjsf/utils@npm:5.18.2"
+"@rjsf/utils@npm:5.18.4":
+  version: 5.18.4
+  resolution: "@rjsf/utils@npm:5.18.4"
   dependencies:
     json-schema-merge-allof: ^0.8.1
     jsonpointer: ^5.0.1
@@ -14369,13 +14369,13 @@ __metadata:
     react-is: ^18.2.0
   peerDependencies:
     react: ^16.14.0 || >=17
-  checksum: 19342ce160f5f2ff1b1448bc61b0767c9b19a3c365fe3dca221c9178dff6b54123bdfe9dd4b0314aa7965011edb0e76029f7e76226936066bfacbaaa619546b4
+  checksum: d7cf514527ec50a94751c5ec1f9e5eafd89d0c56441a22ae28a4e667aaa7c60447e1e1ccf8355c5be5b97e9a1163853c116816b13307e3463433d50f6b89bb3e
   languageName: node
   linkType: hard
 
-"@rjsf/validator-ajv8@npm:5.18.2":
-  version: 5.18.2
-  resolution: "@rjsf/validator-ajv8@npm:5.18.2"
+"@rjsf/validator-ajv8@npm:5.18.4":
+  version: 5.18.4
+  resolution: "@rjsf/validator-ajv8@npm:5.18.4"
   dependencies:
     ajv: ^8.12.0
     ajv-formats: ^2.1.1
@@ -14383,7 +14383,7 @@ __metadata:
     lodash-es: ^4.17.21
   peerDependencies:
     "@rjsf/utils": ^5.18.x
-  checksum: 0ed953615b0619a376edfa95ccb891f1aa701e1915a09de562fb1c13a69a4902887359dcf68597f78ffc0a9be9c402c1488ef8ae552be8c8f48aeb7d59d3eae3
+  checksum: edf3b24e07babe972e57645d396467c6404ff3f95a79118667f2d62082aa28e4ee7df5fad81e28071cd24b5455fe687a9f9bcf714718d4fd6036912b04c69a84
   languageName: node
   linkType: hard
 
@@ -16424,94 +16424,94 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@swc/core-darwin-arm64@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-darwin-arm64@npm:1.5.0"
+"@swc/core-darwin-arm64@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-darwin-arm64@npm:1.5.29"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@swc/core-darwin-x64@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-darwin-x64@npm:1.5.0"
+"@swc/core-darwin-x64@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-darwin-x64@npm:1.5.29"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@swc/core-linux-arm-gnueabihf@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-linux-arm-gnueabihf@npm:1.5.0"
+"@swc/core-linux-arm-gnueabihf@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-linux-arm-gnueabihf@npm:1.5.29"
   conditions: os=linux & cpu=arm
   languageName: node
   linkType: hard
 
-"@swc/core-linux-arm64-gnu@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-linux-arm64-gnu@npm:1.5.0"
+"@swc/core-linux-arm64-gnu@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-linux-arm64-gnu@npm:1.5.29"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@swc/core-linux-arm64-musl@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-linux-arm64-musl@npm:1.5.0"
+"@swc/core-linux-arm64-musl@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-linux-arm64-musl@npm:1.5.29"
   conditions: os=linux & cpu=arm64 & libc=musl
   languageName: node
   linkType: hard
 
-"@swc/core-linux-x64-gnu@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-linux-x64-gnu@npm:1.5.0"
+"@swc/core-linux-x64-gnu@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-linux-x64-gnu@npm:1.5.29"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@swc/core-linux-x64-musl@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-linux-x64-musl@npm:1.5.0"
+"@swc/core-linux-x64-musl@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-linux-x64-musl@npm:1.5.29"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"@swc/core-win32-arm64-msvc@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-win32-arm64-msvc@npm:1.5.0"
+"@swc/core-win32-arm64-msvc@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-win32-arm64-msvc@npm:1.5.29"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"@swc/core-win32-ia32-msvc@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-win32-ia32-msvc@npm:1.5.0"
+"@swc/core-win32-ia32-msvc@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-win32-ia32-msvc@npm:1.5.29"
   conditions: os=win32 & cpu=ia32
   languageName: node
   linkType: hard
 
-"@swc/core-win32-x64-msvc@npm:1.5.0":
-  version: 1.5.0
-  resolution: "@swc/core-win32-x64-msvc@npm:1.5.0"
+"@swc/core-win32-x64-msvc@npm:1.5.29":
+  version: 1.5.29
+  resolution: "@swc/core-win32-x64-msvc@npm:1.5.29"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
 "@swc/core@npm:^1.3.46":
-  version: 1.5.0
-  resolution: "@swc/core@npm:1.5.0"
+  version: 1.5.29
+  resolution: "@swc/core@npm:1.5.29"
   dependencies:
-    "@swc/core-darwin-arm64": 1.5.0
-    "@swc/core-darwin-x64": 1.5.0
-    "@swc/core-linux-arm-gnueabihf": 1.5.0
-    "@swc/core-linux-arm64-gnu": 1.5.0
-    "@swc/core-linux-arm64-musl": 1.5.0
-    "@swc/core-linux-x64-gnu": 1.5.0
-    "@swc/core-linux-x64-musl": 1.5.0
-    "@swc/core-win32-arm64-msvc": 1.5.0
-    "@swc/core-win32-ia32-msvc": 1.5.0
-    "@swc/core-win32-x64-msvc": 1.5.0
-    "@swc/counter": ^0.1.2
-    "@swc/types": ^0.1.5
+    "@swc/core-darwin-arm64": 1.5.29
+    "@swc/core-darwin-x64": 1.5.29
+    "@swc/core-linux-arm-gnueabihf": 1.5.29
+    "@swc/core-linux-arm64-gnu": 1.5.29
+    "@swc/core-linux-arm64-musl": 1.5.29
+    "@swc/core-linux-x64-gnu": 1.5.29
+    "@swc/core-linux-x64-musl": 1.5.29
+    "@swc/core-win32-arm64-msvc": 1.5.29
+    "@swc/core-win32-ia32-msvc": 1.5.29
+    "@swc/core-win32-x64-msvc": 1.5.29
+    "@swc/counter": ^0.1.3
+    "@swc/types": ^0.1.8
   peerDependencies:
-    "@swc/helpers": ^0.5.0
+    "@swc/helpers": "*"
   dependenciesMeta:
     "@swc/core-darwin-arm64":
       optional: true
@@ -16536,11 +16536,11 @@ __metadata:
   peerDependenciesMeta:
     "@swc/helpers":
       optional: true
-  checksum: 1abab0b57755020b60ebf2557629c23c65c3546e4cd80f9d02fbdf208d4169c9300a0229c088081b43a01e630c9d86d02f8c240c9fc2842eaed2a517770fcd1d
+  checksum: 19e3f8525ce4f4d9f6f3f62825b1f13e1e76146390930b6d5e663c0bb2c5e95ef3bf30268110d1444ea92b99dd95bfe5a3c6e2a3c0dd79291505dc7da1ed3dab
   languageName: node
   linkType: hard
 
-"@swc/counter@npm:^0.1.2, @swc/counter@npm:^0.1.3":
+"@swc/counter@npm:^0.1.3":
   version: 0.1.3
   resolution: "@swc/counter@npm:0.1.3"
   checksum: df8f9cfba9904d3d60f511664c70d23bb323b3a0803ec9890f60133954173047ba9bdeabce28cd70ba89ccd3fd6c71c7b0bd58be85f611e1ffbe5d5c18616598
@@ -16548,11 +16548,11 @@ __metadata:
   linkType: hard
 
 "@swc/helpers@npm:^0.5.0":
-  version: 0.5.10
-  resolution: "@swc/helpers@npm:0.5.10"
+  version: 0.5.11
+  resolution: "@swc/helpers@npm:0.5.11"
   dependencies:
     tslib: ^2.4.0
-  checksum: 7a202710e494ff8e6f74b92cc12f2ce226c4d75c0f82c7c4fb911173d27744def1b3a8274fb3820f4161403182acb06ee553eb6e8e5b77b0d0ed7132a9e85bc2
+  checksum: 5d85e641d993264f38871bf53e7509da959cdff7646a40d876153291146b9d0aa701518546e5bfef18fa17c5944333bbeb66c2f0d7a570e8c5535d0937d76bd9
   languageName: node
   linkType: hard
 
@@ -16569,10 +16569,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@swc/types@npm:^0.1.5":
-  version: 0.1.5
-  resolution: "@swc/types@npm:0.1.5"
-  checksum: 6aee11f62d3d805a64848e0bd5f0e0e615f958e327a9e1260056c368d7d28764d89e38bd8005a536c9bf18afbcd303edd84099d60df34a2975d62540f61df13b
+"@swc/types@npm:^0.1.8":
+  version: 0.1.8
+  resolution: "@swc/types@npm:0.1.8"
+  dependencies:
+    "@swc/counter": ^0.1.3
+  checksum: e564d0e37b0e28546973c6d50c7a179395912a97168d695cfe9cf1051199c8b828680cdafcb8d43948f76d3703873bafb88dfb5bc2dfe0596b4ad18fcaf90c80
   languageName: node
   linkType: hard
 
@@ -21475,13 +21477,13 @@ __metadata:
   linkType: hard
 
 "better-sqlite3@npm:^9.0.0":
-  version: 9.5.0
-  resolution: "better-sqlite3@npm:9.5.0"
+  version: 9.6.0
+  resolution: "better-sqlite3@npm:9.6.0"
   dependencies:
     bindings: ^1.5.0
     node-gyp: latest
     prebuild-install: ^7.1.1
-  checksum: cfa56519755d6dd29ef8361c872c6f29392fcfcc44a435099eb61729aae23c4f18057972592a0b9ff0fcedc98e43db4ee7a1a2de21ab2868f8dcec4f8272ad9d
+  checksum: be3a1d2a3f6f9b5141be6607a38c0a51fa5849495b071955e507bc0c2a2fb08430852c1bf03796eec1a53344b25645807db48dcb51c71b0662b74c5a70420bb0
   languageName: node
   linkType: hard
 
@@ -34279,8 +34281,8 @@ __metadata:
   linkType: hard
 
 "mysql2@npm:^3.0.0":
-  version: 3.10.0
-  resolution: "mysql2@npm:3.10.0"
+  version: 3.10.1
+  resolution: "mysql2@npm:3.10.1"
   dependencies:
     denque: ^2.1.0
     generate-function: ^2.3.1
@@ -34290,7 +34292,7 @@ __metadata:
     named-placeholders: ^1.1.3
     seq-queue: ^0.0.5
     sqlstring: ^2.3.2
-  checksum: 4306de21317a05fcd4bbf28679e6b61b5e3421f7b8e2813ce7be8a06a8f7f4e09067bbd77507de465aba59a5742d1c48a3ed1038e96fb76935d24e1648d4b9c3
+  checksum: 293e1a76bfdbde146285ee7028336da7693b5dfb507a7c264216fdb3fe2088ba0f5d5a45a0a9e7c4de4f39c3f44edbe890fb05b28299d6c731fc2e4a281836e3
   languageName: node
   linkType: hard
 
@@ -44678,11 +44680,11 @@ __metadata:
   linkType: hard
 
 "yaml@npm:^2.0.0, yaml@npm:^2.0.0-10, yaml@npm:^2.1.1, yaml@npm:^2.2.1, yaml@npm:^2.2.2, yaml@npm:^2.3.2, yaml@npm:^2.3.3, yaml@npm:~2.4.2":
-  version: 2.4.2
-  resolution: "yaml@npm:2.4.2"
+  version: 2.4.5
+  resolution: "yaml@npm:2.4.5"
   bin:
     yaml: bin.mjs
-  checksum: 90dda4485de04367251face9abb5c36927c94e44078f4e958e6468a07e74e7e92f89be20fc49860b6268c51ee5a5fc79ef89197d3f874bf24ef8921cc4ba9013
+  checksum: f8efd407c07e095f00f3031108c9960b2b12971d10162b1ec19007200f6c987d2e28f73283f4731119aa610f177a3ea03d4a8fcf640600a25de1b74d00c69b3d
   languageName: node
   linkType: hard
 

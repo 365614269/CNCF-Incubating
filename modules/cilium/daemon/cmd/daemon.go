@@ -79,7 +79,6 @@ import (
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/recorder"
-	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/resiliency"
 	"github.com/cilium/cilium/pkg/service"
 	serviceStore "github.com/cilium/cilium/pkg/service/store"
@@ -109,7 +108,6 @@ type Daemon struct {
 	svc              service.ServiceManager
 	rec              *recorder.Recorder
 	policy           *policy.Repository
-	preFilter        datapath.PreFilter
 
 	statusCollectMutex lock.RWMutex
 	statusResponse     models.StatusResponse
@@ -172,8 +170,6 @@ type Daemon struct {
 	// creation events
 	endpointCreations *endpointCreationManager
 
-	lrpManager *redirectpolicy.Manager
-
 	cgroupManager manager.CGroupManager
 
 	ipamMetadata *ipamMetadata.Manager
@@ -209,11 +205,6 @@ type Daemon struct {
 // GetPolicyRepository returns the policy repository of the daemon
 func (d *Daemon) GetPolicyRepository() *policy.Repository {
 	return d.policy
-}
-
-// DebugEnabled returns if debug mode is enabled.
-func (d *Daemon) DebugEnabled() bool {
-	return option.Config.Opts.IsEnabled(option.Debug)
 }
 
 // GetCompilationLock returns the mutex responsible for synchronizing compilation
@@ -432,22 +423,15 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		bigTCPConfig:      params.BigTCPConfig,
 		tunnelConfig:      params.TunnelConfig,
 		bwManager:         params.BandwidthManager,
-		lrpManager:        params.LRPManager,
 		cgroupManager:     params.CGroupManager,
-		preFilter:         params.Prefilter,
 		endpointManager:   params.EndpointManager,
 		k8sWatcher:        params.K8sWatcher,
 		k8sSvcCache:       params.K8sSvcCache,
+		rec:               params.Recorder,
 	}
 
 	d.configModifyQueue = eventqueue.NewEventQueueBuffered("config-modify-queue", ConfigModifyQueueSize)
 	d.configModifyQueue.Run()
-
-	d.rec, err = recorder.NewRecorder(d.ctx, params.Datapath.Loader())
-	if err != nil {
-		log.WithError(err).Error("error while initializing BPF pcap recorder")
-		return nil, nil, fmt.Errorf("error while initializing BPF pcap recorder: %w", err)
-	}
 
 	// Collect CIDR identities from the "old" bpf ipcache and restore them
 	// in to the metadata layer.
@@ -590,6 +574,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	restoredEndpoints, err := d.fetchOldEndpoints(option.Config.StateDir)
 	if err != nil {
 		log.WithError(err).Error("Unable to read existing endpoints")
+	}
+	// Restore all proxy ports from datapath, if possible
+	// Must be run before d.bootstrapFQDN(), which depends
+	// on the ports having been restored.
+	if d.l7Proxy != nil {
+		d.l7Proxy.RestoreProxyPorts()
 	}
 	bootstrapStats.restore.End(true)
 
@@ -979,7 +969,7 @@ func changedOption(key string, value option.OptionSetting, data interface{}) {
 	d := data.(*Daemon)
 	if key == option.Debug {
 		// Set the debug toggle (this can be a no-op)
-		if d.DebugEnabled() {
+		if option.Config.Opts.IsEnabled(option.Debug) {
 			logging.SetLogLevelToDebug()
 		}
 		// Reflect log level change to proxies
