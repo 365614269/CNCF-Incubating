@@ -35,7 +35,7 @@ import {
   createCredentialsWithUserPrincipal,
   createCredentialsWithNonePrincipal,
   toInternalBackstageCredentials,
-} from '../../../backend-app-api/src/services/implementations/auth/helpers';
+} from '../../../backend-defaults/src/entrypoints/auth/helpers';
 // TODO is this circular thingy a problem? Test in e2e
 import {
   type IdentityApiGetIdentityRequest,
@@ -43,7 +43,7 @@ import {
 } from '@backstage/plugin-auth-node';
 import { decodeJwt } from 'jose';
 import { TokenManager } from '../deprecated';
-import { PluginEndpointDiscovery } from '../discovery';
+import { PluginEndpointDiscovery } from '../deprecated';
 import { JsonObject } from '@backstage/types';
 
 class AuthCompat implements AuthService {

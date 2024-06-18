@@ -12,6 +12,7 @@ import { CacheService } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
 import { ConfigSchema } from '@backstage/config-loader';
 import { CorsOptions } from 'cors';
+import { DatabaseService } from '@backstage/backend-plugin-api';
 import { DiscoveryService } from '@backstage/backend-plugin-api';
 import { ErrorRequestHandler } from 'express';
 import { Express as Express_2 } from 'express';
@@ -28,7 +29,6 @@ import { LifecycleService } from '@backstage/backend-plugin-api';
 import { LoadConfigOptionsRemote } from '@backstage/config-loader';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { PermissionsService } from '@backstage/backend-plugin-api';
-import { PluginDatabaseManager } from '@backstage/backend-common';
 import { RemoteConfigSourceOptions } from '@backstage/config-loader';
 import { RequestHandler } from 'express';
 import { RequestListener } from 'http';
@@ -45,7 +45,7 @@ import { transport } from 'winston';
 import { UrlReaderService } from '@backstage/backend-plugin-api';
 import { UserInfoService } from '@backstage/backend-plugin-api';
 
-// @public (undocumented)
+// @public @deprecated (undocumented)
 export const authServiceFactory: () => ServiceFactory<AuthService, 'plugin'>;
 
 // @public (undocumented)
@@ -102,7 +102,7 @@ export interface CreateSpecializedBackendOptions {
 
 // @public @deprecated (undocumented)
 export const databaseServiceFactory: () => ServiceFactory<
-  PluginDatabaseManager,
+  DatabaseService,
   'plugin'
 >;
 
@@ -151,7 +151,7 @@ export class HostDiscovery implements DiscoveryService {
   getExternalBaseUrl(pluginId: string): Promise<string>;
 }
 
-// @public (undocumented)
+// @public @deprecated (undocumented)
 export const httpAuthServiceFactory: () => ServiceFactory<
   HttpAuthService,
   'plugin'
@@ -162,7 +162,7 @@ export interface HttpRouterFactoryOptions {
   getPath?(pluginId: string): string;
 }
 
-// @public (undocumented)
+// @public
 export const httpRouterServiceFactory: (
   options?: HttpRouterFactoryOptions | undefined,
 ) => ServiceFactory<HttpRouterService, 'plugin'>;
@@ -224,7 +224,7 @@ export function loadBackendConfig(options: {
   config: Config;
 }>;
 
-// @public (undocumented)
+// @public
 export const loggerServiceFactory: () => ServiceFactory<
   LoggerService,
   'plugin'
@@ -303,7 +303,7 @@ export interface RootHttpRouterConfigureContext {
   server: Server;
 }
 
-// @public (undocumented)
+// @public
 export type RootHttpRouterFactoryOptions = {
   indexPath?: string | false;
   configure?(context: RootHttpRouterConfigureContext): void;
@@ -320,7 +320,7 @@ export const rootLifecycleServiceFactory: () => ServiceFactory<
   'root'
 >;
 
-// @public (undocumented)
+// @public
 export const rootLoggerServiceFactory: () => ServiceFactory<
   RootLoggerService,
   'root'
@@ -344,7 +344,7 @@ export const urlReaderServiceFactory: () => ServiceFactory<
   'plugin'
 >;
 
-// @public (undocumented)
+// @public @deprecated (undocumented)
 export const userInfoServiceFactory: () => ServiceFactory<
   UserInfoService,
   'plugin'

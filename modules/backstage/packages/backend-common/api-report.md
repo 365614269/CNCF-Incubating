@@ -13,7 +13,7 @@ import { AwsCredentialsManager } from '@backstage/integration-aws-node';
 import { AwsS3Integration } from '@backstage/integration';
 import { AzureDevOpsCredentialsProvider } from '@backstage/integration';
 import { AzureIntegration } from '@backstage/integration';
-import { BackendFeature } from '@backstage/backend-plugin-api';
+import { BackendFeatureCompat } from '@backstage/backend-plugin-api';
 import { BitbucketCloudIntegration } from '@backstage/integration';
 import { BitbucketIntegration } from '@backstage/integration';
 import { BitbucketServerIntegration } from '@backstage/integration';
@@ -22,6 +22,7 @@ import { CacheServiceOptions } from '@backstage/backend-plugin-api';
 import { CacheServiceSetOptions } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
 import cors from 'cors';
+import { DatabaseService } from '@backstage/backend-plugin-api';
 import { DiscoveryService } from '@backstage/backend-plugin-api';
 import Docker from 'dockerode';
 import { ErrorRequestHandler } from 'express';
@@ -43,26 +44,25 @@ import { Logger } from 'winston';
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { MergeResult } from 'isomorphic-git';
 import { PermissionsService } from '@backstage/backend-plugin-api';
-import { DatabaseService as PluginDatabaseManager } from '@backstage/backend-plugin-api';
 import { PluginMetadataService } from '@backstage/backend-plugin-api';
 import { PushResult } from 'isomorphic-git';
 import { Readable } from 'stream';
 import { ReadCommitResult } from 'isomorphic-git';
-import type { ReadTreeOptions as ReadTreeOptions_2 } from '@backstage/backend-plugin-api';
-import type { ReadTreeResponse as ReadTreeResponse_2 } from '@backstage/backend-plugin-api';
-import type { ReadTreeResponseDirOptions as ReadTreeResponseDirOptions_2 } from '@backstage/backend-plugin-api';
-import type { ReadTreeResponseFile as ReadTreeResponseFile_2 } from '@backstage/backend-plugin-api';
-import type { ReadUrlOptions as ReadUrlOptions_2 } from '@backstage/backend-plugin-api';
-import type { ReadUrlResponse as ReadUrlResponse_2 } from '@backstage/backend-plugin-api';
+import { ReadTreeOptions as ReadTreeOptions_2 } from '@backstage/backend-plugin-api';
+import { ReadTreeResponse as ReadTreeResponse_2 } from '@backstage/backend-plugin-api';
+import { ReadTreeResponseDirOptions as ReadTreeResponseDirOptions_2 } from '@backstage/backend-plugin-api';
+import { ReadTreeResponseFile as ReadTreeResponseFile_2 } from '@backstage/backend-plugin-api';
+import { ReadUrlOptions as ReadUrlOptions_2 } from '@backstage/backend-plugin-api';
+import { ReadUrlResponse as ReadUrlResponse_2 } from '@backstage/backend-plugin-api';
 import { RequestHandler } from 'express';
 import { resolvePackagePath as resolvePackagePath_2 } from '@backstage/backend-plugin-api';
 import { resolveSafeChildPath as resolveSafeChildPath_2 } from '@backstage/backend-plugin-api';
 import { RootConfigService } from '@backstage/backend-plugin-api';
 import { Router } from 'express';
 import { SchedulerService } from '@backstage/backend-plugin-api';
-import type { SearchOptions as SearchOptions_2 } from '@backstage/backend-plugin-api';
-import type { SearchResponse as SearchResponse_2 } from '@backstage/backend-plugin-api';
-import type { SearchResponseFile as SearchResponseFile_2 } from '@backstage/backend-plugin-api';
+import { SearchOptions as SearchOptions_2 } from '@backstage/backend-plugin-api';
+import { SearchResponse as SearchResponse_2 } from '@backstage/backend-plugin-api';
+import { SearchResponseFile as SearchResponseFile_2 } from '@backstage/backend-plugin-api';
 import { Server } from 'http';
 import { ServiceRef } from '@backstage/backend-plugin-api';
 import { TokenManagerService } from '@backstage/backend-plugin-api';
@@ -137,7 +137,7 @@ export function cacheToPluginCacheManager(cache: CacheService): {
 // @public @deprecated
 export const coloredFormat: winston.Logform.Format;
 
-// @public
+// @public @deprecated
 export interface ContainerRunner {
   runContainer(opts: RunContainerOptions): Promise<void>;
 }
@@ -191,46 +191,48 @@ export function createStatusCheckRouter(options: {
   statusCheck?: StatusCheck;
 }): Promise<express.Router>;
 
-// @public
+// @public @deprecated (undocumented)
 export class DatabaseManager implements LegacyRootDatabaseService {
+  // (undocumented)
   forPlugin(
     pluginId: string,
-    deps?: {
-      lifecycle: LifecycleService;
-      pluginMetadata: PluginMetadataService;
-    },
+    deps?:
+      | {
+          lifecycle: LifecycleService;
+          pluginMetadata: PluginMetadataService;
+        }
+      | undefined,
   ): PluginDatabaseManager;
+  // (undocumented)
   static fromConfig(
     config: Config,
     options?: DatabaseManagerOptions,
   ): DatabaseManager;
 }
 
-// @public
-export type DatabaseManagerOptions = {
-  migrations?: PluginDatabaseManager['migrations'];
-  logger?: LoggerService;
-};
+// Warning: (ae-forgotten-export) The symbol "DatabaseManagerOptions_2" needs to be exported by the entry point index.d.ts
+//
+// @public @deprecated (undocumented)
+export type DatabaseManagerOptions = DatabaseManagerOptions_2;
 
-// @public
+// @public @deprecated
 export class DockerContainerRunner implements ContainerRunner {
   constructor(options: { dockerClient: Docker });
   // (undocumented)
   runContainer(options: RunContainerOptions): Promise<void>;
 }
 
-// @public @deprecated
-export function dropDatabase(
-  dbConfig: Config,
-  ...databaseNames: string[]
-): Promise<void>;
+// Warning: (ae-forgotten-export) The symbol "dropDatabase_2" needs to be exported by the entry point index.d.ts
+//
+// @public @deprecated (undocumented)
+export const dropDatabase: typeof dropDatabase_2;
 
 // @public @deprecated
 export function errorHandler(
   options?: ErrorHandlerOptions,
 ): ErrorRequestHandler;
 
-// @public
+// @public @deprecated
 export type ErrorHandlerOptions = {
   showStackTraces?: boolean;
   logger?: LoggerService;
@@ -365,20 +367,20 @@ export const isChildPath: typeof isChildPath_2;
 // @public @deprecated (undocumented)
 export const isDatabaseConflictError: typeof isDatabaseConflictError_2;
 
-// @public
+// @public @deprecated
 export class KubernetesContainerRunner implements ContainerRunner {
   constructor(options: KubernetesContainerRunnerOptions);
   // (undocumented)
   runContainer(options: RunContainerOptions): Promise<void>;
 }
 
-// @public
+// @public @deprecated
 export type KubernetesContainerRunnerMountBase = {
   volumeName: string;
   basePath: string;
 };
 
-// @public
+// @public @deprecated
 export type KubernetesContainerRunnerOptions = {
   kubeConfig: KubeConfig;
   name: string;
@@ -400,7 +402,7 @@ export const legacyPlugin: (
         {
           cache: CacheService;
           config: RootConfigService;
-          database: PluginDatabaseManager;
+          database: DatabaseService;
           discovery: DiscoveryService;
           logger: LoggerService;
           permissions: PermissionsService;
@@ -418,12 +420,12 @@ export const legacyPlugin: (
       >
     >;
   }>,
-) => BackendFeature;
+) => BackendFeatureCompat;
 
-// @public
-export type LegacyRootDatabaseService = {
-  forPlugin(pluginId: string): PluginDatabaseManager;
-};
+// Warning: (ae-forgotten-export) The symbol "LegacyRootDatabaseService_2" needs to be exported by the entry point index.d.ts
+//
+// @public @deprecated (undocumented)
+export type LegacyRootDatabaseService = LegacyRootDatabaseService_2;
 
 // @public @deprecated
 export function loadBackendConfig(options: {
@@ -456,7 +458,7 @@ export function makeLegacyPlugin<
   createRouterImport: Promise<{
     default: LegacyCreateRouter<TransformedEnv<TEnv, TEnvTransforms>>;
   }>,
-) => BackendFeature;
+) => BackendFeatureCompat;
 
 // @public @deprecated
 export function notFoundHandler(): RequestHandler;
@@ -466,12 +468,13 @@ export function notFoundHandler(): RequestHandler;
 // @public @deprecated (undocumented)
 export type PluginCacheManager = PluginCacheManager_2;
 
-export { PluginDatabaseManager };
+// @public @deprecated (undocumented)
+export type PluginDatabaseManager = DatabaseService;
 
 // @public @deprecated (undocumented)
 export type PluginEndpointDiscovery = DiscoveryService;
 
-// @public
+// @public @deprecated
 export interface PullOptions {
   // (undocumented)
   [key: string]: unknown;
@@ -538,7 +541,7 @@ export function redactWinstonLogLine(
 // @public @deprecated
 export function requestLoggingHandler(logger?: LoggerService): RequestHandler;
 
-// @public
+// @public @deprecated
 export type RequestLoggingHandlerFactory = (
   logger?: LoggerService,
 ) => RequestHandler;
@@ -549,7 +552,7 @@ export const resolvePackagePath: typeof resolvePackagePath_2;
 // @public @deprecated (undocumented)
 export const resolveSafeChildPath: typeof resolveSafeChildPath_2;
 
-// @public
+// @public @deprecated
 export type RunContainerOptions = {
   imageName: string;
   command?: string | string[];

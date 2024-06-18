@@ -62,7 +62,7 @@ import (
 	"github.com/cilium/cilium/pkg/hubble/exporter/exporteroption"
 	"github.com/cilium/cilium/pkg/hubble/observer/observeroption"
 	"github.com/cilium/cilium/pkg/identity"
-	ipamMetadata "github.com/cilium/cilium/pkg/ipam/metadata"
+	"github.com/cilium/cilium/pkg/ipam"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/ipmasq"
@@ -350,6 +350,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.EnableAutoDirectRoutingName, defaults.EnableAutoDirectRouting, "Enable automatic L2 routing between nodes")
 	option.BindEnv(vp, option.EnableAutoDirectRoutingName)
+
+	flags.Bool(option.DirectRoutingSkipUnreachableName, defaults.EnableDirectRoutingSkipUnreachable, "Enable skipping L2 routes between nodes on different subnets")
+	option.BindEnv(vp, option.DirectRoutingSkipUnreachableName)
 
 	flags.Bool(option.EnableBPFTProxy, defaults.EnableBPFTProxy, "Enable BPF-based proxy redirection, if support available")
 	option.BindEnv(vp, option.EnableBPFTProxy)
@@ -1278,8 +1281,6 @@ func initEnv(vp *viper.Viper) {
 		log.WithError(err).Fatalf("BPF template directory: NOT OK. Please run 'make install-bpf'")
 	}
 
-	linuxdatapath.CheckRequirements()
-
 	if err := probes.CreateHeaderFiles(filepath.Join(option.Config.BpfDir, "include/bpf"), probes.ExecuteHeaderProbes()); err != nil {
 		log.WithError(err).Fatal("failed to create header files with feature macros")
 	}
@@ -1647,7 +1648,6 @@ type daemonParams struct {
 	PolicyK8sWatcher       *policyK8s.PolicyResourcesWatcher
 	DirectoryPolicyWatcher *policyDirectory.PolicyResourcesWatcher
 	DirReadStatus          policyDirectory.DirectoryWatcherReadStatus
-	IPAMMetadataManager    *ipamMetadata.Manager
 	CNIConfigManager       cni.CNIConfigManager
 	SwaggerSpec            *server.Spec
 	HealthAPISpec          *healthApi.Spec
@@ -1685,6 +1685,7 @@ type daemonParams struct {
 	CGroupManager       cgroup.CGroupManager
 	ServiceResolver     *dial.ServiceResolver
 	Recorder            *recorder.Recorder
+	IPAM                *ipam.IPAM
 }
 
 func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], promise.Promise[*option.DaemonConfig]) {
