@@ -18,14 +18,10 @@ export * from './cache';
 export * from './config';
 export * from './database';
 export * from './discovery';
-export * from './httpRouter';
 export * from './identity';
 export * from './lifecycle';
-export * from './logger';
 export * from './permissions';
-export * from './rootHttpRouter';
 export * from './rootLifecycle';
-export * from './rootLogger';
 export * from './tokenManager';
 export * from './urlReader';
 

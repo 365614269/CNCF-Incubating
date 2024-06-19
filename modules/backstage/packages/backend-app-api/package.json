@@ -1,6 +1,6 @@
 {
   "name": "@backstage/backend-app-api",
-  "version": "0.7.6-next.3",
+  "version": "0.7.6",
   "description": "Core API used by Backstage backend apps",
   "backstage": {
     "role": "node-library"
@@ -90,6 +90,7 @@
     "winston-transport": "^4.5.0"
   },
   "devDependencies": {
+    "@backstage/backend-defaults": "workspace:^",
     "@backstage/backend-test-utils": "workspace:^",
     "@backstage/cli": "workspace:^",
     "@types/compression": "^1.7.0",
