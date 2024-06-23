@@ -56,6 +56,7 @@ import (
 	cdifake "kubevirt.io/client-go/generated/containerized-data-importer/clientset/versioned/fake"
 	"kubevirt.io/client-go/kubecli"
 	"kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
+	cdiv1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 
 	"kubevirt.io/kubevirt/pkg/apimachinery/patch"
 	storagetypes "kubevirt.io/kubevirt/pkg/storage/types"
@@ -116,7 +117,7 @@ var _ = Describe("VirtualMachineInstance Subresources", func() {
 		},
 	}
 
-	config, _, kvInformer := testutils.NewFakeClusterConfigUsingKV(kv)
+	config, _, kvStore := testutils.NewFakeClusterConfigUsingKV(kv)
 
 	app := SubresourceAPIApp{}
 	BeforeEach(func() {
@@ -166,10 +167,10 @@ var _ = Describe("VirtualMachineInstance Subresources", func() {
 	enableFeatureGate := func(featureGate string) {
 		kvConfig := kv.DeepCopy()
 		kvConfig.Spec.Configuration.DeveloperConfiguration.FeatureGates = []string{featureGate}
-		testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), kvConfig)
+		testutils.UpdateFakeKubeVirtClusterConfig(kvStore, kvConfig)
 	}
 	disableFeatureGates := func() {
-		testutils.UpdateFakeKubeVirtClusterConfig(kvInformer.GetStore(), kv)
+		testutils.UpdateFakeKubeVirtClusterConfig(kvStore, kv)
 	}
 
 	expectHandlerPod := func() {
@@ -1289,7 +1290,7 @@ var _ = Describe("VirtualMachineInstance Subresources", func() {
 				},
 				Status: v1beta1.CDIConfigStatus{
 					FilesystemOverhead: &v1beta1.FilesystemOverhead{
-						Global: storagetypes.DefaultFSOverhead,
+						Global: cdiv1.Percent(storagetypes.DefaultFSOverhead),
 					},
 				},
 			}
