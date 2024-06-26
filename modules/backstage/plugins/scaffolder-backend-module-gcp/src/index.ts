@@ -1,5 +1,5 @@
 /*
- * This file is part of the KubeVirt project
+ * Copyright 2023 The Backstage Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,19 +12,12 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * Copyright 2017 Red Hat, Inc.
- *
  */
 
-package watchdog
+/**
+ * A module for the scaffolder backend that lets you interact with azure
+ *
+ * @packageDocumentation
+ */
 
-import (
-	"testing"
-
-	"kubevirt.io/client-go/testutils"
-)
-
-func TestWatchdog(t *testing.T) {
-	testutils.KubeVirtTestSuiteSetup(t)
-}
+export { gcpBucketModule as default } from './module';
