@@ -38,6 +38,7 @@ weight: 1
   - [Support Bundle Node Collection Timeout](#support-bundle-node-collection-timeout)
   - [Fast Replica Rebuild Enabled](#fast-replica-rebuild-enabled)
   - [Timeout of HTTP Client to Replica File Sync Server](#timeout-of-http-client-to-replica-file-sync-server)
+  - [Long gRPC Timeout](#long-grpc-timeout)
   - [V1 Data Engine](#v1-data-engine)
 - [V2 Data Engine (Preview Feature)](#v2-data-engine-preview-feature)
   - [V2 Data Engine](#v2-data-engine)
@@ -64,6 +65,7 @@ weight: 1
   - [Backup Compression Method](#backup-compression-method)
   - [Backup Concurrent Limit Per Backup](#backup-concurrent-limit-per-backup)
   - [Restore Concurrent Limit Per Backup](#restore-concurrent-limit-per-backup)
+  - [Auto Cleanup Snapshot When Delete Backup](#auto-cleanup-snapshot-when-delete-backup)
 - [Scheduling](#scheduling)
   - [Allow Volume Creation with Degraded Availability](#allow-volume-creation-with-degraded-availability)
   - [Disable Scheduling On Cordoned Node](#disable-scheduling-on-cordoned-node)
@@ -455,6 +457,12 @@ The setting enables fast replica rebuilding feature. It relies on the checksums 
 > Default: `30`
 
 The value in seconds specifies the timeout of the HTTP client to the replica's file sync server used for replica rebuilding, volume cloning, snapshot cloning, etc.
+
+#### Long gRPC Timeout
+
+> Default: `86400`
+
+Number of seconds that Longhorn allows for the completion of replica rebuilding and snapshot cloning operations.
 
 #### V1 Data Engine
 
@@ -946,3 +954,9 @@ Longhorn coalesces unnecessary snapshots into their newer counterparts, freeing 
 Allowing snapshot purging during normal operations is ideal, but this process temporarily consumes additional disk
 space. If insufficient disk space prevents the process from continuing, consider temporarily disabling purging while
 data is moved to other disks.
+
+#### Auto Cleanup Snapshot When Delete Backup
+
+> Default: `false`
+
+When set to true, the snapshot used by the backup will be automatically cleaned up when the backup is deleted.
