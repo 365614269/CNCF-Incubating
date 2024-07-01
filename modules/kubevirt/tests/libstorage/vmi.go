@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Backstage Authors
+ * This file is part of the KubeVirt project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,6 +12,25 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Copyright 2024 Red Hat, Inc.
+ *
  */
 
-export { createMockActionContext } from './mockActionContext';
+package libstorage
+
+import (
+	"fmt"
+
+	v1 "kubevirt.io/api/core/v1"
+)
+
+func LookupVolumeTargetPath(vmi *v1.VirtualMachineInstance, volumeName string) string {
+	for _, volStatus := range vmi.Status.VolumeStatus {
+		if volStatus.Name == volumeName {
+			return fmt.Sprintf("/dev/%s", volStatus.Target)
+		}
+	}
+
+	return ""
+}

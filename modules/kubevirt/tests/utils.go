@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -31,12 +30,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	"kubevirt.io/kubevirt/pkg/libvmi"
+	libvmici "kubevirt.io/kubevirt/pkg/libvmi/cloudinit"
 	"kubevirt.io/kubevirt/tests/framework/kubevirt"
 
 	"kubevirt.io/kubevirt/pkg/pointer"
@@ -55,9 +54,6 @@ import (
 	"kubevirt.io/kubevirt/tests/framework/checks"
 
 	util2 "kubevirt.io/kubevirt/tests/util"
-
-	"kubevirt.io/kubevirt/pkg/certificates/triple/cert"
-	"kubevirt.io/kubevirt/pkg/virt-operator/resource/generate/components"
 
 	v1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
@@ -192,7 +188,8 @@ func AddEphemeralDisk(vmi *v1.VirtualMachineInstance, name string, bus v1.DiskBu
 // Deprecated: Use libvmi directly
 func NewRandomVMIWithEphemeralDiskAndUserdata(containerImage string, userData string) *v1.VirtualMachineInstance {
 	vmi := NewRandomVMIWithEphemeralDisk(containerImage)
-	AddUserData(vmi, "disk1", userData)
+	cloudInitNoCloudEncodedUserData := libvmi.WithCloudInitNoCloud(libvmici.WithNoCloudEncodedUserData(userData))
+	cloudInitNoCloudEncodedUserData(vmi)
 	return vmi
 }
 
@@ -201,7 +198,8 @@ func NewRandomVMIWithEphemeralDiskAndUserdata(containerImage string, userData st
 // Deprecated: Use libvmi directly
 func NewRandomVMIWithEphemeralDiskAndConfigDriveUserdata(containerImage string, userData string) *v1.VirtualMachineInstance {
 	vmi := NewRandomVMIWithEphemeralDisk(containerImage)
-	AddCloudInitConfigDriveData(vmi, "disk1", userData, "", false)
+	cloudInitConfigDriveData := libvmi.WithCloudInitConfigDrive(libvmici.WithConfigDriveUserData(userData))
+	cloudInitConfigDriveData(vmi)
 	return vmi
 }
 
@@ -210,51 +208,14 @@ func NewRandomVMIWithEphemeralDiskAndConfigDriveUserdata(containerImage string, 
 // Deprecated: Use libvmi directly
 func NewRandomVMIWithEphemeralDiskAndConfigDriveUserdataNetworkData(containerImage, userData, networkData string, b64encode bool) *v1.VirtualMachineInstance {
 	vmi := NewRandomVMIWithEphemeralDisk(containerImage)
-	AddCloudInitConfigDriveData(vmi, "disk1", userData, networkData, b64encode)
-	return vmi
-}
-
-// AddUserData
-//
-// Deprecated: Use libvmi
-func AddUserData(vmi *v1.VirtualMachineInstance, name string, userData string) {
-	cloudInitNoCloudSource := v1.CloudInitNoCloudSource{}
-	cloudInitNoCloudSource.UserDataBase64 = base64.StdEncoding.EncodeToString([]byte(userData))
-	addCloudInitDiskAndVolume(vmi, name, v1.VolumeSource{CloudInitNoCloud: &cloudInitNoCloudSource})
-}
-
-// AddCloudInitConfigDriveData
-//
-// Deprecated: Use libvmi
-func AddCloudInitConfigDriveData(vmi *v1.VirtualMachineInstance, name, userData, networkData string, b64encode bool) {
-	cloudInitConfigDriveSource := v1.CloudInitConfigDriveSource{}
 	if b64encode {
-		cloudInitConfigDriveSource.UserDataBase64 = base64.StdEncoding.EncodeToString([]byte(userData))
-		if networkData != "" {
-			cloudInitConfigDriveSource.NetworkDataBase64 = base64.StdEncoding.EncodeToString([]byte(networkData))
-		}
+		cloudInitConfigDriveData := libvmi.WithCloudInitConfigDrive(libvmici.WithConfigDriveEncodedUserData(userData), libvmici.WithConfigDriveEncodedNetworkData(networkData))
+		cloudInitConfigDriveData(vmi)
 	} else {
-		cloudInitConfigDriveSource.UserData = userData
-		if networkData != "" {
-			cloudInitConfigDriveSource.NetworkData = networkData
-		}
+		cloudInitConfigDriveData := libvmi.WithCloudInitConfigDrive(libvmici.WithConfigDriveUserData(userData), libvmici.WithConfigDriveNetworkData(networkData))
+		cloudInitConfigDriveData(vmi)
 	}
-	addCloudInitDiskAndVolume(vmi, name, v1.VolumeSource{CloudInitConfigDrive: &cloudInitConfigDriveSource})
-}
-
-func addCloudInitDiskAndVolume(vmi *v1.VirtualMachineInstance, name string, volumeSource v1.VolumeSource) {
-	vmi.Spec.Domain.Devices.Disks = append(vmi.Spec.Domain.Devices.Disks, v1.Disk{
-		Name: name,
-		DiskDevice: v1.DiskDevice{
-			Disk: &v1.DiskTarget{
-				Bus: v1.DiskBusVirtio,
-			},
-		},
-	})
-	vmi.Spec.Volumes = append(vmi.Spec.Volumes, v1.Volume{
-		Name:         name,
-		VolumeSource: volumeSource,
-	})
+	return vmi
 }
 
 func NewRandomReplicaSetFromVMI(vmi *v1.VirtualMachineInstance, replicas int32) *v1.VirtualMachineInstanceReplicaSet {
@@ -679,42 +640,6 @@ func callUrlOnPod(pod *k8sv1.Pod, port string, url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	return io.ReadAll(resp.Body)
-}
-
-// EnsurePodsCertIsSynced waits until new certificates are rolled out  to all pods which are matching the specified labelselector.
-// Once all certificates are in sync, the final secret is returned
-func EnsurePodsCertIsSynced(labelSelector string, namespace string, port string) []byte {
-	var certs [][]byte
-	EventuallyWithOffset(1, func() bool {
-		var err error
-		certs, err = libpod.GetCertsForPods(labelSelector, namespace, port)
-		Expect(err).ToNot(HaveOccurred())
-		if len(certs) == 0 {
-			return true
-		}
-		for _, crt := range certs {
-			if !reflect.DeepEqual(certs[0], crt) {
-				return false
-			}
-		}
-		return true
-	}, 90*time.Second, 1*time.Second).Should(BeTrue(), "certificates across '%s' pods are not in sync", labelSelector)
-	if len(certs) > 0 {
-		return certs[0]
-	}
-	return nil
-}
-
-func GetBundleFromConfigMap(configMapName string) ([]byte, []*x509.Certificate) {
-	virtClient := kubevirt.Client()
-	configMap, err := virtClient.CoreV1().ConfigMaps(flags.KubeVirtInstallNamespace).Get(context.Background(), configMapName, metav1.GetOptions{})
-	Expect(err).ToNot(HaveOccurred())
-	if rawBundle, ok := configMap.Data[components.CABundleKey]; ok {
-		crts, err := cert.ParseCertsPEM([]byte(rawBundle))
-		Expect(err).ToNot(HaveOccurred())
-		return []byte(rawBundle), crts
-	}
-	return nil, nil
 }
 
 func RandTmpDir() string {

@@ -38,7 +38,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	k8sv1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -600,15 +599,14 @@ var _ = SIGDescribe("Hotplug", func() {
 				libdv.WithPVC(
 					libdv.PVCWithStorageClass(sc),
 					libdv.PVCWithVolumeSize(cd.ContainerDiskSizeBySourceURL(cd.DataVolumeImportUrlForContainerDisk(cd.ContainerDiskCirros))),
-					libdv.PVCWithAccessMode(k8sv1.ReadWriteMany),
-					libdv.PVCWithVolumeMode(k8sv1.PersistentVolumeBlock),
+					libdv.PVCWithAccessMode(corev1.ReadWriteMany),
+					libdv.PVCWithVolumeMode(corev1.PersistentVolumeBlock),
 				),
 			)
 			dv, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(nil)).Create(context.Background(), dv, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			vmi := libstorage.RenderVMIWithDataVolume(dv.Name, dv.Namespace)
-			tests.AddUserData(vmi, "cloud-init", "#!/bin/bash\necho 'hello'\n")
+			vmi := libstorage.RenderVMIWithDataVolume(dv.Name, dv.Namespace, libvmi.WithCloudInitNoCloud(libvmici.WithNoCloudEncodedUserData("#!/bin/bash\necho 'hello'\n")))
 
 			By("Creating VirtualMachine")
 			vm, err = virtClient.VirtualMachine(vmi.Namespace).Create(context.Background(), libvmi.NewVirtualMachine(vmi), metav1.CreateOptions{})
@@ -927,25 +925,15 @@ var _ = SIGDescribe("Hotplug", func() {
 				Eventually(func() string {
 					vmi, err = virtClient.VirtualMachineInstance(vm.Namespace).Get(context.Background(), vm.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
-					for _, volumeStatus := range vmi.Status.VolumeStatus {
-						if volumeStatus.Name == testVolumes[4] {
-							return volumeStatus.Target
-						}
-					}
-					return ""
-				}, 40*time.Second, 2*time.Second).Should(Equal("sdc"))
+					return libstorage.LookupVolumeTargetPath(vmi, testVolumes[4])
+				}, 40*time.Second, 2*time.Second).Should(Equal("/dev/sdc"))
 				By("Adding intermediate volume, it should end up at the end")
 				addVolumeFunc(vm.Name, vm.Namespace, testVolumes[2], dvNames[2], v1.DiskBusSCSI, false, "")
 				Eventually(func() string {
 					vmi, err = virtClient.VirtualMachineInstance(vm.Namespace).Get(context.Background(), vm.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
-					for _, volumeStatus := range vmi.Status.VolumeStatus {
-						if volumeStatus.Name == testVolumes[2] {
-							return volumeStatus.Target
-						}
-					}
-					return ""
-				}, 40*time.Second, 2*time.Second).Should(Equal("sde"))
+					return libstorage.LookupVolumeTargetPath(vmi, testVolumes[2])
+				}, 40*time.Second, 2*time.Second).Should(Equal("/dev/sde"))
 				verifySingleAttachmentPod(vmi)
 				for _, volumeName := range testVolumes {
 					By(removingVolumeFromVM)
