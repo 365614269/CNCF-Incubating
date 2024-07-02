@@ -76,6 +76,7 @@ type DataPartition struct {
 	RecoverStartTime               time.Time
 	RecoverLastConsumeTime         time.Duration
 	DecommissionWaitTimes          int
+	RepairBlockSize                uint64
 }
 
 type DataPartitionPreLoad struct {
@@ -116,6 +117,7 @@ func newDataPartition(ID uint64, replicaNum uint8, volName string, volID uint64,
 	partition.SpecialReplicaDecommissionStep = SpecialDecommissionInitial
 	partition.DecommissionDstAddrSpecify = false
 	partition.LeaderReportTime = now
+	partition.RepairBlockSize = util.DefaultDataPartitionSize
 	return
 }
 
@@ -1322,10 +1324,10 @@ func (partition *DataPartition) rollback(c *Cluster) {
 			partition.PartitionID, partition.DecommissionDstAddr, err.Error())
 		return
 	}
-	err = partition.restoreReplicaMeta(c)
-	if err != nil {
-		return
-	}
+	//err = partition.restoreReplicaMeta(c)
+	//if err != nil {
+	//	return
+	//}
 	// release token first
 	partition.ReleaseDecommissionToken(c)
 	// reset status if rollback success
@@ -1375,15 +1377,16 @@ func (partition *DataPartition) addToDecommissionList(c *Cluster) {
 		log.LogWarnf("action[addToDecommissionList]dataNode[%v] nodeSet is nil:%v", dataNode.Addr, err.Error())
 		return
 	}
-	ns.AddToDecommissionDataPartitionList(partition, c)
-	log.LogDebugf("action[addToDecommissionList]dp[%v] decommission src[%v] Disk[%v] dst[%v] status[%v] specialStep[%v],"+
-		" add to  decommission list[%v] ",
+	log.LogInfof("action[addToDecommissionList]ready to add dp[%v] decommission src[%v] Disk[%v] dst[%v] status[%v] specialStep[%v],"+
+		" RollbackTimes(%v) isRecover(%v) host[%v] to  decommission list[%v]",
 		partition.PartitionID, partition.DecommissionSrcAddr, partition.DecommissionSrcDiskPath,
-		partition.DecommissionDstAddr, partition.GetDecommissionStatus(), partition.GetSpecialReplicaDecommissionStep(), ns.ID)
+		partition.DecommissionDstAddr, partition.GetDecommissionStatus(), partition.GetSpecialReplicaDecommissionStep(),
+		partition.DecommissionNeedRollbackTimes, partition.isRecover, partition.Hosts, ns.ID)
+	ns.AddToDecommissionDataPartitionList(partition, c)
 }
 
 func (partition *DataPartition) checkConsumeToken() bool {
-	return partition.GetDecommissionStatus() == DecommissionRunning
+	return partition.IsDecommissionRunning() || partition.IsDecommissionSuccess() || partition.IsDecommissionFailed()
 }
 
 // only mark stop status or initial
@@ -1404,9 +1407,7 @@ func (partition *DataPartition) canMarkDecommission() bool {
 func (partition *DataPartition) canAddToDecommissionList() bool {
 	status := partition.GetDecommissionStatus()
 	if status == DecommissionInitial ||
-		status == DecommissionPause ||
-		status == DecommissionSuccess ||
-		(status == DecommissionFail && partition.DecommissionNeedRollbackTimes >= defaultDecommissionRollbackLimit) {
+		status == DecommissionPause {
 		return false
 	}
 	return true
@@ -1629,37 +1630,6 @@ func (partition *DataPartition) ReleaseDecommissionToken(c *Cluster) {
 //	}
 //	partition.ReleaseDecommissionToken(c)
 //}
-
-func (partition *DataPartition) restoreReplicaMeta(c *Cluster) (err error) {
-	//dst has
-	//dstDataNode, err := c.dataNode(partition.DecommissionDstAddr)
-	//if err != nil {
-	//	log.LogWarnf("action[restoreReplicaMeta]partition %v find dst %v data node failed:%v",
-	//		partition.PartitionID, partition.DecommissionDstAddr, err.Error())
-	//	return
-	//}
-	//removePeer := proto.Peer{ID: dstDataNode.ID, Addr: partition.DecommissionDstAddr}
-	//if err = c.removeHostMember(partition, removePeer); err != nil {
-	//	log.LogWarnf("action[restoreReplicaMeta]partition %v metadata  removeReplica %v failed:%v",
-	//		partition.PartitionID, partition.DecommissionDstAddr, err.Error())
-	//	return
-	//}
-	srcDataNode, err := c.dataNode(partition.DecommissionSrcAddr)
-	if err != nil {
-		log.LogWarnf("action[restoreReplicaMeta]partition %v find src %v data node failed:%v",
-			partition.PartitionID, partition.DecommissionSrcAddr, err.Error())
-		return
-	}
-	addPeer := proto.Peer{ID: srcDataNode.ID, Addr: partition.DecommissionSrcAddr}
-	if err = c.addDataPartitionRaftMember(partition, addPeer); err != nil {
-		log.LogWarnf("action[restoreReplicaMeta]partition %v metadata addReplica %v failed:%v",
-			partition.PartitionID, partition.DecommissionSrcAddr, err.Error())
-		return
-	}
-	log.LogDebugf("action[restoreReplicaMeta]partition %v meta data has restored:hosts [%v] peers[%v]",
-		partition.PartitionID, partition.Hosts, partition.Peers)
-	return
-}
 
 func getTargetNodeset(addr string, c *Cluster) (ns *nodeSet, zone *Zone, err error) {
 	var dataNode *DataNode

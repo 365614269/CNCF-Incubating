@@ -61,6 +61,7 @@ type Vol struct {
 	dpReplicaNum      uint8
 	mpReplicaNum      uint8
 	Status            uint8
+	Deleting          bool
 	threshold         float32
 	dataPartitionSize uint64 // byte
 	Capacity          uint64 // GB
@@ -117,6 +118,7 @@ type Vol struct {
 	authKey                 string
 	DeleteExecTime          time.Time
 	user                    *User
+	dpRepairBlockSize       uint64
 }
 
 func newVol(vv volValue) (vol *Vol) {
@@ -185,6 +187,7 @@ func newVol(vv volValue) (vol *Vol) {
 	vol.mpsLock = newMpsLockManager(vol)
 	vol.EnableAuditLog = true
 	vol.preloadCapacity = math.MaxUint64 // mark as special value to trigger calculate
+	vol.dpRepairBlockSize = proto.DefaultDpRepairBlockSize
 	return
 }
 
@@ -210,6 +213,10 @@ func newVolFromVolValue(vv *volValue) (vol *Vol) {
 	vol.authKey = vv.AuthKey
 	vol.DeleteExecTime = vv.DeleteExecTime
 	vol.user = vv.User
+	vol.dpRepairBlockSize = vv.DpRepairBlockSize
+	if vol.dpRepairBlockSize == 0 {
+		vol.dpRepairBlockSize = proto.DefaultDpRepairBlockSize
+	}
 	return vol
 }
 
@@ -1199,7 +1206,14 @@ func (vol *Vol) checkStatus(c *Cluster) {
 	if len(metaTasks) == 0 && len(dataTasks) == 0 {
 		vol.deleteVolFromStore(c)
 	}
+
+	if vol.Deleting {
+		log.LogWarnf("action[volCheckStatus] vol[%v] is already in deleting status", vol.Name)
+		return
+	}
+
 	go func() {
+		vol.Deleting = true
 		for _, metaTask := range metaTasks {
 			vol.deleteMetaPartitionFromMetaNode(c, metaTask)
 		}
@@ -1207,6 +1221,7 @@ func (vol *Vol) checkStatus(c *Cluster) {
 		for _, dataTask := range dataTasks {
 			vol.deleteDataPartitionFromDataNode(c, dataTask)
 		}
+		vol.Deleting = false
 	}()
 }
 
@@ -1231,7 +1246,6 @@ func (vol *Vol) deleteMetaPartitionFromMetaNode(c *Cluster, task *proto.AdminTas
 	_, err = metaNode.Sender.syncSendAdminTask(task)
 	if err != nil {
 		log.LogErrorf("action[deleteMetaPartition] vol[%v],meta partition[%v],err[%v]", mp.volName, mp.PartitionID, err)
-		return
 	}
 	mp.Lock()
 	mp.removeReplicaByAddr(metaNode.Addr)
@@ -1261,7 +1275,7 @@ func (vol *Vol) deleteDataPartitionFromDataNode(c *Cluster, task *proto.AdminTas
 	_, err = dataNode.TaskManager.syncSendAdminTask(task)
 	if err != nil {
 		log.LogErrorf("action[deleteDataReplica] vol[%v],data partition[%v],err[%v]", dp.VolName, dp.PartitionID, err)
-		return
+		err = nil
 	}
 
 	dp.Lock()

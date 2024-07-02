@@ -2075,7 +2075,8 @@ func (l *DecommissionDataPartitionList) Put(id uint64, value *DataPartition, c *
 		log.LogWarnf("action[DecommissionDataPartitionListPut] ns[%v] cannot put nil value", id)
 		return
 	}
-	// can only add running or mark or prepare or failed without reaching roll back max
+	// no need to add initial, pause.
+	// success or failed needs to put into decommission list to reset status
 	if !value.canAddToDecommissionList() {
 		log.LogWarnf("action[DecommissionDataPartitionListPut] ns[%v] put wrong dp[%v] status[%v] DecommissionNeedRollbackTimes(%v)",
 			id, value.PartitionID, value.GetDecommissionStatus(), value.DecommissionNeedRollbackTimes)
@@ -2209,14 +2210,21 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 				continue
 			}
 			allDecommissionDP := l.GetAllDecommissionDataPartitions()
+			log.LogDebugf("action[DecommissionListTraverse]enter")
 			for _, dp := range allDecommissionDP {
 				if dp.IsDecommissionSuccess() {
-					log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for success",
-						dp.PartitionID)
+
 					l.Remove(dp)
 					dp.ReleaseDecommissionToken(c)
 					dp.ResetDecommissionStatus()
-					c.syncUpdateDataPartition(dp)
+					err := c.syncUpdateDataPartition(dp)
+					if err != nil {
+						log.LogWarnf("action[DecommissionListTraverse]Remove success dp[%v] failed for %v",
+							dp.PartitionID, err)
+					} else {
+						log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for success",
+							dp.PartitionID)
+					}
 				} else if dp.IsDecommissionFailed() {
 					if !dp.tryRollback(c) {
 						log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for fail",
@@ -2241,12 +2249,15 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 							// retry should release token
 							if dp.IsMarkDecommission() {
 								dp.ReleaseDecommissionToken(c)
+								// choose other node to create data partitoin
+								dp.DecommissionDstAddr = ""
 							}
 							l.pushFailedDp(dp, c)
 						}
 					}(dp) // special replica cnt cost some time from prepare to running
 				}
 			}
+			log.LogDebugf("action[DecommissionListTraverse]end")
 		}
 	}
 }

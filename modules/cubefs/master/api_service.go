@@ -672,11 +672,14 @@ func (m *Server) UidOperate(w http.ResponseWriter, r *http.Request) {
 	case util.UidGetLimit:
 		ok, uidInfo = vol.uidSpaceManager.checkUid(uid)
 		uidList = append(uidList, uidInfo)
-	case util.AclAddIP:
-		ok = vol.uidSpaceManager.addUid(uid, capSize)
-	case util.AclDelIP:
-		ok = vol.uidSpaceManager.removeUid(uid)
-	case util.AclListIP:
+	case util.UidAddLimit, util.UidDelLimit:
+		cmd := &UidCmd{
+			op:   op,
+			uid:  uid,
+			size: capSize,
+		}
+		ok = vol.uidSpaceManager.pushUidCmd(cmd)
+	case util.UidLimitList:
 		uidList = vol.uidSpaceManager.listAll()
 	default:
 		// do nothing
@@ -2678,10 +2681,11 @@ func newSimpleView(vol *Vol) (view *proto.SimpleVolView) {
 		Forbidden:               vol.Forbidden,
 		EnableAuditLog:          vol.EnableAuditLog,
 		DeleteExecTime:          vol.DeleteExecTime,
+		DpRepairBlockSize:       vol.dpRepairBlockSize,
 	}
 
-	vol.uidSpaceManager.RLock()
-	defer vol.uidSpaceManager.RUnlock()
+	vol.uidSpaceManager.rwMutex.RLock()
+	defer vol.uidSpaceManager.rwMutex.RUnlock()
 	for _, uid := range vol.uidSpaceManager.uidInfo {
 		view.Uids = append(view.Uids, proto.UidSimpleInfo{
 			UID:     uid.Uid,
@@ -6634,4 +6638,60 @@ func isS3QosConfigValid(param *proto.S3QosRequest) bool {
 	}
 
 	return true
+}
+
+func (m *Server) setVolDpRepairBlockSize(w http.ResponseWriter, r *http.Request) {
+	var (
+		repairSize uint64
+		name       string
+		err        error
+	)
+	metric := exporter.NewTPCnt(apiToMetricsName(proto.AdminVolSetDpRepairBlockSize))
+	defer func() {
+		doStatAndMetric(proto.AdminVolSetDpRepairBlockSize, metric, err, nil)
+		if err != nil {
+			log.LogErrorf("[updateVolDpRepairSize] set dp repair size failed, error: %v", err)
+		} else {
+			log.LogInfof("[updateVolDpRepairSize] set dp repair size to (%v) success", repairSize)
+		}
+	}()
+	if name, err = parseAndExtractName(r); err != nil {
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
+		return
+	}
+	if repairSize, err = parseAndExtractDpRepairBlockSize(r); err != nil {
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: err.Error()})
+		return
+	}
+	if repairSize == 0 {
+		repairSize = 512 * util.KB
+	}
+	if repairSize < 128*util.KB {
+		err = errors.NewErrorf("[updateVolDpRepairSize] repair size %v too small", repairSize)
+		log.LogErrorf("[updateVolDpRepairSize] cannot set repair size < 128KB, err(%v)", err)
+		return
+	}
+	if repairSize > 5*util.MB {
+		err = errors.NewErrorf("[updateVolDpRepairSize] repair size %v too large", repairSize)
+		log.LogErrorf("[updateVolDpRepairSize] cannot set repair size > 5MB, err(%v)", err)
+		return
+	}
+
+	vol, err := m.cluster.getVol(name)
+	if err != nil {
+		sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeVolNotExists, Msg: err.Error()})
+		return
+	}
+	oldRepairSize := vol.dpRepairBlockSize
+	vol.dpRepairBlockSize = repairSize
+	defer func() {
+		if err != nil {
+			vol.dpRepairBlockSize = oldRepairSize
+		}
+	}()
+	if err = m.cluster.syncUpdateVol(vol); err != nil {
+		sendErrReply(w, r, newErrHTTPReply(err))
+		return
+	}
+	sendOkReply(w, r, newSuccessHTTPReply(fmt.Sprintf("set volume dp repair block size to (%v) success", repairSize)))
 }
