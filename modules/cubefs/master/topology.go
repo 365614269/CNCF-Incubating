@@ -1112,6 +1112,10 @@ func (ns *nodeSet) ReleaseDecommissionToken(id uint64) {
 	ns.decommissionDataPartitionList.releaseDecommissionToken(id)
 }
 
+func (ns *nodeSet) HasDecommissionToken(id uint64) bool {
+	return ns.decommissionDataPartitionList.hasDecommissionToken(id)
+}
+
 func (ns *nodeSet) AddDecommissionDisk(dd *DecommissionDisk) {
 	ns.DecommissionDisks.Store(dd.GenerateKey(), dd)
 	if dd.IsManualDecommissionDisk() {
@@ -2086,7 +2090,6 @@ func (l *DecommissionDataPartitionList) Put(id uint64, value *DataPartition, c *
 	if value.GetDecommissionStatus() == DecommissionPrepare {
 		value.SetDecommissionStatus(markDecommission)
 	}
-
 	l.mu.Lock()
 	if _, ok := l.cacheMap[value.PartitionID]; ok {
 		l.mu.Unlock()
@@ -2096,30 +2099,22 @@ func (l *DecommissionDataPartitionList) Put(id uint64, value *DataPartition, c *
 	l.cacheMap[value.PartitionID] = elm
 	l.mu.Unlock()
 	// restore from rocksdb
-	if value.checkConsumeToken() {
+	// NOTE: if dp is discard, not need to get token, decommission will success directly
+	if value.checkConsumeToken() && !value.IsDiscard {
 		value.TryAcquireDecommissionToken(c)
 	}
-	log.LogInfof("action[DecommissionDataPartitionListPut] ns[%v] add dp[%v] status[%v] isRecover[%v] rollbackTimes(%v)",
-		id, value.PartitionID, value.GetDecommissionStatus(), value.isRecover, value.DecommissionNeedRollbackTimes)
-}
 
-func (l *DecommissionDataPartitionList) pushFailedDp(value *DataPartition, c *Cluster) {
-	if value == nil {
-		log.LogWarnf("action[pushFailedDp] cannot put nil value")
-		return
+	// restore special replica decommission progress
+	if value.isSpecialReplicaCnt() && value.GetDecommissionStatus() == DecommissionRunning {
+		value.SetDecommissionStatus(markDecommission)
+		value.isRecover = false // can pass decommission validate check
+		log.LogInfof("action[DecommissionDataPartitionListPut] ns[%v]  dp[%v] set status from DecommissionRunning to markDecommission",
+			id, value.PartitionID)
 	}
-	status := value.GetDecommissionStatus()
-	if status != markDecommission && status != DecommissionFail {
-		log.LogWarnf("action[pushFailedDp]  dp(%v) wrong status %v", value.PartitionID, status)
-		return
-	}
-	l.Remove(value)
-	l.mu.Lock()
-	elm := l.decommissionList.PushFront(value)
-	l.cacheMap[value.PartitionID] = elm
-	l.mu.Unlock()
-	log.LogInfof("action[pushFailedDp]  add dp[%v] status[%v] isRecover[%v]",
-		value.PartitionID, status, value.isRecover)
+
+	log.LogInfof("action[DecommissionDataPartitionListPut] ns[%v] add dp[%v] status[%v] specialStep(%v) isRecover[%v] rollbackTimes(%v)",
+		id, value.PartitionID, value.GetDecommissionStatus(), value.GetSpecialReplicaDecommissionStep(),
+		value.isRecover, value.DecommissionNeedRollbackTimes)
 }
 
 func (l *DecommissionDataPartitionList) Remove(value *DataPartition) {
@@ -2180,6 +2175,13 @@ func (l *DecommissionDataPartitionList) releaseDecommissionToken(id uint64) {
 	atomic.StoreInt32(&l.curParallel, int32(len(l.runningMap)))
 }
 
+func (l *DecommissionDataPartitionList) hasDecommissionToken(id uint64) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	_, ok := l.runningMap[id]
+	return ok
+}
+
 func (l *DecommissionDataPartitionList) GetAllDecommissionDataPartitions() (collection []*DataPartition) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -2210,10 +2212,9 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 				continue
 			}
 			allDecommissionDP := l.GetAllDecommissionDataPartitions()
-			log.LogDebugf("action[DecommissionListTraverse]enter")
 			for _, dp := range allDecommissionDP {
+				log.LogDebugf("[DecommissionListTraverse] traverse dp(%v) discard(%v) decommission status(%v)", dp.PartitionID, dp.IsDiscard, dp.GetDecommissionStatus())
 				if dp.IsDecommissionSuccess() {
-
 					l.Remove(dp)
 					dp.ReleaseDecommissionToken(c)
 					dp.ResetDecommissionStatus()
@@ -2245,19 +2246,10 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 				} else if dp.IsMarkDecommission() && dp.TryAcquireDecommissionToken(c) {
 					// TODO: decommission in here
 					go func(dp *DataPartition) {
-						if !dp.TryToDecommission(c) {
-							// retry should release token
-							if dp.IsMarkDecommission() {
-								dp.ReleaseDecommissionToken(c)
-								// choose other node to create data partitoin
-								dp.DecommissionDstAddr = ""
-							}
-							l.pushFailedDp(dp, c)
-						}
+						dp.TryToDecommission(c)
 					}(dp) // special replica cnt cost some time from prepare to running
 				}
 			}
-			log.LogDebugf("action[DecommissionListTraverse]end")
 		}
 	}
 }

@@ -70,6 +70,8 @@ func formatClusterView(cv *proto.ClusterView, cn *proto.ClusterNodeInfo, cp *pro
 	sb.WriteString(fmt.Sprintf("  EbsAddr            : %v\n", cp.EbsAddr))
 	sb.WriteString(fmt.Sprintf("  LoadFactor         : %v\n", cn.LoadFactor))
 	sb.WriteString(fmt.Sprintf("  volDeletionDelayTime : %v h\n", cv.VolDeletionDelayTimeHour))
+	sb.WriteString(fmt.Sprintf("  EnableAutoDecommission: %v\n", cv.EnableAutoDecommission))
+	sb.WriteString(fmt.Sprintf("  MarkDiskBrokenThreshold : %v%%\n", cv.MarkDiskBrokenThreshold*100))
 	return sb.String()
 }
 
@@ -941,11 +943,17 @@ func formatDiskDataPartitionTableRow(view *proto.DataPartitionReport) string {
 }
 
 func formatDecommissionProgress(progress *proto.DecommissionProgress) string {
-	return alignColumn(
-		arow("Status", progress.StatusMessage),
-		arow("Progress", progress.Progress),
-		arow("Failed Dps", progress.FailedDps),
-	)
+	sb := strings.Builder{}
+	sb.WriteString(fmt.Sprintf("Status:           %v\n", progress.StatusMessage))
+	sb.WriteString(fmt.Sprintf("Progress:         %v\n", progress.Progress))
+	if len(progress.FailedDps) != 0 {
+		sb.WriteString("Failed Dps:       \n")
+		for i, info := range progress.FailedDps {
+			sb.WriteString(fmt.Sprintf("           [%v/%v] Partition Id  : %v\n", i+1, len(progress.FailedDps), info.PartitionID))
+			sb.WriteString(fmt.Sprintf("                   Error Message : %v\n", info.ErrMsg))
+		}
+	}
+	return sb.String()
 }
 
 func formatDataPartitionDecommissionProgress(info *proto.DecommissionDataPartitionInfo) string {
@@ -960,7 +968,6 @@ func formatDataPartitionDecommissionProgress(info *proto.DecommissionDataPartiti
 	sb.WriteString(fmt.Sprintf("DstAddress:        %v\n", info.DstAddress))
 	sb.WriteString(fmt.Sprintf("Term:              %v\n", info.Term))
 	sb.WriteString(fmt.Sprintf("Replicas:          %v\n", info.Replicas))
-	sb.WriteString(fmt.Sprintf("WaitTimes:         %v\n", info.WaitTimes))
 	sb.WriteString(fmt.Sprintf("NeedRollbackTimes: %v\n", info.NeedRollbackTimes))
 	sb.WriteString(fmt.Sprintf("ErrorMessage:      %v\n", info.ErrorMessage))
 	return sb.String()

@@ -35,6 +35,7 @@ import (
 	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/errors"
+	"github.com/cubefs/cubefs/util/fileutil"
 	"github.com/cubefs/cubefs/util/log"
 )
 
@@ -611,10 +612,23 @@ func (dp *DataPartition) ForceLoadHeader() {
 	dp.loadExtentHeaderStatus = FinishLoadDataPartitionExtentHeader
 }
 
+func (dp *DataPartition) RemoveAll() (err error) {
+	dp.persistMetaMutex.Lock()
+	defer dp.persistMetaMutex.Unlock()
+
+	err = os.RemoveAll(dp.Path())
+	return
+}
+
 // PersistMetadata persists the file metadata on the disk.
 func (dp *DataPartition) PersistMetadata() (err error) {
 	dp.persistMetaMutex.Lock()
 	defer dp.persistMetaMutex.Unlock()
+
+	if !fileutil.ExistDir(dp.Path()) {
+		log.LogWarnf("[PersistMetadata] dp(%v) persist metadata, but dp dir(%v) has been removed", dp.partitionID, dp.Path())
+		return
+	}
 
 	var (
 		metadataFile *os.File
@@ -710,12 +724,17 @@ func (dp *DataPartition) statusUpdate() {
 			status = proto.Unavailable
 		}
 	}
-	if dp.getDiskErrCnt() > 0 {
-		dp.partitionStatus = proto.Unavailable
+
+	if dp.disk.Status == proto.ReadOnly {
+		status = proto.ReadOnly
 	}
 
-	log.LogInfof("action[statusUpdate] dp %v raft status %v dp.status %v, status %v, disk status %v",
-		dp.partitionID, dp.raftStatus, dp.Status(), status, float64(dp.disk.Status))
+	if dp.getDiskErrCnt() > 0 {
+		status = proto.Unavailable
+	}
+
+	log.LogInfof("action[statusUpdate] dp %v raft status %v dp.status %v, status %v, disk status %v canWrite(%v)",
+		dp.partitionID, dp.raftStatus, dp.Status(), status, float64(dp.disk.Status), dp.disk.CanWrite())
 	// dp.partitionStatus = int(math.Min(float64(status), float64(dp.disk.Status)))
 	dp.partitionStatus = status
 }
@@ -742,6 +761,7 @@ func (dp *DataPartition) checkIsDiskError(err error, rwFlag uint8) {
 		return
 	}
 
+	log.LogWarnf("[checkIsDiskError] disk(%v) dp(%v) meet io error", dp.Path(), dp.partitionID)
 	dp.stopRaft()
 	dp.incDiskErrCnt()
 	dp.disk.triggerDiskError(rwFlag, dp.partitionID)
@@ -1323,18 +1343,6 @@ func (dp *DataPartition) isDecommissionRecovering() bool {
 	return dp.DataPartitionCreateType == proto.DecommissionedCreateDataPartition
 }
 
-func (dp *DataPartition) handleDecommissionRecoverFailed() {
-	if !dp.isDecommissionRecovering() {
-		return
-	}
-	// prevent status changing from  Unavailable to Recovering again in statusUpdate()
-	dp.partitionType = proto.NormalCreateDataPartition
-	dp.partitionStatus = proto.Unavailable
-	log.LogWarnf("[handleDecommissionRecoverFailed]  dp(%d) recover failed reach max limit", dp.partitionID)
-	dp.PersistMetadata()
-	dp.StopDecommissionRecover(true)
-}
-
 func (dp *DataPartition) incDiskErrCnt() {
 	diskErrCnt := atomic.AddUint64(&dp.diskErrCnt, 1)
 	log.LogWarnf("[incDiskErrCnt]: dp(%v) disk err count:%v", dp.partitionID, diskErrCnt)
@@ -1342,4 +1350,18 @@ func (dp *DataPartition) incDiskErrCnt() {
 
 func (dp *DataPartition) getDiskErrCnt() uint64 {
 	return atomic.LoadUint64(&dp.diskErrCnt)
+}
+
+func (dp *DataPartition) reload(s *SpaceManager) error {
+	disk := dp.disk
+	rootDir := dp.path
+	log.LogDebugf("data partition disk %v rootDir %v", disk, rootDir)
+	s.partitionMutex.Lock()
+	delete(s.partitions, dp.partitionID)
+	s.partitionMutex.Unlock()
+	dp.Stop()
+	dp.Disk().DetachDataPartition(dp)
+	log.LogDebugf("data partition %v is detached", dp.partitionID)
+	_, err := LoadDataPartition(rootDir, disk)
+	return err
 }
