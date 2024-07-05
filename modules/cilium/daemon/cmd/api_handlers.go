@@ -16,7 +16,6 @@ import (
 	"github.com/cilium/cilium/api/v1/server/restapi/policy"
 	"github.com/cilium/cilium/api/v1/server/restapi/service"
 	"github.com/cilium/cilium/pkg/api"
-	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 )
@@ -106,55 +105,53 @@ func ciliumAPIHandlers(dp promise.Promise[*Daemon], cfg *option.DaemonConfig, _ 
 	// /healthz/
 	out.DaemonGetHealthzHandler = wrapAPIHandler(dp, getHealthzHandler)
 
-	// /cluster/nodes
-	out.DaemonGetClusterNodesHandler = NewGetClusterNodesHandler(dp)
-
-	if cfg.DatapathMode != datapathOption.DatapathModeLBOnly {
-		// /endpoint/
-		out.EndpointDeleteEndpointHandler = wrapAPIHandler(dp, deleteEndpointHandler)
-		out.EndpointGetEndpointHandler = wrapAPIHandler(dp, getEndpointHandler)
-
-		// /endpoint/{id}
-		out.EndpointGetEndpointIDHandler = wrapAPIHandler(dp, getEndpointIDHandler)
-		out.EndpointPutEndpointIDHandler = wrapAPIHandler(dp, putEndpointIDHandler)
-		out.EndpointPatchEndpointIDHandler = wrapAPIHandler(dp, patchEndpointIDHandler)
-		out.EndpointDeleteEndpointIDHandler = wrapAPIHandler(dp, deleteEndpointIDHandler)
-
-		// /endpoint/{id}config/
-		out.EndpointGetEndpointIDConfigHandler = wrapAPIHandler(dp, getEndpointIDConfigHandler)
-		out.EndpointPatchEndpointIDConfigHandler = wrapAPIHandler(dp, patchEndpointIDConfigHandler)
-
-		// /endpoint/{id}/labels/
-		out.EndpointGetEndpointIDLabelsHandler = wrapAPIHandler(dp, getEndpointIDLabelsHandler)
-		out.EndpointPatchEndpointIDLabelsHandler = wrapAPIHandler(dp, putEndpointIDLabelsHandler)
-
-		// /endpoint/{id}/log/
-		out.EndpointGetEndpointIDLogHandler = wrapAPIHandler(dp, getEndpointIDLogHandler)
-
-		// /endpoint/{id}/healthz
-		out.EndpointGetEndpointIDHealthzHandler = wrapAPIHandler(dp, getEndpointIDHealthzHandler)
-
-		// /identity/
-		out.PolicyGetIdentityHandler = wrapAPIHandler(dp, getIdentityHandler)
-		out.PolicyGetIdentityIDHandler = wrapAPIHandler(dp, getIdentityIDHandler)
-
-		// /identity/endpoints
-		out.PolicyGetIdentityEndpointsHandler = wrapAPIHandler(dp, getIdentityEndpointsHandler)
-
-		// /policy/
-		out.PolicyGetPolicyHandler = wrapAPIHandler(dp, getPolicyHandler)
-		out.PolicyPutPolicyHandler = wrapAPIHandler(dp, putPolicyHandler)
-		out.PolicyDeletePolicyHandler = wrapAPIHandler(dp, deletePolicyHandler)
-		out.PolicyGetPolicySelectorsHandler = wrapAPIHandler(dp, getPolicySelectorsHandler)
-	}
+	// /service/
+	out.ServiceGetServiceHandler = wrapAPIHandler(dp, getServiceHandler)
 
 	// /service/{id}/
 	out.ServiceGetServiceIDHandler = wrapAPIHandler(dp, getServiceIDHandler)
 	out.ServiceDeleteServiceIDHandler = wrapAPIHandler(dp, deleteServiceIDHandler)
 	out.ServicePutServiceIDHandler = wrapAPIHandler(dp, putServiceIDHandler)
 
-	// /service/
-	out.ServiceGetServiceHandler = wrapAPIHandler(dp, getServiceHandler)
+	// /cluster/nodes
+	out.DaemonGetClusterNodesHandler = NewGetClusterNodesHandler(dp)
+
+	// /endpoint/
+	out.EndpointDeleteEndpointHandler = wrapAPIHandler(dp, deleteEndpointHandler)
+	out.EndpointGetEndpointHandler = wrapAPIHandler(dp, getEndpointHandler)
+
+	// /endpoint/{id}
+	out.EndpointGetEndpointIDHandler = wrapAPIHandler(dp, getEndpointIDHandler)
+	out.EndpointPutEndpointIDHandler = wrapAPIHandler(dp, putEndpointIDHandler)
+	out.EndpointPatchEndpointIDHandler = wrapAPIHandler(dp, patchEndpointIDHandler)
+	out.EndpointDeleteEndpointIDHandler = wrapAPIHandler(dp, deleteEndpointIDHandler)
+
+	// /endpoint/{id}config/
+	out.EndpointGetEndpointIDConfigHandler = wrapAPIHandler(dp, getEndpointIDConfigHandler)
+	out.EndpointPatchEndpointIDConfigHandler = wrapAPIHandler(dp, patchEndpointIDConfigHandler)
+
+	// /endpoint/{id}/labels/
+	out.EndpointGetEndpointIDLabelsHandler = wrapAPIHandler(dp, getEndpointIDLabelsHandler)
+	out.EndpointPatchEndpointIDLabelsHandler = wrapAPIHandler(dp, putEndpointIDLabelsHandler)
+
+	// /endpoint/{id}/log/
+	out.EndpointGetEndpointIDLogHandler = wrapAPIHandler(dp, getEndpointIDLogHandler)
+
+	// /endpoint/{id}/healthz
+	out.EndpointGetEndpointIDHealthzHandler = wrapAPIHandler(dp, getEndpointIDHealthzHandler)
+
+	// /identity/
+	out.PolicyGetIdentityHandler = wrapAPIHandler(dp, getIdentityHandler)
+	out.PolicyGetIdentityIDHandler = wrapAPIHandler(dp, getIdentityIDHandler)
+
+	// /identity/endpoints
+	out.PolicyGetIdentityEndpointsHandler = wrapAPIHandler(dp, getIdentityEndpointsHandler)
+
+	// /policy/
+	out.PolicyGetPolicyHandler = wrapAPIHandler(dp, getPolicyHandler)
+	out.PolicyPutPolicyHandler = wrapAPIHandler(dp, putPolicyHandler)
+	out.PolicyDeletePolicyHandler = wrapAPIHandler(dp, deletePolicyHandler)
+	out.PolicyGetPolicySelectorsHandler = wrapAPIHandler(dp, getPolicySelectorsHandler)
 
 	// /debuginfo
 	out.DaemonGetDebuginfoHandler = wrapAPIHandler(dp, getDebugInfoHandler)
@@ -170,13 +167,11 @@ func ciliumAPIHandlers(dp promise.Promise[*Daemon], cfg *option.DaemonConfig, _ 
 	// metrics
 	out.MetricsGetMetricsHandler = wrapAPIHandler(dp, getMetricsHandler)
 
-	if cfg.DatapathMode != datapathOption.DatapathModeLBOnly {
-		// /fqdn/cache
-		out.PolicyGetFqdnCacheHandler = wrapAPIHandler(dp, getFqdnCacheHandler)
-		out.PolicyDeleteFqdnCacheHandler = wrapAPIHandler(dp, deleteFqdnCacheHandler)
-		out.PolicyGetFqdnCacheIDHandler = wrapAPIHandler(dp, getFqdnCacheIDHandler)
-		out.PolicyGetFqdnNamesHandler = wrapAPIHandler(dp, getFqdnNamesHandler)
-	}
+	// /fqdn/cache
+	out.PolicyGetFqdnCacheHandler = wrapAPIHandler(dp, getFqdnCacheHandler)
+	out.PolicyDeleteFqdnCacheHandler = wrapAPIHandler(dp, deleteFqdnCacheHandler)
+	out.PolicyGetFqdnCacheIDHandler = wrapAPIHandler(dp, getFqdnCacheIDHandler)
+	out.PolicyGetFqdnNamesHandler = wrapAPIHandler(dp, getFqdnNamesHandler)
 
 	// /ip/
 	out.PolicyGetIPHandler = wrapAPIHandler(dp, getIPHandler)

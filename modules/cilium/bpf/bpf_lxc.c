@@ -220,7 +220,7 @@ select_ct_map4(struct __ctx_buff *ctx __maybe_unused, int dir __maybe_unused,
 
 #if defined ENABLE_IPV4 || defined ENABLE_IPV6
 static __always_inline int drop_for_direction(struct __ctx_buff *ctx,
-					      enum ct_dir dir, __u32 reason,
+					      enum ct_dir dir, int reason,
 					      __s8 ext_err)
 {
 	__u32 dst = 0;
@@ -1667,7 +1667,8 @@ int tail_ipv6_policy(struct __ctx_buff *ctx)
 #endif /* !ENABLE_ROUTING && !ENABLE_NODEPORT */
 
 		if (ifindex)
-			ret = redirect_ep(ctx, ifindex, from_host, from_tunnel);
+			ret = redirect_ep(ctx, THIS_INTERFACE_IFINDEX, from_host,
+					  from_tunnel);
 		break;
 	default:
 		break;
@@ -2018,7 +2019,8 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 #endif /* !ENABLE_ROUTING && !ENABLE_NODEPORT */
 
 		if (ifindex)
-			ret = redirect_ep(ctx, ifindex, from_host, from_tunnel);
+			ret = redirect_ep(ctx, THIS_INTERFACE_IFINDEX, from_host,
+					  from_tunnel);
 		break;
 	default:
 		break;
