@@ -713,7 +713,7 @@
      - object
      - ``{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}``
    * - :spelling:ignore:`clustermesh.apiserver.service.annotations`
-     - Annotations for the clustermesh-apiserver For GKE LoadBalancer, use annotation cloud.google.com/load-balancer-type: "Internal" For EKS LoadBalancer, use annotation service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+     - Annotations for the clustermesh-apiserver service. Example annotations to configure an internal load balancer on different cloud providers: * AKS: service.beta.kubernetes.io/azure-load-balancer-internal: "true" * EKS: service.beta.kubernetes.io/aws-load-balancer-scheme: "internal" * GKE: networking.gke.io/load-balancer-type: "Internal"
      - object
      - ``{}``
    * - :spelling:ignore:`clustermesh.apiserver.service.enableSessionAffinity`
@@ -2040,6 +2040,10 @@
      - hubble-ui ingress configuration.
      - object
      - ``{"annotations":{},"className":"","enabled":false,"hosts":["chart-example.local"],"labels":{},"tls":[]}``
+   * - :spelling:ignore:`hubble.ui.labels`
+     - Additional labels to be added to 'hubble-ui' deployment object
+     - object
+     - ``{}``
    * - :spelling:ignore:`hubble.ui.nodeSelector`
      - Node labels for pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
      - object

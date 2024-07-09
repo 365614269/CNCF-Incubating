@@ -37,7 +37,7 @@ public class FirefoxWebDriverSupplier implements Supplier<WebDriver, TestWebDriv
 
     @Override
     public void close(WebDriver instance) {
-        instance.close();
+        instance.quit();
     }
 
 }

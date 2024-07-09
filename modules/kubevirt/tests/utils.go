@@ -193,21 +193,6 @@ func NewRandomVMIWithEphemeralDiskAndUserdata(containerImage string, userData st
 	return vmi
 }
 
-// NewRandomVMIWithEphemeralDiskAndConfigDriveUserdataNetworkData
-//
-// Deprecated: Use libvmi directly
-func NewRandomVMIWithEphemeralDiskAndConfigDriveUserdataNetworkData(containerImage, userData, networkData string, b64encode bool) *v1.VirtualMachineInstance {
-	vmi := NewRandomVMIWithEphemeralDisk(containerImage)
-	if b64encode {
-		cloudInitConfigDriveData := libvmi.WithCloudInitConfigDrive(libvmici.WithConfigDriveEncodedUserData(userData), libvmici.WithConfigDriveEncodedNetworkData(networkData))
-		cloudInitConfigDriveData(vmi)
-	} else {
-		cloudInitConfigDriveData := libvmi.WithCloudInitConfigDrive(libvmici.WithConfigDriveUserData(userData), libvmici.WithConfigDriveNetworkData(networkData))
-		cloudInitConfigDriveData(vmi)
-	}
-	return vmi
-}
-
 func NewRandomReplicaSetFromVMI(vmi *v1.VirtualMachineInstance, replicas int32) *v1.VirtualMachineInstanceReplicaSet {
 	name := "replicaset" + rand.String(5)
 	rs := &v1.VirtualMachineInstanceReplicaSet{
@@ -227,23 +212,6 @@ func NewRandomReplicaSetFromVMI(vmi *v1.VirtualMachineInstance, replicas int32) 
 		},
 	}
 	return rs
-}
-
-func RunPodInNamespace(pod *k8sv1.Pod, namespace string) *k8sv1.Pod {
-	virtClient := kubevirt.Client()
-
-	var err error
-	pod, err = virtClient.CoreV1().Pods(namespace).Create(context.Background(), pod, metav1.CreateOptions{})
-	Expect(err).ToNot(HaveOccurred())
-	Eventually(ThisPod(pod), 180).Should(BeInPhase(k8sv1.PodRunning))
-
-	pod, err = ThisPod(pod)()
-	Expect(err).ToNot(HaveOccurred())
-	return pod
-}
-
-func RunPod(pod *k8sv1.Pod) *k8sv1.Pod {
-	return RunPodInNamespace(pod, testsuite.GetTestNamespace(pod))
 }
 
 func GetRunningVirtualMachineInstanceDomainXML(virtClient kubecli.KubevirtClient, vmi *v1.VirtualMachineInstance) (string, error) {

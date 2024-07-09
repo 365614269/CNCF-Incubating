@@ -84,6 +84,7 @@
     "^make generate-k8s-api$",
     "^make manifests$"
   ],
+  "assignAutomerge": true,
   "packageRules": [
     {
       "matchPackageNames": [
@@ -131,7 +132,11 @@
       ],
       "automerge": true,
       "automergeType": "pr",
-      "groupName": "auto-merge-trusted-deps"
+      "groupName": "auto-merge-trusted-deps",
+      // Replace the list of reviewers with just ciliumbot
+      "reviewers":[
+        "ciliumbot",
+      ]
     },
     {
       // Try to group all updates for all dependencies in a single PR. More
@@ -390,6 +395,24 @@
       ]
     },
     {
+      // Avoid updating patch version for statedb as it might contain breaking changes
+      "enabled": false,
+      "matchPackageNames": [
+        "github.com/cilium/statedb",
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "pin",
+        "pinDigest",
+        "digest",
+        "lockFileMaintenance",
+        "rollback",
+        "bump",
+        "replacement",
+      ],
+    },
+    {
       // It's returning 500s for git clones.
       "enabled": false,
       "matchDepNames": [
@@ -580,6 +603,23 @@
         "quay.io/cilium/cilium-envoy"
       ],
       "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-.*$",
+      "allowedVersions": "<1.29",
+      "matchBaseBranches": [
+        "v1.15",
+        "v1.14",
+        "v1.13"
+      ]
+    },
+    {
+      "matchDepNames": [
+        "quay.io/cilium/cilium-envoy"
+      ],
+      "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-.*$",
+      "allowedVersions": "<1.30",
+      "matchBaseBranches": [
+        "v1.16",
+        "main",
+      ]
     },
     {
       "matchDepNames": [
@@ -630,7 +670,8 @@
         "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s+.+kernel: '(?<currentValue>.*)'",
         '# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\s+.+kernel: "(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"',
         '# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*)\\s+.+image-version: "(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"',
-        '# renovate: datasource=(?<datasource>.*?)\\s+.+kube-image: "(?<depName>.*):(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"'
+        '# renovate: datasource=(?<datasource>.*?)\\s+.+kube-image: "(?<depName>.*):(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)"',
+        '# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?) branch=(?<currentValue>.*?)\\s+.+_ref: (?<currentDigest>.*)'
       ]
     },
     {
