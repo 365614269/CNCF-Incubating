@@ -1747,6 +1747,10 @@
     "StatusCode": 206,
     "LastSeen": "2024-04-03T12:51:54.758528517+02:00"
   },
+  "https://docs.spring.io/spring-framework/reference/core/aop/proxying.html": {
+    "StatusCode": 206,
+    "LastSeen": "2024-07-09T08:58:07.531333949Z"
+  },
   "https://docs.spring.io/spring-security/reference/servlet/authorization/architecture.html#authz-authorities": {
     "StatusCode": 206,
     "LastSeen": "2024-02-12T22:02:33.483262-05:00"
@@ -2066,6 +2070,10 @@
   "https://events.linuxfoundation.org/kubecon-cloudnativecon-north-america/venue-travel/": {
     "StatusCode": 206,
     "LastSeen": "2024-01-18T19:02:37.783585-05:00"
+  },
+  "https://events.linuxfoundation.org/kubecon-cloudnativecon-open-source-summit-ai-dev-china/": {
+    "StatusCode": 206,
+    "LastSeen": "2024-06-26T22:57:30.474455806Z"
   },
   "https://events.linuxfoundation.org/open-observability-day-north-america/": {
     "StatusCode": 206,
@@ -2674,6 +2682,10 @@
   "https://github.com/elastic/elastic-otel-node": {
     "StatusCode": 200,
     "LastSeen": "2024-06-26T13:02:15.527574357Z"
+  },
+  "https://github.com/elastic/elastic-otel-python": {
+    "StatusCode": 200,
+    "LastSeen": "2024-07-10T14:54:34.760300868Z"
   },
   "https://github.com/ent/ent/issues/1232#issuecomment-1200405070": {
     "StatusCode": 200,
@@ -4770,6 +4782,10 @@
   "https://github.com/theletterf/": {
     "StatusCode": 200,
     "LastSeen": "2024-01-30T15:25:01.244997-05:00"
+  },
+  "https://github.com/tiffany76": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:57:27.374000192Z"
   },
   "https://github.com/tigrannajaryan": {
     "StatusCode": 200,
@@ -8402,6 +8418,34 @@
   "https://sched.co/1YhfT": {
     "StatusCode": 200,
     "LastSeen": "2024-02-12T15:04:33.334624+01:00"
+  },
+  "https://sched.co/1eYYg": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:57:51.638108489Z"
+  },
+  "https://sched.co/1eYZA": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:57:54.792440733Z"
+  },
+  "https://sched.co/1eYZq": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:58:01.590169805Z"
+  },
+  "https://sched.co/1eYZt": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:57:58.748216479Z"
+  },
+  "https://sched.co/1eYcJ": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:57:45.817887373Z"
+  },
+  "https://sched.co/1f4zX": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:57:38.288706655Z"
+  },
+  "https://sched.co/1f4zz": {
+    "StatusCode": 200,
+    "LastSeen": "2024-06-26T22:57:40.531765606Z"
   },
   "https://seecfp.com/": {
     "StatusCode": 206,

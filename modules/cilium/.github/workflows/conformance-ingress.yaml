@@ -136,7 +136,7 @@ jobs:
         uses: ./.github/actions/set-env-variables
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@9d071f99ae32af95cb15c3e0a280d222b569a1cf # v0.16.11
+        uses: cilium/cilium-cli@9fffebfb38ad7ff1f80f1c1a366ec87730683bb4 # v0.16.12
         with:
           repository: ${{ env.CILIUM_CLI_RELEASE_REPO }}
           release-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -193,7 +193,7 @@ jobs:
           # Please refer to https://github.com/kubernetes-sigs/ingress-controller-conformance/pull/101 for more details.
           repository: cilium/ingress-controller-conformance
           path: ingress-controller-conformance
-          ref: ea4049969a830d3ecac0d2a9b71b254212ac4b65
+          ref: 6a193b3f73d8b1201a818bb7c8f204059b064857
           persist-credentials: false
 
       - name: Install Ingress conformance test tool
@@ -404,6 +404,7 @@ jobs:
             -ingress-class cilium \
             -wait-time-for-ingress-status 60s \
             -wait-time-for-ready 60s \
+            -http-client-timeout 60s \
             -enable-http-debug \
             -stop-on-failure
 
