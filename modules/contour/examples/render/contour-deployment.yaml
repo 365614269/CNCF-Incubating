@@ -1363,6 +1363,8 @@ spec:
                       Defines the XDSServer to use for `contour serve`.
                       Values: `envoy` (default), `contour (deprecated)`.
                       Other values will produce an error.
+                      Deprecated: this field will be removed in a future release when
+                      the `contour` xDS server implementation is removed.
                     type: string
                 type: object
             type: object
@@ -5139,6 +5141,8 @@ spec:
                           Defines the XDSServer to use for `contour serve`.
                           Values: `envoy` (default), `contour (deprecated)`.
                           Other values will produce an error.
+                          Deprecated: this field will be removed in a future release when
+                          the `contour` xDS server implementation is removed.
                         type: string
                     type: object
                 type: object
@@ -9261,7 +9265,7 @@ spec:
             - --log-level info
           command:
             - envoy
-          image: docker.io/envoyproxy/envoy:v1.30.2
+          image: docker.io/envoyproxy/envoy:v1.30.4
           imagePullPolicy: IfNotPresent
           name: envoy
           env:

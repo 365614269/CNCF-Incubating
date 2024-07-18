@@ -1213,14 +1213,15 @@ func (n *linuxNodeHandler) NodeConfigurationChanged(newConfig datapath.LocalNode
 		case !option.Config.EnableL2NeighDiscovery:
 			n.enableNeighDiscovery = false
 		case option.Config.DirectRoutingDeviceRequired():
-			if option.Config.DirectRoutingDevice == "" {
+			if newConfig.DirectRoutingDevice == nil {
 				return fmt.Errorf("direct routing device is required, but not defined")
 			}
 
+			drd := newConfig.DirectRoutingDevice
 			devices := n.nodeConfig.DeviceNames()
 
 			targetDevices := make([]string, 0, len(devices)+1)
-			targetDevices = append(targetDevices, option.Config.DirectRoutingDevice)
+			targetDevices = append(targetDevices, drd.Name)
 			targetDevices = append(targetDevices, devices...)
 
 			var err error
@@ -1289,13 +1290,13 @@ func (n *linuxNodeHandler) NodeConfigurationChanged(newConfig datapath.LocalNode
 		if err := n.removeEncryptRules(); err != nil {
 			n.log.Warn("Cannot cleanup previous encryption rule state.", logfields.Error, err)
 		}
-		if err := ipsec.DeleteXFRM(n.log); err != nil {
+		if err := ipsec.DeleteXFRM(n.log, ipsec.AllReqID); err != nil {
 			return fmt.Errorf("failed to delete xfrm policies on node configuration changed: %w", err)
 		}
 	}
 
 	if !newConfig.EnableIPSecEncryptedOverlay {
-		if err := ipsec.DeleteXFRMWithReqID(n.log, ipsec.EncryptedOverlayReqID); err != nil {
+		if err := ipsec.DeleteXFRM(n.log, ipsec.EncryptedOverlayReqID); err != nil {
 			return fmt.Errorf("failed to delete encrypt overlay xfrm policies on node configuration change: %w", err)
 		}
 	}

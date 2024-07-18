@@ -43,7 +43,7 @@ jobs:
         uses: ./.github/actions/deploy-prometheus-on-cluster
 
       - name: Install Chainsaw
-        uses: kyverno/action-install-chainsaw@573a9c636f7c586f86ecb9de9674176daf80ee29 # v0.2.5
+        uses: kyverno/action-install-chainsaw@5d00c353f61f44f3b492c673420202d1b1374c3f # v0.2.6
 
       - name: Run Integration Tests
         working-directory: .
@@ -56,7 +56,7 @@ jobs:
 
       - name: Upload cluster logs
         if: failure()
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4
+        uses: actions/upload-artifact@0b2256b8c012f0828dc542b3febcab082c67f72b # v4
         with:
           name: logs-integration-tests-${{ inputs.scheduling-gates }}-${{ inputs.cert-manager-io-enabled }}
           path: .github/scripts/logs
