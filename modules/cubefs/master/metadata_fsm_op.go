@@ -61,7 +61,7 @@ type clusterValue struct {
 	DpMaxRepairErrCnt           uint64
 	DpRepairTimeOut             uint64
 	EnableAutoDecommissionDisk  bool
-	DecommissionDiskFactor      float64
+	DecommissionDiskLimit       uint32
 	VolDeletionDelayTimeHour    int64
 	MarkDiskBrokenThreshold     float64
 }
@@ -94,7 +94,7 @@ func newClusterValue(c *Cluster) (cv *clusterValue) {
 		DpMaxRepairErrCnt:           c.cfg.DpMaxRepairErrCnt,
 		DpRepairTimeOut:             c.cfg.DpRepairTimeOut,
 		EnableAutoDecommissionDisk:  c.EnableAutoDecommissionDisk,
-		DecommissionDiskFactor:      c.DecommissionDiskFactor,
+		DecommissionDiskLimit:       c.GetDecommissionDiskLimit(),
 		VolDeletionDelayTimeHour:    c.cfg.volDelayDeleteTimeHour,
 		MarkDiskBrokenThreshold:     c.getMarkDiskBrokenThreshold(),
 	}
@@ -163,6 +163,7 @@ type dataPartitionValue struct {
 	DecommissionErrorMessage       string
 	DecommissionNeedRollbackTimes  uint32
 	DecommissionType               uint32
+	RestoreReplica                 uint32
 }
 
 func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
@@ -194,6 +195,12 @@ func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
 	dp.DecommissionNeedRollbackTimes = dpv.DecommissionNeedRollbackTimes
 	dp.DecommissionErrorMessage = dpv.DecommissionErrorMessage
 	dp.DecommissionType = dpv.DecommissionType
+	dp.RestoreReplica = dpv.RestoreReplica
+	// to ensure progress of checkReplicaMeta can be run again, the status of RestoreReplicaMeta can not be
+	// set to RestoreReplicaMetaStop otherwise for checkReplicaMeta cannot be executed.
+	if dp.RestoreReplica == RestoreReplicaMetaRunning {
+		dp.RestoreReplica = RestoreReplicaMetaStop
+	}
 	for _, rv := range dpv.Replicas {
 		if !contains(dp.Hosts, rv.Addr) {
 			continue
@@ -225,7 +232,7 @@ func newDataPartitionValue(dp *DataPartition) (dpv *dataPartitionValue) {
 		RdOnly:                         dp.RdOnly,
 		IsDiscard:                      dp.IsDiscard,
 		DecommissionRetry:              dp.DecommissionRetry,
-		DecommissionStatus:             dp.DecommissionStatus,
+		DecommissionStatus:             atomic.LoadUint32(&dp.DecommissionStatus),
 		DecommissionSrcAddr:            dp.DecommissionSrcAddr,
 		DecommissionDstAddr:            dp.DecommissionDstAddr,
 		DecommissionRaftForce:          dp.DecommissionRaftForce,
@@ -239,6 +246,7 @@ func newDataPartitionValue(dp *DataPartition) (dpv *dataPartitionValue) {
 		DecommissionErrorMessage:       dp.DecommissionErrorMessage,
 		DecommissionNeedRollbackTimes:  dp.DecommissionNeedRollbackTimes,
 		DecommissionType:               dp.DecommissionType,
+		RestoreReplica:                 atomic.LoadUint32(&dp.RestoreReplica),
 	}
 	for _, replica := range dp.Replicas {
 		rv := &replicaValue{Addr: replica.Addr, DiskPath: replica.DiskPath}
@@ -302,9 +310,11 @@ type volValue struct {
 	IopsRLimit, IopsWLimit, FlowRlimit, FlowWlimit         uint64
 	IopsRMagnify, IopsWMagnify, FlowRMagnify, FlowWMagnify uint32
 	ClientReqPeriod, ClientHitTriggerCnt                   uint32
-	Forbidden                                              bool
-	EnableAuditLog                                         bool
-	DpRepairBlockSize                                      uint64
+	TrashInterval                                          int64
+	DisableAuditLog                                        bool
+
+	Forbidden         bool
+	DpRepairBlockSize uint64
 }
 
 func (v *volValue) Bytes() (raw []byte, err error) {
@@ -366,8 +376,9 @@ func newVolValue(vol *Vol) (vv *volValue) {
 		ClientHitTriggerCnt: vol.qosManager.ClientHitTriggerCnt,
 
 		DpReadOnlyWhenVolFull: vol.DpReadOnlyWhenVolFull,
+		TrashInterval:         vol.TrashInterval,
+		DisableAuditLog:       vol.DisableAuditLog,
 		Forbidden:             vol.Forbidden,
-		EnableAuditLog:        vol.EnableAuditLog,
 		AuthKey:               vol.authKey,
 		DeleteExecTime:        vol.DeleteExecTime,
 		User:                  vol.user,
@@ -1148,7 +1159,7 @@ func (c *Cluster) loadClusterValue() (err error) {
 		c.clusterUuidEnable = cv.ClusterUuidEnable
 		c.DecommissionLimit = cv.DecommissionLimit
 		c.EnableAutoDecommissionDisk = cv.EnableAutoDecommissionDisk
-		c.DecommissionDiskFactor = cv.DecommissionDiskFactor
+		c.DecommissionLimit = cv.DecommissionLimit
 		c.cfg.volDelayDeleteTimeHour = cv.VolDeletionDelayTimeHour
 		if c.cfg.QosMasterAcceptLimit < QosMasterAcceptCnt {
 			c.cfg.QosMasterAcceptLimit = QosMasterAcceptCnt
@@ -1201,7 +1212,6 @@ func (c *Cluster) loadNodeSets() (err error) {
 
 		ns := newNodeSet(c, nsv.ID, cap, nsv.ZoneName)
 		ns.UpdateMaxParallel(int32(c.DecommissionLimit))
-		ns.UpdateDecommissionDiskFactor(c.DecommissionDiskFactor)
 		if nsv.DataNodeSelector != "" && ns.GetDataNodeSelector() != nsv.DataNodeSelector {
 			ns.SetDataNodeSelector(nsv.DataNodeSelector)
 		}
@@ -1214,6 +1224,7 @@ func (c *Cluster) loadNodeSets() (err error) {
 			zone = newZone(nsv.ZoneName)
 			c.t.putZoneIfAbsent(zone)
 		}
+		ns.UpdateMaxParallel(int32(c.DecommissionLimit))
 
 		zone.putNodeSet(ns)
 		log.LogInfof("action[addNodeSetGrp] nodeSet[%v]", ns.ID)
@@ -1484,7 +1495,6 @@ func (c *Cluster) loadVols() (err error) {
 		}
 		vol := newVolFromVolValue(vv)
 		vol.Status = vv.Status
-
 		if err = c.loadAclList(vol); err != nil {
 			log.LogInfof("action[loadVols],vol[%v] load acl manager error %v", vol.Name, err)
 			continue
@@ -1719,10 +1729,7 @@ func (c *Cluster) loadDecommissionDiskList() (err error) {
 
 		dd := ddv.Restore()
 		c.DecommissionDisks.Store(dd.GenerateKey(), dd)
-		log.LogInfof("action[loadDecommissionDiskList],decommissionDisk[%v] type %v dst[%v] status[%v] raftForce[%v]"+
-			"dpTotal[%v] term[%v]",
-			dd.GenerateKey(), dd.Type, dd.DstAddr, dd.GetDecommissionStatus(), dd.DecommissionRaftForce,
-			dd.DecommissionDpTotal, dd.DecommissionTerm)
+		log.LogInfof("action[loadDecommissionDiskList]load disk(%v)", dd.decommissionInfo())
 		c.addDecommissionDiskToNodeset(dd)
 	}
 	return

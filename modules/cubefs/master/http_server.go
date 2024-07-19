@@ -288,6 +288,12 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 		Path(proto.AdminClusterFreeze).
 		HandlerFunc(m.setupAutoAllocation)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.AdminVolForbidden).
+		HandlerFunc(m.forbidVolume)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.AdminVolEnableAuditLog).
+		HandlerFunc(m.setEnableAuditLogForVolume)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminClusterForbidMpDecommission).
 		HandlerFunc(m.setupForbidMetaPartitionDecommission)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
@@ -338,11 +344,8 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 		Path(proto.AdminGetClusterValue).
 		HandlerFunc(m.GetClusterValue)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
-		Path(proto.AdminUpdateDecommissionDiskFactor).
-		HandlerFunc(m.updateDecommissionDiskFactor)
-	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
-		Path(proto.AdminQueryDecommissionDiskLimit).
-		HandlerFunc(m.queryDecommissionDiskLimit)
+		Path(proto.AdminUpdateDecommissionDiskLimit).
+		HandlerFunc(m.updateDecommissionDiskLimit)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminEnableAutoDecommissionDisk).
 		HandlerFunc(m.enableAutoDecommissionDisk)
@@ -355,6 +358,12 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminQueryDiskBrokenThreshold).
 		HandlerFunc(m.queryDiskBrokenThreshold)
+	router.NewRoute().Methods(http.MethodGet).
+		Path(proto.AdminGetClusterDataNodes).
+		HandlerFunc(m.getAllDataNodes)
+	router.NewRoute().Methods(http.MethodGet).
+		Path(proto.AdminGetClusterMetaNodes).
+		HandlerFunc(m.getAllMetaNodes)
 
 	// volume management APIs
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
@@ -658,6 +667,12 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.QueryDisableDisk).
 		HandlerFunc(m.queryDisableDisk)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.CancelDecommissionDisk).
+		HandlerFunc(m.cancelDisableDisk)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.AdminResetDataPartitionRestoreStatus).
+		HandlerFunc(m.resetDataPartitionRestoreStatus)
 
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminSetNodeInfo).
@@ -773,6 +788,9 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 	router.NewRoute().Methods(http.MethodGet).
 		Path(proto.QuotaListAll).
 		HandlerFunc(m.ListQuotaAll)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.AdminSetTrashInterval).
+		HandlerFunc(m.volSetTrashInterval)
 
 	// S3 API QoS Manager
 	router.NewRoute().Methods(http.MethodPut, http.MethodPost).

@@ -17,6 +17,7 @@ package datanode
 import (
 	"context"
 	"fmt"
+	syslog "log"
 	"os"
 	"path"
 	"regexp"
@@ -26,6 +27,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/cubefs/cubefs/util/exporter"
 
 	"golang.org/x/time/rate"
 
@@ -48,6 +51,8 @@ const (
 	ExpiredPartitionPrefix    = "expired_"
 	ExpiredPartitionExistTime = time.Hour * time.Duration(24*7)
 )
+
+const DefaultCurrentLoadDpLimit = 4
 
 const (
 	DecommissionDiskMark = "decommissionDiskMark"
@@ -560,6 +565,11 @@ func (d *Disk) isExpiredPartitionDir(filename string) (isExpiredPartitionDir boo
 	return
 }
 
+type dpLoadInfo struct {
+	Id       uint64
+	FileName string
+}
+
 // RestorePartition reads the files stored on the local disk and restores the data partitions.
 func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 	convert := func(node *proto.DataNodeInfo) *DataNodeInfo {
@@ -597,7 +607,54 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 	var (
 		wg                            sync.WaitGroup
 		toDeleteExpiredPartitionNames = make([]string, 0)
+		dpNum                         int
 	)
+	begin := time.Now()
+	defer func() {
+		msg := fmt.Sprintf("[RestorePartition] disk(%v) load all dp(%v) using time(%v)", d.Path, dpNum, time.Since(begin))
+		syslog.Print(msg)
+		log.LogInfo(msg)
+	}()
+	loadCh := make(chan dpLoadInfo, d.space.currentLoadDpCount)
+
+	for i := 0; i < d.space.currentLoadDpCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			loader := func(partitionID uint64, filename string) {
+				begin := time.Now()
+				var (
+					dp  *DataPartition
+					err error
+				)
+				defer func() {
+					if err == nil {
+						log.LogInfof("[RestorePartition] disk(%v) load dp(%v) using time(%v) slow(%v)", d.Path, dp.partitionID, time.Since(begin), time.Since(begin) > 1*time.Second)
+					}
+				}()
+				if dp, err = LoadDataPartition(path.Join(d.Path, filename), d); err != nil {
+					mesg := fmt.Sprintf("action[RestorePartition] new partition(%v) err(%v) ",
+						partitionID, err.Error())
+					log.LogError(mesg)
+					exporter.Warning(mesg)
+					syslog.Println(mesg)
+					return
+				}
+				if visitor != nil {
+					visitor(dp)
+				}
+			}
+
+			for {
+				dp, ok := <-loadCh
+				if !ok {
+					return
+				}
+				loader(dp.Id, dp.FileName)
+			}
+		}()
+	}
+
 	for _, fileInfo := range fileInfoList {
 		filename := fileInfo.Name()
 		if !d.isPartitionDir(filename) {
@@ -626,50 +683,28 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 			toDeleteExpiredPartitionNames = append(toDeleteExpiredPartitionNames, newName)
 			continue
 		}
-
-		wg.Add(1)
-
-		go func(partitionID uint64, filename string) {
-			var (
-				dp  *DataPartition
-				err error
-			)
-			defer wg.Done()
-			if dp, err = LoadDataPartition(path.Join(d.Path, filename), d); err != nil {
-				mesg := fmt.Sprintf("action[RestorePartition] new partition(%v) err(%v) ",
-					partitionID, err.Error())
-				log.LogError(mesg)
-				if IsDiskErr(err.Error()) {
-					d.triggerDiskError(ReadFlag, partitionID)
-				}
-				// exporter.Warning(mesg)
-				// syslog.Println(mesg)
-				return
-			}
-			if visitor != nil {
-				visitor(dp)
-			}
-		}(partitionID, filename)
-	}
-
-	if len(toDeleteExpiredPartitionNames) > 0 {
-		log.LogInfof("action[RestorePartition] expiredPartitions %v, disk %v", toDeleteExpiredPartitionNames, d.Path)
-
-		notDeletedExpiredPartitionNames := d.deleteExpiredPartitions(toDeleteExpiredPartitionNames)
-
-		if len(notDeletedExpiredPartitionNames) > 0 {
-			go func(toDeleteExpiredPartitions []string) {
-				ticker := time.NewTicker(ExpiredPartitionExistTime)
-				log.LogInfof("action[RestorePartition] delete expiredPartitions automatically start, toDeleteExpiredPartitions %v", toDeleteExpiredPartitions)
-
-				<-ticker.C
-				d.deleteExpiredPartitions(toDeleteExpiredPartitionNames)
-				ticker.Stop()
-				log.LogInfof("action[RestorePartition] delete expiredPartitions automatically finish")
-			}(notDeletedExpiredPartitionNames)
+		dpNum++
+		loadCh <- dpLoadInfo{
+			Id:       partitionID,
+			FileName: filename,
 		}
 	}
+	close(loadCh)
+	// NOTE: wait for load dp goroutines
+	// avoid delete expired dp competing for io
 	wg.Wait()
+
+	if len(toDeleteExpiredPartitionNames) > 0 {
+		go func(toDeleteExpiredPartitions []string) {
+			log.LogInfof("action[RestorePartition] expiredPartitions %v, disk %v", toDeleteExpiredPartitionNames, d.Path)
+			notDeletedExpiredPartitionNames := d.deleteExpiredPartitions(toDeleteExpiredPartitionNames)
+
+			time.Sleep(ExpiredPartitionExistTime)
+			log.LogInfof("action[RestorePartition] delete expiredPartitions automatically start, toDeleteExpiredPartitions %v", notDeletedExpiredPartitionNames)
+			d.deleteExpiredPartitions(notDeletedExpiredPartitionNames)
+			log.LogInfof("action[RestorePartition] delete expiredPartitions automatically finish")
+		}(toDeleteExpiredPartitionNames)
+	}
 	return err
 }
 
@@ -696,6 +731,7 @@ func (d *Disk) deleteExpiredPartitions(toDeleteExpiredPartitionNames []string) (
 				continue
 			}
 			log.LogInfof("action[deleteExpiredPartitions] delete expiredPartition %v automatically", partitionName)
+			time.Sleep(time.Second)
 		} else {
 			notDeletedExpiredPartitionNames = append(notDeletedExpiredPartitionNames, partitionName)
 		}
@@ -719,10 +755,6 @@ func (d *Disk) updateDisk(allocSize uint64) {
 	d.Available = d.Available - allocSize
 }
 
-func (d *Disk) getSelectWeight() float64 {
-	return float64(atomic.LoadUint64(&d.Allocated)) / float64(d.Total)
-}
-
 func (d *Disk) AddDiskErrPartition(dpId uint64) {
 	d.DiskErrPartitionSet.Store(dpId, struct{}{})
 }
@@ -738,6 +770,11 @@ func (d *Disk) GetDiskErrPartitionList() (diskErrPartitionList []uint64) {
 
 func (d *Disk) GetDiskErrPartitionCount() uint64 {
 	return uint64(len(d.GetDiskErrPartitionList()))
+}
+
+func (d *Disk) HasDiskErrPartition(dpId uint64) bool {
+	_, ok := d.DiskErrPartitionSet.Load(dpId)
+	return ok
 }
 
 // isExpiredPartition return whether one partition is expired

@@ -46,6 +46,7 @@ type MetaNodeInfo struct {
 	PersistenceMetaPartitions []uint64
 	RdOnly                    bool
 	CanAllowPartition         bool
+	MaxMpCntLimit             uint32
 	CpuUtil                   float64 `json:"cpuUtil"`
 }
 
@@ -128,6 +129,7 @@ type ClusterView struct {
 	VolDeletionDelayTimeHour int64
 	MarkDiskBrokenThreshold  float64
 	EnableAutoDecommission   bool
+	DecommissionDiskLimit    uint32
 	DataNodeStatInfo         *NodeStatInfo
 	MetaNodeStatInfo         *NodeStatInfo
 	VolStatInfo              []*VolStatInfo
@@ -262,6 +264,7 @@ type VolStatInfo struct {
 	TxRbInoCnt            uint64
 	TxRbDenCnt            uint64
 	DpReadOnlyWhenVolFull bool
+	TrashInterval         int64 `json:"TrashIntervalV2"`
 }
 
 // DataPartition represents the structure of storing the file contents.
@@ -387,6 +390,13 @@ type DiscardDataPartitionInfos struct {
 	DiscardDps []DataPartitionInfo
 }
 
+type DecommissionTokenStatus struct {
+	NodesetID   uint64
+	CurTokenNum int32
+	MaxTokenNum int32
+	RunningDp   []uint64
+}
+
 type VolVersionInfo struct {
 	Ver     uint64 // unixMicro of createTime used as version
 	DelTime int64
@@ -452,10 +462,6 @@ type DecommissionDiskLimitDetail struct {
 	Limit     int
 }
 
-type DecommissionDiskLimit struct {
-	Details []DecommissionDiskLimitDetail
-}
-
 type DecommissionDiskInfo struct {
 	SrcAddr      string
 	DiskPath     string
@@ -467,20 +473,23 @@ type DecommissionDisksResponse struct {
 }
 
 type DecommissionDataPartitionInfo struct {
-	PartitionId       uint64
-	ReplicaNum        uint8
-	Status            uint32
-	SpecialStep       uint32
-	Retry             int
-	RaftForce         bool
-	Recover           bool
-	SrcAddress        string
-	SrcDiskPath       string
-	DstAddress        string
-	Term              uint64
-	Replicas          []string
-	ErrorMessage      string
-	NeedRollbackTimes uint32
+	PartitionId        uint64
+	ReplicaNum         uint8
+	Status             string
+	SpecialStep        string
+	Retry              int
+	RaftForce          bool
+	Recover            bool
+	SrcAddress         string
+	SrcDiskPath        string
+	DstAddress         string
+	Term               uint64
+	Replicas           []string
+	ErrorMessage       string
+	NeedRollbackTimes  uint32
+	DecommissionType   string
+	RestoreReplicaType string
+	IsDiscard          bool
 }
 
 type DecommissionedDisks struct {

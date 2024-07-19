@@ -104,6 +104,7 @@ const (
 	OpMetaBatchGetXAttr      uint8 = 0x39
 	OpMetaExtentAddWithCheck uint8 = 0x3A // Append extent key with discard extents check
 	OpMetaReadDirLimit       uint8 = 0x3D
+	OpMetaLockDir            uint8 = 0x3E
 
 	// Operations: Master -> MetaNode
 	OpCreateMetaPartition           uint8 = 0x40
@@ -127,7 +128,13 @@ const (
 
 	OpLcNodeHeartbeat      uint8 = 0x55
 	OpLcNodeScan           uint8 = 0x56
-	OpLcNodeSnapshotVerDel uint8 = 0x57
+	OpLcNodeSnapshotVerDel uint8 = 0x5B
+
+	// backUp
+	OpBatchLockNormalExtent   uint8 = 0x57
+	OpBatchUnlockNormalExtent uint8 = 0x58
+	OpBackupRead              uint8 = 0x59
+	OpBackupWrite             uint8 = 0x5A
 
 	// Operations: Master -> DataNode
 	OpCreateDataPartition           uint8 = 0x60
@@ -152,7 +159,8 @@ const (
 	OpListMultiparts   uint8 = 0x74
 
 	OpBatchDeleteExtent   uint8 = 0x75 // SDK to MetaNode
-	OpGetExpiredMultipart uint8 = 0x76
+	OpGcBatchDeleteExtent uint8 = 0x76 // SDK to MetaNode
+	OpGetExpiredMultipart uint8 = 0x77
 
 	// Operations: MetaNode Leader -> MetaNode Follower
 	OpMetaBatchDeleteInode  uint8 = 0x90
@@ -250,6 +258,7 @@ const (
 
 	// io speed limit
 	OpLimitedIoErr uint8 = 0xB1
+	OpStoreClosed  uint8 = 0xB2
 )
 
 const (
@@ -566,6 +575,8 @@ func (p *Packet) GetOpMsg() (m string) {
 		m = "OpListMultiparts"
 	case OpBatchDeleteExtent:
 		m = "OpBatchDeleteExtent"
+	case OpGcBatchDeleteExtent:
+		m = "OpGcBatchDeleteExtent"
 	case OpMetaClearInodeCache:
 		m = "OpMetaClearInodeCache"
 	case OpMetaTxCreateInode:
@@ -608,6 +619,12 @@ func (p *Packet) GetOpMsg() (m string) {
 		m = "OpLcNodeSnapshotVerDel"
 	case OpMetaReadDirOnly:
 		m = "OpMetaReadDirOnly"
+	case OpBackupRead:
+		m = "OpBackupRead"
+	case OpBatchLockNormalExtent:
+		m = "OpBatchLockNormalExtent"
+	case OpBatchUnlockNormalExtent:
+		m = "OpBatchUnlockNormalExtent"
 	default:
 		m = fmt.Sprintf("op:%v not found", p.Opcode)
 	}
@@ -1009,7 +1026,8 @@ func (p *Packet) ReadFromConn(c net.Conn, timeoutSec int) (err error) {
 	}
 
 	size := p.Size
-	if (p.Opcode == OpRead || p.Opcode == OpStreamRead || p.Opcode == OpExtentRepairRead || p.Opcode == OpStreamFollowerRead) && p.ResultCode == OpInitResultCode {
+	if (p.Opcode == OpRead || p.Opcode == OpStreamRead || p.Opcode == OpExtentRepairRead || p.Opcode == OpStreamFollowerRead ||
+		p.Opcode == OpBackupRead) && p.ResultCode == OpInitResultCode {
 		size = 0
 	}
 	p.Data = make([]byte, size)
@@ -1088,7 +1106,7 @@ func (p *Packet) GetUniqueLogId() (m string) {
 			return m
 		}
 	} else if p.Opcode == OpReadTinyDeleteRecord || p.Opcode == OpNotifyReplicasToRepair || p.Opcode == OpDataNodeHeartbeat ||
-		p.Opcode == OpLoadDataPartition || p.Opcode == OpBatchDeleteExtent {
+		p.Opcode == OpLoadDataPartition || p.Opcode == OpBatchDeleteExtent || p.Opcode == OpGcBatchDeleteExtent {
 		p.mesg += fmt.Sprintf("Opcode(%v)", p.GetOpMsg())
 		return
 	} else if p.Opcode == OpBroadcastMinAppliedID || p.Opcode == OpGetAppliedId {
@@ -1119,7 +1137,7 @@ func (p *Packet) setPacketPrefix() {
 			return
 		}
 	} else if p.Opcode == OpReadTinyDeleteRecord || p.Opcode == OpNotifyReplicasToRepair || p.Opcode == OpDataNodeHeartbeat ||
-		p.Opcode == OpLoadDataPartition || p.Opcode == OpBatchDeleteExtent {
+		p.Opcode == OpLoadDataPartition || p.Opcode == OpBatchDeleteExtent || p.Opcode == OpGcBatchDeleteExtent {
 		p.mesg += fmt.Sprintf("Opcode(%v)", p.GetOpMsg())
 		return
 	} else if p.Opcode == OpBroadcastMinAppliedID || p.Opcode == OpGetAppliedId {
@@ -1166,7 +1184,7 @@ func (p *Packet) ShouldRetry() bool {
 }
 
 func (p *Packet) IsBatchDeleteExtents() bool {
-	return p.Opcode == OpBatchDeleteExtent
+	return p.Opcode == OpBatchDeleteExtent || p.Opcode == OpGcBatchDeleteExtent
 }
 
 func InitBufferPool(bufLimit int64) {
@@ -1175,4 +1193,12 @@ func InitBufferPool(bufLimit int64) {
 	buf.HeadVerBuffersTotalLimit = bufLimit
 
 	Buffers = buf.NewBufferPool()
+}
+
+func (p *Packet) IsBatchLockNormalExtents() bool {
+	return p.Opcode == OpBatchLockNormalExtent
+}
+
+func (p *Packet) IsBatchUnlockNormalExtents() bool {
+	return p.Opcode == OpBatchUnlockNormalExtent
 }

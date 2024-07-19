@@ -437,12 +437,12 @@ func (client *ExtentClient) EvictStream(inode uint64) error {
 		return nil
 	}
 	if s.isOpen {
-		s.isOpen = false
 		err := s.IssueEvictRequest()
 		if err != nil {
 			return err
 		}
 		s.done <- struct{}{}
+		s.isOpen = false
 	} else {
 		delete(s.client.streamers, s.inode)
 		s.client.streamerLock.Unlock()
@@ -538,8 +538,11 @@ func (client *ExtentClient) Truncate(mw *meta.MetaWrapper, parentIno uint64, ino
 	var err error
 	var oldSize uint64
 	if mw.EnableSummary {
-		// TODO: err ???
-		info, _ = mw.InodeGet_ll(inode)
+		info, err = mw.InodeGet_ll(inode)
+		if err != nil || info == nil {
+			log.LogErrorf("Truncate: InodeGet failed, fullPath(%s) inode(%d) err(%v)\n", fullPath, inode, err)
+			return err
+		}
 		oldSize = info.Size
 	}
 	err = s.IssueTruncRequest(size, fullPath)
@@ -674,6 +677,8 @@ func (client *ExtentClient) GetStreamer(inode uint64) *Streamer {
 	}
 	if !s.isOpen {
 		s.isOpen = true
+		s.request = make(chan interface{}, 64)
+		s.pendingCache = make(chan bcacheKey, 1)
 		go s.server()
 		go s.asyncBlockCache()
 	}

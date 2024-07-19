@@ -21,6 +21,7 @@ package main
 //
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -38,6 +39,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/cubefs/cubefs/sdk/meta"
 
 	"github.com/cubefs/cubefs/blockcache/bcache"
 	cfs "github.com/cubefs/cubefs/client/fs"
@@ -57,6 +60,15 @@ import (
 	"github.com/cubefs/cubefs/util/ump"
 	"github.com/jacobsa/daemonize"
 	_ "go.uber.org/automaxprocs"
+)
+
+const (
+	// CfsExitNormal exit normally, by umount
+	CfsExitNormal = "NORMAL"
+	// CfsExitAbnormal exit abnormal, include panic, SIGINT, SIGTERM
+	CfsExitAbnormal = "ABNORMAL"
+	// CfsExitUnknown exit unknown, include SIGKILL(kill -9) and system exit
+	CfsExitUnknown = "UNKNOWN"
 )
 
 const (
@@ -257,6 +269,54 @@ func doSuspend(uds string, port string) (*os.File, error) {
 	return fud, nil
 }
 
+func getLastExitInfo(outputFile *os.File) string {
+	scanner := bufio.NewScanner(outputFile)
+	lastCubeFsLine := ""
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "CubeFS Client") {
+			lastCubeFsLine = line
+		}
+	}
+
+	exitInfo := ""
+	if lastCubeFsLine != "" {
+		outputFile.Seek(0, 0)
+		scanner = bufio.NewScanner(outputFile)
+		// find last exit info
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == lastCubeFsLine {
+				for scanner.Scan() {
+					line := scanner.Text()
+					if strings.Contains(line, "exit normally") {
+						exitInfo = CfsExitNormal
+						break
+					}
+					if strings.Contains(line, "received signal (interrupt)") {
+						exitInfo = CfsExitAbnormal
+						break
+					}
+					if strings.Contains(line, "received signal (terminated)") {
+						exitInfo = CfsExitAbnormal
+						break
+					}
+					if strings.Contains(line, "panic") {
+						exitInfo = CfsExitAbnormal
+						break
+					}
+				}
+				// if not found exit info, it's `kill -9` or system exit
+				if exitInfo == "" {
+					exitInfo = CfsExitUnknown
+				}
+				break
+			}
+		}
+	}
+	return exitInfo
+}
+
 func main() {
 	flag.Parse()
 
@@ -308,7 +368,7 @@ func main() {
 	// use uber automaxprocs: get real cpu number to k8s pod"
 
 	level := parseLogLevel(opt.Loglvl)
-	_, err = log.InitLog(opt.Logpath, opt.Volname, level, nil, log.DefaultLogLeftSpaceLimit)
+	_, err = log.InitLog(opt.Logpath, opt.Volname, level, nil, log.DefaultLogLeftSpaceLimitRatio)
 	if err != nil {
 		err = errors.NewErrorf("Init log dir fail: %v\n", err)
 		fmt.Println(err)
@@ -366,6 +426,9 @@ func main() {
 		outputFile.Close()
 	}()
 	syslog.SetOutput(outputFile)
+
+	// get cfs-client last exit info from output.log
+	exitInfo := getLastExitInfo(outputFile)
 
 	if *configRestoreFuse {
 		syslog.Println("NeedAfterAlloc restore fuse")
@@ -471,6 +534,12 @@ func main() {
 			fsConn.SetFuseDevFile(fud)
 		}
 	}
+	// if last exit info no empty, export it
+	if exitInfo != "" {
+		syslog.Printf("LastExitInfo: %v", exitInfo)
+		errMetric := exporter.NewCounter("LastExitInfo")
+		errMetric.AddWithLabels(1, map[string]string{exporter.Op: "EXIT", exporter.Type: exitInfo})
+	}
 
 	if err = fs.Serve(fsConn, super, opt); err != nil {
 		log.LogFlush()
@@ -484,6 +553,7 @@ func main() {
 		syslog.Printf("fs Serve returns err(%v)\n", err)
 		os.Exit(1)
 	}
+	syslog.Printf("exit normally\n")
 }
 
 func getPushAddrFromMaster(masterAddr string) (addr string, err error) {
@@ -613,6 +683,8 @@ func mount(opt *proto.MountOptions) (fsConn *fuse.Conn, super *cfs.Super, err er
 	http.HandleFunc(auditlog.EnableAuditLogReqPath, super.EnableAuditLog)
 	http.HandleFunc(auditlog.DisableAuditLogReqPath, auditlog.DisableAuditLog)
 	http.HandleFunc(auditlog.SetAuditLogBufSizeReqPath, auditlog.ResetWriterBuffSize)
+	http.HandleFunc(meta.DisableTrash, super.DisableTrash)
+	http.HandleFunc(meta.QueryTrash, super.QueryTrash)
 
 	statusCh := make(chan error)
 	pprofAddr := ":" + opt.Profport
@@ -666,7 +738,7 @@ func mount(opt *proto.MountOptions) (fsConn *fuse.Conn, super *cfs.Super, err er
 				daemonize.SignalOutcome(err)
 				os.Exit(1)
 			}
-			super.SetTransaction(volumeInfo.EnableTransaction, volumeInfo.TxTimeout, volumeInfo.TxConflictRetryNum, volumeInfo.TxConflictRetryInterval)
+			super.SetTransaction(volumeInfo.EnableTransactionV1, volumeInfo.TxTimeout, volumeInfo.TxConflictRetryNum, volumeInfo.TxConflictRetryInterval)
 			if proto.IsCold(opt.VolType) {
 				super.CacheAction = volumeInfo.CacheAction
 				super.CacheThreshold = volumeInfo.CacheThreshold
@@ -720,8 +792,9 @@ func registerInterceptedSignal(mnt string) {
 	signal.Notify(sigC, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigC
-		syslog.Printf("Killed due to a received signal (%v)\n", sig)
+		syslog.Printf("Killed due to a received signal (%v)[%d-%v]\n", sig, os.Getpid(), mnt)
 		auditlog.StopAudit()
+		log.LogFlush()
 		os.Exit(1)
 	}()
 }
@@ -909,7 +982,7 @@ func loadConfFromMaster(opt *proto.MountOptions) (err error) {
 	opt.CacheAction = volumeInfo.CacheAction
 	opt.CacheThreshold = volumeInfo.CacheThreshold
 	opt.EnableQuota = volumeInfo.EnableQuota
-	opt.EnableTransaction = volumeInfo.EnableTransaction
+	opt.EnableTransaction = volumeInfo.EnableTransactionV1
 	opt.TxTimeout = volumeInfo.TxTimeout
 	opt.TxConflictRetryNum = volumeInfo.TxConflictRetryNum
 	opt.TxConflictRetryInterval = volumeInfo.TxConflictRetryInterval
@@ -921,5 +994,6 @@ func loadConfFromMaster(opt *proto.MountOptions) (err error) {
 	}
 	opt.EbsEndpoint = clusterInfo.EbsAddr
 	opt.EbsServicePath = clusterInfo.ServicePath
+	// opt.TrashInterval = int64(util.Min(int(opt.TrashInterval), volumeInfo.TrashInterval))
 	return
 }

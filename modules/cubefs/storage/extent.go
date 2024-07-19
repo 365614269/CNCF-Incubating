@@ -15,6 +15,7 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
@@ -71,6 +72,79 @@ func (ei *ExtentInfo) String() (m string) {
 	return fmt.Sprintf("FileID(%v)_Size(%v)_IsDeleted(%v)_Souarce(%v)_MT(%d)_AT(%d)_CRC(%d)", ei.FileID, ei.Size, ei.IsDeleted, source, ei.ModifyTime, ei.AccessTime, ei.Crc)
 }
 
+func (ei *ExtentInfo) MarshalBinaryWithBuffer(buff *bytes.Buffer) (err error) {
+	if err = binary.Write(buff, binary.BigEndian, ei.FileID); err != nil {
+		return
+	}
+	if err = binary.Write(buff, binary.BigEndian, ei.Size); err != nil {
+		return
+	}
+	if err = binary.Write(buff, binary.BigEndian, ei.IsDeleted); err != nil {
+		return
+	}
+	if err = binary.Write(buff, binary.BigEndian, ei.ModifyTime); err != nil {
+		return
+	}
+	if err = binary.Write(buff, binary.BigEndian, ei.AccessTime); err != nil {
+		return
+	}
+	if err = binary.Write(buff, binary.BigEndian, ei.SnapPreAllocDataOff); err != nil {
+		return
+	}
+	if err = binary.Write(buff, binary.BigEndian, ei.SnapshotDataOff); err != nil {
+		return
+	}
+	if err = binary.Write(buff, binary.BigEndian, ei.ApplyID); err != nil {
+		return
+	}
+	return
+}
+
+func (ei *ExtentInfo) MarshalBinary() (v []byte, err error) {
+	buff := bytes.NewBuffer([]byte{})
+	if err = ei.MarshalBinaryWithBuffer(buff); err != nil {
+		return
+	}
+	v = buff.Bytes()
+	return
+}
+
+func (ei *ExtentInfo) UnmarshalBinaryWithBuffer(buff *bytes.Buffer) (err error) {
+	if err = binary.Read(buff, binary.BigEndian, &ei.FileID); err != nil {
+		return
+	}
+	if err = binary.Read(buff, binary.BigEndian, &ei.Size); err != nil {
+		return
+	}
+	if err = binary.Read(buff, binary.BigEndian, &ei.IsDeleted); err != nil {
+		return
+	}
+	if err = binary.Read(buff, binary.BigEndian, &ei.ModifyTime); err != nil {
+		return
+	}
+	if err = binary.Read(buff, binary.BigEndian, &ei.AccessTime); err != nil {
+		return
+	}
+
+	if buff.Len() > 0 {
+		if err = binary.Read(buff, binary.BigEndian, &ei.SnapPreAllocDataOff); err != nil {
+			return
+		}
+		if err = binary.Read(buff, binary.BigEndian, &ei.SnapshotDataOff); err != nil {
+			return
+		}
+		if err = binary.Read(buff, binary.BigEndian, &ei.ApplyID); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (ei *ExtentInfo) UnmarshalBinary(v []byte) (err error) {
+	err = ei.UnmarshalBinaryWithBuffer(bytes.NewBuffer(v))
+	return
+}
+
 // SortedExtentInfos defines an array sorted by AccessTime
 type SortedExtentInfos []*ExtentInfo
 
@@ -123,11 +197,18 @@ func (e *Extent) HasClosed() bool {
 	return atomic.LoadInt32(&e.hasClose) == ExtentHasClose
 }
 
+func (e *Extent) setClosed() {
+	atomic.StoreInt32(&e.hasClose, ExtentHasClose)
+}
+
 // Close this extent and release FD.
 func (e *Extent) Close() (err error) {
 	if e.HasClosed() {
 		return
 	}
+	// NOTE: see https://yarchive.net/comp/linux/close_return_value.html
+	// close will always tear down fd
+	e.setClosed()
 	if err = e.file.Close(); err != nil {
 		return
 	}
@@ -202,7 +283,7 @@ func (e *Extent) GetDataSize(statSize int64) (dataSize int64) {
 // RestoreFromFS restores the entity data and status from the file stored on the filesystem.
 func (e *Extent) RestoreFromFS() (err error) {
 	if e.file, err = os.OpenFile(e.filePath, os.O_RDWR, 0o666); err != nil {
-		if strings.Contains(err.Error(), syscall.ENOENT.Error()) {
+		if os.IsNotExist(err) {
 			err = ExtentNotFoundError
 		}
 		return err
@@ -224,8 +305,10 @@ func (e *Extent) RestoreFromFS() (err error) {
 
 	e.dataSize = e.GetDataSize(info.Size())
 	e.snapshotDataOff = util.ExtentSize
-	if info.Size() > util.ExtentSize {
-		e.snapshotDataOff = uint64(info.Size())
+	if !IsTinyExtent(e.extentID) {
+		if info.Size() > util.ExtentSize {
+			e.snapshotDataOff = uint64(info.Size())
+		}
 	}
 
 	atomic.StoreInt64(&e.modifyTime, info.ModTime().Unix())
@@ -394,19 +477,18 @@ func (e *Extent) Write(data []byte, offset, size int64, crc uint32, writeType in
 
 // Read reads data from an extent.
 func (e *Extent) Read(data []byte, offset, size int64, isRepairRead bool) (crc uint32, err error) {
-	log.LogDebugf("action[Extent.read] offset %v size %v extent %v", offset, size, e)
 	if IsTinyExtent(e.extentID) {
 		return e.ReadTiny(data, offset, size, isRepairRead)
 	}
 
 	if err = e.checkReadOffsetAndSize(offset, size); err != nil {
-		log.LogErrorf("action[Extent.Read] offset %d size %d err %v", offset, size, err)
+		log.LogErrorf("action[Extent.Read]extent %v offset %d size %d err %v", e.extentID, offset, size, err)
 		return
 	}
 
 	var rSize int
 	if rSize, err = e.file.ReadAt(data[:size], offset); err != nil {
-		log.LogErrorf("action[Extent.Read] offset %v size %v err %v realsize %v", offset, size, err, rSize)
+		log.LogErrorf("action[Extent.Read]extent %v offset %v size %v err %v realsize %v", e.extentID, offset, size, err, rSize)
 		return
 	}
 	crc = crc32.ChecksumIEEE(data)
@@ -426,7 +508,8 @@ func (e *Extent) ReadTiny(data []byte, offset, size int64, isRepairRead bool) (c
 func (e *Extent) checkReadOffsetAndSize(offset, size int64) error {
 	if (e.snapshotDataOff == util.ExtentSize && offset > e.Size()) ||
 		(e.snapshotDataOff > util.ExtentSize && uint64(offset) > e.snapshotDataOff) {
-		return newParameterError("offset=%d size=%d snapshotDataOff=%d", offset, size, e.snapshotDataOff)
+		return newParameterError("offset=%d size=%d snapshotDataOff=%d e.Size=%v", offset, size,
+			e.snapshotDataOff, e.Size())
 	}
 	return nil
 }
@@ -453,6 +536,9 @@ func (e *Extent) checkWriteOffsetAndSize(writeType int, offset, size int64, isRe
 
 // Flush synchronizes data to the disk.
 func (e *Extent) Flush() (err error) {
+	if e.HasClosed() {
+		return
+	}
 	err = e.file.Sync()
 	return
 }

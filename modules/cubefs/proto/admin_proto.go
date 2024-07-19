@@ -35,6 +35,8 @@ const (
 	AdminGetCluster                           = "/admin/getCluster"
 	AdminSetClusterInfo                       = "/admin/setClusterInfo"
 	AdminGetMonitorPushAddr                   = "/admin/getMonitorPushAddr"
+	AdminGetClusterDataNodes                  = "/admin/cluster/getAllDataNodes"
+	AdminGetClusterMetaNodes                  = "/admin/cluster/getAllMetaNodes"
 	AdminGetDataPartition                     = "/dataPartition/get"
 	AdminLoadDataPartition                    = "/dataPartition/load"
 	AdminCreateDataPartition                  = "/dataPartition/create"
@@ -86,6 +88,7 @@ const (
 	AdminQueryDecommissionLimit               = "/admin/queryDecommissionLimit"
 	AdminQueryDecommissionFailedDisk          = "/admin/queryDecommissionFailedDisk"
 	AdminAbortDecommissionDisk                = "/admin/abortDecommissionDisk"
+	AdminResetDataPartitionRestoreStatus      = "/admin/resetDataPartitionRestoreStatus"
 	// #nosec G101
 	AdminQueryDecommissionToken = "/admin/queryDecommissionToken"
 	AdminSetFileStats           = "/admin/setFileStatsEnable"
@@ -102,10 +105,9 @@ const (
 
 	AdminLcNode = "/admin/lcnode"
 
-	AdminUpdateDecommissionDiskFactor = "/admin/updateDecommissionDiskFactor"
-	AdminQueryDecommissionDiskLimit   = "/admin/queryDecommissionDiskLimit"
-	AdminEnableAutoDecommissionDisk   = "/admin/enableAutoDecommissionDisk"
-	AdminQueryAutoDecommissionDisk    = "/admin/queryAutoDecommissionDisk"
+	AdminUpdateDecommissionDiskLimit = "/admin/updateDecommissionDiskLimit"
+	AdminEnableAutoDecommissionDisk  = "/admin/enableAutoDecommissionDisk"
+	AdminQueryAutoDecommissionDisk   = "/admin/queryAutoDecommissionDisk"
 	// graphql master api
 	AdminClusterAPI               = "/api/cluster"
 	AdminUserAPI                  = "/api/user"
@@ -163,6 +165,7 @@ const (
 	QueryDiskDecoProgress              = "/disk/queryDecommissionProgress"
 	MarkDecoDiskFixed                  = "/disk/MarkDecommissionDiskFixed"
 	PauseDecommissionDisk              = "/disk/pauseDecommission"
+	CancelDecommissionDisk             = "/disk/cancelDecommission"
 	QueryDecommissionDiskDecoFailedDps = "/disk/queryDecommissionFailedDps"
 	QueryBadDisks                      = "/disk/queryBadDisks"
 	QueryDisks                         = "/disk/queryDisks"
@@ -243,6 +246,8 @@ const (
 	QuotaGet    = "/quota/get"
 	// QuotaBatchModifyPath = "/quota/batchModifyPath"
 	QuotaListAll = "/quota/listAll"
+	// trash
+	AdminSetTrashInterval = "/vol/setTrashInterval"
 
 	// s3 qos api
 	S3QoSSet    = "/s3/qos/set"
@@ -292,15 +297,15 @@ var GApiInfo map[string]string = map[string]string{
 	"adminsetdpdiscard":                  AdminSetDpDiscard,
 	"admingetdiscarddp":                  AdminGetDiscardDp,
 
-	//"adminclusterapi":                 AdminClusterAPI,
-	//"adminuserapi":                    AdminUserAPI,
-	//"adminvolumeapi":                  AdminVolumeAPI,
-	//"consoleiql":                      ConsoleIQL,
-	//"consoleloginapi":                 ConsoleLoginAPI,
-	//"consolemonitorapi":               ConsoleMonitorAPI,
-	//"consolefile":                     ConsoleFile,
-	//"consolefiledown":                 ConsoleFileDown,
-	//"consolefileupload":               ConsoleFileUpload,
+	// "adminclusterapi":                 AdminClusterAPI,
+	// "adminuserapi":                    AdminUserAPI,
+	// "adminvolumeapi":                  AdminVolumeAPI,
+	// "consoleiql":                      ConsoleIQL,
+	// "consoleloginapi":                 ConsoleLoginAPI,
+	// "consolemonitorapi":               ConsoleMonitorAPI,
+	// "consolefile":                     ConsoleFile,
+	// "consolefiledown":                 ConsoleFileDown,
+	// "consolefileupload":               ConsoleFileUpload,
 	"clientdatapartitions":   ClientDataPartitions,
 	"clientvol":              ClientVol,
 	"clientmetapartition":    ClientMetaPartition,
@@ -310,7 +315,7 @@ var GApiInfo map[string]string = map[string]string{
 	"qosgetclientslimitinfo": QosGetClientsLimitInfo,
 	"qosgetzonelimitinfo":    QosGetZoneLimitInfo,
 	"qosupdate":              QosUpdate,
-	//"qosupdatemagnify":               QosUpdateMagnify,
+	// "qosupdatemagnify":               QosUpdateMagnify,
 	"qosupdateclientparam":            QosUpdateClientParam,
 	"qosupdatezonelimit":              QosUpdateZoneLimit,
 	"qosupload":                       QosUpload,
@@ -1104,6 +1109,7 @@ type SimpleVolView struct {
 	EnableToken             bool
 	EnablePosixAcl          bool
 	EnableQuota             bool
+	EnableTransactionV1     string
 	EnableTransaction       string
 	TxTimeout               int64
 	TxConflictRetryNum      int64
@@ -1127,10 +1133,12 @@ type SimpleVolView struct {
 	CacheRule        string
 	PreloadCapacity  uint64
 	Uids             []UidSimpleInfo
+	TrashInterval    int64
+
 	// multi version snapshot
 	LatestVer         uint64
 	Forbidden         bool
-	EnableAuditLog    bool
+	DisableAuditLog   bool
 	DeleteExecTime    time.Time
 	DpRepairBlockSize uint64
 }

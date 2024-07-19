@@ -173,6 +173,11 @@ type addrSet struct {
 	replicaAlive string
 }
 
+type NoLeaderPartInfo struct {
+	ReportTime int64
+	Replicas   uint8
+}
+
 type warningMetrics struct {
 	cluster               *Cluster
 	missingDp             *exporter.GaugeVec
@@ -181,8 +186,8 @@ type warningMetrics struct {
 	mpNoLeader            *exporter.GaugeVec
 	dpMutex               sync.Mutex
 	mpMutex               sync.Mutex
-	dpNoLeaderInfo        map[uint64]int64
-	mpNoLeaderInfo        map[uint64]int64
+	dpNoLeaderInfo        map[uint64]NoLeaderPartInfo
+	mpNoLeaderInfo        map[uint64]NoLeaderPartInfo
 	dpMissingReplicaMutex sync.Mutex
 	mpMissingReplicaMutex sync.Mutex
 	dpMissingReplicaInfo  map[string]addrSet
@@ -193,11 +198,11 @@ func newWarningMetrics(c *Cluster) *warningMetrics {
 	return &warningMetrics{
 		cluster:              c,
 		missingDp:            exporter.NewGaugeVec(MetricMissingDp, "", []string{"clusterName", "partitionID", "addr", "ReplicaAlive", "ReplicaNum"}),
-		dpNoLeader:           exporter.NewGaugeVec(MetricDpNoLeader, "", []string{"clusterName", "partitionID"}),
+		dpNoLeader:           exporter.NewGaugeVec(MetricDpNoLeader, "", []string{"clusterName", "partitionID", "ReplicaNum"}),
 		missingMp:            exporter.NewGaugeVec(MetricMissingMp, "", []string{"clusterName", "partitionID", "addr"}),
-		mpNoLeader:           exporter.NewGaugeVec(MetricMpNoLeader, "", []string{"clusterName", "partitionID"}),
-		dpNoLeaderInfo:       make(map[uint64]int64),
-		mpNoLeaderInfo:       make(map[uint64]int64),
+		mpNoLeader:           exporter.NewGaugeVec(MetricMpNoLeader, "", []string{"clusterName", "partitionID", "ReplicaNum"}),
+		dpNoLeaderInfo:       make(map[uint64]NoLeaderPartInfo),
+		mpNoLeaderInfo:       make(map[uint64]NoLeaderPartInfo),
 		dpMissingReplicaInfo: make(map[string]addrSet),
 		mpMissingReplicaInfo: make(map[string]addrSet),
 	}
@@ -206,15 +211,19 @@ func newWarningMetrics(c *Cluster) *warningMetrics {
 func (m *warningMetrics) reset() {
 	log.LogInfo("action[warningMetrics] reset all")
 	m.dpMutex.Lock()
-	for dp := range m.dpNoLeaderInfo {
-		m.dpNoLeader.DeleteLabelValues(m.cluster.Name, strconv.FormatUint(dp, 10))
+	for dp, noLeaderInfo := range m.dpNoLeaderInfo {
+		if m.dpNoLeader != nil {
+			m.dpNoLeader.DeleteLabelValues(m.cluster.Name, strconv.FormatUint(dp, 10), strconv.FormatUint(uint64(noLeaderInfo.Replicas), 10))
+		}
 		delete(m.dpNoLeaderInfo, dp)
 	}
 	m.dpMutex.Unlock()
 
 	m.mpMutex.Lock()
-	for mp := range m.mpNoLeaderInfo {
-		m.mpNoLeader.DeleteLabelValues(m.cluster.Name, strconv.FormatUint(mp, 10))
+	for mp, noLeaderInfo := range m.mpNoLeaderInfo {
+		if m.mpNoLeader != nil {
+			m.mpNoLeader.DeleteLabelValues(m.cluster.Name, strconv.FormatUint(mp, 10), strconv.FormatUint(uint64(noLeaderInfo.Replicas), 10))
+		}
 		delete(m.mpNoLeaderInfo, mp)
 	}
 	m.mpMutex.Unlock()
@@ -222,7 +231,9 @@ func (m *warningMetrics) reset() {
 	m.dpMissingReplicaMutex.Lock()
 	for id, dpAddrSet := range m.dpMissingReplicaInfo {
 		for addr := range dpAddrSet.addrs {
-			m.missingDp.DeleteLabelValues(m.cluster.Name, id, addr, dpAddrSet.replicaAlive, dpAddrSet.replicaNum)
+			if m.missingDp != nil {
+				m.missingDp.DeleteLabelValues(m.cluster.Name, id, addr, dpAddrSet.replicaAlive, dpAddrSet.replicaNum)
+			}
 		}
 		delete(m.dpMissingReplicaInfo, id)
 	}
@@ -231,7 +242,9 @@ func (m *warningMetrics) reset() {
 	m.mpMissingReplicaMutex.Lock()
 	for id, mpAddrSet := range m.mpMissingReplicaInfo {
 		for addr := range mpAddrSet.addrs {
-			m.missingMp.DeleteLabelValues(m.cluster.Name, id, addr)
+			if m.missingMp != nil {
+				m.missingMp.DeleteLabelValues(m.cluster.Name, id, addr)
+			}
 		}
 		delete(m.mpMissingReplicaInfo, id)
 	}
@@ -247,7 +260,8 @@ func (m *warningMetrics) deleteMissingDp(missingDpAddrSet addrSet, clusterName, 
 	if _, ok := missingDpAddrSet.addrs[addr]; !ok {
 		return
 	}
-
+	m.dpMissingReplicaMutex.Lock()
+	defer m.dpMissingReplicaMutex.Unlock()
 	replicaAlive := m.dpMissingReplicaInfo[dpId].replicaAlive
 	replicaNum := m.dpMissingReplicaInfo[dpId].replicaNum
 
@@ -256,7 +270,9 @@ func (m *warningMetrics) deleteMissingDp(missingDpAddrSet addrSet, clusterName, 
 		delete(m.dpMissingReplicaInfo, dpId)
 	}
 
-	m.missingDp.DeleteLabelValues(clusterName, dpId, addr, replicaAlive, replicaNum)
+	if m.missingDp != nil {
+		m.missingDp.DeleteLabelValues(clusterName, dpId, addr, replicaAlive, replicaNum)
+	}
 	log.LogDebugf("action[deleteMissingDp] delete: dpId(%v), addr(%v)", dpId, addr)
 }
 
@@ -307,30 +323,34 @@ func (m *warningMetrics) CleanObsoleteDpMissing(clusterName string, dp *DataPart
 }
 
 // leader only
-func (m *warningMetrics) WarnDpNoLeader(clusterName string, partitionID uint64, report bool) {
+func (m *warningMetrics) WarnDpNoLeader(clusterName string, partitionID uint64, replicas uint8, report bool) {
 	if clusterName != m.cluster.Name {
 		return
 	}
 
 	m.dpMutex.Lock()
 	defer m.dpMutex.Unlock()
-	t, ok := m.dpNoLeaderInfo[partitionID]
+	info, ok := m.dpNoLeaderInfo[partitionID]
 	if !report {
 		if ok {
 			delete(m.dpNoLeaderInfo, partitionID)
-			m.dpNoLeader.DeleteLabelValues(clusterName, strconv.FormatUint(partitionID, 10))
+			if m.dpNoLeader != nil {
+				m.dpNoLeader.DeleteLabelValues(clusterName, strconv.FormatUint(partitionID, 10), strconv.FormatUint(uint64(replicas), 10))
+			}
 		}
 		return
 	}
 
 	now := time.Now().Unix()
 	if !ok {
-		m.dpNoLeaderInfo[partitionID] = now
+		m.dpNoLeaderInfo[partitionID] = NoLeaderPartInfo{ReportTime: now, Replicas: replicas}
 		return
 	}
-	if now-t > m.cluster.cfg.DpNoLeaderReportIntervalSec {
-		m.dpNoLeader.SetWithLabelValues(1, clusterName, strconv.FormatUint(partitionID, 10))
-		m.dpNoLeaderInfo[partitionID] = now
+	if now-info.ReportTime > m.cluster.cfg.DpNoLeaderReportIntervalSec {
+		if m.dpNoLeader != nil {
+			m.dpNoLeader.SetWithLabelValues(1, clusterName, strconv.FormatUint(partitionID, 10), strconv.FormatUint(uint64(replicas), 10))
+		}
+		m.dpNoLeaderInfo[partitionID] = NoLeaderPartInfo{ReportTime: now, Replicas: replicas}
 	}
 }
 
@@ -349,7 +369,9 @@ func (m *warningMetrics) deleteMissingMp(missingMpAddrSet addrSet, clusterName, 
 		delete(m.mpMissingReplicaInfo, mpId)
 	}
 
-	m.missingMp.DeleteLabelValues(clusterName, mpId, addr)
+	if m.missingMp != nil {
+		m.missingMp.DeleteLabelValues(clusterName, mpId, addr)
+	}
 	log.LogDebugf("action[deleteMissingMp] delete: mpId(%v), addr(%v)", mpId, addr)
 }
 
@@ -367,7 +389,9 @@ func (m *warningMetrics) WarnMissingMp(clusterName, addr string, partitionID uin
 		return
 	}
 
-	m.missingMp.SetWithLabelValues(1, clusterName, id, addr)
+	if m.missingMp != nil {
+		m.missingMp.SetWithLabelValues(1, clusterName, id, addr)
+	}
 	if _, ok := m.mpMissingReplicaInfo[id]; !ok {
 		m.dpMissingReplicaInfo[id] = addrSet{addrs: make(map[string]voidType)}
 		// m.mpMissingReplicaInfo[id] = make(addrSet)
@@ -398,17 +422,19 @@ func (m *warningMetrics) CleanObsoleteMpMissing(clusterName string, mp *MetaPart
 }
 
 // leader only
-func (m *warningMetrics) WarnMpNoLeader(clusterName string, partitionID uint64, report bool) {
+func (m *warningMetrics) WarnMpNoLeader(clusterName string, partitionID uint64, replicas uint8, report bool) {
 	if clusterName != m.cluster.Name {
 		return
 	}
 	m.mpMutex.Lock()
 	defer m.mpMutex.Unlock()
-	t, ok := m.mpNoLeaderInfo[partitionID]
+	info, ok := m.mpNoLeaderInfo[partitionID]
 	if !report {
 		if ok {
 			delete(m.mpNoLeaderInfo, partitionID)
-			m.mpNoLeader.DeleteLabelValues(clusterName, strconv.FormatUint(partitionID, 10))
+			if m.mpNoLeader != nil {
+				m.mpNoLeader.DeleteLabelValues(clusterName, strconv.FormatUint(partitionID, 10), strconv.FormatUint(uint64(replicas), 10))
+			}
 		}
 		return
 	}
@@ -416,13 +442,15 @@ func (m *warningMetrics) WarnMpNoLeader(clusterName string, partitionID uint64, 
 	now := time.Now().Unix()
 
 	if !ok {
-		m.mpNoLeaderInfo[partitionID] = now
+		m.mpNoLeaderInfo[partitionID] = NoLeaderPartInfo{ReportTime: now, Replicas: replicas}
 		return
 	}
 
-	if now-t > m.cluster.cfg.MpNoLeaderReportIntervalSec {
-		m.mpNoLeader.SetWithLabelValues(1, clusterName, strconv.FormatUint(partitionID, 10))
-		m.mpNoLeaderInfo[partitionID] = now
+	if now-info.ReportTime > m.cluster.cfg.MpNoLeaderReportIntervalSec {
+		if m.mpNoLeader != nil {
+			m.mpNoLeader.SetWithLabelValues(1, clusterName, strconv.FormatUint(partitionID, 10), strconv.FormatUint(uint64(replicas), 10))
+		}
+		m.mpNoLeaderInfo[partitionID] = NoLeaderPartInfo{ReportTime: now, Replicas: replicas}
 	}
 }
 

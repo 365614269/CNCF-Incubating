@@ -15,8 +15,11 @@
 package master
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util"
@@ -43,6 +46,18 @@ func (api *AdminAPI) EncodingGzip() *AdminAPI {
 func (api *AdminAPI) GetCluster() (cv *proto.ClusterView, err error) {
 	cv = &proto.ClusterView{}
 	err = api.mc.requestWith(cv, newRequest(get, proto.AdminGetCluster).Header(api.h))
+	return
+}
+
+func (api *AdminAPI) GetClusterDataNodes() (nodes []proto.NodeView, err error) {
+	nodes = []proto.NodeView{}
+	err = api.mc.requestWith(&nodes, newRequest(get, proto.AdminGetClusterDataNodes).Header(api.h))
+	return
+}
+
+func (api *AdminAPI) GetClusterMetaNodes() (nodes []proto.NodeView, err error) {
+	nodes = []proto.NodeView{}
+	err = api.mc.requestWith(&nodes, newRequest(get, proto.AdminGetClusterMetaNodes).Header(api.h))
 	return
 }
 
@@ -257,6 +272,7 @@ func (api *AdminAPI) UpdateVolume(
 	request := newRequest(get, proto.AdminUpdateVol).Header(api.h)
 	request.addParam("name", vv.Name)
 	request.addParam("description", vv.Description)
+	request.addParam("crossZone", strconv.FormatBool(vv.CrossZone))
 	request.addParam("authKey", util.CalcAuthKey(vv.Owner))
 	request.addParam("zoneName", vv.ZoneName)
 	request.addParam("capacity", strconv.FormatUint(vv.Capacity, 10))
@@ -628,7 +644,7 @@ func (api *AdminAPI) DiskDetail(addr string, diskPath string) (disk *proto.DiskI
 
 func (api *AdminAPI) DecommissionDisk(addr string, disk string) (err error) {
 	return api.mc.request(newRequest(post, proto.DecommissionDisk).Header(api.h).
-		addParam("addr", addr).addParam("disk", disk))
+		addParam("addr", addr).addParam("disk", disk).addParam("decommissionType", "1"))
 }
 
 func (api *AdminAPI) RecommissionDisk(addr string, disk string) (err error) {
@@ -755,5 +771,54 @@ func (api *AdminAPI) AbortDiskDecommission(addr string, disk string) (err error)
 	request.addParam("disk", disk)
 
 	err = api.mc.request(request)
+	return
+}
+
+func (api *AdminAPI) SetClusterDecommissionLimit(limit int32) (err error) {
+	request := newAPIRequest(http.MethodPost, proto.AdminUpdateDecommissionLimit)
+	request.addParam("decommissionLimit", strconv.FormatInt(int64(limit), 10))
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) QueryDecommissionToken() (status []proto.DecommissionTokenStatus, err error) {
+	var buf []byte
+	request := newAPIRequest(http.MethodGet, proto.AdminQueryDecommissionToken)
+	if buf, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	status = make([]proto.DecommissionTokenStatus, 0)
+	if err = json.Unmarshal(buf, &status); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) SetVolTrashInterval(volName string, authKey string, interval time.Duration) (err error) {
+	request := newAPIRequest(http.MethodPost, proto.AdminSetTrashInterval)
+	request.addParam("name", volName)
+	request.addParam("trashInterval", strconv.FormatInt(int64(interval.Minutes()), 10))
+	request.addParam("authKey", authKey)
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) SetDecommissionDiskLimit(limit uint32) (err error) {
+	request := newRequest(post, proto.AdminUpdateDecommissionDiskLimit)
+	request.addParam("decommissionDiskLimit", strconv.FormatUint(uint64(limit), 10))
+
+	err = api.mc.request(request)
+	return
+}
+
+func (api *AdminAPI) ResetDataPartitionRestoreStatus(dpId uint64) (ok bool, err error) {
+	request := newRequest(post, proto.AdminResetDataPartitionRestoreStatus)
+	request.addParam("id", strconv.FormatUint(dpId, 10))
+
+	err = api.mc.requestWith(&ok, request)
 	return
 }

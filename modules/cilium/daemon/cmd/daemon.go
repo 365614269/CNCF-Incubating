@@ -652,8 +652,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		return nil, nil, fmt.Errorf("failed to finalise LB initialization: %w", err)
 	}
 
-	// BPF masquerade depends on BPF NodePort and require socket-LB to
-	// be enabled in the tunneling mode, so the following checks should
+	// BPF masquerade depends on BPF NodePort, so the following checks should
 	// happen after invoking initKubeProxyReplacementOptions().
 	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
 
@@ -670,9 +669,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 			log.WithError(err).Error("unable to initialize BPF masquerade support")
 			return nil, nil, fmt.Errorf("unable to initialize BPF masquerade support: %w", err)
 		}
-	}
-
-	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
 		if option.Config.EnableMasqueradeRouteSource {
 			log.Error("BPF masquerading does not yet support masquerading to source IP from routing layer")
 			return nil, nil, fmt.Errorf("BPF masquerading to route source (--%s=\"true\") currently not supported with BPF-based masquerading (--%s=\"true\")", option.EnableMasqueradeRouteSource, option.EnableBPFMasquerade)

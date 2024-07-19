@@ -113,6 +113,7 @@ func (s *DataNode) getPartitionsAPI(w http.ResponseWriter, r *http.Request) {
 			Status   int      `json:"status"`
 			Path     string   `json:"path"`
 			Replicas []string `json:"replicas"`
+			Hosts    []string `json:"hosts"`
 		}{
 			ID:       dp.partitionID,
 			Size:     dp.Size(),
@@ -120,6 +121,7 @@ func (s *DataNode) getPartitionsAPI(w http.ResponseWriter, r *http.Request) {
 			Status:   dp.Status(),
 			Path:     dp.Path(),
 			Replicas: dp.Replicas(),
+			Hosts:    dp.getConfigHosts(),
 		}
 		partitions = append(partitions, partition)
 		return true
@@ -445,6 +447,56 @@ func (s *DataNode) buildJSONResp(w http.ResponseWriter, code int, data interface
 		return
 	}
 	w.Write(jsonBody)
+}
+
+type GcExtent struct {
+	*storage.ExtentInfo
+	GcStatus string `json:"gc_status"`
+}
+
+func (s *DataNode) getAllExtent(w http.ResponseWriter, r *http.Request) {
+	var (
+		partitionID uint64
+		err         error
+		extents     []*storage.ExtentInfo
+	)
+	if err = r.ParseForm(); err != nil {
+		s.buildFailureResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	beforeTime, err := strconv.ParseInt(r.FormValue("beforeTime"), 10, 64)
+	if err != nil {
+		s.buildFailureResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if partitionID, err = strconv.ParseUint(r.FormValue("id"), 10, 64); err != nil {
+		s.buildFailureResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	partition := s.space.Partition(partitionID)
+	if partition == nil {
+		s.buildFailureResp(w, http.StatusNotFound, "partition not exist")
+		return
+	}
+
+	store := partition.ExtentStore()
+	extents, err = store.GetAllExtents(beforeTime)
+	if err != nil {
+		s.buildFailureResp(w, http.StatusInternalServerError, "get all extents failed")
+		return
+	}
+
+	gcExtents := make([]*GcExtent, len(extents))
+	for idx, e := range extents {
+		gcExtents[idx] = &GcExtent{
+			ExtentInfo: e,
+			GcStatus:   store.GetGcFlag(e.FileID).String(),
+		}
+	}
+
+	s.buildSuccessResp(w, gcExtents)
 }
 
 func (s *DataNode) setDiskBadAPI(w http.ResponseWriter, r *http.Request) {

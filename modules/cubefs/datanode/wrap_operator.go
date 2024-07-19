@@ -109,7 +109,7 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 			logContent := fmt.Sprintf("action[OperatePacket] %v.",
 				p.LogMessage(p.GetOpMsg(), c.RemoteAddr().String(), start, nil))
 			switch p.Opcode {
-			case proto.OpStreamRead, proto.OpRead, proto.OpExtentRepairRead, proto.OpStreamFollowerRead:
+			case proto.OpStreamRead, proto.OpRead, proto.OpExtentRepairRead, proto.OpStreamFollowerRead, proto.OpBackupRead:
 			case proto.OpReadTinyDeleteRecord:
 				log.LogRead(logContent)
 			case proto.OpWrite, proto.OpRandomWrite,
@@ -130,9 +130,9 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 	switch p.Opcode {
 	case proto.OpCreateExtent:
 		s.handlePacketToCreateExtent(p)
-	case proto.OpWrite, proto.OpSyncWrite:
+	case proto.OpWrite, proto.OpSyncWrite, proto.OpBackupWrite:
 		s.handleWritePacket(p)
-	case proto.OpStreamRead:
+	case proto.OpStreamRead, proto.OpBackupRead:
 		s.handleStreamReadPacket(p, c, StreamRead)
 	case proto.OpStreamFollowerRead:
 		s.extentRepairReadPacket(p, c, StreamRead)
@@ -144,7 +144,7 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 		s.handleSnapshotExtentRepairReadPacket(p, c)
 	case proto.OpMarkDelete, proto.OpSplitMarkDelete:
 		s.handleMarkDeletePacket(p, c)
-	case proto.OpBatchDeleteExtent:
+	case proto.OpBatchDeleteExtent, proto.OpGcBatchDeleteExtent:
 		s.handleBatchMarkDeletePacket(p, c)
 	case proto.OpRandomWrite, proto.OpSyncRandomWrite,
 		proto.OpRandomWriteAppend, proto.OpSyncRandomWriteAppend,
@@ -181,6 +181,10 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 		s.handlePacketToReadTinyDeleteRecordFile(p, c)
 	case proto.OpBroadcastMinAppliedID:
 		s.handleBroadcastMinAppliedID(p)
+	case proto.OpBatchLockNormalExtent:
+		s.handleBatchLockNormalExtent(p, c)
+	case proto.OpBatchUnlockNormalExtent:
+		s.handleBatchUnlockNormalExtent(p, c)
 	case proto.OpVersionOperation:
 		s.handleUpdateVerPacket(p)
 	case proto.OpStopDataPartitionRepair:
@@ -211,13 +215,6 @@ func (s *DataNode) handlePacketToCreateExtent(p *repl.Packet) {
 		return
 	} else if partition.disk.Status == proto.Unavailable {
 		err = storage.BrokenDiskError
-		return
-	}
-
-	// in case too many extents
-	if partition.GetExtentCount() >= storage.MaxExtentCount+10 {
-		log.LogWarnf("[handlePacketToCreateExtent] dp(%v) not enough space, too many extents(%v)", partition.partitionID, partition.GetExtentCount())
-		err = storage.NoSpaceError
 		return
 	}
 
@@ -744,6 +741,13 @@ func (s *DataNode) handleBatchMarkDeletePacket(p *repl.Packet, c net.Conn) {
 	store := partition.ExtentStore()
 	if err == nil {
 		for _, ext := range exts {
+			ok := store.CanGcDelete(ext.ExtentId)
+			if p.Opcode == proto.OpGcBatchDeleteExtent && ok {
+				log.LogWarnf("handleBatchMarkDeletePacket: ext %d is not in gc status, can't be gc delete, dp %d", ext.ExtentId, ext.PartitionId)
+				err = storage.ParameterMismatchError
+				return
+			}
+
 			if deleteLimiteRater.Allow() {
 				log.LogInfof(fmt.Sprintf("recive DeleteExtent (%v) from (%v)", ext, c.RemoteAddr().String()))
 				partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
@@ -791,6 +795,7 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 			p.PacketOkReply()
 		}
 	}()
+
 	partition := p.Object.(*DataPartition)
 	if partition.IsForbidden() {
 		err = storage.ForbiddenDataPartitionError
@@ -818,7 +823,7 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 		partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
 
 		if writable := partition.disk.limitWrite.TryRun(int(p.Size), func() {
-			_, err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite(), false, false)
+			_, err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite(), false, false, false)
 		}); !writable {
 			err = storage.LimitedIoError
 			return
@@ -840,7 +845,7 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 		partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
 
 		if writable := partition.disk.limitWrite.TryRun(int(p.Size), func() {
-			_, err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite(), false, false)
+			_, err = store.Write(p.ExtentID, p.ExtentOffset, int64(p.Size), p.Data, p.CRC, storage.AppendWriteType, p.IsSyncWrite(), false, false, false)
 		}); !writable {
 			err = storage.LimitedIoError
 			return
@@ -868,7 +873,7 @@ func (s *DataNode) handleWritePacket(p *repl.Packet) {
 			partition.disk.allocCheckLimit(proto.IopsWriteType, 1)
 
 			if writable := partition.disk.limitWrite.TryRun(currSize, func() {
-				_, err = store.Write(p.ExtentID, p.ExtentOffset+int64(offset), int64(currSize), data, crc, storage.AppendWriteType, p.IsSyncWrite(), false, false)
+				_, err = store.Write(p.ExtentID, p.ExtentOffset+int64(offset), int64(currSize), data, crc, storage.AppendWriteType, p.IsSyncWrite(), false, false, false)
 			}); !writable {
 				err = storage.LimitedIoError
 				return
@@ -1223,7 +1228,6 @@ func (s *DataNode) handlePacketToGetPartitionSize(p *repl.Packet) {
 func (s *DataNode) handlePacketToGetMaxExtentIDAndPartitionSize(p *repl.Packet) {
 	partition := p.Object.(*DataPartition)
 	maxExtentID, totalPartitionSize := partition.extentStore.GetMaxExtentIDAndPartitionSize()
-
 	buf := make([]byte, 16)
 	binary.BigEndian.PutUint64(buf[0:8], uint64(maxExtentID))
 	binary.BigEndian.PutUint64(buf[8:16], totalPartitionSize)
@@ -1649,4 +1653,78 @@ func (s *DataNode) handlePacketToRecoverDataReplicaMeta(p *repl.Packet) {
 	} else {
 		log.LogInfof("action[handlePacketToRecoverDataReplicaMeta] dp %v recover replica success", dp.partitionID)
 	}
+}
+
+func (s *DataNode) handleBatchLockNormalExtent(p *repl.Packet, connect net.Conn) {
+	var err error
+
+	defer func() {
+		if err != nil {
+			log.LogErrorf("action[handleBatchLockNormalExtent] err %v", err)
+			p.PackErrorBody(ActionBatchLockNormalExtent, err.Error())
+		} else {
+			p.PacketOkReply()
+		}
+	}()
+
+	partition := p.Object.(*DataPartition)
+	gcLockEks := &proto.GcLockExtents{}
+	err = json.Unmarshal(p.Data, gcLockEks)
+	if err != nil {
+		log.LogErrorf("action[handleBatchLockNormalExtent] err %v", err)
+		return
+	}
+
+	store := partition.ExtentStore()
+
+	// In order to prevent users from writing extents, lock first and then create
+	err = store.ExtentBatchLockNormalExtent(gcLockEks)
+	if err != nil {
+		log.LogErrorf("action[handleBatchLockNormalExtent] err %v", err)
+		return
+	}
+
+	start := time.Now()
+	if gcLockEks.IsCreate {
+		for _, ek := range gcLockEks.Eks {
+			err = store.Create(ek.ExtentId)
+			if err == storage.ExtentExistsError {
+				err = nil
+				continue
+			}
+			if err != nil {
+				log.LogErrorf("action[handleBatchLockNormalExtent] create path %s, id %d, extent err %v",
+					partition.Path(), ek.ExtentId, err)
+				return
+			}
+		}
+	}
+	log.LogInfof("action[handleBatchLockNormalExtent] dp %d, success len: %v, isCreate: %v, flag %s, cost %d ms",
+		partition.partitionID, len(gcLockEks.Eks), gcLockEks.IsCreate, gcLockEks.Flag.String(), time.Since(start).Milliseconds())
+}
+
+func (s *DataNode) handleBatchUnlockNormalExtent(p *repl.Packet, connect net.Conn) {
+	var err error
+
+	defer func() {
+		if err != nil {
+			log.LogErrorf("action[handleBatchUnlockNormalExtent] err %v", err)
+			p.PackErrorBody(ActionBatchLockNormalExtent, err.Error())
+		} else {
+			p.PacketOkReply()
+		}
+	}()
+
+	partition := p.Object.(*DataPartition)
+	var exts []*proto.ExtentKey
+	err = json.Unmarshal(p.Data, &exts)
+	if err != nil {
+		log.LogErrorf("action[handleBatchUnlockNormalExtent] err %v", err)
+		return
+	}
+
+	store := partition.ExtentStore()
+	store.ExtentBatchUnlockNormalExtent(exts)
+
+	log.LogInfof("action[handleBatchUnlockNormalExtent] success len: %v", len(exts))
 }

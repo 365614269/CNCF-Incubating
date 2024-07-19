@@ -112,7 +112,6 @@ type asyncWriter struct {
 	flushC     chan bool
 	rotateDay  chan struct{} // TODO rotateTime?
 	mu         sync.Mutex
-	rotateMu   sync.Mutex
 }
 
 func (writer *asyncWriter) flushScheduler() {
@@ -167,7 +166,7 @@ func (writer *asyncWriter) Flush() {
 func (writer *asyncWriter) flushToFile() {
 	writer.mu.Lock()
 	writer.buffer, writer.flushTmp = writer.flushTmp, writer.buffer
-	writer.mu.Unlock()
+
 	isRotateDay := false
 	select {
 	case <-writer.rotateDay:
@@ -175,7 +174,7 @@ func (writer *asyncWriter) flushToFile() {
 	default:
 	}
 	flushLength := writer.flushTmp.Len()
-	writer.rotateMu.Lock()
+
 	if (writer.logSize+int64(flushLength)) >= writer.
 		rotateSize || isRotateDay {
 		oldFile := writer.fileName + "." + time.Now().Format(
@@ -197,11 +196,12 @@ func (writer *asyncWriter) flushToFile() {
 			syslog.Printf("log rotate: lstat error: %v already exists", oldFile)
 		}
 	}
-	writer.rotateMu.Unlock()
+
 	writer.logSize += int64(flushLength)
 	// TODO Unhandled errors
 	writer.file.Write(writer.flushTmp.Bytes())
 	writer.flushTmp.Reset()
+	writer.mu.Unlock()
 }
 
 func (writer *asyncWriter) rename(newName string) error {
@@ -302,7 +302,7 @@ func (l *Log) outputStderr(calldepth int, s string) {
 }
 
 // InitLog initializes the log.
-func InitLog(dir, module string, level Level, rotate *LogRotate, logLeftSpaceLimit int64) (*Log, error) {
+func InitLog(dir, module string, level Level, rotate *LogRotate, logLeftSpaceLimitRatio float64) (*Log, error) {
 	l := new(Log)
 	l.printStderr = 1
 	dir = path.Join(dir, module)
@@ -328,14 +328,7 @@ func InitLog(dir, module string, level Level, rotate *LogRotate, logLeftSpaceLim
 	}
 
 	if rotate.headRoom == 0 {
-		var minLogLeftSpaceLimit float64
-		if float64(fs.Bavail*uint64(fs.Bsize)) < float64(fs.Blocks*uint64(fs.Bsize))*DefaultHeadRatio {
-			minLogLeftSpaceLimit = float64(fs.Bavail*uint64(fs.Bsize)) * DefaultHeadRatio / 1024 / 1024
-		} else {
-			minLogLeftSpaceLimit = float64(fs.Blocks*uint64(fs.Bsize)) * DefaultHeadRatio / 1024 / 1024
-		}
-
-		minLogLeftSpaceLimit = math.Max(minLogLeftSpaceLimit, float64(logLeftSpaceLimit))
+		minLogLeftSpaceLimit := float64(fs.Blocks*uint64(fs.Bsize)) * logLeftSpaceLimitRatio / 1024 / 1024
 
 		rotate.SetHeadRoomMb(int64(math.Min(minLogLeftSpaceLimit, DefaultHeadRoom)))
 	}

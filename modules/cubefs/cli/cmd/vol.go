@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/master"
@@ -52,6 +53,7 @@ func newVolCmd(client *master.MasterClient) *cobra.Command {
 		newVolAddMPCmd(client),
 		newVolSetForbiddenCmd(client),
 		newVolSetAuditLogCmd(client),
+		newVolSetTrashIntervalCmd(client),
 		newVolSetDpRepairBlockSize(client),
 	)
 	return cmd
@@ -266,6 +268,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	var optDescription string
 	var optCacheRule string
 	var optZoneName string
+	var optCrossZone string
 	var optCapacity uint64
 	var optFollowerRead string
 	var optEbsBlkSize int
@@ -314,16 +317,14 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 			} else {
 				confirmString.WriteString(fmt.Sprintf("  Description         : %v \n", vv.Description))
 			}
-			if !vv.CrossZone && "" != optZoneName {
+			if "" != optZoneName {
 				isChange = true
 				confirmString.WriteString(fmt.Sprintf("  ZoneName            : %v -> %v\n", vv.ZoneName, optZoneName))
 				vv.ZoneName = optZoneName
 			} else {
 				confirmString.WriteString(fmt.Sprintf("  ZoneName            : %v\n", vv.ZoneName))
 			}
-			if vv.CrossZone && "" != optZoneName {
-				err = fmt.Errorf("Can not set zone name of the volume that cross zone\n")
-			}
+
 			if optCapacity > 0 {
 				isChange = true
 				confirmString.WriteString(fmt.Sprintf("  Capacity            : %v GB -> %v GB\n", vv.Capacity, optCapacity))
@@ -355,6 +356,18 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				}
 				confirmString.WriteString(fmt.Sprintf("  Allow follower read : %v\n", formatEnabledDisabled(vv.FollowerRead)))
 			}
+			if optCrossZone != "" {
+				isChange = true
+				var enable bool
+				if enable, err = strconv.ParseBool(optCrossZone); err != nil {
+					return
+				}
+				confirmString.WriteString(fmt.Sprintf("  Allow CrossZone : %v -> %v\n", formatEnabledDisabled(vv.CrossZone), formatEnabledDisabled(enable)))
+				vv.CrossZone = enable
+			} else {
+				confirmString.WriteString(fmt.Sprintf("  Allow CrossZone : %v\n", formatEnabledDisabled(vv.CrossZone)))
+			}
+
 			if optEbsBlkSize > 0 {
 				if vv.VolType == 0 {
 					err = fmt.Errorf("ebs-blk-size not support in hot vol\n")
@@ -410,7 +423,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 			// var maskStr string
 			if optTxMask != "" {
 				var oldMask, newMask proto.TxOpMask
-				oldMask, err = proto.GetMaskFromString(vv.EnableTransaction)
+				oldMask, err = proto.GetMaskFromString(vv.EnableTransactionV1)
 				if err != nil {
 					return
 				}
@@ -421,14 +434,14 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 
 				if optTxForceReset {
 					if oldMask == newMask {
-						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v \n", vv.EnableTransaction))
+						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v \n", vv.EnableTransactionV1))
 					} else {
 						isChange = true
-						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v  -> %v \n", vv.EnableTransaction, optTxMask))
+						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v  -> %v \n", vv.EnableTransactionV1, optTxMask))
 					}
 				} else {
 					if proto.MaskContains(oldMask, newMask) {
-						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v \n", vv.EnableTransaction))
+						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v \n", vv.EnableTransactionV1))
 					} else {
 						isChange = true
 						mergedMaskString := ""
@@ -438,13 +451,13 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 							mergedMaskString = proto.GetMaskString(oldMask | newMask)
 						}
 
-						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v  -> %v \n", vv.EnableTransaction, mergedMaskString))
+						confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v  -> %v \n", vv.EnableTransactionV1, mergedMaskString))
 
 					}
 				}
 
 			} else {
-				confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v \n", vv.EnableTransaction))
+				confirmString.WriteString(fmt.Sprintf("  Transaction Mask    : %v \n", vv.EnableTransactionV1))
 			}
 
 			if optTxTimeout > 0 && vv.TxTimeout != optTxTimeout {
@@ -607,6 +620,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&optDescription, CliFlagDescription, "", "The description of volume")
 	cmd.Flags().StringVar(&optZoneName, CliFlagZoneName, "", "Specify volume zone name")
+	cmd.Flags().StringVar(&optCrossZone, CliFlagEnableCrossZone, "", "Enable cross zone")
 	cmd.Flags().Uint64Var(&optCapacity, CliFlagCapacity, 0, "Specify volume datanode capacity [Unit: GB]")
 	cmd.Flags().StringVar(&optFollowerRead, CliFlagEnableFollowerRead, "", "Enable read form replica follower (default false)")
 	cmd.Flags().IntVar(&optEbsBlkSize, CliFlagEbsBlkSize, 0, "Specify ebsBlk Size[Unit: byte]")
@@ -620,7 +634,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	cmd.Flags().IntVar(&optCacheLRUInterval, CliFlagCacheLRUInterval, 0, "Specify interval expiration time[Unit: min] (default 5)")
 	cmd.Flags().StringVar(&optDpReadOnlyWhenVolFull, CliDpReadOnlyWhenVolFull, "", "Enable volume becomes read only when it is full")
 	cmd.Flags().BoolVarP(&optYes, "yes", "y", false, "Answer yes for all questions")
-	cmd.Flags().StringVar(&optTxMask, CliTxMask, "", "Enable transaction for specified operation: [\"create|mkdir|remove|rename|mknod|symlink|link|pause\"] or \"off\" or \"all\"")
+	cmd.Flags().StringVar(&optTxMask, CliTxMask, "", "Enable transaction for specified operation: [\"create|mkdir|remove|rename|mknod|symlink|link\"] or \"off\" or \"all\"")
 	cmd.Flags().Int64Var(&optTxTimeout, CliTxTimeout, 0, "Specify timeout[Unit: minute] for transaction (0-60]")
 	cmd.Flags().Int64Var(&optTxConflictRetryNum, CliTxConflictRetryNum, 0, "Specify retry times for transaction conflict [1-100]")
 	cmd.Flags().Int64Var(&optTxConflictRetryInterval, CliTxConflictRetryInterval, 0, "Specify retry interval[Unit: ms] for transaction conflict [10-1000]")
@@ -1033,7 +1047,9 @@ func newVolSetAuditLogCmd(client *master.MasterClient) *cobra.Command {
 			settingStr := args[1]
 			var err error
 			defer func() {
-				errout(err)
+				if err != nil {
+					errout(err)
+				}
 			}()
 			enable, err := strconv.ParseBool(settingStr)
 			if err != nil {
@@ -1073,6 +1089,50 @@ func newVolSetDpRepairBlockSize(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("Volume dp repair block size has been set successfully, please wait few minutes for the settings to take effect.\n")
+		},
+	}
+	return cmd
+}
+
+var (
+	cmdVolSetTrashIntervalUse   = "set-trash-interval [VOLUME] [INTERVAL MINUTES]"
+	cmdVolSetTrashIntervalShort = "set trash interval for volume"
+)
+
+func newVolSetTrashIntervalCmd(client *master.MasterClient) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   cmdVolSetTrashIntervalUse,
+		Short: cmdVolSetTrashIntervalShort,
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			var (
+				err      error
+				interval time.Duration
+				tmp      int64
+			)
+
+			name := args[0]
+			defer func() {
+				if err != nil {
+					errout(err)
+				}
+			}()
+
+			var svv *proto.SimpleVolView
+			svv, err = client.AdminAPI().GetVolumeSimpleInfo(name)
+			if err != nil {
+				return
+			}
+
+			if tmp, err = strconv.ParseInt(args[1], 10, 64); err != nil {
+				return
+			}
+			interval = time.Duration(tmp) * time.Minute
+			authKey := util.CalcAuthKey(svv.Owner)
+			if err = client.AdminAPI().SetVolTrashInterval(name, authKey, interval); err != nil {
+				return
+			}
+			stdout("Set trash interval of %v to %v successfully\n", name, interval)
 		},
 	}
 	return cmd

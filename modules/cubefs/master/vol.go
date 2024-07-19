@@ -49,6 +49,8 @@ type VolVarargs struct {
 	txConflictRetryNum      int64
 	txConflictRetryInterval int64
 	txOpLimit               int
+	trashInterval           int64
+	crossZone               bool
 }
 
 // Vol represents a set of meta partitionMap and data partitionMap
@@ -111,10 +113,11 @@ type Vol struct {
 	volLock                 sync.RWMutex
 	quotaManager            *MasterQuotaManager
 	enableQuota             bool
+	TrashInterval           int64
+	DisableAuditLog         bool
 	VersionMgr              *VolVersionManager
 	Forbidden               bool
 	mpsLock                 *mpsLockManager
-	EnableAuditLog          bool
 	preloadCapacity         uint64
 	authKey                 string
 	DeleteExecTime          time.Time
@@ -185,8 +188,8 @@ func newVol(vv volValue) (vol *Vol) {
 	}
 	vol.qosManager.volUpdateMagnify(magnifyQosVal)
 	vol.DpReadOnlyWhenVolFull = vv.DpReadOnlyWhenVolFull
+	vol.DisableAuditLog = false
 	vol.mpsLock = newMpsLockManager(vol)
-	vol.EnableAuditLog = true
 	vol.preloadCapacity = math.MaxUint64 // mark as special value to trigger calculate
 	vol.dpRepairBlockSize = proto.DefaultDpRepairBlockSize
 	return
@@ -209,8 +212,9 @@ func newVolFromVolValue(vv *volValue) (vol *Vol) {
 	if vol.txConflictRetryInterval == 0 {
 		vol.txConflictRetryInterval = proto.DefaultTxConflictRetryInterval
 	}
+	vol.TrashInterval = vv.TrashInterval
+	vol.DisableAuditLog = vv.DisableAuditLog
 	vol.Forbidden = vv.Forbidden
-	vol.EnableAuditLog = vv.EnableAuditLog
 	vol.authKey = vv.AuthKey
 	vol.DeleteExecTime = vv.DeleteExecTime
 	vol.user = vv.User
@@ -407,6 +411,7 @@ func (vol *Vol) initQosManager(limitArgs *qosArgs) {
 			Buffer:     arrLimit[i],
 			requestCh:  make(chan interface{}, 10240),
 			qosManager: vol.qosManager,
+			done:       make(chan interface{}, 1),
 		}
 		go vol.qosManager.serverFactorLimitMap[arrType[i]].dispatch()
 	}
@@ -600,7 +605,8 @@ func (vol *Vol) checkDataPartitions(c *Cluster) (cnt int) {
 		if proto.IsPreLoadDp(dp.PartitionType) {
 			now := time.Now().Unix()
 			if now > dp.PartitionTTL {
-				log.LogWarnf("[checkDataPartitions] dp(%d) is deleted because of ttl expired, now(%d), ttl(%d)", dp.PartitionID, now, dp.PartitionTTL)
+				log.LogWarnf("[checkDataPartitions] dp(%d) is deleted because of ttl expired, now(%d), ttl(%d)",
+					dp.PartitionID, now, dp.PartitionTTL)
 				vol.deleteDataPartition(c, dp)
 				continue
 			}
@@ -707,38 +713,6 @@ func (vol *Vol) isOkUpdateRepCnt() (ok bool, rsp []uint64) {
 		}
 	}
 	return ok, rsp
-}
-
-func (vol *Vol) checkReplicaNum(c *Cluster) {
-	if !vol.NeedToLowerReplica {
-		return
-	}
-	var err error
-	if proto.IsCold(vol.VolType) {
-		return
-	}
-
-	dps := vol.cloneDataPartitionMap()
-	cnt := 0
-	for _, dp := range dps {
-		host := dp.getToBeDecommissionHost(int(vol.dpReplicaNum))
-		if host == "" {
-			continue
-		}
-		if err = dp.removeOneReplicaByHost(c, host); err != nil {
-			if dp.isSpecialReplicaCnt() && len(dp.Hosts) > 1 {
-				log.LogWarnf("action[checkReplicaNum] removeOneReplicaByHost host [%v],vol[%v],err[%v]", host, vol.Name, err)
-				continue
-			}
-			log.LogErrorf("action[checkReplicaNum] removeOneReplicaByHost host [%v],vol[%v],err[%v]", host, vol.Name, err)
-			continue
-		}
-		cnt++
-		if cnt > 100 {
-			return
-		}
-	}
-	vol.NeedToLowerReplica = false
 }
 
 func (vol *Vol) checkMetaPartitions(c *Cluster) {
@@ -1231,13 +1205,17 @@ func (vol *Vol) checkStatus(c *Cluster) {
 	metaTasks := vol.getTasksToDeleteMetaPartitions()
 	dataTasks := vol.getTasksToDeleteDataPartitions()
 
-	if len(metaTasks) == 0 && len(dataTasks) == 0 {
-		vol.deleteVolFromStore(c)
-	}
-
 	if vol.Deleting {
 		log.LogWarnf("action[volCheckStatus] vol[%v] is already in deleting status", vol.Name)
 		return
+	}
+
+	if len(metaTasks) == 0 && len(dataTasks) == 0 {
+		go func() {
+			vol.Deleting = true
+			vol.deleteVolFromStore(c)
+			vol.Deleting = false
+		}()
 	}
 
 	go func() {
@@ -1319,7 +1297,12 @@ func (vol *Vol) deleteDataPartitionFromDataNode(c *Cluster, task *proto.AdminTas
 }
 
 func (vol *Vol) deleteVolFromStore(c *Cluster) (err error) {
-	log.LogWarnf("deleteVolFromStore vol %v", vol.Name)
+	start := time.Now()
+	log.LogWarnf("deleteVolFromStore: start delete volume from store, name %s", vol.Name)
+	defer func() {
+		log.LogWarnf("deleteVolFromStore: finish delete volume, name %s, cost %d ms", vol.Name, time.Since(start).Milliseconds())
+	}()
+
 	if err = c.syncDeleteVol(vol); err != nil {
 		return
 	}
@@ -1571,6 +1554,7 @@ func setVolFromArgs(args *VolVarargs, vol *Vol) {
 	vol.txConflictRetryInterval = args.txConflictRetryInterval
 	vol.txOpLimit = args.txOpLimit
 	vol.dpReplicaNum = args.dpReplicaNum
+	vol.crossZone = args.crossZone
 
 	if proto.IsCold(vol.VolType) {
 		coldArgs := args.coldArgs
@@ -1589,6 +1573,7 @@ func setVolFromArgs(args *VolVarargs, vol *Vol) {
 
 	vol.dpSelectorName = args.dpSelectorName
 	vol.dpSelectorParm = args.dpSelectorParm
+	vol.TrashInterval = args.trashInterval
 }
 
 func getVolVarargs(vol *Vol) *VolVarargs {
@@ -1606,6 +1591,7 @@ func getVolVarargs(vol *Vol) *VolVarargs {
 
 	return &VolVarargs{
 		zoneName:                vol.zoneName,
+		crossZone:               vol.crossZone,
 		description:             vol.description,
 		capacity:                vol.Capacity,
 		deleteLockTime:          vol.DeleteLockTime,

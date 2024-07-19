@@ -34,7 +34,6 @@ import (
 
 const (
 	AsyncDeleteInterval           = 10 * time.Second
-	UpdateVolTicket               = 2 * time.Minute
 	BatchCounts                   = 128
 	OpenRWAppendOpt               = os.O_CREATE | os.O_RDWR | os.O_APPEND
 	TempFileValidTime             = 86400 // units: sec
@@ -58,11 +57,35 @@ func (mp *metaPartition) startFreeList() (err error) {
 		return
 	}
 
-	// start vol update ticket
 	go mp.updateVolWorker()
 	go mp.deleteWorker()
 	mp.startToDeleteExtents()
 	return
+}
+
+func (mp *metaPartition) UpdateVolumeView(dataView *proto.DataPartitionsView, volumeView *proto.SimpleVolView) {
+	convert := func(view *proto.DataPartitionsView) *DataPartitionsView {
+		newView := &DataPartitionsView{
+			DataPartitions: make([]*DataPartition, len(view.DataPartitions)),
+		}
+		for i := 0; i < len(view.DataPartitions); i++ {
+			if len(view.DataPartitions[i].Hosts) < 1 {
+				log.LogErrorf("action[UpdateVolumeView] dp id(%v) is invalid, DataPartitionResponse detail[%v]",
+					view.DataPartitions[i].PartitionID, view.DataPartitions[i])
+				continue
+			}
+			newView.DataPartitions[i] = &DataPartition{
+				PartitionID: view.DataPartitions[i].PartitionID,
+				Status:      view.DataPartitions[i].Status,
+				Hosts:       view.DataPartitions[i].Hosts,
+				ReplicaNum:  view.DataPartitions[i].ReplicaNum,
+				IsDiscard:   view.DataPartitions[i].IsDiscard,
+			}
+		}
+		return newView
+	}
+	mp.vol.UpdatePartitions(convert(dataView))
+	mp.vol.volDeleteLockTime = volumeView.DeleteLockTime
 }
 
 func (mp *metaPartition) updateVolView(convert func(view *proto.DataPartitionsView) *DataPartitionsView) (err error) {
@@ -200,7 +223,8 @@ func (mp *metaPartition) deleteWorker() {
 
 // delete Extents by Partition,and find all successDelete inode
 func (mp *metaPartition) batchDeleteExtentsByPartition(partitionDeleteExtents map[uint64][]*proto.DelExtentParam,
-	allInodes []*Inode) (shouldCommit []*Inode, shouldPushToFreeList []*Inode) {
+	allInodes []*Inode,
+) (shouldCommit []*Inode, shouldPushToFreeList []*Inode) {
 	occurErrors := make(map[uint64]error)
 	shouldCommit = make([]*Inode, 0, len(allInodes))
 	shouldPushToFreeList = make([]*Inode, 0)
@@ -416,11 +440,14 @@ func (mp *metaPartition) doDeleteMarkedInodes(ext *proto.ExtentKey) (err error) 
 		err = errors.NewErrorf("dp id(%v) is invalid", ext.PartitionId)
 		return
 	}
-	// NOTE: if all replicas in dp is dead
-	// skip send request to dp leader
-	if dp.Status == proto.Unavailable {
-		return
-	}
+
+	defer func() {
+		if err != nil && dp.IsDiscard {
+			log.LogWarnf("doBatchDeleteExtentsByPartition: dp is already discard, no need to delete any more. dp(%d), err %s", dp.PartitionID, err.Error())
+			err = nil
+		}
+	}()
+
 	addr := util.ShiftAddrPort(dp.Hosts[0], smuxPortShift)
 	conn, err := smuxPool.GetConnect(addr)
 	log.LogInfof("doDeleteMarkedInodes mp (%v) GetConnect (%v), ext(%s)", mp.config.PartitionId, addr, ext.String())
@@ -488,6 +515,13 @@ func (mp *metaPartition) doBatchDeleteExtentsByPartition(partitionID uint64, ext
 			return
 		}
 	}
+
+	defer func() {
+		if err != nil && dp.IsDiscard {
+			log.LogWarnf("doBatchDeleteExtentsByPartition: dp is already discard, no need to delete any more. dp(%d), err %s", dp.PartitionID, err.Error())
+			err = nil
+		}
+	}()
 
 	// delete the data node
 	if len(dp.Hosts) < 1 {
@@ -657,10 +691,10 @@ func (mp *metaPartition) persistDeletedInode(ino uint64, currentSize *uint64) {
 			return
 		}
 	}
-	// NOTE: += sizeof(uint64)
-	*currentSize += 8
-	if _, err := mp.delInodeFp.WriteString(fmt.Sprintf("%v\n", ino)); err != nil {
-		log.LogErrorf("[persistDeletedInode] vol(%v) mp(%v) failed to persist ino(%v), err(%v)", mp.config.VolName, mp.config.PartitionId, ino, err)
+	content := fmt.Sprintf("%v\n", ino)
+	*currentSize += uint64(len(content))
+	if _, err := mp.delInodeFp.WriteString(content); err != nil {
+		log.LogErrorf("[persistDeletedInode] failed to persist ino(%v), err(%v)", ino, err)
 		return
 	}
 }

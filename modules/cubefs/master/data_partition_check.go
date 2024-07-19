@@ -149,7 +149,7 @@ func (partition *DataPartition) checkLeader(c *Cluster, clusterID string, timeOu
 		report = true
 	}
 	if WarnMetrics != nil {
-		WarnMetrics.WarnDpNoLeader(clusterID, partition.PartitionID, report)
+		WarnMetrics.WarnDpNoLeader(clusterID, partition.PartitionID, partition.ReplicaNum, report)
 	}
 	partition.Unlock()
 	if report && partition.ReplicaNum == 1 && partition.GetDecommissionStatus() == DecommissionInitial &&
@@ -204,11 +204,14 @@ func (partition *DataPartition) checkMissingReplicas(clusterID, leaderAddr strin
 	defer partition.Unlock()
 
 	id := strconv.FormatUint(partition.PartitionID, 10)
+
+	WarnMetrics.dpMissingReplicaMutex.Lock()
 	_, ok := WarnMetrics.dpMissingReplicaInfo[id]
 	oldMissingReplicaNum := 0
 	if ok {
 		oldMissingReplicaNum = len(WarnMetrics.dpMissingReplicaInfo[id].addrs)
 	}
+	WarnMetrics.dpMissingReplicaMutex.Unlock()
 
 	for _, replica := range partition.Replicas {
 		if partition.hasHost(replica.Addr) && replica.isMissing(dataPartitionMissSec) && !partition.IsDiscard {
@@ -225,19 +228,13 @@ func (partition *DataPartition) checkMissingReplicas(clusterID, leaderAddr strin
 					clusterID, partition.PartitionID, replica.Addr, dataPartitionMissSec, replica.ReportTime, lastReportTime, isActive)
 				// msg = msg + fmt.Sprintf(" decommissionDataPartitionURL is http://%v/dataPartition/decommission?id=%v&addr=%v", leaderAddr, partition.PartitionID, replica.Addr)
 				Warn(clusterID, msg)
-				if WarnMetrics != nil {
-					WarnMetrics.WarnMissingDp(clusterID, replica.Addr, partition.PartitionID, true)
-				}
+				WarnMetrics.WarnMissingDp(clusterID, replica.Addr, partition.PartitionID, true)
 			}
 		} else {
-			if WarnMetrics != nil {
-				WarnMetrics.WarnMissingDp(clusterID, replica.Addr, partition.PartitionID, false)
-			}
+			WarnMetrics.WarnMissingDp(clusterID, replica.Addr, partition.PartitionID, false)
 		}
 	}
-	if WarnMetrics != nil {
-		WarnMetrics.CleanObsoleteDpMissing(clusterID, partition)
-	}
+	WarnMetrics.CleanObsoleteDpMissing(clusterID, partition)
 	WarnMetrics.dpMissingReplicaMutex.Lock()
 	replicaInfo, ok := WarnMetrics.dpMissingReplicaInfo[id]
 	if ok {
@@ -252,10 +249,12 @@ func (partition *DataPartition) checkMissingReplicas(clusterID, leaderAddr strin
 		replicaInfo.replicaAlive = strconv.FormatUint(uint64(dpReplicaAliveNum), 10)
 		WarnMetrics.dpMissingReplicaInfo[id] = replicaInfo
 		for missingReplicaAddr := range WarnMetrics.dpMissingReplicaInfo[id].addrs {
-			if oldDpReplicaAliveNum != "" {
-				WarnMetrics.missingDp.DeleteLabelValues(clusterID, id, missingReplicaAddr, oldDpReplicaAliveNum, replicaInfo.replicaNum)
+			if WarnMetrics.missingDp != nil {
+				if oldDpReplicaAliveNum != "" {
+					WarnMetrics.missingDp.DeleteLabelValues(clusterID, id, missingReplicaAddr, oldDpReplicaAliveNum, replicaInfo.replicaNum)
+				}
+				WarnMetrics.missingDp.SetWithLabelValues(1, clusterID, id, missingReplicaAddr, replicaInfo.replicaAlive, replicaInfo.replicaNum)
 			}
-			WarnMetrics.missingDp.SetWithLabelValues(1, clusterID, id, missingReplicaAddr, replicaInfo.replicaAlive, replicaInfo.replicaNum)
 		}
 	}
 	WarnMetrics.dpMissingReplicaMutex.Unlock()

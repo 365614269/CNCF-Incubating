@@ -396,6 +396,7 @@ type updateVolReq struct {
 	coldArgs                *coldVolArgs
 	dpReadOnlyWhenVolFull   bool
 	enableQuota             bool
+	crossZone               bool
 }
 
 func parseColdVolUpdateArgs(r *http.Request, vol *Vol) (args *coldVolArgs, err error) {
@@ -471,6 +472,9 @@ func parseVolUpdateReq(r *http.Request, vol *Vol, req *updateVolReq) (err error)
 	req.authKey = extractStr(r, volAuthKey)
 	req.description = extractStrWithDefault(r, descriptionKey, vol.description)
 	req.zoneName = extractStrWithDefault(r, zoneNameKey, vol.zoneName)
+	if req.crossZone, err = extractBoolWithDefault(r, crossZoneKey, vol.crossZone); err != nil {
+		return
+	}
 
 	if req.capacity, err = extractUint64WithDefault(r, volCapacityKey, vol.Capacity); err != nil {
 		return
@@ -1842,17 +1846,39 @@ func extractQuotaId(r *http.Request) (quotaId uint32, err error) {
 	return
 }
 
-func parseRequestToUpdateDecommissionDiskFactor(r *http.Request) (factor float64, err error) {
+func parseRequestToSetTrashInterval(r *http.Request) (name, authKey string, interval int64, err error) {
+	if err = r.ParseForm(); err != nil {
+		return
+	}
+
+	if name, err = extractName(r); err != nil {
+		return
+	}
+	if authKey, err = extractAuthKey(r); err != nil {
+		return
+	}
+	if interval, err = extractInt64WithDefault(r, TrashIntervalKey, 0); err != nil {
+		return
+	}
+	return
+}
+
+func parseRequestToUpdateDecommissionDiskLimit(r *http.Request) (limit uint32, err error) {
 	if err = r.ParseForm(); err != nil {
 		return
 	}
 
 	var value string
-	if value = r.FormValue(decommissionDiskFactor); value == "" {
-		err = keyNotFound(decommissionDiskFactor)
+	if value = r.FormValue(decommissionDiskLimit); value == "" {
+		err = keyNotFound(decommissionDiskLimit)
 		return
 	}
-	return strconv.ParseFloat(value, 64)
+	tmp, err := strconv.ParseUint(value, 10, 32)
+	if err != nil {
+		return
+	}
+	limit = uint32(tmp)
+	return
 }
 
 func parseS3QosReq(r *http.Request, req *proto.S3QosRequest) (err error) {
@@ -1886,4 +1912,12 @@ func extractDiskBrokenThreshold(r *http.Request) (ratio float64, err error) {
 		return
 	}
 	return strconv.ParseFloat(value, 64)
+}
+
+func parseRequestToResetDpRestoreStatus(r *http.Request) (dpId uint64, err error) {
+	if err = r.ParseForm(); err != nil {
+		return
+	}
+	dpId, err = extractDataPartitionID(r)
+	return
 }

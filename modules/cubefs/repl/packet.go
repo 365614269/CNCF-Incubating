@@ -128,6 +128,8 @@ func (p *FollowerPacket) identificationErrorResultCode(errLog string, errMsg str
 		p.ResultCode = proto.OpTryOtherAddr
 	} else if strings.Contains(errMsg, raft.ErrStopped.Error()) {
 		p.ResultCode = proto.OpTryOtherAddr
+	} else if strings.Contains(errMsg, storage.ErrStoreAlreadyClosed.Error()) {
+		p.ResultCode = proto.OpStoreClosed
 	} else if strings.Contains(errLog, ActionReceiveFromFollower) || strings.Contains(errLog, ActionSendToFollowers) ||
 		strings.Contains(errLog, ConnIsNullErr) {
 		p.ResultCode = proto.OpIntraGroupNetErr
@@ -452,6 +454,8 @@ func (p *Packet) identificationErrorResultCode(errLog string, errMsg string) {
 		// log.LogDebugf("action[identificationErrorResultCode] not change ver erro code, (%v)", string(debug.Stack()))
 	} else if strings.Contains(errMsg, storage.NoDiskReadRepairExtentTokenError.Error()) {
 		p.ResultCode = proto.OpReadRepairExtentAgain
+	} else if strings.Contains(errMsg, storage.ErrStoreAlreadyClosed.Error()) {
+		p.ResultCode = proto.OpStoreClosed
 	} else {
 		log.LogErrorf("action[identificationErrorResultCode] error %v, errmsg %v", errLog, errMsg)
 		p.ResultCode = proto.OpIntraGroupNetErr
@@ -538,11 +542,18 @@ func (p *Packet) IsMarkSplitExtentOperation() bool {
 }
 
 func (p *Packet) IsBatchDeleteExtents() bool {
-	return p.Opcode == proto.OpBatchDeleteExtent
+	return p.Opcode == proto.OpBatchDeleteExtent || p.Opcode == proto.OpGcBatchDeleteExtent
 }
 
 func (p *Packet) IsBroadcastMinAppliedID() bool {
 	return p.Opcode == proto.OpBroadcastMinAppliedID
+}
+
+func (p *Packet) IsReadOperation() bool {
+	return p.Opcode == proto.OpStreamRead || p.Opcode == proto.OpRead ||
+		p.Opcode == proto.OpExtentRepairRead || p.Opcode == proto.OpReadTinyDeleteRecord ||
+		p.Opcode == proto.OpTinyExtentRepairRead || p.Opcode == proto.OpStreamFollowerRead ||
+		p.Opcode == proto.OpBackupRead
 }
 
 func (p *Packet) IsRandomWrite() bool {
