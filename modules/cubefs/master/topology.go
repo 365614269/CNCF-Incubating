@@ -24,27 +24,36 @@ import (
 	"time"
 
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/util"
+	"github.com/cubefs/cubefs/util/auditlog"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
 )
 
+type rsManager struct {
+	// nodeType         NodeType
+	nodes            *sync.Map
+	zoneIndexForNode int
+	// zones            []*Zone
+}
+
+func (rsm *rsManager) clear() {
+	rsm.nodes = new(sync.Map)
+}
+
 type topology struct {
-	dataNodes            *sync.Map
-	metaNodes            *sync.Map
-	zoneMap              *sync.Map
-	zoneIndexForDataNode int
-	zoneIndexForMetaNode int
-	zones                []*Zone
-	domainExcludeZones   []string // not domain zone, empty if domain disable.
-	zoneLock             sync.RWMutex
+	zoneMap            *sync.Map
+	zones              []*Zone
+	domainExcludeZones []string // not domain zone, empty if domain disable.
+	metaTopology       rsManager
+	dataTopology       rsManager
+	zoneLock           sync.RWMutex
 }
 
 func newTopology() (t *topology) {
 	t = new(topology)
 	t.zoneMap = new(sync.Map)
-	t.dataNodes = new(sync.Map)
-	t.metaNodes = new(sync.Map)
+	t.dataTopology.nodes = new(sync.Map)
+	t.metaTopology.nodes = new(sync.Map)
 	t.zones = make([]*Zone, 0)
 	return
 }
@@ -56,14 +65,8 @@ func (t *topology) zoneLen() int {
 }
 
 func (t *topology) clear() {
-	t.dataNodes.Range(func(key, value interface{}) bool {
-		t.dataNodes.Delete(key)
-		return true
-	})
-	t.metaNodes.Range(func(key, value interface{}) bool {
-		t.metaNodes.Delete(key)
-		return true
-	})
+	t.metaTopology.clear()
+	t.dataTopology.clear()
 }
 
 func (t *topology) putZone(zone *Zone) (err error) {
@@ -114,7 +117,7 @@ func (t *topology) getZone(name string) (zone *Zone, err error) {
 }
 
 func (t *topology) putDataNode(dataNode *DataNode) (err error) {
-	if _, ok := t.dataNodes.Load(dataNode.Addr); ok {
+	if _, ok := t.dataTopology.nodes.Load(dataNode.Addr); ok {
 		return
 	}
 	zone, err := t.getZone(dataNode.ZoneName)
@@ -128,7 +131,7 @@ func (t *topology) putDataNode(dataNode *DataNode) (err error) {
 }
 
 func (t *topology) putDataNodeToCache(dataNode *DataNode) {
-	t.dataNodes.Store(dataNode.Addr, dataNode)
+	t.dataTopology.nodes.Store(dataNode.Addr, dataNode)
 }
 
 func (t *topology) deleteDataNode(dataNode *DataNode) {
@@ -137,11 +140,11 @@ func (t *topology) deleteDataNode(dataNode *DataNode) {
 		return
 	}
 	zone.deleteDataNode(dataNode)
-	t.dataNodes.Delete(dataNode.Addr)
+	t.dataTopology.nodes.Delete(dataNode.Addr)
 }
 
 func (t *topology) putMetaNode(metaNode *MetaNode) (err error) {
-	if _, ok := t.metaNodes.Load(metaNode.Addr); ok {
+	if _, ok := t.metaTopology.nodes.Load(metaNode.Addr); ok {
 		return
 	}
 	zone, err := t.getZone(metaNode.ZoneName)
@@ -154,7 +157,7 @@ func (t *topology) putMetaNode(metaNode *MetaNode) (err error) {
 }
 
 func (t *topology) deleteMetaNode(metaNode *MetaNode) {
-	t.metaNodes.Delete(metaNode.Addr)
+	t.metaTopology.nodes.Delete(metaNode.Addr)
 	zone, err := t.getZone(metaNode.ZoneName)
 	if err != nil {
 		return
@@ -163,7 +166,7 @@ func (t *topology) deleteMetaNode(metaNode *MetaNode) {
 }
 
 func (t *topology) putMetaNodeToCache(metaNode *MetaNode) {
-	t.metaNodes.Store(metaNode.Addr, metaNode)
+	t.metaTopology.nodes.Store(metaNode.Addr, metaNode)
 }
 
 type nodeSetCollection []*nodeSet
@@ -304,13 +307,13 @@ func (nsgm *DomainManager) checkExcludeZoneState() {
 				if zone.status == normalZone {
 					log.LogInfof("action[checkExcludeZoneState] zone[%v] be set unavailableZone", zone.name)
 				}
-				zone.status = unavailableZone
+				zone.setStatus(unavailableZone)
 			} else {
 				excludeNeedDomain = false
 				if zone.status == unavailableZone {
 					log.LogInfof("action[checkExcludeZoneState] zone[%v] be set normalZone", zone.name)
 				}
-				zone.status = normalZone
+				zone.setStatus(normalZone)
 			}
 		}
 	}
@@ -358,7 +361,7 @@ func (nsgm *DomainManager) checkGrpState(domainGrpManager *DomainNodeSetGrpManag
 
 			domainGrpManager.nodeSetGrpMap[i].nodeSets[j].dataNodes.Range(func(key, value interface{}) bool {
 				node := value.(*DataNode)
-				if node.isWriteAble() {
+				if node.IsWriteAble() {
 					used = used + node.Used
 				} else {
 					used = used + node.Total
@@ -375,7 +378,7 @@ func (nsgm *DomainManager) checkGrpState(domainGrpManager *DomainNodeSetGrpManag
 			}
 			domainGrpManager.nodeSetGrpMap[i].nodeSets[j].metaNodes.Range(func(key, value interface{}) bool {
 				node := value.(*MetaNode)
-				if node.isWritable() {
+				if node.IsWriteAble() {
 					metaWorked = true
 					log.LogInfof("action[checkGrpState] nodeset[%v] zonename[%v] used [%v] total [%v] threshold [%v] got available metanode",
 						node.ID, node.ZoneName, node.Used, node.Total, node.Threshold)
@@ -1031,28 +1034,11 @@ func (ns *nodeSet) deleteMetaNode(metaNode *MetaNode) {
 	ns.metaNodes.Delete(metaNode.Addr)
 }
 
-func (ns *nodeSet) canWriteForDataNode(replicaNum int) bool {
+func (ns *nodeSet) canWriteForNode(nodes *sync.Map, replicaNum int) bool {
 	var count int
-	ns.dataNodes.Range(func(key, value interface{}) bool {
-		node := value.(*DataNode)
-		if node.isWriteAble() && node.dpCntInLimit() {
-			count++
-		}
-		if count >= replicaNum {
-			return false
-		}
-		return true
-	})
-	log.LogInfof("canWriteForDataNode zone[%v], ns[%v],count[%v], replicaNum[%v]",
-		ns.zoneName, ns.ID, count, replicaNum)
-	return count >= replicaNum
-}
-
-func (ns *nodeSet) canWriteForMetaNode(replicaNum int) bool {
-	var count int
-	ns.metaNodes.Range(func(key, value interface{}) bool {
-		node := value.(*MetaNode)
-		if node.isWritable() && node.mpCntInLimit() {
+	nodes.Range(func(key, value interface{}) bool {
+		node := value.(Node)
+		if node.IsWriteAble() && node.PartitionCntLimited() {
 			count++
 		}
 		if count >= replicaNum {
@@ -1063,6 +1049,17 @@ func (ns *nodeSet) canWriteForMetaNode(replicaNum int) bool {
 	log.LogInfof("canWriteForMetaNode zone[%v], ns[%v],count[%v] replicaNum[%v]",
 		ns.zoneName, ns.ID, count, replicaNum)
 	return count >= replicaNum
+}
+
+func (ns *nodeSet) calcNodesForAlloc(nodes *sync.Map) (cnt int) {
+	nodes.Range(func(key, value interface{}) bool {
+		node := value.(Node)
+		if node.IsWriteAble() && node.PartitionCntLimited() {
+			cnt++
+		}
+		return true
+	})
+	return
 }
 
 func (ns *nodeSet) putDataNode(dataNode *DataNode) {
@@ -1263,23 +1260,30 @@ func (t *topology) getNodeSetByNodeSetId(nodeSetId uint64) (nodeSet *nodeSet, er
 	return nil, errors.NewErrorf("set %v not found", nodeSetId)
 }
 
-func calculateDemandWriteNodes(zoneNum int, replicaNum int) (demandWriteNodes int) {
+func calculateDemandWriteNodes(zoneNum int, replicaNum int, isSpecialZoneName bool) (demandWriteNodesCntPerZone int) {
+	if isSpecialZoneName {
+		return 1
+	}
 	if zoneNum == 1 {
-		demandWriteNodes = replicaNum
+		demandWriteNodesCntPerZone = replicaNum
 	} else {
 		if replicaNum == 1 {
-			demandWriteNodes = 1
+			demandWriteNodesCntPerZone = 1
 		} else {
-			demandWriteNodes = 2
+			demandWriteNodesCntPerZone = 2
 		}
 	}
 	return
 }
 
-func (t *topology) allocZonesForMetaNode(zoneNum, replicaNum int, excludeZone []string) (zones []*Zone, err error) {
+// Choose the zone if it is writable and adapt to the rules for classifying zones
+func (t *topology) allocZonesForNode(rsMgr *rsManager, zoneNumNeed, replicaNum int, excludeZone []string, specialZones []*Zone) (zones []*Zone, err error) {
 	if len(t.domainExcludeZones) > 0 {
 		zones = t.getDomainExcludeZones()
 		log.LogInfof("action[allocZonesForMetaNode] getDomainExcludeZones zones [%v]", t.domainExcludeZones)
+	} else if len(specialZones) > 0 {
+		zones = specialZones
+		zoneNumNeed = len(specialZones)
 	} else {
 		// if domain enable, will not enter here
 		zones = t.getAllZones()
@@ -1291,85 +1295,26 @@ func (t *topology) allocZonesForMetaNode(zoneNum, replicaNum int, excludeZone []
 		excludeZone = make([]string, 0)
 	}
 	candidateZones := make([]*Zone, 0)
-	demandWriteNodes := calculateDemandWriteNodes(zoneNum, replicaNum)
-	for i := 0; i < len(zones); i++ {
-		if t.zoneIndexForMetaNode >= len(zones) {
-			t.zoneIndexForMetaNode = 0
-		}
-		zone := zones[t.zoneIndexForMetaNode]
-		t.zoneIndexForMetaNode++
+	demandWriteNodesCntPerZone := calculateDemandWriteNodes(zoneNumNeed, replicaNum, len(specialZones) > 1)
+
+	for _, zone := range zones {
 		if zone.status == unavailableZone {
 			continue
 		}
 		if contains(excludeZone, zone.name) {
 			continue
 		}
-		if zone.canWriteForMetaNode(uint8(demandWriteNodes)) {
+
+		if zone.canWriteForNode(rsMgr.nodes, uint8(demandWriteNodesCntPerZone)) {
 			candidateZones = append(candidateZones, zone)
-		}
-		if len(candidateZones) >= zoneNum {
-			break
 		}
 	}
 
 	// if across zone,candidateZones must be larger than or equal with 2,otherwise,must have a candidate zone
-	if (zoneNum >= 2 && len(candidateZones) < 2) || len(candidateZones) < 1 {
-		log.LogError(fmt.Sprintf("action[allocZonesForMetaNode],reqZoneNum[%v],candidateZones[%v],demandWriteNodes[%v],err:%v",
-			zoneNum, len(candidateZones), demandWriteNodes, proto.ErrNoZoneToCreateMetaPartition))
+	if (zoneNumNeed >= 2 && len(candidateZones) < 2) || len(candidateZones) < 1 {
+		log.LogError(fmt.Sprintf("action[allocZonesForqa n   Node],reqZoneNum[%v],candidateZones[%v],demandWriteNodes[%v],err:%v",
+			zoneNumNeed, len(candidateZones), demandWriteNodesCntPerZone, proto.ErrNoZoneToCreateMetaPartition))
 		return nil, proto.ErrNoZoneToCreateMetaPartition
-	}
-	zones = candidateZones
-	err = nil
-	return
-}
-
-func (t *topology) allocZonesForDataNode(zoneNum, replicaNum int, excludeZone []string) (zones []*Zone, err error) {
-	// domain enabled and have old zones to be used
-	if len(t.domainExcludeZones) > 0 {
-		zones = t.getDomainExcludeZones()
-	} else {
-		// if domain enable, will not enter here
-		zones = t.getAllZones()
-	}
-
-	log.LogInfof("len(zones) = %v \n", len(zones))
-	if t.isSingleZone() {
-		return zones, nil
-	}
-	if excludeZone == nil {
-		excludeZone = make([]string, 0)
-	}
-
-	demandWriteNodes := calculateDemandWriteNodes(zoneNum, replicaNum)
-	candidateZones := make([]*Zone, 0)
-
-	for i := 0; i < len(zones); i++ {
-		if t.zoneIndexForDataNode >= len(zones) {
-			t.zoneIndexForDataNode = 0
-		}
-
-		zone := zones[t.zoneIndexForDataNode]
-		t.zoneIndexForDataNode++
-
-		if zone.status == unavailableZone {
-			continue
-		}
-		if contains(excludeZone, zone.name) {
-			continue
-		}
-		if zone.canWriteForDataNode(uint8(demandWriteNodes)) {
-			candidateZones = append(candidateZones, zone)
-		}
-		if len(candidateZones) >= zoneNum {
-			break
-		}
-	}
-
-	// if across zone,candidateZones must be larger than or equal with 2,otherwise,must have one candidate zone
-	if (zoneNum >= 2 && len(candidateZones) < 2) || len(candidateZones) < 1 {
-		log.LogError(fmt.Sprintf("action[allocZonesForDataNode],reqZoneNum[%v],candidateZones[%v],demandWriteNodes[%v],err:%v",
-			zoneNum, len(candidateZones), demandWriteNodes, proto.ErrNoZoneToCreateDataPartition))
-		return nil, errors.NewError(proto.ErrNoZoneToCreateDataPartition)
 	}
 	zones = candidateZones
 	err = nil
@@ -1407,7 +1352,7 @@ type zoneValue struct {
 
 func newZone(name string) (zone *Zone) {
 	zone = &Zone{name: name}
-	zone.status = normalZone
+	zone.setStatus(normalZone)
 	zone.dataNodes = new(sync.Map)
 	zone.metaNodes = new(sync.Map)
 	zone.nodeSetMap = make(map[uint64]*nodeSet)
@@ -1682,16 +1627,16 @@ func (zone *Zone) allocNodeSetForMetaNode(excludeNodeSets []uint64, replicaNum u
 	return ns, nil
 }
 
-func (zone *Zone) canWriteForDataNode(replicaNum uint8) (can bool) {
+func (zone *Zone) canWriteForNode(nodes *sync.Map, replicaNum uint8) (can bool) {
 	zone.RLock()
 	defer zone.RUnlock()
 	var leastAlive uint8
-	zone.dataNodes.Range(func(addr, value interface{}) bool {
-		dataNode := value.(*DataNode)
-		if !dataNode.dpCntInLimit() {
+	nodes.Range(func(addr, value interface{}) bool {
+		node := value.(Node)
+		if !node.PartitionCntLimited() {
 			return true
 		}
-		if dataNode.isActive && dataNode.isWriteAbleWithSize(30*util.GB) {
+		if node.IsActiveNode() && node.IsWriteAble() {
 			leastAlive++
 		}
 		if leastAlive >= replicaNum {
@@ -1700,8 +1645,6 @@ func (zone *Zone) canWriteForDataNode(replicaNum uint8) (can bool) {
 		}
 		return true
 	})
-	log.LogInfof("action[canWriteForDataNode] zone name %v canWriteForDataNode leastAlive[%v],replicaNum[%v],count[%v]",
-		zone.name, leastAlive, replicaNum, zone.dataNodeCount())
 	return
 }
 
@@ -1732,7 +1675,7 @@ func (zone *Zone) isUsedRatio(ratio float64) (can bool) {
 
 	zone.metaNodes.Range(func(addr, value interface{}) bool {
 		metaNode := value.(*MetaNode)
-		if metaNode.IsActive && metaNode.isWritable() {
+		if metaNode.IsActive && metaNode.IsWriteAble() {
 			metaNodeUsed += metaNode.Used
 		} else {
 			metaNodeUsed += metaNode.Total
@@ -1749,69 +1692,32 @@ func (zone *Zone) isUsedRatio(ratio float64) (can bool) {
 	return false
 }
 
-func (zone *Zone) getDataUsed() (dataNodeUsed uint64, dataNodeTotal uint64) {
+func (zone *Zone) getUsed(dataType uint32) (dataNodeUsed uint64, dataNodeTotal uint64) {
 	zone.RLock()
 	defer zone.RUnlock()
-	zone.dataNodes.Range(func(addr, value interface{}) bool {
-		dataNode := value.(*DataNode)
-		if dataNode.isActive {
-			dataNodeUsed += dataNode.Used
+	var nodes *sync.Map
+	if dataType == uint32(MetaNodeType) {
+		nodes = zone.metaNodes
+	} else {
+		nodes = zone.dataNodes
+	}
+	nodes.Range(func(addr, value interface{}) bool {
+		dataNode := value.(Node)
+		if dataNode.IsActiveNode() {
+			dataNodeUsed += dataNode.GetUsed()
 		} else {
-			dataNodeUsed += dataNode.Total
+			dataNodeUsed += dataNode.GetTotal()
 		}
-		dataNodeTotal += dataNode.Total
+		dataNodeTotal += dataNode.GetTotal()
 		return true
 	})
 
 	return dataNodeUsed, dataNodeTotal
 }
 
-func (zone *Zone) getMetaUsed() (metaNodeUsed uint64, metaNodeTotal uint64) {
-	zone.RLock()
-	defer zone.RUnlock()
-
-	zone.metaNodes.Range(func(addr, value interface{}) bool {
-		metaNode := value.(*MetaNode)
-		if metaNode.IsActive && metaNode.isWritable() {
-			metaNodeUsed += metaNode.Used
-		} else {
-			metaNodeUsed += metaNode.Total
-		}
-		metaNodeTotal += metaNode.Total
-		return true
-	})
-	return metaNodeUsed, metaNodeTotal
-}
-
 func (zone *Zone) getSpaceLeft(dataType uint32) (spaceLeft uint64) {
-	if dataType == TypeDataPartition {
-		dataNodeUsed, dataNodeTotal := zone.getDataUsed()
-		return dataNodeTotal - dataNodeUsed
-	} else {
-		metaNodeUsed, metaNodeTotal := zone.getMetaUsed()
-		return metaNodeTotal - metaNodeUsed
-	}
-}
-
-func (zone *Zone) canWriteForMetaNode(replicaNum uint8) (can bool) {
-	zone.RLock()
-	defer zone.RUnlock()
-	var leastAlive uint8
-	zone.metaNodes.Range(func(addr, value interface{}) bool {
-		metaNode := value.(*MetaNode)
-		if !metaNode.mpCntInLimit() {
-			return true
-		}
-		if metaNode.IsActive && metaNode.isWritable() {
-			leastAlive++
-		}
-		if leastAlive >= replicaNum {
-			can = true
-			return false
-		}
-		return true
-	})
-	return
+	dataNodeUsed, dataNodeTotal := zone.getUsed(dataType)
+	return dataNodeTotal - dataNodeUsed
 }
 
 func (zone *Zone) getAvailNodeHosts(nodeType uint32, excludeNodeSets []uint64, excludeHosts []string, replicaNum int) (newHosts []string, peers []proto.Peer, err error) {
@@ -1907,14 +1813,6 @@ func (zone *Zone) loadDataNodeQosLimit() {
 		}
 		return true
 	})
-}
-
-func (zone *Zone) dataNodeCount() (len int) {
-	zone.dataNodes.Range(func(key, value interface{}) bool {
-		len++
-		return true
-	})
-	return
 }
 
 func (zone *Zone) updateDecommissionLimit(limit int32, c *Cluster) (err error) {
@@ -2050,7 +1948,12 @@ func (l *DecommissionDataPartitionList) Put(id uint64, value *DataPartition, c *
 	// restore from rocksdb
 	// NOTE: if dp is discard, not need to get token, decommission will success directly
 	if value.checkConsumeToken() && !value.IsDiscard {
-		value.TryAcquireDecommissionToken(c)
+		// keep origin error msg, DecommissionErrorMessage would be replaced by "no node set available" e.g. if
+		// execute TryAcquireDecommissionToken failed
+		msg := value.DecommissionErrorMessage
+		if !value.TryAcquireDecommissionToken(c) {
+			value.DecommissionErrorMessage = msg
+		}
 	}
 
 	// restore special replica decommission progress
@@ -2160,12 +2063,15 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 			}
 			allDecommissionDP := l.GetAllDecommissionDataPartitions()
 			for _, dp := range allDecommissionDP {
-				log.LogDebugf("[DecommissionListTraverse] traverse dp(%v) discard(%v) decommission status(%v)", dp.PartitionID, dp.IsDiscard, dp.GetDecommissionStatus())
+				log.LogDebugf("[DecommissionListTraverse] traverse dp(%v)", dp.decommissionInfo())
 				if dp.IsDecommissionSuccess() {
 					l.Remove(dp)
 					dp.ReleaseDecommissionToken(c)
+					msg := fmt.Sprintf("dp %v decommission success, cost %v",
+						dp.decommissionInfo(), time.Since(dp.RecoverStartTime))
 					dp.ResetDecommissionStatus()
 					dp.setRestoreReplicaStop()
+
 					err := c.syncUpdateDataPartition(dp)
 					if err != nil {
 						log.LogWarnf("action[DecommissionListTraverse]Remove success dp[%v] failed for %v",
@@ -2174,22 +2080,28 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 						log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for success",
 							dp.PartitionID)
 					}
+					auditlog.LogMasterOp("TraverseDataPartition", msg, err)
 				} else if dp.IsDecommissionFailed() {
 					if !dp.tryRollback(c) {
 						log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for fail",
 							dp.PartitionID)
 						l.Remove(dp)
+						// if dp is not removed from decommission list, do not reset RestoreReplica
+						dp.setRestoreReplicaStop()
 					}
 					// rollback fail/success need release token
 					dp.ReleaseDecommissionToken(c)
-					dp.setRestoreReplicaStop()
+					dp.DecommissionType = InitialDecommission
 					c.syncUpdateDataPartition(dp)
+					msg := fmt.Sprintf("dp %v decommission failed", dp.decommissionInfo())
+					auditlog.LogMasterOp("TraverseDataPartition", msg, nil)
 				} else if dp.IsDecommissionPaused() {
 					log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for paused ",
 						dp.PartitionID)
 					dp.ReleaseDecommissionToken(c)
 					l.Remove(dp)
 					dp.setRestoreReplicaStop()
+					dp.DecommissionType = InitialDecommission
 					c.syncUpdateDataPartition(dp)
 				} else if dp.IsDecommissionInitial() { // fixed done ,not release token
 					l.Remove(dp)

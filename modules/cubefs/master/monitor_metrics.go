@@ -253,6 +253,8 @@ func (m *warningMetrics) reset() {
 
 // The caller is responsible for lock
 func (m *warningMetrics) deleteMissingDp(missingDpAddrSet addrSet, clusterName, dpId, addr string) {
+	m.dpMissingReplicaMutex.Lock()
+	defer m.dpMissingReplicaMutex.Unlock()
 	if len(missingDpAddrSet.addrs) == 0 {
 		return
 	}
@@ -260,8 +262,6 @@ func (m *warningMetrics) deleteMissingDp(missingDpAddrSet addrSet, clusterName, 
 	if _, ok := missingDpAddrSet.addrs[addr]; !ok {
 		return
 	}
-	m.dpMissingReplicaMutex.Lock()
-	defer m.dpMissingReplicaMutex.Unlock()
 	replicaAlive := m.dpMissingReplicaInfo[dpId].replicaAlive
 	replicaNum := m.dpMissingReplicaInfo[dpId].replicaNum
 
@@ -278,13 +278,13 @@ func (m *warningMetrics) deleteMissingDp(missingDpAddrSet addrSet, clusterName, 
 
 // leader only
 func (m *warningMetrics) WarnMissingDp(clusterName, addr string, partitionID uint64, report bool) {
-	m.dpMissingReplicaMutex.Lock()
-	defer m.dpMissingReplicaMutex.Unlock()
 	if clusterName != m.cluster.Name {
 		return
 	}
+	m.dpMissingReplicaMutex.Lock()
 	id := strconv.FormatUint(partitionID, 10)
 	if !report {
+		m.dpMissingReplicaMutex.Unlock()
 		m.deleteMissingDp(m.dpMissingReplicaInfo[id], clusterName, id, addr)
 		return
 	}
@@ -295,6 +295,7 @@ func (m *warningMetrics) WarnMissingDp(clusterName, addr string, partitionID uin
 		// m.dpMissingReplicaInfo[id].addrs = make(addrSet)
 	}
 	m.dpMissingReplicaInfo[id].addrs[addr] = voidVal
+	m.dpMissingReplicaMutex.Unlock()
 }
 
 // leader only
@@ -356,6 +357,8 @@ func (m *warningMetrics) WarnDpNoLeader(clusterName string, partitionID uint64, 
 
 // The caller is responsible for lock
 func (m *warningMetrics) deleteMissingMp(missingMpAddrSet addrSet, clusterName, mpId, addr string) {
+	m.mpMissingReplicaMutex.Lock()
+	defer m.mpMissingReplicaMutex.Unlock()
 	if len(missingMpAddrSet.addrs) == 0 {
 		return
 	}
@@ -378,13 +381,15 @@ func (m *warningMetrics) deleteMissingMp(missingMpAddrSet addrSet, clusterName, 
 // leader only
 func (m *warningMetrics) WarnMissingMp(clusterName, addr string, partitionID uint64, report bool) {
 	m.mpMissingReplicaMutex.Lock()
-	defer m.mpMissingReplicaMutex.Unlock()
+
 	if clusterName != m.cluster.Name {
+		m.mpMissingReplicaMutex.Unlock()
 		return
 	}
 
 	id := strconv.FormatUint(partitionID, 10)
 	if !report {
+		m.mpMissingReplicaMutex.Unlock()
 		m.deleteMissingMp(m.mpMissingReplicaInfo[id], clusterName, id, addr)
 		return
 	}
@@ -393,26 +398,27 @@ func (m *warningMetrics) WarnMissingMp(clusterName, addr string, partitionID uin
 		m.missingMp.SetWithLabelValues(1, clusterName, id, addr)
 	}
 	if _, ok := m.mpMissingReplicaInfo[id]; !ok {
-		m.dpMissingReplicaInfo[id] = addrSet{addrs: make(map[string]voidType)}
+		m.mpMissingReplicaInfo[id] = addrSet{addrs: make(map[string]voidType)}
 		// m.mpMissingReplicaInfo[id] = make(addrSet)
 	}
 	m.mpMissingReplicaInfo[id].addrs[addr] = voidVal
+	m.mpMissingReplicaMutex.Unlock()
 }
 
 // leader only
 func (m *warningMetrics) CleanObsoleteMpMissing(clusterName string, mp *MetaPartition) {
-	m.mpMissingReplicaMutex.Lock()
-	defer m.mpMissingReplicaMutex.Unlock()
 	if clusterName != m.cluster.Name {
 		return
 	}
 	id := strconv.FormatUint(mp.PartitionID, 10)
 
+	m.mpMissingReplicaMutex.Lock()
 	missingRepAddrs, ok := m.mpMissingReplicaInfo[id]
 	if !ok {
+		m.mpMissingReplicaMutex.Unlock()
 		return
 	}
-
+	m.mpMissingReplicaMutex.Unlock()
 	for addr := range missingRepAddrs.addrs {
 		if _, err := mp.getMetaReplica(addr); err != nil {
 			log.LogDebugf("action[warningMetrics] delete obsolete Mp missing record: dpId(%v), addr(%v)", id, addr)
@@ -814,7 +820,7 @@ func (mm *monitorMetrics) updateMetaNodesStat() {
 		mm.nodeStat.SetWithLabelValues(float64(metaNode.Used), MetricRoleMetaNode, metaNode.Addr, "memUsed")
 		mm.nodeStat.SetWithLabelValues(float64(metaNode.MetaPartitionCount), MetricRoleMetaNode, metaNode.Addr, "mpCount")
 		mm.nodeStat.SetWithLabelValues(float64(metaNode.Threshold), MetricRoleMetaNode, metaNode.Addr, "threshold")
-		mm.nodeStat.SetBoolWithLabelValues(metaNode.isWritable(), MetricRoleMetaNode, metaNode.Addr, "writable")
+		mm.nodeStat.SetBoolWithLabelValues(metaNode.IsWriteAble(), MetricRoleMetaNode, metaNode.Addr, "writable")
 		mm.nodeStat.SetBoolWithLabelValues(metaNode.IsActive, MetricRoleMetaNode, metaNode.Addr, "active")
 
 		return true
@@ -865,7 +871,7 @@ func (mm *monitorMetrics) updateDataNodesStat() {
 		mm.nodeStat.SetWithLabelValues(dataNode.UsageRatio, MetricRoleDataNode, dataNode.Addr, "usageRatio")
 		mm.nodeStat.SetWithLabelValues(float64(len(dataNode.BadDisks)), MetricRoleDataNode, dataNode.Addr, "badDiskCount")
 		mm.nodeStat.SetBoolWithLabelValues(dataNode.isActive, MetricRoleDataNode, dataNode.Addr, "active")
-		mm.nodeStat.SetBoolWithLabelValues(dataNode.isWriteAble(), MetricRoleDataNode, dataNode.Addr, "writable")
+		mm.nodeStat.SetBoolWithLabelValues(dataNode.IsWriteAble(), MetricRoleDataNode, dataNode.Addr, "writable")
 		return true
 	})
 	mm.dataNodesInactive.Set(float64(inactiveDataNodesCount))
@@ -891,7 +897,7 @@ func (mm *monitorMetrics) setNotWritableMetaNodesCount() {
 		if !ok {
 			return true
 		}
-		if !metaNode.isWritable() {
+		if !metaNode.IsWriteAble() {
 			notWritabelMetaNodesCount++
 		}
 		return true
@@ -906,7 +912,7 @@ func (mm *monitorMetrics) setNotWritableDataNodesCount() {
 		if !ok {
 			return true
 		}
-		if !dataNode.isWriteAble() {
+		if !dataNode.IsWriteAble() {
 			notWritabelDataNodesCount++
 		}
 		return true

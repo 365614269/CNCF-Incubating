@@ -300,8 +300,8 @@ func LoadDataPartition(partitionDir string, disk *Disk) (dp *DataPartition, err 
 		go dp.StartRaftAfterRepair(true)
 	}
 	if err != nil {
-		log.LogErrorf("PartitionID(%v) start raft err(%v)..", dp.partitionID, err)
-		// disk.space.DetachDataPartition(dp.partitionID)
+		log.LogErrorf("PartitionID(%v) start raft err(%v)..", dp.info(), err)
+		disk.space.DetachDataPartition(dp.partitionID)
 		return
 	}
 
@@ -390,6 +390,7 @@ func newDataPartition(dpCfg *dataPartitionCfg, disk *Disk, isCreate bool) (dp *D
 	dp = partition
 	go partition.statusUpdateScheduler()
 	go partition.startEvict()
+	go partition.validatePeers()
 	if isCreate {
 		if err = dp.getVerListFromMaster(); err != nil {
 			log.LogErrorf("action[newDataPartition] vol %v dp %v loadFromMaster verList failed err %v", dp.volumeID, dp.partitionID, err)
@@ -638,6 +639,7 @@ func (dp *DataPartition) Stop() {
 		log.LogInfo(msg)
 	}()
 	dp.stopOnce.Do(func() {
+		log.LogInfof("action[Stop]:dp(%v) stop once", dp.info())
 		if dp.stopC != nil {
 			close(dp.stopC)
 		}
@@ -685,12 +687,26 @@ func (dp *DataPartition) ForceLoadHeader() {
 	dp.loadExtentHeaderStatus = FinishLoadDataPartitionExtentHeader
 }
 
-func (dp *DataPartition) RemoveAll() (err error) {
+func (dp *DataPartition) RemoveAll(decommissionType uint32, force bool) (err error) {
 	dp.persistMetaMutex.Lock()
 	defer dp.persistMetaMutex.Unlock()
-
-	err = os.RemoveAll(dp.Path())
-	return
+	if force && decommissionType == proto.AutoDecommission {
+		originalPath := dp.Path()
+		parent := path.Dir(originalPath)
+		fileName := path.Base(originalPath)
+		newFilename := BackupPartitionPrefix + fileName
+		newPath := path.Join(parent, newFilename)
+		err = os.Rename(originalPath, newPath)
+		if err == nil {
+			dp.path = newPath
+			dp.disk.AddBackupPartitionDir(dp.partitionID)
+		}
+		log.LogInfof("action[Stop]:dp(%v) rename dir from %v to %v,err %v", dp.info(), originalPath, newPath, err)
+	} else {
+		err = os.RemoveAll(dp.Path())
+		log.LogInfof("action[Stop]:dp(%v) remove %v,err %v", dp.info(), dp.Path(), err)
+	}
+	return err
 }
 
 // PersistMetadata persists the file metadata on the disk.
@@ -737,6 +753,7 @@ func (dp *DataPartition) PersistMetadata() (err error) {
 	if metaData, err = json.Marshal(md); err != nil {
 		return
 	}
+	// persist meta can be failed with  io error
 	if _, err = metadataFile.Write(metaData); err != nil {
 		return
 	}
@@ -888,7 +905,7 @@ func (dp *DataPartition) updateReplicas(isForce bool) (err error) {
 		return
 	}
 	dp.isLeader = false
-	isLeader, replicas, err := dp.fetchReplicasFromMaster()
+	isLeader, replicas, _, err := dp.fetchReplicasFromMaster()
 	if err != nil {
 		return
 	}
@@ -921,8 +938,13 @@ func (dp *DataPartition) compareReplicas(v1, v2 []string) (equals bool) {
 	return false
 }
 
+type ReplicaInfo struct {
+	Addr string
+	Disk string
+}
+
 // Fetch the replica information from the master.
-func (dp *DataPartition) fetchReplicasFromMaster() (isLeader bool, replicas []string, err error) {
+func (dp *DataPartition) fetchReplicasFromMaster() (isLeader bool, replicas []string, infos []ReplicaInfo, err error) {
 	var partition *proto.DataPartitionInfo
 	retry := 0
 	for {
@@ -939,6 +961,9 @@ func (dp *DataPartition) fetchReplicasFromMaster() (isLeader bool, replicas []st
 	}
 
 	replicas = append(replicas, partition.Hosts...)
+	for _, replica := range partition.Replicas {
+		infos = append(infos, ReplicaInfo{Addr: replica.Addr, Disk: replica.DiskPath})
+	}
 	if partition.Hosts != nil && len(partition.Hosts) >= 1 {
 		leaderAddr := strings.Split(partition.Hosts[0], ":")
 		if len(leaderAddr) == 2 && strings.TrimSpace(leaderAddr[0]) == LocalIP {
@@ -1456,8 +1481,8 @@ func (dp *DataPartition) isDecommissionRecovering() bool {
 
 func (dp *DataPartition) incDiskErrCnt() {
 	diskErrCnt := atomic.AddUint64(&dp.diskErrCnt, 1)
-	dp.PersistMetadata()
-	log.LogWarnf("[incDiskErrCnt]: dp(%v) disk err count:%v", dp.partitionID, diskErrCnt)
+	err := dp.PersistMetadata()
+	log.LogWarnf("[incDiskErrCnt]: dp(%v) disk err count:%v, err %v", dp.partitionID, diskErrCnt, err)
 }
 
 func (dp *DataPartition) getDiskErrCnt() uint64 {
@@ -1468,14 +1493,15 @@ func (dp *DataPartition) reload(s *SpaceManager) error {
 	disk := dp.disk
 	rootDir := dp.path
 	log.LogDebugf("data partition disk %v rootDir %v", disk, rootDir)
-	s.partitionMutex.Lock()
-	delete(s.partitions, dp.partitionID)
-	s.partitionMutex.Unlock()
+	s.DetachDataPartition(dp.partitionID)
 	dp.Stop()
 	dp.Disk().DetachDataPartition(dp)
 	log.LogDebugf("data partition %v is detached", dp.partitionID)
 	_, err := LoadDataPartition(rootDir, disk)
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (dp *DataPartition) resetDiskErrCnt() {
@@ -1491,4 +1517,49 @@ func (dp *DataPartition) hasNodeIDConflict(addr string, nodeID uint64) error {
 		}
 	}
 	return nil
+}
+
+func (dp *DataPartition) info() string {
+	return fmt.Sprintf("id(%v)_disk(%v)_type(%v)", dp.partitionID, dp.disk.Path, dp.partitionType)
+}
+
+func (dp *DataPartition) validatePeers() {
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			dataNodes := dp.dataNode.space.getDataNodeIDs()
+			for _, peer := range dp.config.Peers {
+				for _, dn := range dataNodes {
+					if dn.Addr == peer.Addr && dn.ID != peer.ID {
+						log.LogWarnf("dp %v find expired peer %v(expected %v_%v)", dp.info(), peer, dn.ID, dn.Addr)
+						newReq := &proto.RemoveDataPartitionRaftMemberRequest{
+							PartitionId: dp.partitionID,
+							Force:       true,
+							RemovePeer:  peer,
+						}
+						reqData, err := json.Marshal(newReq)
+						if err != nil {
+							log.LogWarnf("dp %v marshal newReq %v failed %v", dp.info(), newReq, err)
+							continue
+						}
+						cc := &raftProto.ConfChange{
+							Type: raftProto.ConfRemoveNode,
+							Peer: raftProto.Peer{
+								ID: peer.ID,
+							},
+							Context: reqData,
+						}
+						dp.dataNode.space.raftStore.RaftServer().RemoveRaftForce(dp.partitionID, cc)
+						dp.ApplyMemberChange(cc, 0)
+						dp.PersistMetadata()
+						log.LogWarnf("dp %v remove expired peer %v", dp.info(), peer)
+					}
+				}
+			}
+		case <-dp.stopC:
+			ticker.Stop()
+			return
+		}
+	}
 }

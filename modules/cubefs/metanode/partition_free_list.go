@@ -59,6 +59,7 @@ func (mp *metaPartition) startFreeList() (err error) {
 
 	go mp.updateVolWorker()
 	go mp.deleteWorker()
+	go mp.startRecycleInodeDelFile()
 	mp.startToDeleteExtents()
 	return
 }
@@ -624,7 +625,24 @@ func (mp *metaPartition) deleteObjExtents(oeks []proto.ObjExtentKey) (err error)
 	return err
 }
 
+func (mp *metaPartition) startRecycleInodeDelFile() {
+	timer := time.NewTicker(time.Minute)
+	defer timer.Stop()
+	for {
+		select {
+		case <-mp.stopC:
+			return
+		case <-timer.C:
+			mp.recycleInodeDelFile()
+		}
+	}
+}
+
 func (mp *metaPartition) recycleInodeDelFile() {
+	if !mp.recycleInodeDelFileFlag.TestAndSet() {
+		return
+	}
+	defer mp.recycleInodeDelFileFlag.Release()
 	// NOTE: get all files
 	dentries, err := os.ReadDir(mp.config.RootDir)
 	if err != nil {
@@ -652,13 +670,18 @@ func (mp *metaPartition) recycleInodeDelFile() {
 			return
 		}
 		diskSpaceLeft = int64(stat.Bavail * uint64(stat.Bsize))
-		if diskSpaceLeft >= 50*util.GB && len(inodeDelFiles) < 5 {
+		// NOTE: 5% of disk space
+		spaceWaterMark := int64(stat.Blocks*uint64(stat.Bsize)) / 20
+		if spaceWaterMark > 50*util.GB {
+			spaceWaterMark = 50 * util.GB
+		}
+		if diskSpaceLeft >= spaceWaterMark && len(inodeDelFiles) < 5 {
 			log.LogDebugf("[recycleInodeDelFile] mp(%v) not need to recycle, return", mp.config.PartitionId)
 			return
 		}
 		// NOTE: delete a file and pop an item
-		oldestFile := inodeDelFiles[len(inodeDelFiles)-1]
-		inodeDelFiles = inodeDelFiles[:len(inodeDelFiles)-1]
+		oldestFile := inodeDelFiles[0]
+		inodeDelFiles = inodeDelFiles[1:]
 		err = os.Remove(oldestFile)
 		if err != nil {
 			log.LogErrorf("[recycleInodeDelFile] mp(%v) failed to remove file(%v)", mp.config.PartitionId, oldestFile)

@@ -8,9 +8,11 @@ import org.keycloak.test.framework.injection.Supplier;
 public class MockParentSupplier implements Supplier<MockParentValue, MockParentAnnotation> {
 
     public static LifeCycle DEFAULT_LIFECYCLE = LifeCycle.CLASS;
+    public static boolean COMPATIBLE = true;
 
     public static void reset() {
         DEFAULT_LIFECYCLE = LifeCycle.CLASS;
+        COMPATIBLE = true;
     }
 
     @Override
@@ -30,7 +32,7 @@ public class MockParentSupplier implements Supplier<MockParentValue, MockParentA
 
     @Override
     public boolean compatible(InstanceContext<MockParentValue, MockParentAnnotation> a, RequestedInstance<MockParentValue, MockParentAnnotation> b) {
-        return true;
+        return COMPATIBLE;
     }
 
     @Override

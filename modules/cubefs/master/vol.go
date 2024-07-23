@@ -26,6 +26,7 @@ import (
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util"
+	"github.com/cubefs/cubefs/util/atomicutil"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
 )
@@ -51,6 +52,7 @@ type VolVarargs struct {
 	txOpLimit               int
 	trashInterval           int64
 	crossZone               bool
+	enableAutoDpMetaRepair  bool
 }
 
 // Vol represents a set of meta partitionMap and data partitionMap
@@ -123,6 +125,7 @@ type Vol struct {
 	DeleteExecTime          time.Time
 	user                    *User
 	dpRepairBlockSize       uint64
+	EnableAutoMetaRepair    atomicutil.Bool
 }
 
 func newVol(vv volValue) (vol *Vol) {
@@ -192,6 +195,7 @@ func newVol(vv volValue) (vol *Vol) {
 	vol.mpsLock = newMpsLockManager(vol)
 	vol.preloadCapacity = math.MaxUint64 // mark as special value to trigger calculate
 	vol.dpRepairBlockSize = proto.DefaultDpRepairBlockSize
+	vol.EnableAutoMetaRepair.Store(defaultEnableDpMetaRepair)
 	return
 }
 
@@ -222,6 +226,7 @@ func newVolFromVolValue(vv *volValue) (vol *Vol) {
 	if vol.dpRepairBlockSize == 0 {
 		vol.dpRepairBlockSize = proto.DefaultDpRepairBlockSize
 	}
+	vol.EnableAutoMetaRepair.Store(vv.EnableAutoMetaRepair)
 	return vol
 }
 
@@ -622,12 +627,16 @@ func (vol *Vol) checkDataPartitions(c *Cluster) (cnt int) {
 			totalPreloadCapacity += dp.total / util.GB
 		}
 
-		dp.checkReplicaStatus(c.cfg.DataPartitionTimeOutSec)
-		dp.checkStatus(c.Name, true, c.cfg.DataPartitionTimeOutSec, c, shouldDpInhibitWriteByVolFull, vol.Forbidden)
-		dp.checkLeader(c, c.Name, c.cfg.DataPartitionTimeOutSec)
+		dp.checkReplicaStatus(c.getDataPartitionTimeoutSec())
+		dp.checkStatus(c.Name, true, c.getDataPartitionTimeoutSec(), c, shouldDpInhibitWriteByVolFull, vol.Forbidden)
+		dp.checkLeader(c, c.Name, c.getDataPartitionTimeoutSec())
 		dp.checkMissingReplicas(c.Name, c.leaderInfo.addr, c.cfg.MissingDataPartitionInterval, c.cfg.IntervalToAlarmMissingDataPartition)
 		dp.checkReplicaNum(c, vol)
-		dp.checkReplicaMeta(c)
+
+		// NOTE: cluster or enable meta repair
+		if c.getEnableAutoDpMetaRepair() || vol.EnableAutoMetaRepair.Load() {
+			dp.checkReplicaMeta(c)
+		}
 
 		if time.Now().Unix()-vol.createTime < defaultIntervalToCheckHeartbeat*3 && !vol.Forbidden {
 			dp.setReadWrite()
@@ -791,7 +800,7 @@ func (mp *MetaPartition) memUsedReachThreshold(clusterName, volName string) bool
 	if !foundReadonlyReplica || readonlyReplica == nil {
 		return false
 	}
-	if readonlyReplica.metaNode.isWritable() {
+	if readonlyReplica.metaNode.IsWriteAble() {
 		msg := fmt.Sprintf("action[checkSplitMetaPartition] vol[%v],max meta parition[%v] status is readonly\n",
 			volName, mp.PartitionID)
 		Warn(clusterName, msg)
@@ -1149,7 +1158,7 @@ func (vol *Vol) deleteDataPartition(c *Cluster, dp *DataPartition) {
 	}
 
 	for _, addr := range addrs {
-		if err := vol.deleteDataPartitionFromDataNode(c, dp.createTaskToDeleteDataPartition(addr)); err != nil {
+		if err := vol.deleteDataPartitionFromDataNode(c, dp.createTaskToDeleteDataPartition(addr, false)); err != nil {
 			log.LogErrorf("[deleteDataPartitionFromDataNode] delete data replica from datanode fail, id %d, err %s", dp.PartitionID, err.Error())
 		}
 	}
@@ -1356,7 +1365,7 @@ func (vol *Vol) getTasksToDeleteDataPartitions() (tasks []*proto.AdminTask) {
 
 	for _, dp := range vol.dataPartitions.partitions {
 		for _, replica := range dp.Replicas {
-			tasks = append(tasks, dp.createTaskToDeleteDataPartition(replica.Addr))
+			tasks = append(tasks, dp.createTaskToDeleteDataPartition(replica.Addr, false))
 		}
 	}
 	return
@@ -1474,8 +1483,7 @@ func (vol *Vol) doCreateMetaPartition(c *Cluster, start, end uint64) (mp *MetaPa
 		}
 	} else {
 		var excludeZone []string
-		zoneNum := c.decideZoneNum(vol.crossZone)
-
+		zoneNum := c.decideZoneNum(vol)
 		if hosts, peers, err = c.getHostFromNormalZone(TypeMetaPartition, excludeZone, nil, nil, int(vol.mpReplicaNum), zoneNum, vol.zoneName); err != nil {
 			log.LogErrorf("action[doCreateMetaPartition] getHostFromNormalZone err[%v]", err)
 			return nil, errors.NewError(err)
@@ -1574,6 +1582,7 @@ func setVolFromArgs(args *VolVarargs, vol *Vol) {
 	vol.dpSelectorName = args.dpSelectorName
 	vol.dpSelectorParm = args.dpSelectorParm
 	vol.TrashInterval = args.trashInterval
+	vol.EnableAutoMetaRepair.Store(args.enableAutoDpMetaRepair)
 }
 
 func getVolVarargs(vol *Vol) *VolVarargs {
@@ -1609,6 +1618,7 @@ func getVolVarargs(vol *Vol) *VolVarargs {
 		txOpLimit:               vol.txOpLimit,
 		coldArgs:                args,
 		dpReadOnlyWhenVolFull:   vol.DpReadOnlyWhenVolFull,
+		enableAutoDpMetaRepair:  vol.EnableAutoMetaRepair.Load(),
 	}
 }
 
