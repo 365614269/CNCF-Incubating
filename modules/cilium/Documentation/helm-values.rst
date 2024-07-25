@@ -1239,7 +1239,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:fe3cec76ecdd22c4c70e7643228850562e8b1f5122fc11021bc6725254190064","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.29.7-fb2df6ec59fed2589e65e924bd6eb7bfecbb5108","useDigest":true}``
+     - ``{"digest":"sha256:e1f46cc7ebffa3421913220f3c5d6d200fd61ef7c802f548b5b39634e099cd83","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.30.4-48fa07fc1729f182860151fbfe5a17132607bda2","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -2468,6 +2468,14 @@
      - Agent container name.
      - string
      - ``"cilium"``
+   * - :spelling:ignore:`nat.mapStatsEntries`
+     - Number of the top-k SNAT map connections to track in Cilium statedb.
+     - int
+     - ``32``
+   * - :spelling:ignore:`nat.mapStatsInterval`
+     - Interval between how often SNAT map is counted for stats.
+     - string
+     - ``"30s"``
    * - :spelling:ignore:`nat46x64Gateway`
      - Configure standalone NAT46/NAT64 gateway
      - object
