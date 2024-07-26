@@ -15,7 +15,6 @@ public class FirefoxWebDriverSupplier extends AbstractWebDriverSupplier {
     public WebDriver getWebDriver() {
         FirefoxOptions options = new FirefoxOptions();
         setGlobalOptions(options);
-        options.addArguments("-headless");
         return new FirefoxDriver(options);
     }
 }

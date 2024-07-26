@@ -22,13 +22,13 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import org.keycloak.representations.idm.UserRepresentation;
+import org.keycloak.representations.idm.MemberRepresentation;
 
 public interface OrganizationMemberResource {
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    UserRepresentation toRepresentation();
+    MemberRepresentation toRepresentation();
 
     @DELETE
     Response delete();
