@@ -18,7 +18,6 @@
 package org.keycloak.organization.jpa;
 
 import static org.keycloak.models.OrganizationModel.BROKER_PUBLIC;
-import static org.keycloak.models.OrganizationModel.ORGANIZATION_ATTRIBUTE;
 import static org.keycloak.models.OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE;
 import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
 import static org.keycloak.utils.StreamsUtil.closing;
@@ -26,6 +25,7 @@ import static org.keycloak.utils.StreamsUtil.closing;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 import jakarta.persistence.EntityManager;
@@ -36,7 +36,6 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
-import java.util.stream.Collectors;
 import org.keycloak.connections.jpa.JpaConnectionProvider;
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.GroupModel.Type;
@@ -49,7 +48,6 @@ import org.keycloak.models.ModelException;
 import org.keycloak.models.ModelValidationException;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.models.RealmModel;
-import org.keycloak.models.UserManager;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
 import org.keycloak.models.jpa.entities.GroupAttributeEntity;
@@ -59,6 +57,7 @@ import org.keycloak.models.jpa.entities.UserEntity;
 import org.keycloak.models.jpa.entities.UserGroupMembershipEntity;
 import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.representations.idm.MembershipType;
+import org.keycloak.organization.utils.Organizations;
 import org.keycloak.utils.StringUtil;
 
 public class JpaOrganizationProvider implements OrganizationProvider {
@@ -94,7 +93,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         }
 
         RealmModel realm = getRealm();
-        OrganizationAdapter adapter = new OrganizationAdapter(realm, this);
+        OrganizationAdapter adapter = new OrganizationAdapter(session, realm, this);
 
         try {
             session.setAttribute(OrganizationModel.class.getName(), adapter);
@@ -126,8 +125,9 @@ public class JpaOrganizationProvider implements OrganizationProvider {
                 GroupModel group = getOrganizationGroup(entity);
 
                 if (group != null) {
+                    OrganizationProvider provider = session.getProvider(OrganizationProvider.class);
                     //TODO: won't scale, requires a better mechanism for bulk deleting users
-                    userProvider.getGroupMembersStream(realm, group).forEach(userModel -> removeMember(organization, userModel));
+                    userProvider.getGroupMembersStream(realm, group).forEach(userModel -> provider.removeMember(organization, userModel));
                     groupProvider.removeGroup(realm, group);
                 }
 
@@ -163,7 +163,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         throwExceptionIfObjectIsNull(user, "User");
 
         OrganizationEntity entity = getEntity(organization.getId());
-        OrganizationModel current = (OrganizationModel) session.getAttribute(OrganizationModel.class.getName());
+        OrganizationModel current = Organizations.resolveOrganization(session);
 
         // check the user and the organization belongs to the same realm
         if (session.users().getUserById(session.realms().getRealm(entity.getRealmId()), user.getId()) == null) {
@@ -181,12 +181,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
                 return false;
             }
 
-            if (user.getFirstAttribute(ORGANIZATION_ATTRIBUTE) != null) {
-                throw new ModelException("User [" + user.getId() + "] is a member of a different organization");
-            }
-
             user.joinGroup(group, metadata);
-            user.setSingleAttribute(ORGANIZATION_ATTRIBUTE, entity.getId());
         } finally {
             if (current == null) {
                 session.removeAttribute(OrganizationModel.class.getName());
@@ -199,7 +194,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     @Override
     public OrganizationModel getById(String id) {
         OrganizationEntity entity = getEntity(id, false);
-        return entity == null ? null : new OrganizationAdapter(getRealm(), entity, this);
+        return entity == null ? null : new OrganizationAdapter(session, getRealm(), entity, this);
     }
 
     @Override
@@ -210,7 +205,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         query.setParameter("name", domain.toLowerCase());
         try {
             OrganizationEntity entity = query.getSingleResult();
-            return new OrganizationAdapter(realm, entity, this);
+            return new OrganizationAdapter(session, realm, entity, this);
         } catch (NoResultException nre) {
             return null;
         }
@@ -232,7 +227,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         query.setParameter("realmId", realm.getId());
 
         return closing(paginateQuery(query, first, max).getResultStream()
-                .map(entity -> new OrganizationAdapter(realm, entity, this)));
+                .map(entity -> new OrganizationAdapter(session, realm, entity, this)));
     }
 
     @Override
@@ -265,7 +260,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         Predicate finalPredicate = builder.and(predicates.toArray(new Predicate[0]));
         TypedQuery<OrganizationEntity> typedQuery = em.createQuery(query.select(org).where(finalPredicate));
         return closing(paginateQuery(typedQuery, first, max).getResultStream())
-                .map(entity -> new OrganizationAdapter(realm, entity, this));
+                .map(entity -> new OrganizationAdapter(session, realm, entity, this));
     }
 
     @Override
@@ -285,9 +280,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             return null;
         }
 
-        String orgId = user.getFirstAttribute(ORGANIZATION_ATTRIBUTE);
-
-        if (organization.getId().equals(orgId)) {
+        if (getByMember(user).anyMatch(organization::equals)) {
             return user;
         }
 
@@ -295,17 +288,19 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     }
 
     @Override
-    public OrganizationModel getByMember(UserModel member) {
+    public Stream<OrganizationModel> getByMember(UserModel member) {
         throwExceptionIfObjectIsNull(member, "User");
+        TypedQuery<String> query = em.createNamedQuery("getGroupsByMember", String.class);
 
-        String orgId = member.getFirstAttribute(ORGANIZATION_ATTRIBUTE);
+        query.setParameter("userId", member.getId());
 
-        if (orgId == null) {
-            return null;
-        }
+        OrganizationProvider organizations = session.getProvider(OrganizationProvider.class);
+        GroupProvider groups = session.groups();
 
-        // need to go via the session to avoid bypassing the cache
-        return session.getProvider(OrganizationProvider.class).getById(orgId);
+        return closing(query.getResultStream())
+                .map((id) -> groups.getGroupById(getRealm(), id))
+                .map((g) -> organizations.getById(g.getName()))
+                .filter(Objects::nonNull);
     }
 
     @Override
@@ -395,25 +390,22 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         throwExceptionIfObjectIsNull(organization, "organization");
         throwExceptionIfObjectIsNull(member, "member");
 
-        OrganizationModel userOrg = getByMember(member);
+        OrganizationModel userOrg = getByMember(member).filter(organization::equals).findAny().orElse(null);
 
         if (userOrg == null || !userOrg.equals(organization)) {
             return false;
         }
 
         if (isManagedMember(organization, member)) {
-            return new UserManager(session).removeUser(getRealm(), member, userProvider);
+            userProvider.removeUser(getRealm(), member);
         } else {
-            OrganizationModel current = (OrganizationModel) session.getAttribute(OrganizationModel.class.getName());
+            OrganizationModel current = Organizations.resolveOrganization(session);
 
             if (current == null) {
                 session.setAttribute(OrganizationModel.class.getName(), organization);
             }
 
             try {
-                List<String> organizations = member.getAttributes().get(ORGANIZATION_ATTRIBUTE);
-                organizations.remove(organization.getId());
-                member.setAttribute(ORGANIZATION_ATTRIBUTE, organizations);
                 member.leaveGroup(getOrganizationGroup(organization));
             } finally {
                 if (current == null) {

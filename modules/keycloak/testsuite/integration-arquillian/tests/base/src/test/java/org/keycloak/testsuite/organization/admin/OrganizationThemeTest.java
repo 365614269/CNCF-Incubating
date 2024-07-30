@@ -19,12 +19,14 @@
 
 package org.keycloak.testsuite.organization.admin;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.keycloak.testsuite.broker.BrokerTestTools.waitForPage;
 
 import java.util.List;
 import java.util.Map.Entry;
 
 import jakarta.ws.rs.core.Response;
+import org.hamcrest.Matchers;
 import org.jboss.arquillian.graphene.page.Page;
 import org.junit.Assert;
 import org.junit.Before;
@@ -152,7 +154,8 @@ public class OrganizationThemeTest extends AbstractOrganizationTest {
         oauth.clientId("broker-app");
         loginPage.open(bc.consumerRealmName());
         loginPage.loginUsername("tom");
-        loginPage.login("tom", "password");
+        Assert.assertTrue(driver.getPageSource().contains("Sign-in to myorg organization"));
+        loginPage.login("password");
         waitForPage(driver, "update account information", false);
         Assert.assertTrue("Driver should be on the consumer realm page right now",
                 driver.getCurrentUrl().contains("/auth/realms/" + bc.consumerRealmName() + "/"));
@@ -174,7 +177,7 @@ public class OrganizationThemeTest extends AbstractOrganizationTest {
         loginPage.loginUsername("non-user@myorg.com");
         Assert.assertTrue(driver.getPageSource().contains("Sign-in to myorg organization"));
         for (Entry<String, List<String>> attribute : orgRep.getAttributes().entrySet()) {
-            Assert.assertTrue(driver.getPageSource().contains("The " + attribute.getKey() + " is " + attribute.getValue()));
+            assertThat(driver.getPageSource(), Matchers.containsString("The " + attribute.getKey() + " is " + String.join(", ", attribute.getValue())));
         }
         Assert.assertFalse(loginPage.isPasswordInputPresent());
     }

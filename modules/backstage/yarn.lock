@@ -6723,6 +6723,7 @@ __metadata:
     msw: ^1.0.0
     uuid: ^9.0.0
     zod: ^3.22.4
+    zod-to-json-schema: ^3.20.4
   languageName: unknown
   linkType: soft
 
@@ -45239,6 +45240,7 @@ __metadata:
     "@yarnpkg/core": ^4.0.3
     "@yarnpkg/fslib": ^3.0.2
     chalk: ^4.0.0
+    lodash: ^4.17.21
     nodemon: ^3.0.1
     semver: ^7.6.0
   languageName: unknown
