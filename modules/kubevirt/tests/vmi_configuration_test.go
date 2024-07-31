@@ -1810,7 +1810,7 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 				libwait.WaitForSuccessfulVMIStart(cpuVmi)
 
 				By("Checking the CPU model under the guest OS")
-				output := tests.RunCommandOnVmiPod(cpuVmi, []string{"grep", "-m1", "model name", "/proc/cpuinfo"})
+				output := libpod.RunCommandOnVmiPod(cpuVmi, []string{"grep", "-m1", "model name", "/proc/cpuinfo"})
 
 				niceName := parseCPUNiceName(output)
 
@@ -1832,7 +1832,7 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 				Expect(err).ToNot(HaveOccurred())
 				libwait.WaitForSuccessfulVMIStart(cpuVmi)
 
-				output := tests.RunCommandOnVmiPod(cpuVmi, []string{"grep", "-m1", "model name", "/proc/cpuinfo"})
+				output := libpod.RunCommandOnVmiPod(cpuVmi, []string{"grep", "-m1", "model name", "/proc/cpuinfo"})
 
 				niceName := parseCPUNiceName(output)
 
@@ -2137,19 +2137,24 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 
 	Context("[rfe_id:904][crit:medium][vendor:cnv-qe@redhat.com][level:component]with driver cache and io settings and PVC", decorators.SigStorage, decorators.StorageReq, func() {
 		var dataVolume *cdiv1.DataVolume
+		var err error
 
 		BeforeEach(func() {
-			var err error
 			if !checks.HasFeature(virtconfig.HostDiskGate) {
 				Skip("Cluster has the HostDisk featuregate disabled, skipping  the tests")
 			}
 
-			dataVolume, err = createBlockDataVolume(virtClient)
-			Expect(err).ToNot(HaveOccurred())
-			if dataVolume == nil {
+			sc, foundSC := libstorage.GetBlockStorageClass(k8sv1.ReadWriteOnce)
+			if !foundSC {
 				Skip("Skip test when Block storage is not present")
 			}
 
+			dataVolume = libdv.NewDataVolume(
+				libdv.WithRegistryURLSource(cd.DataVolumeImportUrlForContainerDisk(cd.ContainerDiskCirros)),
+				libdv.WithPVC(libdv.PVCWithStorageClass(sc), libdv.PVCWithBlockVolumeMode()),
+			)
+			dataVolume, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(nil)).Create(context.Background(), dataVolume, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
 			libstorage.EventuallyDV(dataVolume, 240, Or(HaveSucceeded(), WaitForFirstConsumer()))
 		})
 
@@ -2158,7 +2163,7 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 		})
 
 		It("[test_id:1681]should set appropriate cache modes", func() {
-			tmpHostDiskDir := tests.RandTmpDir()
+			tmpHostDiskDir := storage.RandHostDiskDir()
 			vmi := libvmi.New(
 				libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
 				libvmi.WithNetwork(v1.DefaultPodNetwork()),
@@ -2186,7 +2191,9 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 			Expect(err).ToNot(HaveOccurred())
 			vmiPod, err := libpod.GetPodByVirtualMachineInstance(vmi, vmi.Namespace)
 			Expect(err).NotTo(HaveOccurred())
-			defer tests.RemoveHostDiskImage(tmpHostDiskDir, vmiPod.Spec.NodeName)
+			defer func() {
+				Expect(storage.RemoveHostDisk(tmpHostDiskDir, vmiPod.Spec.NodeName)).To(Succeed())
+			}()
 
 			disks := runningVMISpec.Devices.Disks
 			By("checking if number of attached disks is equal to real disks number")
@@ -2284,13 +2291,21 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 	Context("Block size configuration set", func() {
 
 		It("[test_id:6965]Should set BlockIO when using custom block sizes", decorators.SigStorage, func() {
+			var dataVolume *cdiv1.DataVolume
+			var err error
+
 			By("creating a block volume")
-			dataVolume, err := createBlockDataVolume(virtClient)
-			Expect(err).ToNot(HaveOccurred())
-			if dataVolume == nil {
+			sc, foundSC := libstorage.GetBlockStorageClass(k8sv1.ReadWriteOnce)
+			if !foundSC {
 				Skip("Skip test when Block storage is not present")
 			}
 
+			dataVolume = libdv.NewDataVolume(
+				libdv.WithRegistryURLSource(cd.DataVolumeImportUrlForContainerDisk(cd.ContainerDiskCirros)),
+				libdv.WithPVC(libdv.PVCWithStorageClass(sc), libdv.PVCWithBlockVolumeMode()),
+			)
+			dataVolume, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(nil)).Create(context.Background(), dataVolume, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
 			libstorage.EventuallyDV(dataVolume, 240, Or(HaveSucceeded(), WaitForFirstConsumer()))
 
 			vmi := libvmi.New(
@@ -2327,13 +2342,21 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 		})
 
 		It("[test_id:6966]Should set BlockIO when set to match volume block sizes on block devices", decorators.SigStorage, func() {
+			var dataVolume *cdiv1.DataVolume
+			var err error
+
 			By("creating a block volume")
-			dataVolume, err := createBlockDataVolume(virtClient)
-			Expect(err).ToNot(HaveOccurred())
-			if dataVolume == nil {
+			sc, foundSC := libstorage.GetBlockStorageClass(k8sv1.ReadWriteOnce)
+			if !foundSC {
 				Skip("Skip test when Block storage is not present")
 			}
 
+			dataVolume = libdv.NewDataVolume(
+				libdv.WithRegistryURLSource(cd.DataVolumeImportUrlForContainerDisk(cd.ContainerDiskCirros)),
+				libdv.WithPVC(libdv.PVCWithStorageClass(sc), libdv.PVCWithBlockVolumeMode()),
+			)
+			dataVolume, err = virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(nil)).Create(context.Background(), dataVolume, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
 			libstorage.EventuallyDV(dataVolume, 240, Or(HaveSucceeded(), WaitForFirstConsumer()))
 
 			vmi := libvmi.New(
@@ -2373,17 +2396,19 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 
 			By("creating a disk image")
 			var nodeName string
-			tmpHostDiskDir := tests.RandTmpDir()
+			tmpHostDiskDir := storage.RandHostDiskDir()
 			tmpHostDiskPath := filepath.Join(tmpHostDiskDir, fmt.Sprintf("disk-%s.img", uuid.NewString()))
 
-			pod := storage.CreateDiskOnHost(tmpHostDiskPath)
+			pod := storage.CreateHostDisk(tmpHostDiskPath)
 			pod, err := virtClient.CoreV1().Pods(testsuite.NamespacePrivileged).Create(context.Background(), pod, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Eventually(ThisPod(pod), 30*time.Second, 1*time.Second).Should(BeInPhase(k8sv1.PodSucceeded))
 			pod, err = ThisPod(pod)()
 			Expect(err).NotTo(HaveOccurred())
 			nodeName = pod.Spec.NodeName
-			defer tests.RemoveHostDiskImage(tmpHostDiskDir, nodeName)
+			defer func() {
+				Expect(storage.RemoveHostDisk(tmpHostDiskDir, nodeName)).To(Succeed())
+			}()
 
 			vmi := libvmi.New(
 				libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
@@ -3405,20 +3430,6 @@ func withSerialBIOS() libvmi.Option {
 		}
 		vmi.Spec.Domain.Firmware.Bootloader.BIOS.UseSerial = pointer.P(true)
 	}
-}
-
-func createBlockDataVolume(virtClient kubecli.KubevirtClient) (*cdiv1.DataVolume, error) {
-	sc, foundSC := libstorage.GetBlockStorageClass(k8sv1.ReadWriteOnce)
-	if !foundSC {
-		return nil, nil
-	}
-
-	dataVolume := libdv.NewDataVolume(
-		libdv.WithRegistryURLSource(cd.DataVolumeImportUrlForContainerDisk(cd.ContainerDiskCirros)),
-		libdv.WithPVC(libdv.PVCWithStorageClass(sc), libdv.PVCWithBlockVolumeMode()),
-	)
-
-	return virtClient.CdiClient().CdiV1beta1().DataVolumes(testsuite.GetTestNamespace(nil)).Create(context.Background(), dataVolume, metav1.CreateOptions{})
 }
 
 func getKvmPitMask(qemupid, nodeName string) (output string, err error) {
