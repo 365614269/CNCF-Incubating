@@ -44,10 +44,10 @@ import (
 	kubevirtfake "kubevirt.io/client-go/generated/kubevirt/clientset/versioned/fake"
 	"kubevirt.io/client-go/kubecli"
 
+	"kubevirt.io/kubevirt/pkg/apimachinery/patch"
 	"kubevirt.io/kubevirt/pkg/libvmi"
 	"kubevirt.io/kubevirt/pkg/pointer"
 	"kubevirt.io/kubevirt/pkg/testutils"
-	"kubevirt.io/kubevirt/tests/util"
 )
 
 const (
@@ -203,7 +203,7 @@ var _ = Describe("Clone", func() {
 		stop = make(chan struct{})
 		ctrl = gomock.NewController(GinkgoT())
 
-		testNamespace = util.NamespaceTestDefault
+		testNamespace = metav1.NamespaceDefault
 
 		vmInterface = kubecli.NewMockVirtualMachineInterface(ctrl)
 		vmInformer, _ = testutils.NewFakeInformerFor(&virtv1.VirtualMachine{})
@@ -228,7 +228,7 @@ var _ = Describe("Clone", func() {
 		runStrategy := virtv1.RunStrategyHalted
 		sourceVM.Spec.RunStrategy = &runStrategy
 
-		vmClone = kubecli.NewMinimalCloneWithNS("testclone", util.NamespaceTestDefault)
+		vmClone = kubecli.NewMinimalCloneWithNS("testclone", metav1.NamespaceDefault)
 		cloneSourceRef := &k8sv1.TypedLocalObjectReference{
 			APIGroup: pointer.P(vmAPIGroup),
 			Kind:     "VirtualMachine",
@@ -266,10 +266,10 @@ var _ = Describe("Clone", func() {
 		client = kubevirtfake.NewSimpleClientset()
 
 		virtClient.EXPECT().VirtualMachine(testNamespace).Return(vmInterface).AnyTimes()
-		virtClient.EXPECT().VirtualMachineClone(util.NamespaceTestDefault).Return(client.CloneV1alpha1().VirtualMachineClones(util.NamespaceTestDefault)).AnyTimes()
-		virtClient.EXPECT().VirtualMachineSnapshot(util.NamespaceTestDefault).Return(client.SnapshotV1beta1().VirtualMachineSnapshots(util.NamespaceTestDefault)).AnyTimes()
-		virtClient.EXPECT().VirtualMachineRestore(util.NamespaceTestDefault).Return(client.SnapshotV1beta1().VirtualMachineRestores(util.NamespaceTestDefault)).AnyTimes()
-		virtClient.EXPECT().VirtualMachineSnapshotContent(util.NamespaceTestDefault).Return(client.SnapshotV1beta1().VirtualMachineSnapshotContents(util.NamespaceTestDefault)).AnyTimes()
+		virtClient.EXPECT().VirtualMachineClone(metav1.NamespaceDefault).Return(client.CloneV1alpha1().VirtualMachineClones(metav1.NamespaceDefault)).AnyTimes()
+		virtClient.EXPECT().VirtualMachineSnapshot(metav1.NamespaceDefault).Return(client.SnapshotV1beta1().VirtualMachineSnapshots(metav1.NamespaceDefault)).AnyTimes()
+		virtClient.EXPECT().VirtualMachineRestore(metav1.NamespaceDefault).Return(client.SnapshotV1beta1().VirtualMachineRestores(metav1.NamespaceDefault)).AnyTimes()
+		virtClient.EXPECT().VirtualMachineSnapshotContent(metav1.NamespaceDefault).Return(client.SnapshotV1beta1().VirtualMachineSnapshotContents(metav1.NamespaceDefault)).AnyTimes()
 
 		k8sClient = k8sfake.NewSimpleClientset()
 		k8sClient.Fake.PrependReactor("*", "*", func(action testing.Action) (handled bool, obj runtime.Object, err error) {
@@ -885,7 +885,8 @@ var _ = Describe("Clone", func() {
 				restore, err := client.SnapshotV1beta1().VirtualMachineRestores(testNamespace).Get(context.TODO(), testRestoreName, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(restore.Spec.VirtualMachineSnapshotName).To(Equal(testSnapshotName))
-				expectedPatches := []string{`{"op": "replace", "path": "/spec/template/spec/domain/devices/interfaces/0/macAddress", "value": ""}`}
+				expectedPatches, err := generateStringPatchOperations(patch.New(patch.WithReplace("/spec/template/spec/domain/devices/interfaces/0/macAddress", "")))
+				Expect(err).ToNot(HaveOccurred())
 				Expect(restore.Spec.Patches).To(Equal(expectedPatches))
 				patchedVM, err := offlinePatchVM(sourceVMCpy, restore.Spec.Patches)
 				Expect(err).ToNot(HaveOccurred())
@@ -906,7 +907,9 @@ var _ = Describe("Clone", func() {
 				restore, err := client.SnapshotV1beta1().VirtualMachineRestores(testNamespace).Get(context.TODO(), testRestoreName, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(restore.Spec.VirtualMachineSnapshotName).To(Equal(testSnapshotName))
-				Expect(restore.Spec.Patches).ToNot(ContainElement(`{"op": "remove", "path": "/metadata/annotations/new_annotation_matching_filter"}`))
+				partialExpectedPatches, err := generateStringPatchOperations(patch.New(patch.WithRemove("/metadata/annotations/new_annotation_matching_filter")))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(restore.Spec.Patches).ToNot(ContainElement(partialExpectedPatches[0]))
 			})
 		})
 
