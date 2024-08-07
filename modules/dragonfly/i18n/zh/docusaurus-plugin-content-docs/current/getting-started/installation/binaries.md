@@ -116,6 +116,106 @@ mv target/release/dfdaemon /opt/dragonfly/bin/dfdaemon
 export PATH="/opt/dragonfly/bin/:$PATH"
 ```
 
+### 使用 RPM 安装 Client
+
+下载并执行安装脚本：
+
+> 注意: version 建议使用最新版本
+
+```bash
+curl \
+  --proto '=https' \
+  --tlsv1.2 -L -o client-{arch}-unknown-linux-gnu.rpm \
+  https://github.com/dragonflyoss/client/releases/download/v{version}/client-v{version}-{arch}-unknown-linux-gnu.rpm
+
+rpm -ivh client-{arch}-unknown-linux-gnu.rpm
+```
+
+确保将 `arch` 替换为以下内容之一：
+
+- `x86_64`
+- `aarch64`
+
+Systemd 启动 dfdaemon 服务:
+
+> 注意：要启动 dfdaemon，您需要先启动 manager 和 scheduler。
+
+```shell
+$ sudo systemctl enable dfdaemon
+$ sudo systemctl start dfdaemon
+$ sudo systemctl status dfdaemon
+● dfdaemon.service - dfdaemon is a high performance P2P download daemon
+     Loaded: loaded (/lib/systemd/system/dfdaemon.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2024-08-05 17:46:39 UTC; 4s ago
+       Docs: https://github.com/dragonflyoss/client
+   Main PID: 2118 (dfdaemon)
+      Tasks: 13 (limit: 11017)
+     Memory: 15.0M (max: 8.0G available: 7.9G)
+        CPU: 83ms
+     CGroup: /system.slice/dfdaemon.service
+             └─2118 /usr/bin/dfdaemon --config /etc/dragonfly/dfdaemon.yaml --verbose
+```
+
+使用 Dfget 下载文件，参考 [Dfget](../../reference/commands/client/dfget.md)。
+
+```shell
+# 查看 Dfget cli 帮助。
+dfget --help
+
+# 使用 HTTP 协议下载
+dfget -O /path/to/output http://example.com/object
+```
+
+### 使用 DEB 安装 Client
+
+下载并执行安装脚本：
+
+> 注意: version 建议使用最新版本
+
+```bash
+curl \
+  --proto '=https' \
+  --tlsv1.2 -L -o client-{arch}-unknown-linux-gnu.deb \
+  https://github.com/dragonflyoss/client/releases/download/v{version}/client-v{version}-{arch}-unknown-linux-gnu.deb
+
+dpkg -i client-{arch}-unknown-linux-gnu.deb
+```
+
+确保将 `arch` 替换为以下内容之一：
+
+- `x86_64`
+- `aarch64`
+
+Systemd 启动 dfdaemon 服务:
+
+> 注意：要启动 dfdaemon，您需要先启动 manager 和 scheduler。
+
+```shell
+$ sudo systemctl enable dfdaemon
+$ sudo systemctl start dfdaemon
+$ sudo systemctl status dfdaemon
+● dfdaemon.service - dfdaemon is a high performance P2P download daemon
+     Loaded: loaded (/lib/systemd/system/dfdaemon.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2024-08-05 17:46:39 UTC; 4s ago
+       Docs: https://github.com/dragonflyoss/client
+   Main PID: 2118 (dfdaemon)
+      Tasks: 13 (limit: 11017)
+     Memory: 15.0M (max: 8.0G available: 7.9G)
+        CPU: 83ms
+     CGroup: /system.slice/dfdaemon.service
+             └─2118 /usr/bin/dfdaemon --config /etc/dragonfly/dfdaemon.yaml --verbose
+```
+
+使用 Dfget 下载文件，参考 [Dfget](../../reference/commands/client/dfget.md)。
+
+```shell
+# 查看 Dfget cli 帮助。
+dfget --help
+
+# 使用 HTTP 协议下载
+dfget -O /path/to/output http://example.com/object
+```
+
 ## 运行
 
 ### Manager
@@ -155,7 +255,7 @@ database:
 # 查看 Manager cli 帮助文档。
 manager --help
 
-# 启动 Manager。
+# 启动 Manager，推荐使用 systemd 启动 Manager。
 manager
 ```
 
@@ -208,7 +308,7 @@ database:
 # 查看 Scheduler cli 帮助。
 scheduler --help
 
-# 启动 Scheduler。
+# 启动 Scheduler，推荐使用 systemd 启动 Scheduler。
 scheduler
 ```
 
@@ -243,13 +343,10 @@ seedPeer:
 把 Dfdaemon 当作 Seed Peer 运行:
 
 ```bash
-# 查看 Dfget cli 帮助。
-dfget --help
-
 # 查看 Dfdaemon cli 帮助。
 dfdaemon --help
 
-# 启动 Dfdaemon 模式。
+# 启动 Dfdaemon 模式，推荐使用 systemd 启动 Dfdaemon。
 dfdaemon
 ```
 
@@ -280,13 +377,10 @@ manager:
 把 Dfdaemon 当作 Peer 运行:
 
 ```bash
-# 查看 Dfget cli 帮助。
-dfget --help
-
 # 查看 Dfdaemon cli 帮助。
 dfdaemon --help
 
-# 启动 Dfdaemon 模式。
+# 启动 Dfdaemon 模式，推荐使用 systemd 启动 Dfdaemon。
 dfdaemon
 ```
 
@@ -298,4 +392,16 @@ Peer 部署完成之后，运行以下命令以检查 **Peer** 是否正在运�
 telnet 127.0.0.1 4000
 telnet 127.0.0.1 4001
 telnet 127.0.0.1 4002
+```
+
+### Dfget
+
+使用 Dfget 下载文件，参考 [Dfget](../../reference/commands/client/dfget.md)。
+
+```shell
+# 查看 Dfget cli 帮助。
+dfget --help
+
+# 使用 HTTP 协议下载
+dfget -O /path/to/output http://example.com/object
 ```
