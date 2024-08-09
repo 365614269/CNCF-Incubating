@@ -20,7 +20,9 @@ define build_image
   # Pre-pull FROM docker image due to Buildkit sometimes failing to pull them.
   grep -m 1 "^FROM " $(1) | tr -d '\r' | cut -d ' ' -f2 | xargs -n1 $(CONTAINER_ENGINE) pull
   $(QUIET)tar c $(REQUIREMENTS) Dockerfile \
-    | $(CONTAINER_ENGINE) build $(DOCKER_BUILD_FLAGS) --target $(2) --tag $(3) -
+    | $(CONTAINER_ENGINE) build $(DOCKER_BUILD_FLAGS) \
+                          --build-arg READTHEDOCS_VERSION \
+                          --target $(2) --tag $(3) -
 endef
 
 ##@ Development Images
@@ -42,12 +44,13 @@ endif
 # documentation to be generated correctly.
 cilium-build:
 ifndef SKIP_BUILD
+	$(MAKE) builder-image
 	../contrib/scripts/builder.sh env MAKEFLAGS="$(MAKEFLAGS)" make build
 else
 	echo "SKIP_BUILD set, assuming all build artifacts are already present."
 endif
 
-READTHEDOCS_VERSION:=$(READTHEDOCS_VERSION)
+READTHEDOCS_VERSION ?= latest
 DOCKER_CTR_ROOT_DIR := /src
 DOCKER_CTR_BASE := $(CONTAINER_ENGINE) container run --rm \
 		--workdir $(DOCKER_CTR_ROOT_DIR)/Documentation \
@@ -69,7 +72,7 @@ api-flaggen: ## Update the table of API flags restrictions.
 		> configuration/api-restrictions-table.rst
 
 .PHONY: update-cmdref
-update-cmdref: builder-image cilium-build ## Update the command reference documents (agent, bugtool, operators, etc.).
+update-cmdref: cilium-build ## Update the command reference documents (agent, bugtool, operators, etc.).
 	@$(ECHO_GEN)cmdref
 	-$(QUIET)rm -rf cmdref/cilium*.md
 	$(QUIET)$(DOCKER_RUN) ./update-cmdref.sh
