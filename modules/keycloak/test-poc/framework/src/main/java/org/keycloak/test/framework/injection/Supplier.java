@@ -13,32 +13,32 @@ public interface Supplier<T, S extends Annotation> {
 
     T getValue(InstanceContext<T, S> instanceContext);
 
-    default LifeCycle getLifeCycle(S annotation) {
+    default Object getAnnotationElementValue(S annotation, String annotationAttribute) {
         if (annotation != null) {
-            Optional<Method> lifecycle = Arrays.stream(annotation.annotationType().getMethods()).filter(m -> m.getName().equals("lifecycle")).findFirst();
-            if (lifecycle.isPresent()) {
+            Optional<Method> annotationMethod = Arrays.stream(annotation.annotationType().getMethods()).filter(m -> m.getName().equals(annotationAttribute)).findFirst();
+            if (annotationMethod.isPresent()) {
                 try {
-                    return (LifeCycle) lifecycle.get().invoke(annotation);
+                    return annotationMethod.get().invoke(annotation);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
             }
         }
-        return getDefaultLifecycle();
+        return getAnnotationElementValue(annotationAttribute);
     }
 
-    default String getRef(S annotation) {
-        if (annotation != null) {
-            Optional<Method> ref = Arrays.stream(annotation.annotationType().getMethods()).filter(m -> m.getName().equals("ref")).findFirst();
-            if (ref.isPresent()) {
-                try {
-                    return (String) ref.get().invoke(annotation);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
+    default Object getAnnotationElementValue(String annotationAttribute) {
+        switch (annotationAttribute) {
+            case SupplierHelpers.LIFECYCLE -> {
+                return this.getDefaultLifecycle();
+            }
+            case SupplierHelpers.REF, SupplierHelpers.REALM_REF -> {
+                return "";
+            }
+            default -> {
+                return null;
             }
         }
-        return "";
     }
 
     default LifeCycle getDefaultLifecycle() {

@@ -14,8 +14,8 @@ public class RequestedInstance<T, A extends Annotation> {
         this.supplier = supplier;
         this.annotation = annotation;
         this.valueType = valueType;
-        this.lifeCycle = supplier.getLifeCycle(annotation);
-        this.ref = supplier.getRef(annotation);
+        this.lifeCycle = (LifeCycle) supplier.getAnnotationElementValue(annotation, SupplierHelpers.LIFECYCLE);
+        this.ref = (String) supplier.getAnnotationElementValue(annotation, SupplierHelpers.REF);
     }
 
     public Supplier<T, A> getSupplier() {
@@ -37,4 +37,5 @@ public class RequestedInstance<T, A extends Annotation> {
     public String getRef() {
         return ref;
     }
+
 }
