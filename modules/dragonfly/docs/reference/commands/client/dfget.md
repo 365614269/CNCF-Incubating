@@ -39,37 +39,37 @@ Options:
 
   -e, --endpoint <ENDPOINT>
           Endpoint of dfdaemon's GRPC server
-
+          
           [default: /var/run/dragonfly/dfdaemon.sock]
 
       --timeout <TIMEOUT>
           Specify the timeout for downloading a file
-
+          
           [default: 2h]
 
       --piece-length <PIECE_LENGTH>
           Specify the byte length of the piece
-
+          
           [default: 4194304]
 
   -d, --digest <DIGEST>
           Verify the integrity of the downloaded file using the specified digest, e.g. md5:86d3f3a95c324c9479bd8986968f4327
-
+          
           [default: ]
 
   -p, --priority <PRIORITY>
           Specify the priority for scheduling task
-
+          
           [default: 6]
 
       --application <APPLICATION>
           Caller application which is used for statistics and access control
-
+          
           [default: ]
 
       --tag <TAG>
           Different tags for the same url will be divided into different tasks
-
+          
           [default: ]
 
   -H, --header <HEADER>
@@ -81,48 +81,56 @@ Options:
       --disable-back-to-source
           Disable back-to-source download when dfget download failed
 
+      --storage-region <STORAGE_REGION>
+          Specify the region for the Object Storage Service
+
+      --storage-endpoint <STORAGE_ENDPOINT>
+          Specify the endpoint for the Object Storage Service
+
+      --storage-access-key-id <STORAGE_ACCESS_KEY_ID>
+          Specify the access key ID for the Object Storage Service
+
+      --storage-access-key-secret <STORAGE_ACCESS_KEY_SECRET>
+          Specify the access key secret for the Object Storage Service
+
+      --storage-session-token <STORAGE_SESSION_TOKEN>
+          Specify the session token for Amazon Simple Storage Service(S3)
+
+      --storage-credential <STORAGE_CREDENTIAL>
+          Specify the credential for Google Cloud Storage Service(GCS)
+
+      --storage-predefined-acl <STORAGE_PREDEFINED_ACL>
+          Specify the predefined ACL for Google Cloud Storage Service(GCS)
+          
+          [default: publicRead]
+
+      --max-files <MAX_FILES>
+          Specify the max count of file to download when downloading a directory. If the actual file count is greater than this value, the downloading will be rejected
+          
+          [default: 10]
+
+      --max-concurrent-requests <MAX_CONCURRENT_REQUESTS>
+          Specify the max count of concurrent download files when downloading a directory
+          
+          [default: 5]
+
   -l, --log-level <LOG_LEVEL>
           Specify the logging level [trace, debug, info, warn, error]
-
+          
           [default: info]
 
       --log-dir <LOG_DIR>
           Specify the log directory
-
+          
           [default: /var/log/dragonfly/dfget]
 
       --log-max-files <LOG_MAX_FILES>
           Specify the max number of log files
-
-          [default: 24]
+          
+          [default: 6]
 
       --verbose
           Specify whether to print log
-
-  -c, --dfdaemon-config <DFDAEMON_CONFIG>
-          Specify dfdaemon's config file to use
-
-          [default: /etc/dragonfly/dfdaemon.yaml]
-
-      --dfdaemon-lock-path <DFDAEMON_LOCK_PATH>
-          Specify the dfdaemon's lock file path
-
-          [default: /var/lock/dragonfly/dfdaemon.lock]
-
-      --dfdaemon-log-level <DFDAEMON_LOG_LEVEL>
-          Specify the dfdaemon's logging level [trace, debug, info, warn, error]
-
-          [default: info]
-
-      --dfdaemon-log-dir <DFDAEMON_LOG_DIR>
-          Specify the dfdaemon's log directory
-
-          [default: /var/log/dragonfly/dfdaemon]
-
-      --dfdaemon-log-max-files <DFDAEMON_LOG_MAX_FILES>
-          Specify the dfdaemon's max number of log files
-
-          [default: 24]
 
   -h, --help
           Print help (see a summary with '-h')
@@ -136,7 +144,69 @@ Options:
 #### Download with HTTP protocol {#downlad-with-http}
 
 ```shell
-dfget -O /path/to/output http://example.com/object
+dfget https://<host>:<port>/<path> -O /tmp/file.txt
+```
+
+#### Download with S3 protocol {#downlad-with-s3}
+
+```shell
+# Download a file.
+dfget s3://<bucket>/<path> -O /tmp/file.txt --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret>
+
+# Download a directory.
+dfget s3://<bucket/<path>/ -O /tmp/path/ --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret>
+```
+
+#### Download with GCS protocol {#downlad-with-gcs}
+
+```shell
+# Download a file.
+dfget gcs://<bucket>/<path> -O /tmp/file.txt --storage-credential=<credential> --storage-endpoint=<endpoint>
+
+# Download a directory.
+dfget gcs://<bucket>/<path>/ -O /tmp/path/ --storage-credential=<credential> --storage-endpoint=<endpoint>
+```
+
+#### Download with ABS protocol {#downlad-with-abs}
+
+```shell
+# Download a file.
+dfget abs://<container>/<path> -O /tmp/file.txt --storage-access-key-id=<account_name> --storage-access-key-secret=<account_key> --storage-endpoint=<endpoint>
+
+# Download a directory.
+dfget abs://<container>/<path>/ -O /tmp/path/ --storage-access-key-id=<account_name> --storage-access-key-secret=<account_key> --storage-endpoint=<endpoint>
+```
+
+#### Download with OSS protocol {#downlad-with-oss}
+
+```shell
+# Download a file.
+dfget oss://<bucket>/<path> -O /tmp/file.txt --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret> --storage-endpoint=<endpoint>
+
+# Download a directory.
+dfget oss://<bucket>/<path>/ -O /tmp/path/ --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret> --storage-endpoint=<endpoint>
+```
+
+#### Download with OBS protocol {#downlad-with-obs}
+
+```shell
+# Download a file.
+dfget obs://<bucket>/<path> -O /tmp/file.txt --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret> --storage-endpoint=<endpoint>
+
+# Download a directory.
+dfget obs://<bucket>/<path>/ -O /tmp/path/ --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret> --storage-endpoint=<endpoint>
+```
+
+#### Download with COS protocol {#downlad-with-cos}
+
+> Note: The endpoint does not require `BucketName-APPID`, just --storage-endpoint=cos.region.myqcloud.com.
+
+```shell
+# Download a file.
+dfget cos://<bucket>/<path> -O /tmp/file.txt --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret> --storage-endpoint=<endpoint>
+
+# Download a directory.
+dfget cos://<bucket>/<path>/ -O /tmp/path/ --storage-access-key-id=<access_key_id> --storage-access-key-secret=<access_key_secret> --storage-endpoint=<endpoint>
 ```
 
 ### Log {#log}
