@@ -103,6 +103,14 @@ id = "G-60C6Q1ETC1"
     source = "../sdkdocs/js/daprdocs/content/en/js-sdk-contributing"
     target = "content/contributing/sdk-contrib/"
     lang = "en"
+  [[module.mounts]]
+    source = "../sdkdocs/rust/daprdocs/content/en/rust-sdk-docs"
+    target = "content/developing-applications/sdks/rust"
+    lang = "en"
+  [[module.mounts]]
+    source = "../sdkdocs/rust/daprdocs/content/en/rust-sdk-contributing"
+    target = "content/contributing/sdks-contrib"
+    lang = "en"
 
   [[module.mounts]]
     source = "../translations/docs-zh/translated_content/zh_CN/docs"
@@ -188,20 +196,23 @@ offlineSearch = false
 github_repo = "https://github.com/dapr/docs"
 github_project_repo = "https://github.com/dapr/dapr"
 github_subdir = "daprdocs"
-github_branch = "v1.13"
+github_branch = "v1.14"
 
 # Versioning
-version_menu = "v1.13 (latest)"
-version = "v1.13"
+version_menu = "v1.14 (latest)"
+version = "v1.14"
 archived_version = false
 url_latest_version = "https://docs.dapr.io"
 
 [[params.versions]]
-  version = "v1.14 (preview)"
-  url = "https://v1-14.docs.dapr.io"
+  version = "v1.15 (preview)"
+  url = "https://v1-15.docs.dapr.io"
 [[params.versions]]
-  version = "v1.13 (latest)"
-  url = "#"
+  version = "v1.14 (latest)"
+  url = "https://docs.dapr.io"
+[[params.versions]]
+  version = "v1.13"
+  url = "https://v1-13.docs.dapr.io"
 [[params.versions]]
   version = "v1.12"
   url = "https://v1-12.docs.dapr.io"
