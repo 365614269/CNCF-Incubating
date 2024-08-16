@@ -16,7 +16,6 @@
  */
 package org.keycloak.models.cache.infinispan.idp;
 
-import org.keycloak.models.cache.infinispan.CachedCount;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.keycloak.models.IDPProvider;
@@ -24,6 +23,7 @@ import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.cache.CacheRealmProvider;
+import org.keycloak.models.cache.infinispan.CachedCount;
 import org.keycloak.models.cache.infinispan.RealmCacheSession;
 
 public class InfinispanIDPProvider implements IDPProvider {
@@ -34,7 +34,7 @@ public class InfinispanIDPProvider implements IDPProvider {
     private final KeycloakSession session;
     private final IDPProvider idpDelegate;
     private final RealmCacheSession realmCache;
-    
+
     public InfinispanIDPProvider(KeycloakSession session) {
         this.session = session;
         this.idpDelegate = session.getProvider(IDPProvider.class, "jpa");
@@ -88,6 +88,8 @@ public class InfinispanIDPProvider implements IDPProvider {
 
     @Override
     public IdentityProviderModel getById(String internalId) {
+        if (internalId == null)
+            return null;
         CachedIdentityProvider cached = realmCache.getCache().get(internalId, CachedIdentityProvider.class);
         String realmId = getRealm().getId();
         if (cached != null && !cached.getRealm().equals(realmId)) {
@@ -128,6 +130,11 @@ public class InfinispanIDPProvider implements IDPProvider {
         }
 
         return cached.getIdentityProvider();
+    }
+
+    @Override
+    public Stream<String> getByFlow(String flowId, String search, Integer first, Integer max) {
+        return idpDelegate.getByFlow(flowId, search, first, max);
     }
 
     @Override
