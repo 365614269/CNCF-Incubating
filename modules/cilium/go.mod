@@ -29,7 +29,7 @@ require (
 	github.com/cilium/linters v0.0.0-20240730094540-199a06d02f99
 	github.com/cilium/lumberjack/v2 v2.3.0
 	github.com/cilium/proxy v0.0.0-20240723112637-48fa07fc1729
-	github.com/cilium/statedb v0.2.4
+	github.com/cilium/statedb v0.2.5
 	github.com/cilium/stream v0.0.0-20240226091623-f979d32855f8
 	github.com/cilium/workerpool v1.2.0
 	github.com/cloudflare/cfssl v1.6.5
@@ -136,7 +136,7 @@ require (
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/controller-runtime v0.18.4
 	sigs.k8s.io/controller-tools v0.15.0
-	sigs.k8s.io/gateway-api v1.1.1-0.20240730220551-c94d4010a152
+	sigs.k8s.io/gateway-api v1.1.1-0.20240815062117-d6e29e302721
 	sigs.k8s.io/mcs-api v0.1.1-0.20240801074550-a32df8816421
 	sigs.k8s.io/yaml v1.4.0
 )

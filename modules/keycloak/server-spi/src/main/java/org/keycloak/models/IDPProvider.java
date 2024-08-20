@@ -16,7 +16,12 @@
  */
 package org.keycloak.models;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.keycloak.provider.Provider;
@@ -24,7 +29,7 @@ import org.keycloak.provider.Provider;
 /**
  * The {@code IDPProvider} is concerned with the storage/retrieval of the configured identity providers in Keycloak. In
  * other words, it is a provider of identity providers (IDPs) and, as such, handles the CRUD operations for IDPs.
- *
+ * </p>
  * It is not to be confused with the {@code IdentityProvider} found in server-spi-private as that provider is meant to be
  * implemented by actual identity providers that handle the logic of authenticating users with third party brokers, such
  * as Microsoft, Google, Github, LinkedIn, etc.
@@ -129,7 +134,7 @@ public interface IDPProvider extends Provider {
      * @return a non-null stream of {@link IdentityProviderModel}s that match the search criteria.
      */
     default Stream<IdentityProviderModel> getByOrganization(String orgId, Integer first, Integer max) {
-        return getAllStream(Map.of(OrganizationModel.ORGANIZATION_ATTRIBUTE, orgId), first, max);
+        return getAllStream(Map.of(IdentityProviderModel.ORGANIZATION_ID, orgId), first, max);
     }
 
     /**
@@ -148,6 +153,42 @@ public interface IDPProvider extends Provider {
     Stream<String> getByFlow(String flowId, String search, Integer first, Integer max);
 
     /**
+     * Returns all identity providers available for login, according to the specified mode. An IDP can be used for login
+     * if it is enabled, is not a link-only IDP, and is not configured to be hidden on login page.
+     * </p>
+     * The mode parameter may narrow the list of IDPs that are available. {@code FETCH_MODE.REALM_ONLY} fetches only realm-level
+     * IDPs (i.e. those not associated with any org). {@code FETCH_MODE.ORG_ONLY} will work together with the {@code organizationId}
+     * parameter. If the latter is set, only the IDPs associated with that org will be returned. Otherwise, the method returns
+     * the IDPs associated with any org. {@code FETCH_MODE.ALL} combines both approaches, returning both the realm-level
+     * IDPs with those associated with organizations (or a specific organization as per the {@code organizationId} param).
+     *
+     * @param mode the fetch mode to be used. Can be {@code REALM_ONLY}, {@code ORG_ONLY}, or {@code ALL}.
+     * @param organizationId an optional organization ID. If present and the mode is not {@code REALM_ONLY}, the param indicates
+     *                       that only IDPs associated with the specified organization are to be returned.
+     * @return a non-null stream of {@link IdentityProviderModel}s that are suitable for being displayed in the login pages.
+     */
+    default Stream<IdentityProviderModel> getForLogin(FetchMode mode, String organizationId) {
+        Stream<IdentityProviderModel> result = Stream.of();
+        if (mode == FetchMode.REALM_ONLY || mode == FetchMode.ALL) {
+            // fetch all realm-only IDPs - i.e. those not associated with orgs.
+            Map<String, String> searchOptions = LoginFilter.getLoginSearchOptions();
+            searchOptions.put(IdentityProviderModel.ORGANIZATION_ID, null);
+            result = Stream.concat(result, getAllStream(searchOptions, null, null));
+        }
+        if (mode == FetchMode.ORG_ONLY || mode == FetchMode.ALL) {
+            // fetch IDPs associated with organizations.
+            Map<String, String> searchOptions = LoginFilter.getLoginSearchOptions();
+            if (organizationId != null) {
+                // we want the IDPs associated with a specific org.
+                searchOptions.put(IdentityProviderModel.ORGANIZATION_ID, organizationId);
+            }
+            searchOptions.put(OrganizationModel.BROKER_PUBLIC, "true");
+            result = Stream.concat(result, getAllStream(searchOptions, null, null));
+        }
+        return result;
+    }
+
+    /**
      * Returns the number of IDPs in the realm.
      *
      * @return the number of IDPs found in the realm.
@@ -162,5 +203,60 @@ public interface IDPProvider extends Provider {
      */
     default boolean isIdentityFederationEnabled() {
         return count() > 0;
+    }
+
+    /**
+     * Enum to control how login identity providers should be fetched.
+     */
+    enum FetchMode {
+        /** only realm-level providers should be fetched (not linked to any organization) **/
+        REALM_ONLY,
+        /** only providers linked to organizations should be fetched **/
+        ORG_ONLY,
+        /** all providers should fetched, regardless of being linked to an organization or not **/
+        ALL
+    }
+
+    /**
+     * Enum that contains all fields that are considered when deciding if a provider should be available for login or not.
+     */
+    enum LoginFilter {
+
+        ENABLED(IdentityProviderModel.ENABLED, Boolean.TRUE.toString(), IdentityProviderModel::isEnabled),
+
+        LINK_ONLY(IdentityProviderModel.LINK_ONLY, Boolean.FALSE.toString(), Predicate.not(IdentityProviderModel::isLinkOnly)),
+
+        HIDE_ON_LOGIN(IdentityProviderModel.HIDE_ON_LOGIN, Boolean.FALSE.toString(), Predicate.not(IdentityProviderModel::isHideOnLogin));
+
+        private final String key;
+        private final String value;
+        private final Predicate<IdentityProviderModel> filter;
+
+        LoginFilter(String key, String value, java.util.function.Predicate<IdentityProviderModel> filter) {
+            this.key = key;
+            this.value = value;
+            this.filter = filter;
+        }
+
+        public String getKey() {
+            return key;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public Predicate<IdentityProviderModel> getFilter() {
+            return filter;
+        }
+
+        public static Map<String, String> getLoginSearchOptions() {
+            return Stream.of(values()).collect(Collectors.toMap(LoginFilter::getKey, LoginFilter::getValue, (v1, v2) -> v1, LinkedHashMap::new));
+        }
+
+        public static Predicate<IdentityProviderModel> getLoginPredicate() {
+            return ((Predicate<IdentityProviderModel>) Objects::nonNull)
+                    .and(Stream.of(values()).map(LoginFilter::getFilter).reduce(Predicate::and).get());
+        }
     }
 }
