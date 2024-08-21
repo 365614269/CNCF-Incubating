@@ -49,6 +49,7 @@ import org.keycloak.models.UserModel;
 
 import org.keycloak.models.utils.ModelToRepresentation;
 import org.keycloak.organization.OrganizationProvider;
+import org.keycloak.organization.utils.Organizations;
 import org.keycloak.representations.idm.MemberRepresentation;
 import org.keycloak.representations.idm.MembershipType;
 import org.keycloak.representations.idm.OrganizationRepresentation;
@@ -190,16 +191,9 @@ public class OrganizationMemberResource {
             throw ErrorResponse.error("id cannot be null", Status.BAD_REQUEST);
         }
 
-        UserModel member = getMember(id);
+        UserModel member = getUser(id);
 
-        return provider.getByMember(member).map((org) -> {
-            OrganizationRepresentation organization = new OrganizationRepresentation();
-
-            organization.setId(org.getId());
-            organization.setName(org.getName());
-
-            return organization;
-        });
+        return provider.getByMember(member).map(Organizations::toRepresentation);
     }
 
     @Path("count")
@@ -220,6 +214,16 @@ public class OrganizationMemberResource {
         }
 
         return member;
+    }
+
+    private UserModel getUser(String id) {
+        UserModel user = session.users().getUserById(realm, id);
+
+        if (user == null) {
+            throw new NotFoundException();
+        }
+
+        return user;
     }
 
     private MemberRepresentation toRepresentation(UserModel member) {

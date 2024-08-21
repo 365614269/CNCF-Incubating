@@ -576,6 +576,7 @@ openapi
 openssl
 originatingTLS
 os
+oseq
 otx
 pahole
 parsable
@@ -669,6 +670,7 @@ secretName
 secretsNamespace
 selftest
 selftests
+serverinfo
 serviceAccount
 serviceMonitor
 setrlimit
