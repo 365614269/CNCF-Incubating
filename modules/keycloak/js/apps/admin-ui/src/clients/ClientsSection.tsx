@@ -10,7 +10,9 @@ import {
   Tab,
   TabTitleText,
   ToolbarItem,
+  Tooltip,
 } from "@patternfly/react-core";
+import { WarningTriangleIcon } from "@patternfly/react-icons";
 import { IRowData, TableText, cellWidth } from "@patternfly/react-table";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,10 +24,7 @@ import {
   RoutableTabs,
   useRoutableTab,
 } from "../components/routable-tabs/RoutableTabs";
-import {
-  Action,
-  KeycloakDataTable,
-} from "../components/table-toolbar/KeycloakDataTable";
+import { Action, KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useAccess } from "../context/access/Access";
 import { useRealm } from "../context/realm-context/RealmContext";
@@ -58,6 +57,14 @@ const ClientDetailLink = (client: ClientRepresentation) => {
           </Badge>
         )}
       </Link>
+      {client.attributes?.["is_temporary_admin"] === "true" && (
+        <Tooltip content={t("temporaryService")}>
+          <WarningTriangleIcon
+            className="pf-v5-u-ml-sm"
+            id="temporary-admin-label"
+          />
+        </Tooltip>
+      )}
     </TableText>
   );
 };

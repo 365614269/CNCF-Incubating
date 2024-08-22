@@ -86,7 +86,6 @@ import org.keycloak.services.Urls;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.managers.UserConsentManager;
-import org.keycloak.services.managers.UserSessionCrossDCManager;
 import org.keycloak.services.managers.UserSessionManager;
 import org.keycloak.services.resources.IdentityBrokerService;
 import org.keycloak.services.util.AuthorizationContextUtil;
@@ -193,7 +192,7 @@ public class TokenManager {
 
         // Can theoretically happen in cross-dc environment. Try to see if userSession with our client is available in remoteCache
         if (clientSession == null) {
-            userSession = new UserSessionCrossDCManager(session).getUserSessionWithClient(realm, userSession.getId(), offline, client.getId());
+            userSession = session.sessions().getUserSessionIfClientExists(realm, userSession.getId(), offline, client.getId());
             if (userSession != null) {
                 clientSession = userSession.getAuthenticatedClientSessionByClient(client.getId());
             } else {
@@ -397,7 +396,9 @@ public class TokenManager {
         //if scope parameter is not null, remove every scope that is not part of scope parameter
         if (scopeParameter != null && ! scopeParameter.isEmpty()) {
             Set<String> scopeParamScopes = Arrays.stream(scopeParameter.split(" ")).collect(Collectors.toSet());
-            oldTokenScope = Arrays.stream(oldTokenScope.split(" ")).filter(sc -> scopeParamScopes.contains(sc))
+            oldTokenScope = Arrays.stream(oldTokenScope.split(" "))
+                    .map(transformScopes(scopeParamScopes))
+                    .filter(Objects::nonNull)
                     .collect(Collectors.joining(" "));
         }
 
@@ -437,6 +438,21 @@ public class TokenManager {
         }
 
         return responseBuilder;
+    }
+
+    private Function<String, String> transformScopes(Set<String> requestedScopes) {
+        return scope -> {
+            if (requestedScopes.contains(scope)) {
+                return scope;
+            }
+
+            if (Profile.isFeatureEnabled(Feature.ORGANIZATION)) {
+                OrganizationScope oldScope = OrganizationScope.valueOfScope(scope);
+                return oldScope == null ? null : oldScope.resolveName(requestedScopes, scope);
+            }
+
+            return null;
+        };
     }
 
     private void validateTokenReuseForRefresh(KeycloakSession session, RealmModel realm, RefreshToken refreshToken,
