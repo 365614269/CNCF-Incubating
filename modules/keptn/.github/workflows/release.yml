@@ -166,7 +166,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Cosign
-        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
+        uses: sigstore/cosign-installer@4959ce089c160fddf62f7b42464195ba1a56d382 # v3.6.0
 
       - name: Clean up image tag
         id: clean-image-tag
@@ -214,7 +214,7 @@ jobs:
             ${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@d94f46e13c6c62f59525ac9a1e147a99dc0b9bf5 # v0.17.0
+        uses: anchore/sbom-action@61119d458adab75f756bc0b9e4bde25725f86a7a # v0.17.2
         with:
           image: ${{ env.IMAGE_NAME }}:${{ steps.clean-image-tag.outputs.IMAGE_TAG }}
           artifact-name: sbom-${{ matrix.config.name }}
@@ -240,7 +240,7 @@ jobs:
             ${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
 
       - name: Upload verification log as artifact
-        uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+        uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a # v4.3.6
         with:
           name: cosign-attest-verification-log
           path: ./cosign-attest-output.json

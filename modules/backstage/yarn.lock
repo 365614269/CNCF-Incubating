@@ -3397,14 +3397,14 @@ __metadata:
   linkType: hard
 
 "@backstage-community/plugin-puppetdb@npm:^0.1.18":
-  version: 0.1.19
-  resolution: "@backstage-community/plugin-puppetdb@npm:0.1.19"
+  version: 0.1.20
+  resolution: "@backstage-community/plugin-puppetdb@npm:0.1.20"
   dependencies:
-    "@backstage/catalog-model": ^1.5.0
-    "@backstage/core-components": ^0.14.9
+    "@backstage/catalog-model": ^1.6.0
+    "@backstage/core-components": ^0.14.10
     "@backstage/core-plugin-api": ^1.9.3
     "@backstage/errors": ^1.2.4
-    "@backstage/plugin-catalog-react": ^1.12.2
+    "@backstage/plugin-catalog-react": ^1.12.3
     "@material-ui/core": ^4.12.2
     "@types/react": ^16.13.1 || ^17.0.0 || ^18.0.0
     react-use: ^17.2.4
@@ -3412,15 +3412,15 @@ __metadata:
     react: ^16.13.1 || ^17.0.0 || ^18.0.0
     react-dom: ^16.13.1 || ^17.0.0 || ^18.0.0
     react-router-dom: 6.0.0-beta.0 || ^6.3.0
-  checksum: abe5e3b5b9772b5cdc17074f58f38bdbf81516afe7b9241e06844729608ec2a56899437a7cf82d4c8f3608038c15217bd6ea971f41dbce2934e7b05986bfcc10
+  checksum: 231855a135575bdc6eb92890602589adcf82c5eabaec7dfaef456c598454d8d05e2484ee80c3684824a9b52f62ce313d5e780722ae0553c3742ec7a89ec558c7
   languageName: node
   linkType: hard
 
 "@backstage-community/plugin-stackstorm@npm:^0.1.16":
-  version: 0.1.17
-  resolution: "@backstage-community/plugin-stackstorm@npm:0.1.17"
+  version: 0.1.18
+  resolution: "@backstage-community/plugin-stackstorm@npm:0.1.18"
   dependencies:
-    "@backstage/core-components": ^0.14.9
+    "@backstage/core-components": ^0.14.10
     "@backstage/core-plugin-api": ^1.9.3
     "@backstage/errors": ^1.2.4
     "@material-ui/core": ^4.12.2
@@ -3431,7 +3431,7 @@ __metadata:
     react: ^16.13.1 || ^17.0.0 || ^18.0.0
     react-dom: ^16.13.1 || ^17.0.0 || ^18.0.0
     react-router-dom: 6.0.0-beta.0 || ^6.3.0
-  checksum: 3fa2b45da036e4001a9e034a8841b58877d0b4189d244806b3b1808d3c2a34bb4ab4acbcff629edda47d03b2941c51743dd84f7352ed0d700988aaee946b65f3
+  checksum: 9a11e4ee8c6e28df83658b91efa27d41808664a19b71b874b7a3eaa1a6befa1733f92ed14902f291e8050cc78a879357ab2fd0b37042cad9f0953d78953fcfd5
   languageName: node
   linkType: hard
 
@@ -3821,7 +3821,10 @@ __metadata:
     "@backstage/types": "workspace:^"
     "@keyv/memcache": ^1.3.5
     "@keyv/redis": ^2.5.3
+    "@types/express": ^4.17.6
+    "@types/express-serve-static-core": ^4.17.5
     "@types/keyv": ^4.2.0
+    "@types/qs": ^6.9.6
     "@types/supertest": ^2.0.8
     better-sqlite3: ^11.0.0
     cookie: ^0.6.0
@@ -3856,7 +3859,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@backstage/catalog-model@^1.4.3, @backstage/catalog-model@^1.5.0, @backstage/catalog-model@workspace:^, @backstage/catalog-model@workspace:packages/catalog-model":
+"@backstage/catalog-model@^1.4.3, @backstage/catalog-model@^1.6.0, @backstage/catalog-model@workspace:^, @backstage/catalog-model@workspace:packages/catalog-model":
   version: 0.0.0-use.local
   resolution: "@backstage/catalog-model@workspace:packages/catalog-model"
   dependencies:
@@ -4183,7 +4186,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@backstage/core-components@^0.14.9, @backstage/core-components@workspace:^, @backstage/core-components@workspace:packages/core-components":
+"@backstage/core-components@^0.14.10, @backstage/core-components@workspace:^, @backstage/core-components@workspace:packages/core-components":
   version: 0.0.0-use.local
   resolution: "@backstage/core-components@workspace:packages/core-components"
   dependencies:
@@ -5709,7 +5712,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@backstage/plugin-catalog-react@^1.12.2, @backstage/plugin-catalog-react@^1.9.3, @backstage/plugin-catalog-react@workspace:^, @backstage/plugin-catalog-react@workspace:plugins/catalog-react":
+"@backstage/plugin-catalog-react@^1.12.3, @backstage/plugin-catalog-react@^1.9.3, @backstage/plugin-catalog-react@workspace:^, @backstage/plugin-catalog-react@workspace:plugins/catalog-react":
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-catalog-react@workspace:plugins/catalog-react"
   dependencies:
@@ -7648,7 +7651,6 @@ __metadata:
     "@aws-sdk/types": ^3.347.0
     "@azure/identity": ^4.0.0
     "@azure/storage-blob": ^12.5.0
-    "@backstage/backend-common": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/catalog-model": "workspace:^"
@@ -7766,7 +7768,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-user-settings-backend@workspace:plugins/user-settings-backend"
   dependencies:
-    "@backstage/backend-common": "workspace:^"
     "@backstage/backend-defaults": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
@@ -7783,7 +7784,6 @@ __metadata:
     express-promise-router: ^4.1.0
     knex: ^3.0.0
     supertest: ^6.1.3
-    winston: ^3.2.1
     yn: ^4.0.0
   languageName: unknown
   linkType: soft
@@ -18484,10 +18484,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/qs@npm:*":
-  version: 6.9.6
-  resolution: "@types/qs@npm:6.9.6"
-  checksum: 01871b1cf7062717ec76fcb9b29ddae1e04fcfadc1c76d86ec2571e72f27bf09ff31b094b295be8d4ca664aeec9b8965563680b31fcab7aba1ed93afac5181cd
+"@types/qs@npm:*, @types/qs@npm:^6.9.6":
+  version: 6.9.15
+  resolution: "@types/qs@npm:6.9.15"
+  checksum: 97d8208c2b82013b618e7a9fc14df6bd40a73e1385ac479b6896bafc7949a46201c15f42afd06e86a05e914f146f495f606b6fb65610cc60cf2e0ff743ec38a2
   languageName: node
   linkType: hard
 

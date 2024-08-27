@@ -16,7 +16,31 @@
  */
 package org.keycloak.models;
 
+import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderFactory;
+import org.keycloak.provider.Spi;
 
-public interface IDPProviderFactory<T extends IDPProvider> extends ProviderFactory<T> {
+public class IdentityProviderStorageSpi implements Spi {
+
+    public static final String NAME = "identity-provider-storage";
+
+    @Override
+    public Class<? extends ProviderFactory> getProviderFactoryClass() {
+        return IdentityProviderStorageProviderFactory.class;
+    }
+
+    @Override
+    public Class<? extends Provider> getProviderClass() {
+        return IdentityProviderStorageProvider.class;
+    }
+
+    @Override
+    public String getName() {
+        return NAME;
+    }
+
+    @Override
+    public boolean isInternal() {
+        return true;
+    }
 }
