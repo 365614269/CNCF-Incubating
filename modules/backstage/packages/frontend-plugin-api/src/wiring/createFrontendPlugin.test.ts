@@ -127,7 +127,7 @@ function createTestAppRoot({
   config: JsonObject;
 }) {
   return createApp({
-    features,
+    features: [...features],
     configLoader: async () => ({ config: new MockConfigApi(config) }),
   }).createRoot();
 }
@@ -150,6 +150,7 @@ describe('createFrontendPlugin', () => {
     expect(plugin.getExtension('test/1')).toMatchInlineSnapshot(`
       {
         "$$type": "@backstage/ExtensionDefinition",
+        "T": undefined,
         "attachTo": {
           "id": "test/output",
           "input": "names",
@@ -281,6 +282,7 @@ describe('createFrontendPlugin', () => {
       expect(plugin.getExtension('test/1')).toMatchInlineSnapshot(`
         {
           "$$type": "@backstage/ExtensionDefinition",
+          "T": undefined,
           "attachTo": {
             "id": "test/output",
             "input": "names",

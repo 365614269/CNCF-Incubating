@@ -3,13 +3,13 @@ module github.com/keptn/lifecycle-toolkit/metrics-operator
 go 1.22
 
 require (
-	github.com/DataDog/datadog-api-client-go/v2 v2.28.0
+	github.com/DataDog/datadog-api-client-go/v2 v2.29.0
 	github.com/benbjohnson/clock v1.3.5
 	github.com/go-logr/logr v1.4.2
 	github.com/gorilla/mux v1.8.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/keptn/lifecycle-toolkit/keptn-cert-manager v0.0.0-20240806082913-9bcc0d1633a6
-	github.com/open-feature/go-sdk v1.11.0
+	github.com/open-feature/go-sdk v1.12.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/client_model v0.6.1
@@ -18,14 +18,14 @@ require (
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/net v0.28.0
 	gopkg.in/inf.v0 v0.9.1
-	k8s.io/api v0.29.7
-	k8s.io/apiextensions-apiserver v0.29.7
-	k8s.io/apimachinery v0.29.7
-	k8s.io/apiserver v0.29.7
-	k8s.io/client-go v0.29.7
-	k8s.io/component-base v0.29.7
+	k8s.io/api v0.29.8
+	k8s.io/apiextensions-apiserver v0.29.8
+	k8s.io/apimachinery v0.29.8
+	k8s.io/apiserver v0.29.8
+	k8s.io/client-go v0.29.8
+	k8s.io/component-base v0.29.8
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/metrics v0.29.7
+	k8s.io/metrics v0.29.8
 	sigs.k8s.io/controller-runtime v0.16.6
 	sigs.k8s.io/custom-metrics-apiserver v1.29.0
 	sigs.k8s.io/yaml v1.4.0
@@ -110,7 +110,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/kms v0.29.7 // indirect
+	k8s.io/kms v0.29.8 // indirect
 	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
