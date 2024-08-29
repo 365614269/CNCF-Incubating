@@ -238,10 +238,6 @@ Metrics:
 
 Proxy:
 
---proxy <mode>       DEPRECATED. The proxy address forwarding mode if the server is behind a
-                       reverse proxy. Possible values are: none, edge, reencrypt, passthrough.
-                       Default: none. Use the following options instead: http-enabled,
-                       proxy-headers.
 --proxy-headers <headers>
                      The proxy headers that should be accepted by the server. Misconfiguration
                        might leave the server exposed to security vulnerabilities. Takes precedence
@@ -259,7 +255,7 @@ Vault:
 Logging:
 
 --log <handler>      Enable one or more log handlers in a comma-separated list. Possible values
-                       are: console, file, syslog, gelf (deprecated). Default: console.
+                       are: console, file, syslog. Default: console.
 --log-console-color <true|false>
                      Enable or disable colors when logging to console. Default: false. Available
                        only when Console log handler is activated.

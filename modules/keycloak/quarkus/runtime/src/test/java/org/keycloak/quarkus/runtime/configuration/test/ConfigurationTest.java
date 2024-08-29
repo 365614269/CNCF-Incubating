@@ -145,15 +145,11 @@ public class ConfigurationTest extends AbstractConfigurationTest {
     @Test
     public void testResolveTransformedValue() {
         ConfigArgsConfigSource.setCliArgs("");
-        assertEquals("none", createConfig().getConfigValue("kc.proxy").getValue());
-        ConfigArgsConfigSource.setCliArgs("--proxy=none");
-        assertEquals("none", createConfig().getConfigValue("kc.proxy").getValue());
-        ConfigArgsConfigSource.setCliArgs("");
-        assertEquals("none", createConfig().getConfigValue("kc.proxy").getValue());
-        ConfigArgsConfigSource.setCliArgs("--proxy=none", "--http-enabled=false");
-        assertEquals("false", createConfig().getConfigValue("kc.http-enabled").getValue());
-        ConfigArgsConfigSource.setCliArgs("--proxy=none", "--http-enabled=true");
-        assertEquals("true", createConfig().getConfigValue("kc.http-enabled").getValue());
+        assertEquals("false", createConfig().getConfigValue("kc.proxy-allow-forwarded-header").getValue());
+        ConfigArgsConfigSource.setCliArgs("--proxy-headers=xforwarded");
+        assertEquals("false", createConfig().getConfigValue("kc.proxy-allow-forwarded-header").getValue());
+        ConfigArgsConfigSource.setCliArgs("--proxy-headers=forwarded");
+        assertEquals("true", createConfig().getConfigValue("kc.proxy-allow-forwarded-header").getValue());
     }
 
     @Test
@@ -441,42 +437,30 @@ public class ConfigurationTest extends AbstractConfigurationTest {
         assertEquals("true", config.getConfigValue("quarkus.log.console.enable").getValue());
         assertEquals("true", config.getConfigValue("quarkus.log.file.enable").getValue());
         assertEquals("false", config.getConfigValue("quarkus.log.syslog.enable").getValue());
-        assertEquals("false", config.getConfigValue("quarkus.log.handler.gelf.enabled").getValue());
 
         ConfigArgsConfigSource.setCliArgs("--log=file");
         SmallRyeConfig config2 = createConfig();
         assertEquals("false", config2.getConfigValue("quarkus.log.console.enable").getValue());
         assertEquals("true", config2.getConfigValue("quarkus.log.file.enable").getValue());
         assertEquals("false", config2.getConfigValue("quarkus.log.syslog.enable").getValue());
-        assertEquals("false", config2.getConfigValue("quarkus.log.handler.gelf.enabled").getValue());
 
         ConfigArgsConfigSource.setCliArgs("--log=console");
         SmallRyeConfig config3 = createConfig();
         assertEquals("true", config3.getConfigValue("quarkus.log.console.enable").getValue());
         assertEquals("false", config3.getConfigValue("quarkus.log.file.enable").getValue());
         assertEquals("false", config3.getConfigValue("quarkus.log.syslog.enable").getValue());
-        assertEquals("false", config3.getConfigValue("quarkus.log.handler.gelf.enabled").getValue());
-
-        ConfigArgsConfigSource.setCliArgs("--log=console,gelf");
-        SmallRyeConfig config4 = createConfig();
-        assertEquals("true", config4.getConfigValue("quarkus.log.console.enable").getValue());
-        assertEquals("false", config4.getConfigValue("quarkus.log.file.enable").getValue());
-        assertEquals("false", config4.getConfigValue("quarkus.log.syslog.enable").getValue());
-        assertEquals("true", config4.getConfigValue("quarkus.log.handler.gelf.enabled").getValue());
 
         ConfigArgsConfigSource.setCliArgs("--log=console,syslog");
         SmallRyeConfig config5 = createConfig();
         assertEquals("true", config5.getConfigValue("quarkus.log.console.enable").getValue());
         assertEquals("false", config5.getConfigValue("quarkus.log.file.enable").getValue());
         assertEquals("true", config5.getConfigValue("quarkus.log.syslog.enable").getValue());
-        assertEquals("false", config5.getConfigValue("quarkus.log.handler.gelf.enabled").getValue());
 
         ConfigArgsConfigSource.setCliArgs("--log=syslog");
         SmallRyeConfig config6 = createConfig();
         assertEquals("false", config6.getConfigValue("quarkus.log.console.enable").getValue());
         assertEquals("false", config6.getConfigValue("quarkus.log.file.enable").getValue());
         assertEquals("true", config6.getConfigValue("quarkus.log.syslog.enable").getValue());
-        assertEquals("false", config6.getConfigValue("quarkus.log.handler.gelf.enabled").getValue());
     }
 
     @Test
