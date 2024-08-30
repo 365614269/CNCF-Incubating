@@ -1,7 +1,6 @@
-<#import "footer.ftl" as loginFooter>
 <#macro registrationLayout bodyClass="" displayInfo=false displayMessage=true displayRequiredFields=false>
 <!DOCTYPE html>
-<html class="${properties.kcHtmlClass!}"<#if realm.internationalizationEnabled> lang="${locale.currentLanguageTag}" dir="${(locale.rtl)?then('rtl','ltr')}"</#if>>
+<html class="${properties.kcHtmlClass!}"<#if realm.internationalizationEnabled> lang="${locale.currentLanguageTag}"</#if>>
 
 <head>
     <meta charset="utf-8">
@@ -53,18 +52,18 @@
 
 <body id="keycloak-bg" class="${properties.kcBodyClass!}">
 
-<div class="pf-v5-c-login">
-  <div class="pf-v5-c-login__container">
+<div class="${properties.kcLogin!}">
+  <div class="${properties.kcLoginContainer!}">
     <header id="kc-header" class="pf-v5-c-login__header">
       <div id="kc-header-wrapper"
               class="pf-v5-c-brand">${kcSanitize(msg("loginTitleHtml",(realm.displayNameHtml!'')))?no_esc}</div>
     </header>
-    <main class="pf-v5-c-login__main">
-      <header class="pf-v5-c-login__main-header">
-        <h1 class="pf-v5-c-title pf-m-3xl" id="kc-page-title"><#nested "header"></h1>
+    <main class="${properties.kcLoginMain!}">
+      <div class="${properties.kcLoginMainHeader!}">
+        <h1 class="${properties.kcLoginMainTitle!}" id="kc-page-title"><#nested "header"></h1>
         <#if realm.internationalizationEnabled  && locale.supported?size gt 1>
-        <div class="pf-v5-c-login__main-header-utilities">
-          <div class="pf-v5-c-form-control">
+        <div class="${properties.kcLoginMainHeaderUtilities!}">
+          <div class="${properties.kcInputClass!}">
             <select
               aria-label="${msg("languages")}"
               id="login-select-toggle"
@@ -79,8 +78,8 @@
                 </option>
               </#list>
             </select>
-            <span class="pf-v5-c-form-control__utilities">
-              <span class="pf-v5-c-form-control__toggle-icon">
+            <span class="${properties.kcFormControlUtilClass}">
+              <span class="${properties.kcFormControlToggleIcon!}">
                 <svg
                   class="pf-v5-svg"
                   viewBox="0 0 320 512"
@@ -100,13 +99,15 @@
           </div>
         </div>
         </#if>
-      </header>
-      <div class="pf-v5-c-login__main-body">
+      </div>
+      <div class="${properties.kcLoginMainBody!}">
         <#if !(auth?has_content && auth.showUsername() && !auth.showResetCredentials())>
             <#if displayRequiredFields>
                 <div class="${properties.kcContentWrapperClass!}">
                     <div class="${properties.kcLabelWrapperClass!} subtitle">
-                        <span class="pf-v5-c-helper-text__item-text"><span class="pf-v5-c-form__label-required">*</span> ${msg("requiredFields")}</span>
+                        <span class="${properties.kcInputHelperTextItemTextClass!}">
+                          <span class="${properties.kcInputErrorMessageClass!}">*</span> ${msg("requiredFields")}
+                        </span>
                     </div>
                 </div>
             </#if>
@@ -147,7 +148,7 @@
         <#-- during login.                                                                               -->
         <#if displayMessage && message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
             <div class="${properties.kcAlertClass!} pf-m-${(message.type = 'error')?then('danger', message.type)}">
-                <div class="pf-v5-c-alert__icon">
+                <div class="${properties.kcAlertIconClass!}">
                     <#if message.type = 'success'><span class="${properties.kcFeedbackSuccessIcon!}"></span></#if>
                     <#if message.type = 'warning'><span class="${properties.kcFeedbackWarningIcon!}"></span></#if>
                     <#if message.type = 'error'><span class="${properties.kcFeedbackErrorIcon!}"></span></#if>
@@ -180,8 +181,6 @@
       <footer class="pf-v5-c-login__main-footer">
         <#nested "socialProviders">
       </footer>
-
-      <@loginFooter.content/>
     </main>
   </div>
 </div>
