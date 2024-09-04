@@ -18,6 +18,7 @@ Please see [here](https://github.com/longhorn/longhorn/releases/tag/v{{< current
 - [Resilience](#resilience)
   - [RWX Volumes Fast Failover](#rwx-volumes-fast-failover)
   - [Timeout Configuration for Replica Rebuilding and Snapshot Cloning](#timeout-configuration-for-replica-rebuilding-and-snapshot-cloning)
+  - [Change in Engine Replica Timeout Behavior](#change-in-engine-replica-timeout-behavior)
 - [Data Integrity and Reliability](#data-integrity-and-reliability)
   - [Support Periodic and On-Demand Full Backups to Enhance Backup Reliability](#support-periodic-and-on-demand-full-backups-to-enhance-backup-reliability)
   - [High Availability of Backing Images](#high-availability-of-backing-images)
@@ -25,6 +26,8 @@ Please see [here](https://github.com/longhorn/longhorn/releases/tag/v{{< current
   - [Auto-Balance Pressured Disks](#auto-balance-pressured-disks)
 - [Networking](#networking)
   - [Storage Network Support for Read-Write-Many (RWX) Volumes](#storage-network-support-for-read-write-many-rwx-volumes)
+- [OS Distro Specific](#os-distro-specific)
+  - [V2 Data Engine Support for Talos Linux](#talos-linux)
 - [V2 Data Engine](#v2-data-engine)
   - [Longhorn System Upgrade](#longhorn-system-upgrade)
   - [Enable Both `vfio_pci` and `uio_pci_generic` Kernel Modules](#enable-both-vfio_pci-and-uio_pci_generic-kernel-modules)
@@ -159,6 +162,12 @@ RWX Volumes fast failover is introduced in Longhorn v1.7.0 to improve resilience
 
 Starting with v1.7.0, Longhorn supports configuration of timeouts for replica rebuilding and snapshot cloning. Before v1.7.0, the replica rebuilding timeout was capped at 24 hours, which could cause failures for large volumes in slow bandwidth environments. The default timeout is still 24 hours but you can adjust it to accommodate different environments. For more information, see [Long gRPC Timeout](../references/settings/#long-grpc-timeout).
 
+### Change in Engine Replica Timeout Behavior
+
+In versions earlier than v1.8.0, the [Engine Replica Timeout](../references/settings#engine-replica-timeout) setting
+was equally applied to all V1 volume replicas. In v1.8.0, a V1 engine marks the last active replica as failed only after
+twice the configured number of seconds (timeout value x 2) have passed.
+
 ## Data Integrity and Reliability
 
 ### Support Periodic and On-Demand Full Backups to Enhance Backup Reliability
@@ -192,6 +201,12 @@ You can upgrade clusters with pre-existing RWX volume workloads to Longhorn v1.7
 To apply the storage network to existing RWX volumes, you must detach the volumes, enable the [Storage Network For RWX Volume Enabled](../references/settings#storage-network-for-rwx-volume-enabled) setting, and then reattach the volumes.
 
 For more information, see [Issue #8184](https://github.com/longhorn/longhorn/issues/8184).
+
+## OS Distro Specific
+
+### Talos Linux
+
+Longhorn v1.8.0 and later versions support usage of V2 volumes in Talos Linux clusters. To use V2 volumes, ensure that all nodes meet the V2 Data Engine prerequisites. For more information, see [Talos Linux Support: V2 Data Engine](../advanced-resources/os-distro-specific/talos-linux-support#v2-data-engine).
 
 ## V2 Data Engine
 
