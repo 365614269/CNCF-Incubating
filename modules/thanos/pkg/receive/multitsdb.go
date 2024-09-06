@@ -176,7 +176,7 @@ func newLocalClient(store *store.TSDBStore) *localClient {
 }
 
 func (l *localClient) LabelSets() []labels.Labels {
-	return labelpb.ZLabelSetsToPromLabelSets(l.store.LabelSet()...)
+	return labelpb.LabelpbLabelSetsToPromLabels(l.store.LabelSet()...)
 }
 
 func (l *localClient) TimeRange() (mint int64, maxt int64) {
@@ -266,17 +266,11 @@ func (t *tenant) readyStorage() *ReadyStorage {
 	return t.readyS
 }
 
-func (t *tenant) store() *store.TSDBStore {
-	t.mtx.RLock()
-	defer t.mtx.RUnlock()
-	return t.storeTSDB
-}
-
 func (t *tenant) client() store.Client {
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
 
-	tsdbStore := t.store()
+	tsdbStore := t.storeTSDB
 	if tsdbStore == nil {
 		return nil
 	}
