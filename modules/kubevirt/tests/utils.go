@@ -60,9 +60,7 @@ import (
 )
 
 const (
-	CustomHostPath     = "custom-host-path"
 	DiskAlpineHostPath = "disk-alpine-host-path"
-	DiskCustomHostPath = "disk-custom-host-path"
 )
 
 func NewRandomReplicaSetFromVMI(vmi *v1.VirtualMachineInstance, replicas int32) *v1.VirtualMachineInstanceReplicaSet {
@@ -219,14 +217,6 @@ func GetRunningVMIDomainSpec(vmi *v1.VirtualMachineInstance) (*launcherApi.Domai
 
 	err = xml.Unmarshal([]byte(domXML), &runningVMISpec)
 	return &runningVMISpec, err
-}
-
-func GetRunningVMIEmulator(vmi *v1.VirtualMachineInstance) (string, error) {
-	domSpec, err := GetRunningVMIDomainSpec(vmi)
-	if err != nil {
-		return "", err
-	}
-	return domSpec.Devices.Emulator, nil
 }
 
 func updateKubeVirtConfigValueAndWaitHandlerRedeploymnet(kvConfig v1.KubeVirtConfiguration) *v1.KubeVirt {
