@@ -89,7 +89,7 @@
     "file-saver": "^2.0.5",
     "file-selector": "^0.6.0",
     "flat": "^6.0.1",
-    "i18next": "^23.14.0",
+    "i18next": "^23.15.0",
     "i18next-http-backend": "^2.6.1",
     "keycloak-js": "workspace:*",
     "lodash-es": "^4.17.21",
@@ -100,7 +100,7 @@
     "react-dropzone": "^14.2.3",
     "react-hook-form": "^7.53.0",
     "react-i18next": "^15.0.1",
-    "react-router-dom": "^6.26.1",
+    "react-router-dom": "^6.26.2",
     "reactflow": "^11.11.4",
     "use-react-router-breadcrumbs": "^4.0.1"
   },
