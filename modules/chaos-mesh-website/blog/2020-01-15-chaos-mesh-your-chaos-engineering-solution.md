@@ -1,10 +1,7 @@
 ---
 slug: /chaos_mesh_your_chaos_engineering_solution
 title: Chaos Mesh - Your Chaos Engineering Solution for System Resiliency on Kubernetes
-author: Cwen Yin
-author_title: Maintainer of Chaos Mesh
-author_url: https://github.com/cwen0
-author_image_url: https://avatars1.githubusercontent.com/u/22956341?v=4
+authors: cwen
 image: /img/blog/chaos-engineering.png
 tags: [Chaos Mesh, Chaos Engineering, Kubernetes]
 ---
@@ -30,8 +27,6 @@ Chaos Mesh is a versatile Chaos Engineering platform that features all-around fa
 Here is an example of how we use Chaos Mesh to locate a TiDB system bug. In this example, we simulate Pod downtime with our distributed storage engine ([TiKV](https://docs.pingcap.com/tidb/stable/tidb-architecture#tikv-server)) and observe changes in queries per second (QPS). Regularly, if one TiKV node is down, the QPS may experience a transient jitter before it returns to the level before the failure. This is how we guarantee high availability.
 
 ![Chaos Mesh discovers downtime recovery exceptions in TiKV](/img/blog/chaos-mesh-discovers-downtime-recovery-exceptions-in-tikv.png)
-
-<div className="caption"> Chaos Mesh discovers downtime recovery exceptions in TiKV</div>
 
 As you can see from the dashboard:
 
@@ -129,8 +124,6 @@ With the CRD design settled, let's look at the big picture on how Chaos Mesh wor
 
 ![Chaos Mesh workflow](/img/blog/chaos-mesh-workflow.png)
 
-<div className="caption"> Chaos Mesh workflow </div>
-
 Here is how these components streamline a chaos experiment:
 
 1. Using a YAML file or Kubernetes client, the user creates or updates chaos objects to the Kubernetes API server.
@@ -218,8 +211,6 @@ The following chaos experiment simulates the TiKV Pods being frequently killed i
 
 ![Chaos experiment running](/img/blog/chaos-experiment-running.gif)
 
-<div className="caption"> Chaos experiment running </div>
-
 We use a sysbench program to monitor the real-time QPS changes in the TiDB cluster. When errors are injected into the cluster, the QPS show a drastic jitter, which means a specific TiKV Pod has been deleted, and Kubernetes then re-creates a new TiKV Pod.
 
 For more YAML file examples, see https://github.com/chaos-mesh/chaos-mesh/tree/master/examples.
@@ -232,22 +223,24 @@ In the [test-infra](https://github.com/pingcap/tipocket/tree/35206e8483b66f9728b
 
 The following is a Chaos Mesh sample script using the Kubernetes API:
 
-```
+```go
 import (
-    "context"
+  "context"
 
- "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
-    "sigs.k8s.io/controller-runtime/pkg/client"
+  "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
+  "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func main() {
-  ...
+  // ...
   delay := &chaosv1alpha1.NetworkChaos{
-  Spec: chaosv1alpha1.NetworkChaosSpec{...},
-      }
-      k8sClient := client.New(conf, client.Options{ Scheme: scheme.Scheme })
+    Spec: chaosv1alpha1.NetworkChaosSpec{
+      // ...
+    },
+  }
+  k8sClient := client.New(conf, client.Options{ Scheme: scheme.Scheme })
   k8sClient.Create(context.TODO(), delay)
-      k8sClient.Delete(context.TODO(), delay)
+  k8sClient.Delete(context.TODO(), delay)
 }
 ```
 

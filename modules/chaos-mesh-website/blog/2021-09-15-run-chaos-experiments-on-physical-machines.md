@@ -1,12 +1,9 @@
 ---
 slug: /run-chaos-experiments-on-physical-machines
 title: 'How to run chaos experiments on your physical machine'
-author: Xiang Wang
-author_title: Chaos Mesh Committer
-author_url: https://github.com/WangXiangUSTC
-author_image_url: https://avatars.githubusercontent.com/u/5793595?v=4
+authors: xiangwang
 image: /img/blog/chaosd-banner.png
-tags: [Chaos Mesh, Chaos Engineering, chaosd]
+tags: [Chaos Mesh, Chaos Engineering, Chaosd]
 ---
 
 ![How to run chaos experiments on your physical machine](/img/blog/chaosd-banner.png)
@@ -108,8 +105,6 @@ As you can see, chaosd is fairly easy to use. But we can make it easier—a dash
 We will continue to enhance its usability and implement more functionalities such as managing chaos experiments run with chaosd as well as those run with Chaos Mesh. This will provide a consistent and unified user experience for chaos testing on Kubernetes and physical machines. The architecture below is just a simple example:
 
 ![Chaos Mesh's optimized architecture](/img/blog/chaos-mesh-optimized-architecture.png)
-
-<p className="caption">Chaos Mesh's optimized architecture</p>
 
 For more, check out [Chaos Mesh's optimized architecture](https://pingcap.com/blog/chaos-mesh-remake-one-step-closer-toward-chaos-as-a-service#developing-chaos-mesh-towards-caas).
 

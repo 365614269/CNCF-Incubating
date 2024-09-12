@@ -1,12 +1,9 @@
 ---
 slug: /develop-a-daily-reporting-system
 title: 'How to Develop a Daily Reporting System to Track Chaos Testing Results'
-author: Lei Li
-author_title: Senior software engineer at Digital China
-author_url: https://github.com/lileiaab
-author_image_url: https://avatars.githubusercontent.com/u/88825087?v=4
+authors: leili
 image: /img/blog/chaos-mesh-digitalchina-banner.png
-tags: [Chaos Mesh, Chaos Engineering, Use case]
+tags: [Chaos Mesh, Chaos Engineering, Use Cases]
 ---
 
 ![How to Develop a Daily Reporting System to Track Chaos Testing Results](/img/blog/chaos-mesh-digitalchina-banner.png)
@@ -96,8 +93,6 @@ For plotting, I used [gnuplot](http://www.gnuplot.info/), a Linux command-line g
 
 ![QPS line graph](/img/blog/qps-line-graph.png)
 
-<p class="caption">QPS line graph</p>
-
 ### Generate the report in PDF
 
 Currently, there is no available API for generating Chaos Mesh reports or analyzing results. I decided to generate the report in PDF format so it would be readable on different browsers. In my case, I used [gopdf](https://github.com/signintech/gopdf), a support library that allows users to create PDF files. It also lets me insert images or draw tables, which meets my needs.
@@ -116,13 +111,9 @@ Below is an example of a web application that I developed for daily reporting. T
 
 ![Web application for daily reporting](/img/blog/web-app-for-daily-reporting.png)
 
-<p class="caption">Web application for daily reporting</p>
-
 Clicking the red card will open the report, as shown below. I used [pdf.js](https://github.com/mozilla/pdf.js) to view the PDF.
 
 ![Daily report in PDF](/img/blog/daily-report-pdf.png)
-
-<p class="caption">Daily report in PDF</p>
 
 ## Summary
 
