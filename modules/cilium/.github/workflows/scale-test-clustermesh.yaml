@@ -218,6 +218,7 @@ jobs:
             install/kubernetes/cilium
 
       - name: Install Cilium
+        id: install-cilium
         run: |
           # * Increase the node BPF map size to account for the total number of nodes.
           # * Disable health checking, as mocked nodes are unreachable.
@@ -262,6 +263,7 @@ jobs:
           cp -r .github/actions/cl2-modules ./perf-tests/clusterloader2/testing/custom
 
       - name: Run CL2 to setup prometheus
+        shell: bash
         working-directory: ./perf-tests/clusterloader2
         env:
           CL2_PROMETHEUS_PVC_ENABLED: "false"
@@ -343,6 +345,7 @@ jobs:
 
       - name: Run CL2
         id: run-cl2
+        shell: bash
         working-directory: ./perf-tests/clusterloader2
         env:
           CL2_PROMETHEUS_PVC_ENABLED: "false"
@@ -365,10 +368,18 @@ jobs:
             2>&1 | tee cl2-output.txt
 
       - name: Get sysdump
-        if: ${{ always() && steps.run-cl2.outcome != 'skipped' && steps.run-cl2.outcome != 'cancelled' }}
+        if: ${{ always() && steps.install-cilium.outcome != 'skipped' && steps.install-cilium.outcome != 'cancelled' }}
         run: |
           cilium status
           cilium sysdump --output-filename cilium-sysdump-final
+
+      - name: Upload sysdump
+        if: ${{ !success() && steps.install-cilium.outcome != 'skipped' && steps.install-cilium.outcome != 'cancelled' }}
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: cilium-sysdump
+          path: cilium-sysdump-final.zip
+          retention-days: 1
 
       - name: Cleanup cluster
         if: ${{ always() && steps.deploy-cluster.outcome != 'skipped' }}
