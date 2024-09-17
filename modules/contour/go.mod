@@ -23,13 +23,13 @@ require (
 	github.com/projectcontour/yages v0.1.0
 	github.com/prometheus/client_golang v1.20.3
 	github.com/prometheus/client_model v0.6.1
-	github.com/prometheus/common v0.57.0
+	github.com/prometheus/common v0.59.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/tsaarni/certyaml v0.9.3
-	github.com/vektra/mockery/v2 v2.45.0
+	github.com/vektra/mockery/v2 v2.45.1
 	go.uber.org/automaxprocs v1.5.3
-	golang.org/x/oauth2 v0.22.0
+	golang.org/x/oauth2 v0.23.0
 	gonum.org/v1/plot v0.14.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157
 	google.golang.org/grpc v1.65.0
