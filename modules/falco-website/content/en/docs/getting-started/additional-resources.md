@@ -4,7 +4,7 @@ description: Learn More About Falco
 slug: falco-additional
 aliases:
 - ../../falco-additional
-weight: 40
+weight: 99
 ---
 
 ## Learn more about Falco
@@ -12,7 +12,7 @@ weight: 40
 If you'd like to dive deeper into the various components that make up Falco, check out the following resources:
 
 * Understand Falco's [event sources]( {{< ref "docs/event-sources" >}})
-* Learn more about Falco [rules]( {{< ref "docs/rules" >}})
-* Review Falco [alerts]( {{< ref "docs/outputs" >}})
-* Investigate Falco [plugins]( {{< ref "docs/plugins" >}})ks
-* Read the Falco [glossary]( {{< ref "docs/reference/glossary" >}})
+* Learn more about Falco [Rules]( {{< ref "docs/rules" >}})
+* Review Falco [Alerts]( {{< ref "docs/outputs" >}})
+* Investigate Falco [Glugins]( {{< ref "docs/plugins" >}})
+* Read the Falco [Glossary]( {{< ref "docs/reference/glossary" >}})

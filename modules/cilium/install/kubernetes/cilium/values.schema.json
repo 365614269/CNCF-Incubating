@@ -505,6 +505,9 @@
           },
           "type": "object"
         },
+        "ctAccounting": {
+          "type": "boolean"
+        },
         "ctAnyMax": {
           "type": [
             "null",
@@ -1615,6 +1618,9 @@
       "type": "boolean"
     },
     "enableIPv6Masquerade": {
+      "type": "boolean"
+    },
+    "enableInternalTrafficPolicy": {
       "type": "boolean"
     },
     "enableK8sTerminatingEndpoint": {
@@ -3913,6 +3919,12 @@
     },
     "name": {
       "type": "string"
+    },
+    "namespaceOverride": {
+      "type": [
+        "null",
+        "string"
+      ]
     },
     "nat": {
       "properties": {

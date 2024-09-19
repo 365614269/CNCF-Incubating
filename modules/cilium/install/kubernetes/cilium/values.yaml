@@ -5,6 +5,12 @@
 # @schema
 # type: [null, string]
 # @schema
+# -- namespaceOverride allows to override the destination namespace for Cilium resources.
+# This property allows to use Cilium as part of an Umbrella Chart with different targets.
+namespaceOverride: ""
+# @schema
+# type: [null, string]
+# @schema
 # -- upgradeCompatibility helps users upgrading to ensure that the configMap for
 # Cilium will not change critical values to ensure continued operation
 # This flag is not required for new installations.
@@ -461,6 +467,8 @@ bpf:
   # -- (int) Configure the maximum number of entries in auth map.
   # @default -- `524288`
   authMapMax: ~
+  # -- Enable CT accounting for packets and bytes
+  ctAccounting: false
   # @schema
   # type: [null, integer]
   # @schema
@@ -3627,3 +3635,5 @@ authentication:
       agentSocketPath: /run/spire/sockets/agent/agent.sock
       # -- SPIRE connection timeout
       connectionTimeout: 30s
+# -- Enable Internal Traffic Policy
+enableInternalTrafficPolicy: true

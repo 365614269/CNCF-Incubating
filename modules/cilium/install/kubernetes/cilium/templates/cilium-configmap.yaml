@@ -89,7 +89,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cilium-config
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "cilium.namespace" . }}
 data:
 {{- if .Values.etcd.enabled }}
   # The kvstore configuration is used to enable use of a kvstore for state
@@ -409,6 +409,9 @@ data:
 {{- if $bpfCtAnyMax }}
   bpf-ct-global-any-max: {{ $bpfCtAnyMax | quote }}
 {{- end }}
+{{- end }}
+{{- if .Values.bpf.ctAccounting }}
+  bpf-conntrack-accounting-enabled: "{{ .Values.bpf.ctAccounting }}"
 {{- end }}
 {{- if .Values.bpf.natMax }}
   # bpf-nat-global-max specified the maximum number of entries in the
@@ -1332,6 +1335,7 @@ data:
 
   nat-map-stats-entries: {{ .Values.nat.mapStatsEntries | quote }}
   nat-map-stats-interval: {{ .Values.nat.mapStatsInterval | quote }}
+  enable-internal-traffic-policy: {{ .Values.enableInternalTrafficPolicy | quote }}
 
 # Extra config allows adding arbitrary properties to the cilium config.
 # By putting it at the end of the ConfigMap, it's also possible to override existing properties.
@@ -1346,7 +1350,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ip-masq-agent
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "cilium.namespace" . }}
 data:
   config: |-
 {{ toJson .Values.ipMasqAgent.config | indent 4 }}

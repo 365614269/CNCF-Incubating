@@ -1258,6 +1258,12 @@ const (
 
 	// BPFEventsTraceEnabled defines the TraceNotification setting for any endpoint
 	BPFEventsTraceEnabled = "bpf-events-trace-enabled"
+
+	// BPFConntrackAccountingEnabled controls whether CT accounting for packets and bytes is enabled
+	BPFConntrackAccountingEnabled = "bpf-conntrack-accounting-enabled"
+
+	// EnableInternalTrafficPolicy enables handling routing for services with internalTrafficPolicy configured
+	EnableInternalTrafficPolicy = "enable-internal-traffic-policy"
 )
 
 // Default string arguments
@@ -2444,6 +2450,9 @@ type DaemonConfig struct {
 	// BPFEventsTraceEnabled  controls whether the Cilium datapath exposes "trace" events to Cilium monitor and Hubble.
 	BPFEventsTraceEnabled bool
 
+	// BPFConntrackAccountingEnabled controls whether CT accounting for packets and bytes is enabled.
+	BPFConntrackAccountingEnabled bool
+
 	// IPAMCiliumNodeUpdateRate is the maximum rate at which the CiliumNode custom
 	// resource is updated.
 	IPAMCiliumNodeUpdateRate time.Duration
@@ -2480,6 +2489,9 @@ type DaemonConfig struct {
 	// EnableSocketLBPodConnectionTermination enables the termination of connections from pods
 	// to deleted service backends when socket-LB is enabled
 	EnableSocketLBPodConnectionTermination bool
+
+	// EnableInternalTrafficPolicy enables handling routing for services with internalTrafficPolicy configured
+	EnableInternalTrafficPolicy bool
 }
 
 var (
@@ -2533,7 +2545,9 @@ var (
 		BPFEventsDropEnabled:          defaults.BPFEventsDropEnabled,
 		BPFEventsPolicyVerdictEnabled: defaults.BPFEventsPolicyVerdictEnabled,
 		BPFEventsTraceEnabled:         defaults.BPFEventsTraceEnabled,
+		BPFConntrackAccountingEnabled: defaults.BPFConntrackAccountingEnabled,
 		EnableEnvoyConfig:             defaults.EnableEnvoyConfig,
+		EnableInternalTrafficPolicy:   defaults.EnableInternalTrafficPolicy,
 	}
 )
 
@@ -3161,6 +3175,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.BPFEventsDropEnabled = vp.GetBool(BPFEventsDropEnabled)
 	c.BPFEventsPolicyVerdictEnabled = vp.GetBool(BPFEventsPolicyVerdictEnabled)
 	c.BPFEventsTraceEnabled = vp.GetBool(BPFEventsTraceEnabled)
+	c.BPFConntrackAccountingEnabled = vp.GetBool(BPFConntrackAccountingEnabled)
 	c.EnableIPSecEncryptedOverlay = vp.GetBool(EnableIPSecEncryptedOverlay)
 
 	c.ServiceNoBackendResponse = vp.GetString(ServiceNoBackendResponse)
@@ -3588,6 +3603,8 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	}
 
 	c.LoadBalancerProtocolDifferentiation = vp.GetBool(LoadBalancerProtocolDifferentiation)
+
+	c.EnableInternalTrafficPolicy = vp.GetBool(EnableInternalTrafficPolicy)
 }
 
 func (c *DaemonConfig) populateLoadBalancerSettings(vp *viper.Viper) {
@@ -4298,7 +4315,7 @@ func InitConfig(cmd *cobra.Command, programName, configName string, vp *viper.Vi
 			log.WithField(logfields.Path, vp.ConfigFileUsed()).
 				Info("Using config from file")
 		} else if Config.ConfigFile != "" {
-			log.WithField(logfields.Path, Config.ConfigFile).
+			log.WithField(logfields.Path, Config.ConfigFile).WithError(err).
 				Fatal("Error reading config file")
 		} else {
 			log.WithError(err).Debug("Skipped reading configuration file")

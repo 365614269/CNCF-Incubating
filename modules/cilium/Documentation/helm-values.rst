@@ -300,6 +300,10 @@
      - Enable automatic mount of BPF filesystem When ``autoMount`` is enabled, the BPF filesystem is mounted at ``bpf.root`` path on the underlying host and inside the cilium agent pod. If users disable ``autoMount``\ , it's expected that users have mounted bpffs filesystem at the specified ``bpf.root`` volume, and then the volume will be mounted inside the cilium agent pod at the same path.
      - bool
      - ``true``
+   * - :spelling:ignore:`bpf.ctAccounting`
+     - Enable CT accounting for packets and bytes
+     - bool
+     - ``false``
    * - :spelling:ignore:`bpf.ctAnyMax`
      - Configure the maximum number of entries for the non-TCP connection tracking table.
      - int
@@ -1034,6 +1038,10 @@
      - ``false``
    * - :spelling:ignore:`enableIPv6Masquerade`
      - Enables masquerading of IPv6 traffic leaving the node from endpoints.
+     - bool
+     - ``true``
+   * - :spelling:ignore:`enableInternalTrafficPolicy`
+     - Enable Internal Traffic Policy
      - bool
      - ``true``
    * - :spelling:ignore:`enableK8sTerminatingEndpoint`
@@ -2532,6 +2540,10 @@
      - Agent container name.
      - string
      - ``"cilium"``
+   * - :spelling:ignore:`namespaceOverride`
+     - namespaceOverride allows to override the destination namespace for Cilium resources. This property allows to use Cilium as part of an Umbrella Chart with different targets.
+     - string
+     - ``""``
    * - :spelling:ignore:`nat.mapStatsEntries`
      - Number of the top-k SNAT map connections to track in Cilium statedb.
      - int
