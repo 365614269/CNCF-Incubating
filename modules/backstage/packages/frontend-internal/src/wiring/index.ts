@@ -15,3 +15,4 @@
  */
 
 export { OpaqueExtensionDefinition } from './InternalExtensionDefinition';
+export { OpaqueFrontendPlugin } from './InternalFrontendPlugin';

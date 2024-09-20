@@ -51,6 +51,7 @@ To use Falco with the {{< glossary_tooltip text="Kernel Module" term_id="kernel-
 docker pull falcosecurity/falco:latest
 docker run --rm -it \
     --privileged \
+    -e FALCO_DRIVER_LOADER_OPTIONS="kmod" \
     -v /var/run/docker.sock:/host/var/run/docker.sock \
     -v /dev:/host/dev \
     -v /proc:/host/proc:ro \
@@ -58,13 +59,13 @@ docker run --rm -it \
     -v /lib/modules:/host/lib/modules:ro \
     -v /usr:/host/usr:ro \
     -v /etc:/host/etc:ro \
-    falcosecurity/falco:latest falco -o engine.kind=kmod
+    falcosecurity/falco:latest falco
 ```
 
 {{% pageinfo color="primary" %}}
 Alternatively, you can install the driver on the host system first, then run Falco in a separate container. In such cases:
 
-1. Install the driver on the host system using the `falcosecurity/falco-driver-loader` image, as described in the [Driver Installation](#kernel-module-driver-installation-kernel-module) section.
+1. Install the driver on the host system using the `falcosecurity/falco-driver-loader` image, as described in the [Driver Installation](#driver-installation-kernel-module) section.
 2. Replace `falcosecurity/falco:latest` with `falcosecurity/falco-no-driver:latest` in the above command.
 {{% /pageinfo %}}
 
@@ -83,7 +84,7 @@ docker run --rm -it \
     -v /lib/modules:/host/lib/modules:ro \
     -v /usr:/host/usr:ro \
     -v /etc:/host/etc:ro \
-    falcosecurity/falco:latest falco -o engine.kind=ebpf
+    falcosecurity/falco:latest falco
 
 # If running a kernel version < 4.14, add '-v /sys/kernel/debug:/sys/kernel/debug:ro \' to the above docker command.
 ```
@@ -130,9 +131,7 @@ However, in the command above, we use `CAP_SYS_ADMIN` because [Docker does not y
 
 For the {{< glossary_tooltip text="Kernel Module" term_id="kernel-module-driver" >}} driver, Falco requires the driver to be installed on the host system first. This step requires full privileges, while the Falco container can then run with the least privileges.
 
-1. Install the driver on the host system using the `falcosecurity/falco
-
--driver-loader` image, as described in the [Driver Installation](#kernel-module-driver-installation-kernel-module) section.
+1. Install the driver on the host system using the `falcosecurity/falco-driver-loader` image, as described in the [Driver Installation](#driver-installation-kernel-module) section.
 
 2. Run Falco using the `falcosecurity/falco-no-driver` image with the least privileges:
 
