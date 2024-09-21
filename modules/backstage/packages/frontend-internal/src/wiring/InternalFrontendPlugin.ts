@@ -19,7 +19,7 @@ import {
   FeatureFlagConfig,
   FrontendPlugin,
 } from '@backstage/frontend-plugin-api';
-import { OpaqueType } from './OpaqueType';
+import { OpaqueType } from '@internal/opaque';
 
 export const OpaqueFrontendPlugin = OpaqueType.create<{
   public: FrontendPlugin;
