@@ -2,6 +2,7 @@
 
 ## master / unreleased
 
+* [CHANGE] Enable Compactor and Alertmanager in target all. #6204
 * [FEATURE] Ruler: Experimental: Add `ruler.frontend-address` to allow query to query frontends instead of ingesters. #6151
 * [FEATURE] Ruler: Minimize chances of missed rule group evaluations that can occur due to OOM kills, bad underlying nodes, or due to an unhealthy ruler that appears in the ring as healthy. This feature is enabled via `-ruler.enable-ha-evaluation` flag. #6129
 * [ENHANCEMENT] Query Frontend: Add info field to query response. #6207
@@ -12,6 +13,7 @@
 * [ENHANCEMENT] Ingester: Add new API `/ingester/all_user_stats` which shows loaded blocks, active timeseries and ingestion rate for a specific ingester. #6178
 * [ENHANCEMENT] Distributor: Add new `cortex_reduced_resolution_histogram_samples_total` metric to track the number of histogram samples which resolution was reduced. #6182
 * [ENHANCEMENT] StoreGateway: Implement metadata API limit in queryable. #6195
+* [ENHANCEMENT] Ingester: Add matchers to ingester LabelNames() and LabelNamesStream() RPC. #6209
 
 ## 1.18.0 2024-09-03
 

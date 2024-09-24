@@ -21,13 +21,13 @@ require (
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
 	github.com/projectcontour/yages v0.1.0
-	github.com/prometheus/client_golang v1.20.3
+	github.com/prometheus/client_golang v1.20.4
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.59.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	github.com/tsaarni/certyaml v0.9.3
-	github.com/vektra/mockery/v2 v2.45.1
+	github.com/vektra/mockery/v2 v2.46.0
 	go.uber.org/automaxprocs v1.5.3
 	golang.org/x/oauth2 v0.23.0
 	gonum.org/v1/plot v0.14.0

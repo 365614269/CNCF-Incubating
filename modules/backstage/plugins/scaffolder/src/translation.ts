@@ -184,8 +184,17 @@ export const scaffolderTranslationRef = createTranslationRef({
         cancel: 'Cancel',
       },
     },
+    templateEditorForm: {
+      stepper: {
+        emptyText: 'There are no spec parameters in the template to preview.',
+      },
+    },
     templateTypePicker: {
       title: 'Categories',
+    },
+    templateFormPage: {
+      title: 'Template Form Playground',
+      subtitle: 'Edit, preview, and try out templates and template forms',
     },
     templateEditorPage: {
       title: 'Template Editor',
@@ -214,8 +223,11 @@ export const scaffolderTranslationRef = createTranslationRef({
           title: 'Field Options',
           applyButtonTitle: 'Apply',
         },
+        fieldPreview: {
+          title: 'Field Preview',
+        },
         preview: {
-          title: 'Example Template Spec',
+          title: 'Template Spec',
         },
       },
       templateEditorBrowser: {
@@ -230,6 +242,12 @@ export const scaffolderTranslationRef = createTranslationRef({
           title: 'Load Template Directory',
           description:
             'Load a local template directory, allowing you to both edit and try executing your own template.',
+          unsupportedTooltip: 'Only supported in some Chromium-based browsers',
+        },
+        createLocal: {
+          title: 'Create New Template',
+          description:
+            'Create a local template directory, allowing you to both edit and try executing your own template.',
           unsupportedTooltip: 'Only supported in some Chromium-based browsers',
         },
         formEditor: {
