@@ -9,10 +9,10 @@ Falco comes with a default rules file that is loaded if no specific configuratio
 
 ## The configuration file
 
-The default configuration file, [`/etc/falco/falco.yaml`](https://github.com/falcosecurity/falco/blob/master/falco.yaml) makes Falco load rules from the `/etc/falco/falco_rules.yaml` file followed by any custom rules located in the `/etc/falco/rules.d` directory. This configuration is governed by the `rules_file` key:
+The default configuration file, [`/etc/falco/falco.yaml`](https://github.com/falcosecurity/falco/blob/master/falco.yaml) makes Falco load rules from the `/etc/falco/falco_rules.yaml` file followed by any custom rules located in the `/etc/falco/rules.d` directory. This configuration is governed by the `rules_files` key:
 
 ```
-rules_file:
+rules_files:
   - /etc/falco/falco_rules.yaml
   - /etc/falco/falco_rules.local.yaml
   - /etc/falco/rules.d
@@ -20,7 +20,7 @@ rules_file:
 
 Changing these configuration entries will affect the location and loading order of the rules files.
 
-> You can find the details of the available default rules in this [page](/docs/reference/rules/default-rules/) or classified by tag and status in the official repository: [**falcosecurity/rules**](https://github.com/falcosecurity/rules/blob/main/rules_inventory/rules_overview.md#falco-rules---summary-stats).
+> You can find the details of the available default rules in this [page](/docs/reference/rules/default-rules/) or in the Falco rules auto-generated [**documentation**](https://falcosecurity.github.io/rules/).
 
 If you are running Falco directly from the command line, you can use the `-r` switch to add as many rules files as needed. e.g.:
 
@@ -75,7 +75,7 @@ If you only want to use the rules that you add via configmap, discarding all aut
 
 ```
 helm install falco -f ./custom_rules.yaml \
-    --set "falco.rules_file={/etc/falco/falco_rules.local.yaml,/etc/falco/rules.d}" \
+    --set "falco.rules_files={/etc/falco/falco_rules.local.yaml,/etc/falco/rules.d}" \
     --set falcoctl.artifact.install.enabled=false \
     --set falcoctl.artifact.follow.enabled=false
 ```
