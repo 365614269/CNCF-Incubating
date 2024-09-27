@@ -136,37 +136,18 @@ func GenerateCIDRRules(numRules int) (api.Rules, identity.IdentityMap) {
 	fooSelector := api.NewESFromLabels(parseFooLabel)
 	//barSelector := api.NewESFromLabels(labels.ParseSelectLabel("bar"))
 
-	// Change ingRule and rule in the for-loop below to change what type of rules
-	// are added into the policy repository.
-	egRule := api.EgressRule{
-		EgressCommonRule: api.EgressCommonRule{
-			ToCIDR: []api.CIDR{api.CIDR("10.2.3.0/24"), api.CIDR("ff02::/64")},
-		},
-		/*ToRequires:  []api.EndpointSelector{barSelector},
-		ToPorts: []api.PortRule{
-			{
-				Ports: []api.PortProtocol{
-					{
-						Port:     "8080",
-						Protocol: api.ProtoTCP,
-					},
-				},
-			},
-		},*/
-	}
-
 	var rules api.Rules
 	uuid := k8stypes.UID("12bba160-ddca-13e8-b697-0800273b04ff")
 	for i := 1; i <= numRules; i++ {
 		rule := api.Rule{
 			EndpointSelector: fooSelector,
-			Egress:           []api.EgressRule{egRule},
+			Egress:           []api.EgressRule{generateCIDREgressRule(i)},
 			Labels:           utils.GetPolicyLabels("default", "cidr", uuid, utils.ResourceTypeCiliumNetworkPolicy),
 		}
 		rule.Sanitize()
 		rules = append(rules, &rule)
 	}
-	return rules, generateNumIdentities(3000)
+	return rules, generateCIDRIdentities(rules)
 }
 
 type DummyOwner struct{}
@@ -238,12 +219,16 @@ func (td *testData) bootstrapRepo(ruleGenFunc func(int) (api.Rules, identity.Ide
 func BenchmarkRegenerateCIDRPolicyRules(b *testing.B) {
 	td := newTestData()
 	td.bootstrapRepo(GenerateCIDRRules, 1000, b)
+	ip, _ := td.repo.resolvePolicyLocked(fooIdentity)
+	b.ReportAllocs()
 	b.ResetTimer()
+	n := 0
 	for i := 0; i < b.N; i++ {
-		ip, _ := td.repo.resolvePolicyLocked(fooIdentity)
-		_ = ip.DistillPolicy(DummyOwner{}, false)
-		ip.Detach()
+		epPolicy := ip.DistillPolicy(DummyOwner{}, false)
+		n += epPolicy.policyMapState.Len()
 	}
+	ip.Detach()
+	fmt.Printf("Number of MapState entries: %d\n", n/b.N)
 }
 
 func BenchmarkRegenerateL3IngressPolicyRules(b *testing.B) {

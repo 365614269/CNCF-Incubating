@@ -16,7 +16,7 @@
 
 import { Entity } from '@backstage/catalog-model';
 import { assertError } from '@backstage/errors';
-import limiterFactory from 'p-limit';
+import limiterFactory, { Limit } from 'p-limit';
 import { LocationSpec } from '@backstage/plugin-catalog-common';
 import parseGitUrl from 'git-url-parse';
 import {
@@ -44,12 +44,18 @@ type CacheItem = {
 
 /** @public */
 export class UrlReaderProcessor implements CatalogProcessor {
+  // This limiter is used for only consuming a limited number of read streams
+  // concurrently.
+  #limiter: Limit;
+
   constructor(
     private readonly options: {
       reader: UrlReaderService;
       logger: LoggerService;
     },
-  ) {}
+  ) {
+    this.#limiter = limiterFactory(5);
+  }
 
   getProcessorName() {
     return 'url-reader';
@@ -105,6 +111,7 @@ export class UrlReaderProcessor implements CatalogProcessor {
           emit(parseResult);
         }
         emit(processingResult.refresh(`${location.type}:${location.target}`));
+        await cache.set(CACHE_KEY, cacheItem);
       } else if (error.name === 'NotFoundError') {
         if (!optional) {
           emit(processingResult.notFoundError(location, message));
@@ -126,11 +133,10 @@ export class UrlReaderProcessor implements CatalogProcessor {
 
     const { filepath } = parseGitUrl(location);
     if (filepath?.match(/[*?]/)) {
-      const limiter = limiterFactory(5);
       const response = await this.options.reader.search(location, { etag });
       const output = response.files.map(async file => ({
         url: file.url,
-        data: await limiter(file.content),
+        data: await this.#limiter(file.content),
       }));
       return { response: await Promise.all(output), etag: response.etag };
     }

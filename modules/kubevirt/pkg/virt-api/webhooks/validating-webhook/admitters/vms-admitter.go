@@ -155,7 +155,7 @@ func (admitter *VMsAdmitter) Admit(ctx context.Context, ar *admissionv1.Admissio
 	}
 
 	// Set VirtualMachine defaults on the copy before validating
-	if err = webhooks.SetDefaultVirtualMachine(admitter.ClusterConfig, vmCopy); err != nil {
+	if err = webhooks.SetDefaultVirtualMachineInstanceSpec(admitter.ClusterConfig, &vmCopy.Spec.Template.Spec); err != nil {
 		return webhookutils.ToAdmissionResponseError(err)
 	}
 
@@ -443,7 +443,6 @@ func validateDataVolumeTemplate(field *k8sfield.Path, spec *v1.VirtualMachineSpe
 
 			dataVolumeRefFound := false
 			for _, volume := range spec.Template.Spec.Volumes {
-				// TODO: Assuming here that PVC name == DV name which might not be the case in the future
 				if volume.VolumeSource.PersistentVolumeClaim != nil && volume.VolumeSource.PersistentVolumeClaim.ClaimName == dataVolume.Name {
 					dataVolumeRefFound = true
 					break
