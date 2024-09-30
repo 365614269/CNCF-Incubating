@@ -396,10 +396,170 @@ Restart containerd:
 systemctl restart containerd
 ```
 
-### Private registry using self-signed certificates
+### Container Registry using self-signed certificates
 
-Take Harbor as an example of a private registry using self-signed certificates.
+Use Harbor as an example of a container registry using self-signed certificates.
 Harbor generates self-signed certificate, refer to [Harbor](https://goharbor.io/docs/2.11.0/install-config/configure-https/).
+
+#### Install Dragonfly with Helm Charts
+
+##### Create self-signed certificate secret for Seed Peer
+
+Create seed client secret configuration file `seed-client-secret.yaml`, configuration content is as follows:
+
+> Notice: yourdomain.crt is Harbor's ca.crt.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: seed-client-secret
+  namespace: dragonfly-system
+type: Opaque
+data:
+  # the data is abbreviated in this example.
+  yourdomain.crt: |
+    MIIFwTCCA6mgAwIBAgIUdgmYyNCw4t+Lp/...
+```
+
+Create the secret through the following command:
+
+```shell
+kubectl apply -f seed-client-secret.yaml
+```
+
+##### Create self-signed certificate secret for Peer
+
+Create client secret configuration file `client-secret.yaml`, configuration content is as follows:
+
+> Notice: yourdomain.crt is Harbor's ca.crt.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: client-secret
+  namespace: dragonfly-system
+type: Opaque
+data:
+  # the data is abbreviated in this example.
+  yourdomain.crt: |
+    MIIFwTCCA6mgAwIBAgIUdgmYyNCw4t+Lp/...
+```
+
+Create the secret through the following command:
+
+```shell
+kubectl apply -f client-secret.yaml
+```
+
+##### Create Dragonfly cluster based on helm charts {#harbor-create-dragonfly-cluster-based-on-helm-charts}
+
+Create helm charts configuration file `values.yaml`, configuration content is as follows:
+
+- Support preheating for harbor with self-signed certificates,
+  you need to change the `manager.config.job.preheat.tls` configuration,
+  `/etc/certs/yourdomain.crt` is the harbor self-signed certificate configuration file.
+  If you want to bypass TLS verification, please set `insecureSkipVerify` to `true`.
+
+- Support dragonfly as registry of containerd for harbor with self-signed certificates,
+  you need to change the `client.config.proxy.registryMirror` configuration and
+  `seedClient.config.proxy.registryMirror` configuration,
+  `https://yourdomain.com` is the harbor service address,
+  `/etc/certs/yourdomain.crt` is the harbor self-signed certificate configuration file.
+
+- Set the configuration of the containerd for harbor with self-signed certificates,
+  you need to change the `client.dfinit.config.containerRuntime.containerd.registries` configuration,
+  `yourdomain.com` is harbor registry host address, `https://yourdomain.com` is the Harbor service address.
+  If you want to bypass TLS verification, please set `skipVerify` to `true`.
+
+```yaml
+manager:
+  image:
+    repository: dragonflyoss/manager
+    tag: latest
+  metrics:
+    enable: true
+  config:
+    verbose: true
+    pprofPort: 18066
+    job:
+      preheat:
+        tls:
+          insecureSkipVerify: false
+          caCert: /etc/certs/yourdomain.crt
+  extraVolumes:
+    - name: client-secret
+      secret:
+        secretName: client-secret
+  extraVolumeMounts:
+    - name: client-secret
+      mountPath: /etc/certs
+
+scheduler:
+  image:
+    repository: dragonflyoss/scheduler
+    tag: latest
+  metrics:
+    enable: true
+  config:
+    verbose: true
+    pprofPort: 18066
+
+seedClient:
+  image:
+    repository: dragonflyoss/client
+    tag: latest
+  metrics:
+    enable: true
+  config:
+    verbose: true
+    proxy:
+      registryMirror:
+        addr: https://yourdomain.com
+        certs: /etc/certs/yourdomain.crt
+  extraVolumes:
+    - name: seed-client-secret
+      secret:
+        secretName: seed-client-secret
+  extraVolumeMounts:
+    - name: seed-client-secret
+      mountPath: /etc/certs
+
+client:
+  image:
+    repository: dragonflyoss/client
+    tag: latest
+  metrics:
+    enable: true
+  config:
+    verbose: true
+    proxy:
+      registryMirror:
+        addr: https://yourdomain.com
+        certs: /etc/certs/yourdomain.crt
+  extraVolumes:
+    - name: client-secret
+      secret:
+        secretName: client-secret
+  extraVolumeMounts:
+    - name: client-secret
+      mountPath: /etc/certs
+  dfinit:
+    enable: true
+    image:
+      repository: dragonflyoss/dfinit
+      tag: latest
+    config:
+      containerRuntime:
+        containerd:
+          configPath: /etc/containerd/config.toml
+          registries:
+            - hostNamespace: yourdomain.com
+              serverAddr: https://yourdomain.com
+              capabilities: ['pull', 'resolve']
+              skipVerify: true
+```
 
 #### Install Dragonfly with Binaries
 
@@ -410,6 +570,39 @@ cp ca.crt /etc/certs/yourdomain.crt
 ```
 
 Install Dragonfly with Binaries, refer to [Binaries](../../../getting-started/installation/binaries.md).
+
+##### Setup Manager and configure self-signed certificate
+
+To support preheating for harbor with self-signed certificates, the Manager configuration needs to be modified.
+
+Configure Manager yaml file, The default path in Linux is `/etc/dragonfly/manager.yaml` in linux,
+refer to [Manager](../../../reference/configuration/manager.md).
+
+> Notice: `yourdomain.crt` is Harbor's ca.crt.
+
+```shell
+job:
+  # Preheat configuration.
+  preheat:
+    tls:
+      # insecureSkipVerify controls whether a client verifies the server's certificate chain and hostname.
+      insecureSkipVerify: false
+      # # caCert is the CA certificate for preheat tls handshake, it can be path or PEM format string.
+      caCert: /etc/certs/yourdomain.crt
+```
+
+Skip TLS verification, set `job.preheat.tls.insecureSkipVerify` to true.
+
+```shell
+job:
+  # Preheat configuration.
+  preheat:
+    tls:
+      # insecureSkipVerify controls whether a client verifies the server's certificate chain and hostname.
+      insecureSkipVerify: true
+      # # caCert is the CA certificate for preheat tls handshake, it can be path or PEM format string.
+      # caCert: ''
+```
 
 ##### Setup Dfdaemon as Seed Peer and configure self-signed certificate
 
@@ -507,204 +700,8 @@ Restart containerd:
 systemctl restart containerd
 ```
 
-#### Install Dragonfly with Helm Charts
-
-Create a Namespace:
+#### containerd downloads harbor images through Dragonfly
 
 ```shell
-kubectl create namespace dragonfly-system
-```
-
-##### Enable Seed Peer and configure self-signed certificate
-
-Create seed client secret configuration file `seed-client-secret.yaml`, configuration content is as follows:
-
-> Notice: yourdomain.crt is Harbor's ca.crt.
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: seed-client-secret
-  namespace: dragonfly-system
-type: Opaque
-data:
-  # the data is abbreviated in this example.
-  yourdomain.crt: |
-    MIIFwTCCA6mgAwIBAgIUdgmYyNCw4t+Lp/...
-```
-
-Create the secret through the following command:
-
-```shell
-kubectl apply -f seed-client-secret.yaml
-```
-
-Create helm charts configuration file charts-config.yaml, If you want to bypass TLS verification,
-set `client.dfinit.containerRuntime.containerd.registries.skipVerify` to `true`.
-configuration content is as follows:
-
-```yaml
-manager:
-  image:
-    repository: dragonflyoss/manager
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-    pprofPort: 18066
-
-scheduler:
-  image:
-    repository: dragonflyoss/scheduler
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-    pprofPort: 18066
-
-seedClient:
-  image:
-    repository: dragonflyoss/client
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-    proxy:
-      registryMirror:
-        certs: /etc/certs/yourdomain.crt
-  extraVolumes:
-    - name: logs
-      emptyDir: {}
-    - name: seed-client-secret
-      secret:
-        secretName: seed-client-secret
-  extraVolumeMounts:
-    - name: logs
-      mountPath: /var/log/dragonfly/dfdaemon/
-    - name: seed-client-secret
-      mountPath: /etc/certs
-
-client:
-  image:
-    repository: dragonflyoss/client
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-  dfinit:
-    enable: true
-    image:
-      repository: dragonflyoss/dfinit
-      tag: latest
-    config:
-      containerRuntime:
-        containerd:
-          configPath: /etc/containerd/config.toml
-          registries:
-            - hostNamespace: yourdomain.com
-              serverAddr: https://yourdomain.com
-              capabilities: ['pull', 'resolve']
-              skipVerify: true
-```
-
-##### Enable Peer and configure self-signed certificate
-
-Create client secret configuration file `client-secret.yaml`, configuration content is as follows:
-
-> Notice: yourdomain.crt is Harbor's ca.crt.
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: client-secret
-  namespace: dragonfly-system
-type: Opaque
-data:
-  # the data is abbreviated in this example.
-  yourdomain.crt: |
-    MIIFwTCCA6mgAwIBAgIUdgmYyNCw4t+Lp/...
-```
-
-Create the secret through the following command:
-
-```shell
-kubectl apply -f client-secret.yaml
-```
-
-Create helm charts configuration file charts-config.yaml, If you want to bypass TLS verification,
-set `client.dfinit.containerRuntime.containerd.registries.skipVerify` to `true`.
-configuration content is as follows:
-
-```yaml
-manager:
-  image:
-    repository: dragonflyoss/manager
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-    pprofPort: 18066
-
-scheduler:
-  image:
-    repository: dragonflyoss/scheduler
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-    pprofPort: 18066
-
-seedClient:
-  image:
-    repository: dragonflyoss/client
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-
-client:
-  image:
-    repository: dragonflyoss/client
-    tag: latest
-  metrics:
-    enable: true
-  config:
-    verbose: true
-    proxy:
-      registryMirror:
-        certs: /etc/certs/yourdomain.crt
-  extraVolumes:
-    - name: logs
-      emptyDir: {}
-    - name: client-secret
-      secret:
-        secretName: client-secret
-  extraVolumeMounts:
-    - name: logs
-      mountPath: /var/log/dragonfly/dfdaemon/
-    - name: client-secret
-      mountPath: /etc/certs
-  dfinit:
-    enable: true
-    image:
-      repository: dragonflyoss/dfinit
-      tag: latest
-    config:
-      containerRuntime:
-        containerd:
-          configPath: /etc/containerd/config.toml
-          registries:
-            - hostNamespace: yourdomain.com
-              serverAddr: https://yourdomain.com
-              capabilities: ['pull', 'resolve']
-              skipVerify: true
+crictl pull yourdomain.com/alpine:3.19
 ```
