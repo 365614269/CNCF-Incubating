@@ -433,7 +433,7 @@ struct metrics_key {
 	__u8      dir:2,	/* 1: ingress 2: egress */
 		  pad:6;
 	__u16	  line;		/* __MAGIC_LINE__ */
-	__u8	  file;		/* __MAGIC_FILE__, needs to fit __source_file_name_to_id */
+	__u8	  file;		/* __MAGIC_FILE__, needs to fit __id_for_file */
 	__u8	  reserved[3];	/* reserved for future extension */
 };
 
@@ -903,7 +903,7 @@ enum {
 	SVC_FLAG_INT_LOCAL_SCOPE = (1 << 4), /* internalTrafficPolicy=Local */
 	SVC_FLAG_TWO_SCOPES     = (1 << 5),  /* Two sets of backends are used for external/internal connections */
 	SVC_FLAG_QUARANTINED    = (1 << 6),  /* Backend slot (key: backend_slot > 0) is quarantined */
-	SVC_FLAG_MODE_FLIP      = (1 << 7),  /* If bit is set, use DSR/SNAT if SNAT/DSR is default */
+	SVC_FLAG_FWD_MODE_FLIP  = (1 << 7),  /* If bit is set, use DSR/SNAT if SNAT/DSR is default */
 };
 
 /* Backend flags (lb{4,6}_backends->flags) */
