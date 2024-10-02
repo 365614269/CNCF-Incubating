@@ -28,7 +28,7 @@ export interface KeycloakConfig {
 	/**
 	 * URL to the Keycloak server, for example: http://keycloak-server/auth
 	 */
-	url?: string;
+	url: string;
 	/**
 	 * Name of the realm, for example: 'myrealm'
 	 */
@@ -74,8 +74,6 @@ export interface KeycloakInitOptions {
 	 * For example:
 	 *
 	 * ```ts
-	 * import Keycloak, { KeycloakAdapter } from 'keycloak-js';
-	 *
 	 * // Implement the 'KeycloakAdapter' interface so that all required methods are guaranteed to be present.
 	 * const MyCustomAdapter: KeycloakAdapter = {
 	 * 	login(options) {
@@ -84,8 +82,6 @@ export interface KeycloakInitOptions {
 	 *
 	 * 	// The other methods go here...
 	 * };
-	 *
-	 * const keycloak = new Keycloak();
 	 *
 	 * keycloak.init({
 	 * 	adapter: MyCustomAdapter,
@@ -373,7 +369,7 @@ declare class Keycloak {
 	 * Creates a new Keycloak client instance.
 	 * @param config A configuration object or path to a JSON config file.
 	 */
-	constructor(config?: KeycloakConfig | string)
+	constructor(config: KeycloakConfig | string)
 
 	/**
 	 * Is true if the user is authenticated, false otherwise.
