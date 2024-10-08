@@ -830,13 +830,13 @@ enum {
 #define CB_CLUSTER_ID_EGRESS	CB_IFINDEX	/* Alias, non-overlapping */
 #define CB_HSIPC_ADDR_V4	CB_IFINDEX	/* Alias, non-overlapping */
 #define CB_TRACED		CB_IFINDEX	/* Alias, non-overlapping */
-	CB_POLICY,
-#define	CB_ADDR_V6_2		CB_POLICY	/* Alias, non-overlapping */
-#define CB_SRV6_SID_3		CB_POLICY	/* Alias, non-overlapping */
-#define	CB_CLUSTER_ID_INGRESS	CB_POLICY	/* Alias, non-overlapping */
-#define CB_HSIPC_PORT		CB_POLICY	/* Alias, non-overlapping */
-#define CB_DSR_SRC_LABEL	CB_POLICY	/* Alias, non-overlapping */
-#define CB_NAT_FLAGS		CB_POLICY	/* Alias, non-overlapping */
+	CB_2,
+#define	CB_ADDR_V6_2		CB_2		/* Alias, non-overlapping */
+#define CB_SRV6_SID_3		CB_2		/* Alias, non-overlapping */
+#define	CB_CLUSTER_ID_INGRESS	CB_2		/* Alias, non-overlapping */
+#define CB_HSIPC_PORT		CB_2		/* Alias, non-overlapping */
+#define CB_DSR_SRC_LABEL	CB_2		/* Alias, non-overlapping */
+#define CB_NAT_FLAGS		CB_2		/* Alias, non-overlapping */
 	CB_3,
 #define	CB_ADDR_V6_3		CB_3		/* Alias, non-overlapping */
 #define	CB_FROM_HOST		CB_3		/* Alias, non-overlapping */
@@ -903,7 +903,7 @@ enum {
 	SVC_FLAG_INT_LOCAL_SCOPE = (1 << 4), /* internalTrafficPolicy=Local */
 	SVC_FLAG_TWO_SCOPES     = (1 << 5),  /* Two sets of backends are used for external/internal connections */
 	SVC_FLAG_QUARANTINED    = (1 << 6),  /* Backend slot (key: backend_slot > 0) is quarantined */
-	SVC_FLAG_FWD_MODE_FLIP  = (1 << 7),  /* If bit is set, use DSR/SNAT if SNAT/DSR is default */
+	SVC_FLAG_FWD_MODE_DSR   = (1 << 7),  /* If bit is set, use DSR instead of SNAT in annotation mode */
 };
 
 /* Backend flags (lb{4,6}_backends->flags) */

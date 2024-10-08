@@ -55,11 +55,11 @@ jobs:
         with:
           cache: false
           # renovate: datasource=golang-version depName=go
-          go-version: 1.23.1
+          go-version: 1.23.2
 
       # Load Golang cache build from GitHub
       - name: Load Golang cache build from GitHub
-        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        uses: actions/cache@2cdf405574d6ef1f33a1d12acccd3ae82f47b3f2 # v4.1.0
         id: go-cache
         with:
           path: /tmp/.cache/go
@@ -70,7 +70,7 @@ jobs:
 
       # Load CCache build from GitHub
       - name: Load ccache cache build from GitHub
-        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        uses: actions/cache@2cdf405574d6ef1f33a1d12acccd3ae82f47b3f2 # v4.1.0
         id: ccache-cache
         with:
           path: /tmp/.cache/ccache
@@ -125,7 +125,11 @@ jobs:
           BUILDER_CCACHE_DIR: "/tmp/.cache/ccache/.ccache"
         run: |
           set -eu -o pipefail
-          COMMITS=$(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          if [[ "${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}" == "true" ]]; then
+            COMMITS=${{ github.sha }}
+          else
+            COMMITS=$(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          fi
           for commit in $COMMITS ; do
             git checkout $commit || exit 1
             # Do not run make if there aren't any files modified in these
@@ -183,7 +187,11 @@ jobs:
         if: steps.test-tree.outputs.src == 'true'
         run: |
           set -eu -o pipefail
-          COMMITS=$(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          if [[ "${{ github.event_name == 'push' || github.event_name == 'workflow_run' }}" == "true" ]]; then
+            COMMITS=${{ github.sha }}
+          else
+            COMMITS=$(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          fi
           for commit in $COMMITS ; do
             git checkout $commit || exit 1
             # Do not run make if there aren't any files modified in these

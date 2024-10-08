@@ -149,7 +149,7 @@ nodeport_fib_lookup_and_redirect(struct __ctx_buff *ctx,
 static __always_inline bool nodeport_uses_dsr6(const struct lb6_service *svc,
 					       const struct ipv6_ct_tuple *tuple)
 {
-	return nodeport_uses_dsr(svc->flags2 & SVC_FLAG_FWD_MODE_FLIP,
+	return nodeport_uses_dsr(svc->flags2 & SVC_FLAG_FWD_MODE_DSR,
 				 tuple->nexthdr);
 }
 
@@ -1473,6 +1473,11 @@ skip_service_lookup:
 #endif
 #endif /* ENABLE_DSR */
 
+#ifndef ENABLE_MASQUERADE_IPV6
+		if (!is_svc_proto)
+			return CTX_ACT_OK;
+#endif /* ENABLE_MASQUERADE_IPV6 */
+
 		ctx_store_meta(ctx, CB_NAT_46X64, 0);
 		ctx_store_meta(ctx, CB_SRC_LABEL, src_sec_identity);
 		return tail_call_internal(ctx, CILIUM_CALL_IPV6_NODEPORT_NAT_INGRESS,
@@ -1649,7 +1654,7 @@ int tail_handle_nat_fwd_ipv6(struct __ctx_buff *ctx)
 static __always_inline bool nodeport_uses_dsr4(const struct lb4_service *svc,
 					       const struct ipv4_ct_tuple *tuple)
 {
-	return nodeport_uses_dsr(svc->flags2 & SVC_FLAG_FWD_MODE_FLIP,
+	return nodeport_uses_dsr(svc->flags2 & SVC_FLAG_FWD_MODE_DSR,
 				 tuple->nexthdr);
 }
 
@@ -3067,6 +3072,14 @@ skip_service_lookup:
 		}
 #endif
 #endif /* ENABLE_DSR */
+
+#ifndef ENABLE_MASQUERADE_IPV4
+		/* When BPF-Masquerading is off, we can skip the revSNAT path via
+		 * CILIUM_CALL_IPV4_NODEPORT_NAT_INGRESS if the packet is ICMP.
+		 */
+		if (!is_svc_proto)
+			return CTX_ACT_OK;
+#endif /* ENABLE_MASQUERADE_IPV4 */
 
 		ctx_store_meta(ctx, CB_SRC_LABEL, src_sec_identity);
 		/* For NAT64 we might see an IPv4 reply from the backend to
