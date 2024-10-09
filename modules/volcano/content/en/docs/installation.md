@@ -3,7 +3,7 @@ title =  "Installation"
 
 
 date = 2019-01-28
-lastmod =2024-05-21
+lastmod =2024-09-29
 
 draft = false  # Is this a draft? true/false
 toc = true  # Show table of contents? true/false
@@ -36,7 +36,7 @@ Install Volcano on an existing Kubernetes cluster. This way is both available fo
 kubectl apply -f https://raw.githubusercontent.com/volcano-sh/volcano/master/installer/volcano-development.yaml
 ```
 
-You can also replace `master` of above url with specific tag/branch (such as `release-1.9` branch for latest v1.9.x version, `v1.9.0` tag for v1.9.0 version) to install Volcano with specific version.
+You can also replace `master` of above url with specific tag/branch (such as `release-1.10` branch for latest v1.10.x version, `v1.10.0` tag for v1.10.0 version) to install Volcano with specific version.
 
 
 ### Install from code
@@ -69,7 +69,7 @@ helm install volcano volcano-sh/volcano -n volcano-system --create-namespace
 The output is as follows after executing the above command.
 ```
 NAME: volcano
-LAST DEPLOYED: Tue May 21 15:16:30 2024
+LAST DEPLOYED: Tue Sep 29 10:18:44 2024
 NAMESPACE: volcano-system
 STATUS: deployed
 REVISION: 1
