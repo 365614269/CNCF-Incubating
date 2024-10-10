@@ -33,120 +33,6 @@ func egressL3OnlyKey(identity identity.NumericIdentity) Key {
 	return EgressKey().WithIdentity(identity)
 }
 
-func Test_IsSuperSetOf(t *testing.T) {
-	tests := []struct {
-		superSet Key
-		subSet   Key
-		res      int
-	}{
-		{ingressKey(0, 0, 0, 0), ingressKey(0, 0, 0, 0), 0},
-		{ingressKey(0, 0, 0, 0), ingressKey(42, 6, 0, 0), 1},
-		{ingressKey(0, 0, 0, 0), ingressKey(42, 6, 80, 0), 1},
-		{ingressKey(0, 0, 0, 0), ingressKey(42, 0, 0, 0), 1},
-		{ingressKey(0, 6, 0, 0), ingressKey(42, 6, 0, 0), 3}, // port is the same
-		{ingressKey(0, 6, 0, 0), ingressKey(42, 6, 80, 0), 2},
-		{ingressKey(0, 6, 64, 10), ingressKey(42, 6, 80, 0), 2}, // port range 64-127,80
-		{ingressKey(0, 6, 80, 0), ingressKey(42, 6, 80, 0), 3},
-		{ingressKey(0, 6, 64, 10), ingressKey(42, 6, 64, 10), 3},  // port ranges are the same
-		{ingressKey(0, 6, 80, 0), ingressKey(42, 17, 80, 0), 0},   // proto is different
-		{ingressKey(2, 6, 80, 0), ingressKey(42, 6, 80, 0), 0},    // id is different
-		{ingressKey(0, 6, 8080, 0), ingressKey(42, 6, 80, 0), 0},  // port is different
-		{ingressKey(0, 6, 64, 10), ingressKey(42, 6, 8080, 0), 0}, // port range is different from port
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 0, 0, 0), 0},     // same key
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 6, 0, 0), 4},
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 6, 80, 0), 4},
-		{ingressKey(42, 0, 64, 10), ingressKey(42, 6, 80, 0), 4}, // port range 64-127,80
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 17, 0, 0), 4},
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 17, 80, 0), 4},
-		{ingressKey(42, 0, 64, 10), ingressKey(42, 17, 80, 0), 4},
-		{ingressKey(42, 6, 0, 0), ingressKey(42, 6, 0, 0), 0}, // same key
-		{ingressKey(42, 6, 0, 0), ingressKey(42, 6, 80, 0), 5},
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 6, 80, 0), 5},
-		{ingressKey(42, 6, 0, 0), ingressKey(42, 6, 8080, 0), 5},
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 6, 80, 0), 0},    // same key
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 6, 64, 10), 0},  // same key
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 6, 8080, 0), 0},  // different port
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 6, 128, 10), 0}, // different port ranges
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 17, 80, 0), 0},   // different proto
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 17, 8080, 0), 0}, // different port and proto
-
-		// increasing specificity for a L3/L4 key
-		{ingressKey(0, 0, 0, 0), ingressKey(42, 6, 80, 0), 1},
-		{ingressKey(0, 0, 64, 10), ingressKey(42, 6, 80, 0), 1},
-		{ingressKey(0, 6, 0, 0), ingressKey(42, 6, 80, 0), 2},
-		{ingressKey(0, 6, 64, 10), ingressKey(42, 6, 80, 0), 2},
-		{ingressKey(0, 6, 80, 0), ingressKey(42, 6, 80, 0), 3},
-		{ingressKey(0, 6, 64, 10), ingressKey(42, 6, 64, 10), 3},
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 6, 80, 0), 4},
-		{ingressKey(42, 0, 64, 10), ingressKey(42, 6, 80, 0), 4},
-		{ingressKey(42, 6, 0, 0), ingressKey(42, 6, 80, 0), 5},
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 6, 80, 0), 5},
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 6, 80, 0), 0},   // same key
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 6, 64, 10), 0}, // same key
-
-		// increasing specificity for a L3-only key
-		{ingressKey(0, 0, 0, 0), ingressKey(42, 0, 0, 0), 1},
-		{ingressKey(0, 0, 64, 10), ingressKey(42, 0, 0, 0), 1},
-		{ingressKey(0, 6, 0, 0), ingressKey(42, 0, 0, 0), 0},      // not a superset
-		{ingressKey(0, 6, 80, 0), ingressKey(42, 0, 0, 0), 0},     // not a superset
-		{ingressKey(0, 6, 64, 10), ingressKey(42, 0, 0, 0), 0},    // not a superset
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 0, 0, 0), 0},     // same key
-		{ingressKey(42, 6, 0, 0), ingressKey(42, 0, 0, 0), 0},     // not a superset
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 0, 64, 10), 0}, // not a superset
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 0, 0, 0), 0},    // not a superset
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 0, 0, 0), 0},   // not a superset
-
-		// increasing specificity for a L3/proto key
-		{ingressKey(0, 0, 0, 0), ingressKey(42, 6, 0, 0), 1}, // wildcard
-		{ingressKey(0, 0, 64, 10), ingressKey(42, 6, 64, 10), 1},
-		{ingressKey(0, 6, 0, 0), ingressKey(42, 6, 0, 0), 3},     // ports are the same
-		{ingressKey(0, 6, 64, 10), ingressKey(42, 6, 64, 10), 3}, // port ranges are the same
-		{ingressKey(0, 6, 80, 0), ingressKey(42, 6, 0, 0), 0},    // not a superset
-		{ingressKey(0, 6, 80, 0), ingressKey(42, 6, 64, 10), 0},  // not a superset
-		{ingressKey(42, 0, 0, 0), ingressKey(42, 6, 0, 0), 4},
-		{ingressKey(42, 0, 64, 10), ingressKey(42, 6, 64, 10), 4},
-		{ingressKey(42, 6, 0, 0), ingressKey(42, 6, 0, 0), 0},     // same key
-		{ingressKey(42, 6, 64, 10), ingressKey(42, 6, 64, 10), 0}, // same key
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 6, 0, 0), 0},    // not a superset
-		{ingressKey(42, 6, 80, 0), ingressKey(42, 6, 64, 10), 0},  // not a superset
-
-		// increasing specificity for a proto-only key
-		{ingressKey(0, 0, 0, 0), ingressKey(0, 6, 0, 0), 1},
-		{ingressKey(0, 0, 64, 10), ingressKey(0, 6, 64, 10), 1},
-		{ingressKey(0, 6, 0, 0), ingressKey(0, 6, 0, 0), 0},      // same key
-		{ingressKey(0, 6, 64, 10), ingressKey(0, 6, 64, 10), 0},  // same key
-		{ingressKey(0, 6, 80, 0), ingressKey(0, 6, 0, 0), 0},     // not a superset
-		{ingressKey(0, 6, 80, 0), ingressKey(0, 6, 64, 10), 0},   // not a superset
-		{ingressKey(42, 0, 0, 0), ingressKey(0, 6, 0, 0), 0},     // not a superset
-		{ingressKey(42, 0, 64, 10), ingressKey(0, 6, 64, 10), 0}, // not a superset
-		{ingressKey(42, 6, 0, 0), ingressKey(0, 6, 0, 0), 0},     // not a superset
-		{ingressKey(42, 6, 64, 10), ingressKey(0, 6, 64, 10), 0}, // not a superset
-		{ingressKey(42, 6, 80, 0), ingressKey(0, 6, 0, 0), 0},    // not a superset
-		{ingressKey(42, 6, 80, 0), ingressKey(0, 6, 64, 10), 0},  // not a superset
-
-		// increasing specificity for a L4-only key
-		{ingressKey(0, 0, 0, 0), ingressKey(0, 6, 80, 0), 1},
-		{ingressKey(0, 0, 64, 10), ingressKey(0, 6, 64, 10), 1},
-		{ingressKey(0, 6, 0, 0), ingressKey(0, 6, 80, 0), 2},
-		{ingressKey(0, 6, 64, 10), ingressKey(0, 6, 80, 0), 2},
-		{ingressKey(0, 6, 80, 0), ingressKey(0, 6, 80, 0), 0},    // same key
-		{ingressKey(0, 6, 64, 10), ingressKey(0, 6, 64, 10), 0},  // same key
-		{ingressKey(42, 0, 0, 0), ingressKey(0, 6, 80, 0), 0},    // not a superset
-		{ingressKey(42, 0, 64, 10), ingressKey(0, 6, 80, 0), 0},  // not a superset
-		{ingressKey(42, 6, 0, 0), ingressKey(0, 6, 80, 0), 0},    // not a superset
-		{ingressKey(42, 6, 64, 10), ingressKey(0, 6, 80, 0), 0},  // not a superset
-		{ingressKey(42, 6, 80, 0), ingressKey(0, 6, 80, 0), 0},   // not a superset
-		{ingressKey(42, 6, 64, 10), ingressKey(0, 6, 64, 10), 0}, // not a superset
-
-	}
-	for i, tt := range tests {
-		assert.Equal(t, tt.res, IsSuperSetOf(tt.superSet, tt.subSet), fmt.Sprintf("IsSuperSetOf failed on round %d", i+1))
-		if tt.res != 0 {
-			assert.Equal(t, 0, IsSuperSetOf(tt.subSet, tt.superSet), fmt.Sprintf("Reverse IsSuperSetOf succeeded on round %d", i+1))
-		}
-	}
-}
-
 // WithOwners replaces owners of 'e' with 'owners'.
 // No owners is represented with a 'nil' map.
 func (e MapStateEntry) WithOwners(owners ...MapStateOwner) MapStateEntry {
@@ -2192,17 +2078,17 @@ func TestMapState_AccumulateMapChanges(t *testing.T) {
 		name:      "test-5a - auth type propagation from the most specific superset",
 		args: []args{
 			{cs: csFoo, adds: []int{43}, hasAuth: ExplicitAuthType, authType: AuthTypeAlwaysFail},
-			{cs: csFoo, adds: []int{43}, proto: 6, hasAuth: ExplicitAuthType, authType: AuthTypeSpire},
+			{cs: csFoo, adds: []int{0}, proto: 6, hasAuth: ExplicitAuthType, authType: AuthTypeSpire},
 			{cs: csBar, adds: []int{43}, port: 80, proto: 6, redirect: true},
 		},
 		state: testMapState(MapStateMap{
 			egressKey(43, 0, 0, 0):  allowEntry(0, csFoo).WithAuthType(AuthTypeAlwaysFail),
-			egressKey(43, 6, 0, 0):  allowEntry(0, csFoo).WithAuthType(AuthTypeSpire),
+			egressKey(0, 6, 0, 0):   allowEntry(0, csFoo).WithAuthType(AuthTypeSpire),
 			egressKey(43, 6, 80, 0): allowEntry(1, csBar).WithDefaultAuthType(AuthTypeSpire),
 		}),
 		adds: Keys{
 			egressKey(43, 0, 0, 0):  {},
-			egressKey(43, 6, 0, 0):  {},
+			egressKey(0, 6, 0, 0):   {},
 			egressKey(43, 6, 80, 0): {},
 		},
 		deletes: Keys{},
@@ -2211,17 +2097,17 @@ func TestMapState_AccumulateMapChanges(t *testing.T) {
 		name:      "test-5b - auth type propagation from the most specific superset - reverse",
 		args: []args{
 			{cs: csBar, adds: []int{43}, port: 80, proto: 6, redirect: true},
-			{cs: csFoo, adds: []int{43}, proto: 6, hasAuth: ExplicitAuthType, authType: AuthTypeSpire},
+			{cs: csFoo, adds: []int{0}, proto: 6, hasAuth: ExplicitAuthType, authType: AuthTypeSpire},
 			{cs: csFoo, adds: []int{43}, hasAuth: ExplicitAuthType, authType: AuthTypeAlwaysFail},
 		},
 		state: testMapState(MapStateMap{
 			egressKey(43, 0, 0, 0):  allowEntry(0, csFoo).WithAuthType(AuthTypeAlwaysFail),
-			egressKey(43, 6, 0, 0):  allowEntry(0, csFoo).WithAuthType(AuthTypeSpire),
+			egressKey(0, 6, 0, 0):   allowEntry(0, csFoo).WithAuthType(AuthTypeSpire),
 			egressKey(43, 6, 80, 0): allowEntry(1, csBar).WithDefaultAuthType(AuthTypeSpire),
 		}),
 		adds: Keys{
 			egressKey(43, 0, 0, 0):  {},
-			egressKey(43, 6, 0, 0):  {},
+			egressKey(0, 6, 0, 0):   {},
 			egressKey(43, 6, 80, 0): {},
 		},
 		deletes: Keys{},
@@ -2393,8 +2279,6 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		insertAasB // Proto and entry from B
 		insertBWithAProto
 		insertBWithAProtoAsDeny
-		insertAasDeny
-		insertBasDeny
 		worldIPl3only        // Do not expect L4 keys for IP covered by a subnet
 		worldIPProtoOnly     // Do not expect port keys for IP covered by a subnet
 		worldSubnetl3only    // Do not expect L4 keys for IP subnet
@@ -2425,8 +2309,8 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		outcome          action
 	}{
 		// deny-allow insertions
-		{"deny-allow: a superset a|b L3-only; subset allow inserted as deny", WithAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 0, 0, 0, insertAllowAll | insertA | insertBasDeny},
-		{"deny-allow: a superset a|b L3-only; without allow-all", WithoutAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 0, 0, 0, insertA | insertBasDeny},
+		{"deny-allow: a superset a|b L3-only; subset allow inserted as deny", WithAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 0, 0, 0, insertAllowAll | insertA},
+		{"deny-allow: a superset a|b L3-only; without allow-all", WithoutAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 0, 0, 0, insertA},
 
 		{"deny-allow: b superset a|b L3-only", WithAllowAll, worldIPSelections, worldSubnetSelections, true, false, 0, 0, 0, 0, insertAllowAll | insertBoth},
 		{"deny-allow: b superset a|b L3-only; without allow-all", WithoutAllowAll, worldIPSelections, worldSubnetSelections, true, false, 0, 0, 0, 0, insertBoth},
@@ -2449,8 +2333,8 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		{"deny-allow: b superset a L4, b L3-only", WithAllowAll, worldIPSelections, worldSubnetSelections, true, false, 0, 6, 0, 0, insertAllowAll | insertBoth},
 		{"deny-allow: b superset a L4, b L3-only; without allow-all", WithoutAllowAll, worldIPSelections, worldSubnetSelections, true, false, 0, 6, 0, 0, insertBoth},
 
-		{"deny-allow: a superset a L4, b L4; subset allow inserted as deny", WithAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 6, 0, 6, insertAllowAll | insertA | insertBasDeny},
-		{"deny-allow: a superset a L4, b L4; without allow-all, subset allow inserted as deny", WithoutAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 6, 0, 6, insertA | insertBasDeny},
+		{"deny-allow: a superset a L4, b L4; subset allow inserted as deny", WithAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 6, 0, 6, insertAllowAll | insertA},
+		{"deny-allow: a superset a L4, b L4; without allow-all, subset allow inserted as deny", WithoutAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 0, 6, 0, 6, insertA},
 
 		{"deny-allow: b superset a L4, b L4", WithAllowAll, worldIPSelections, worldSubnetSelections, true, false, 0, 6, 0, 6, insertAllowAll | insertBoth},
 		{"deny-allow: b superset a L4, b L4; without allow-all", WithoutAllowAll, worldIPSelections, worldSubnetSelections, true, false, 0, 6, 0, 6, insertBoth},
@@ -2473,8 +2357,8 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		{"deny-allow: b superset a L3L4, b L4", WithAllowAll, worldIPSelections, worldSubnetSelections, true, false, 80, 6, 0, 6, insertAllowAll | insertBoth},
 		{"deny-allow: b superset a L3L4, b L4 without allow-all", WithoutAllowAll, worldIPSelections, worldSubnetSelections, true, false, 80, 6, 0, 6, insertBoth},
 
-		{"deny-allow: a superset a L3L4, b L3L4", WithAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 80, 6, 80, 6, insertAllowAll | insertA | insertBasDeny},
-		{"deny-allow: a superset a L3L4, b L3L4 without allow-all", WithoutAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 80, 6, 80, 6, insertA | insertBasDeny},
+		{"deny-allow: a superset a L3L4, b L3L4", WithAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 80, 6, 80, 6, insertAllowAll | insertA},
+		{"deny-allow: a superset a L3L4, b L3L4 without allow-all", WithoutAllowAll, reservedWorldSelections, worldSubnetSelections, true, false, 80, 6, 80, 6, insertA},
 
 		{"deny-allow: b superset a L3L4, b L3L4", WithAllowAll, worldIPSelections, worldSubnetSelections, true, false, 80, 6, 80, 6, insertAllowAll | insertBoth},
 		{"deny-allow: b superset a L3L4, b L3L4; without allow-all", WithoutAllowAll, worldIPSelections, worldSubnetSelections, true, false, 80, 6, 80, 6, insertBoth},
@@ -2653,16 +2537,6 @@ func TestMapState_denyPreferredInsertWithSubnets(t *testing.T) {
 		if tt.outcome&insertA > 0 {
 			for _, aKey := range aKeys {
 				expectedKeys.insert(aKey, aEntry)
-			}
-		}
-		if tt.outcome&insertAasDeny > 0 {
-			for _, aKey := range aKeys {
-				expectedKeys.insert(aKey, aEntry.asDeny())
-			}
-		}
-		if tt.outcome&insertBasDeny > 0 {
-			for _, bKey := range bKeys {
-				expectedKeys.insert(bKey, bEntry.asDeny())
 			}
 		}
 		if tt.outcome&insertAWithBProto > 0 {

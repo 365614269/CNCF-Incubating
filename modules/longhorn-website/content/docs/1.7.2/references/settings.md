@@ -232,7 +232,7 @@ Every Longhorn release will ship with a new Longhorn engine image. If the curren
 
 > Default: `longhorn-static`
 
-The `storageClassName` is for persistent volumes (PVs) and persistent volume claims (PVCs) when creating PV/PVC for an existing Longhorn volume. Notice that it's unnecessary for users to create the related StorageClass object in Kubernetes since the StorageClass would only be used as matching labels for PVC bounding purpose. By default 'longhorn-static'.
+The `storageClassName` is for persistent volumes (PVs) and persistent volume claims (PVCs) when creating PV/PVC for an existing Longhorn volume. Notice that it's unnecessary for users to create the related StorageClass object in Kubernetes since the StorageClass would only be used as matching labels for PVC bounding purposes.  The "storageClassName" needs to be an existing StorageClass. Only the StorageClass named `longhorn-static` will be created if it does not exist. By default 'longhorn-static'.
 
 #### Default Replica Count
 
@@ -619,6 +619,12 @@ The Kubernetes secret associated with the backup target. See [Setting a Backup T
 The interval in seconds to poll the backup store for updating volumes' **Last Backup** field. Set to 0 to disable the polling. See [Setting up Disaster Recovery Volumes](../../snapshots-and-backups/setup-disaster-recovery-volumes) for details.
 
 For more information on how the backupstore poll interval affects the recovery time objective and recovery point objective, refer to the [concepts section.](../../concepts/#34-backupstore-update-intervals-rto-and-rpo)
+
+#### Backup Execution Timeout
+
+> Default: `1`
+
+Number of minutes that Longhorn allows for the backup execution.
 
 #### Failed Backup Time To Live
 
