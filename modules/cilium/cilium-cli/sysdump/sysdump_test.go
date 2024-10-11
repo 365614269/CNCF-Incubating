@@ -114,7 +114,7 @@ func TestAddTasks(t *testing.T) {
 	}
 	collector, err := NewCollector(&client, options, &nopHooks{}, time.Now())
 	assert.NoError(t, err)
-	assert.Len(t, collector.additionalTasks, 0)
+	assert.Empty(t, collector.additionalTasks)
 	collector.AddTasks([]Task{{}, {}, {}})
 	assert.Len(t, collector.additionalTasks, 3)
 	collector.AddTasks([]Task{{}, {}, {}})
@@ -123,13 +123,13 @@ func TestAddTasks(t *testing.T) {
 	collector, err = NewCollector(&client, options, &extendingHooks{}, time.Now())
 	assert.NoError(t, err)
 	assert.Len(t, collector.additionalTasks, 1)
-	assert.Equal(t, collector.additionalTasks[0].Description, "extended")
+	assert.Equal(t, "extended", collector.additionalTasks[0].Description)
 	collector.AddTasks([]Task{{}, {}})
 	assert.Len(t, collector.additionalTasks, 3)
-	assert.Equal(t, collector.additionalTasks[0].Description, "extended")
+	assert.Equal(t, "extended", collector.additionalTasks[0].Description)
 	collector.AddTasks([]Task{{}, {}, {}})
 	assert.Len(t, collector.additionalTasks, 6)
-	assert.Equal(t, collector.additionalTasks[0].Description, "extended")
+	assert.Equal(t, "extended", collector.additionalTasks[0].Description)
 
 }
 

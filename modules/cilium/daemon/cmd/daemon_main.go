@@ -1571,7 +1571,7 @@ type daemonParams struct {
 	IdentityAllocator      identitycell.CachingIdentityAllocator
 	Policy                 *policy.Repository
 	IPCache                *ipcache.IPCache
-	DirectoryPolicyWatcher *policyDirectory.PolicyResourcesWatcher
+	DirectoryPolicyWatcher policyDirectory.ResourcesWatcher
 	DirReadStatus          policyDirectory.DirectoryWatcherReadStatus
 	CNIConfigManager       cni.CNIConfigManager
 	SwaggerSpec            *server.Spec
@@ -1610,7 +1610,7 @@ type daemonParams struct {
 	ServiceResolver     *dial.ServiceResolver
 	IPAM                *ipam.IPAM
 	CRDSyncPromise      promise.Promise[k8sSynced.CRDSync]
-	IdentityManager     *identitymanager.IdentityManager
+	IdentityManager     identitymanager.IDManager
 	Orchestrator        datapath.Orchestrator
 	IPTablesManager     datapath.IptablesManager
 	Hubble              hubblecell.HubbleIntegration

@@ -49,7 +49,7 @@ func setupRedirectSuite(tb testing.TB) *RedirectSuite {
 	// Setup dependencies for endpoint.
 	kvstore.SetupDummy(tb, "etcd")
 
-	s.mgr = cache.NewCachingIdentityAllocator(s.do)
+	s.mgr = cache.NewCachingIdentityAllocator(s.do, cache.AllocatorConfig{})
 	<-s.mgr.InitIdentityAllocator(nil)
 
 	identityCache := identity.IdentityMap{
@@ -57,7 +57,7 @@ func setupRedirectSuite(tb testing.TB) *RedirectSuite {
 		identityBar: labelsBar,
 	}
 
-	s.do.idmgr = identitymanager.NewIdentityManager()
+	s.do.idmgr = identitymanager.NewIDManager()
 	s.do.repo = policy.NewPolicyRepository(identityCache, nil, nil, s.do.idmgr)
 	s.do.repo.GetSelectorCache().SetLocalIdentityNotifier(testidentity.NewDummyIdentityNotifier())
 
@@ -126,7 +126,7 @@ func (d *DummyIdentityAllocatorOwner) GetNodeSuffix() string {
 // DummyOwner implements pkg/endpoint/regeneration/Owner. Used for unit testing.
 type DummyOwner struct {
 	repo  *policy.Repository
-	idmgr *identitymanager.IdentityManager
+	idmgr identitymanager.IDManager
 }
 
 // GetPolicyRepository returns the policy repository of the owner.
@@ -209,7 +209,7 @@ func (s *RedirectSuite) NewTestEndpoint(t *testing.T) *Endpoint {
 	ep.SetPropertyValue(PropertyFakeEndpoint, false)
 
 	epIdentity, _, err := s.mgr.AllocateIdentity(context.Background(), labelsBar.Labels(), true, identityBar)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	ep.SetIdentity(epIdentity, true)
 
 	return ep
@@ -306,9 +306,9 @@ func TestRedirectWithDeny(t *testing.T) {
 	})
 
 	res, err := ep.regeneratePolicy(s.stats)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = ep.setDesiredPolicy(res)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	expected := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
@@ -330,14 +330,14 @@ func TestRedirectWithDeny(t *testing.T) {
 
 	realizedRedirects := ep.GetRealizedRedirects()
 	desiredRedirects, err, finalizeFunc, revertFunc := ep.addNewRedirects(cmp)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	finalizeFunc()
 
 	// Redirect is still created, even if all MapState entries may have been overridden by a
 	// deny entry.  A new FQDN redirect may have no MapState entries as the associated CIDR
 	// identities may match no numeric IDs yet, so we can not count the number of added MapState
 	// entries and make any conclusions from it.
-	require.Equal(t, 1, len(desiredRedirects))
+	require.Len(t, desiredRedirects, 1)
 
 	expected2 := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
@@ -369,7 +369,7 @@ func TestRedirectWithDeny(t *testing.T) {
 	ep.removeOldRedirects(desiredRedirects, realizedRedirects, cmp)
 
 	// Check that the redirect is still realized
-	require.Equal(t, 1, len(desiredRedirects))
+	require.Len(t, desiredRedirects, 1)
 	require.Equal(t, 4, ep.desiredPolicy.GetPolicyMap().Len())
 
 	// Pretend that something failed and revert the changes
@@ -469,9 +469,9 @@ func TestRedirectWithPriority(t *testing.T) {
 	})
 
 	res, err := ep.regeneratePolicy(s.stats)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = ep.setDesiredPolicy(res)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	expected := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
@@ -492,13 +492,13 @@ func TestRedirectWithPriority(t *testing.T) {
 
 	realizedRedirects := ep.GetRealizedRedirects()
 	desiredRedirects, err, finalizeFunc, revertFunc := ep.addNewRedirects(cmp)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	finalizeFunc()
 
 	// Check that all redirects have been created.
 	require.Equal(t, crd2Port, desiredRedirects["12345:ingress:TCP:80:/cec2/listener2"])
 	require.Equal(t, crd1Port, desiredRedirects["12345:ingress:TCP:80:/cec1/listener1"])
-	require.Equal(t, 2, len(desiredRedirects))
+	require.Len(t, desiredRedirects, 2)
 
 	expected2 := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
@@ -522,7 +522,7 @@ func TestRedirectWithPriority(t *testing.T) {
 	ep.removeOldRedirects(desiredRedirects, realizedRedirects, cmp)
 
 	// Check that the redirect is still realized
-	require.Equal(t, 2, len(desiredRedirects))
+	require.Len(t, desiredRedirects, 2)
 	require.Equal(t, 3, ep.desiredPolicy.GetPolicyMap().Len())
 
 	// Pretend that something failed and revert the changes
@@ -550,9 +550,9 @@ func TestRedirectWithEqualPriority(t *testing.T) {
 	})
 
 	res, err := ep.regeneratePolicy(s.stats)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = ep.setDesiredPolicy(res)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	expected := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
@@ -573,13 +573,13 @@ func TestRedirectWithEqualPriority(t *testing.T) {
 
 	realizedRedirects := ep.GetRealizedRedirects()
 	desiredRedirects, err, finalizeFunc, revertFunc := ep.addNewRedirects(cmp)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	finalizeFunc()
 
 	// Check that all redirects have been created.
 	require.Equal(t, crd2Port, desiredRedirects["12345:ingress:TCP:80:/cec2/listener2"])
 	require.Equal(t, crd1Port, desiredRedirects["12345:ingress:TCP:80:/cec1/listener1"])
-	require.Equal(t, 2, len(desiredRedirects))
+	require.Len(t, desiredRedirects, 2)
 
 	expected2 := s.testMapState(policy.MapStateMap{
 		mapKeyAllowAllE: {
@@ -603,7 +603,7 @@ func TestRedirectWithEqualPriority(t *testing.T) {
 	ep.removeOldRedirects(desiredRedirects, realizedRedirects, cmp)
 
 	// Check that the redirect is still realized
-	require.Equal(t, 2, len(desiredRedirects))
+	require.Len(t, desiredRedirects, 2)
 	require.Equal(t, 3, ep.desiredPolicy.GetPolicyMap().Len())
 
 	// Pretend that something failed and revert the changes

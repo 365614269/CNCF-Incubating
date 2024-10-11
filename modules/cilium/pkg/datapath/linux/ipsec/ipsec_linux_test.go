@@ -51,7 +51,7 @@ func TestLoadKeysNoFile(t *testing.T) {
 	log := setupIPSecSuitePrivileged(t)
 
 	_, _, err := LoadIPSecKeysFile(log, path)
-	require.Equal(t, true, os.IsNotExist(err))
+	require.True(t, os.IsNotExist(err))
 }
 
 func TestInvalidLoadKeys(t *testing.T) {
@@ -154,7 +154,7 @@ func TestUpsertIPSecEquals(t *testing.T) {
 	// Let's check that state was not added as source and destination are the same
 	result, err := netlink.XfrmStateList(netlink.FAMILY_ALL)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(result))
+	require.Empty(t, result)
 
 	err = DeleteXFRM(log, AllReqID)
 	require.NoError(t, err)
@@ -178,7 +178,7 @@ func TestUpsertIPSecEquals(t *testing.T) {
 	// Let's check that state was not added as source and destination are the same
 	result, err = netlink.XfrmStateList(netlink.FAMILY_ALL)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(result))
+	require.Empty(t, result)
 }
 
 func TestUpsertIPSecEndpoint(t *testing.T) {

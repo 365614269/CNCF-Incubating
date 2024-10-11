@@ -364,7 +364,7 @@ func TestManager_AddRedirectPolicy_AddrMatcherDuplicateConfig(t *testing.T) {
 
 	added, err := m.rpm.AddRedirectPolicy(dupConfigFe)
 
-	require.Equal(t, false, added)
+	require.False(t, added)
 	require.Error(t, err)
 }
 
@@ -384,7 +384,7 @@ func TestManager_AddRedirectPolicy_SvcMatcherDuplicateConfig(t *testing.T) {
 
 	added, err := m.rpm.AddRedirectPolicy(invalidConfigSvc)
 
-	require.Equal(t, false, added)
+	require.False(t, added)
 	require.Error(t, err)
 }
 
@@ -406,19 +406,19 @@ func TestManager_AddrMatcherConfigSinglePort(t *testing.T) {
 
 	added, err := m.rpm.AddRedirectPolicy(configAddrType)
 
-	require.Equal(t, true, added)
-	require.Nil(t, err)
-	require.Equal(t, 1, len(m.rpm.policyConfigs))
+	require.True(t, added)
+	require.NoError(t, err)
+	require.Len(t, m.rpm.policyConfigs, 1)
 	require.Equal(t, configAddrType.id.Name, m.rpm.policyConfigs[configAddrType.id].id.Name)
 	require.Equal(t, configAddrType.id.Namespace, m.rpm.policyConfigs[configAddrType.id].id.Namespace)
-	require.Equal(t, 1, len(m.rpm.policyFrontendsByHash))
+	require.Len(t, m.rpm.policyFrontendsByHash, 1)
 	require.Equal(t, configAddrType.id, m.rpm.policyFrontendsByHash[configAddrType.frontendMappings[0].feAddr.Hash()])
-	require.Equal(t, 2, len(configAddrType.frontendMappings[0].podBackends))
+	require.Len(t, configAddrType.frontendMappings[0].podBackends, 2)
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes[i], configAddrType.frontendMappings[0].podBackends[i])
 	}
-	require.Equal(t, 1, len(m.rpm.policyPods))
-	require.Equal(t, 1, len(m.rpm.policyPods[pod1ID]))
+	require.Len(t, m.rpm.policyPods, 1)
+	require.Len(t, m.rpm.policyPods[pod1ID], 1)
 	require.Equal(t, configAddrType.id, m.rpm.policyPods[pod1ID][0])
 
 	// Add a new backend pod, this will add 2 more pod backends with each of the podIPs.
@@ -437,10 +437,10 @@ func TestManager_AddrMatcherConfigSinglePort(t *testing.T) {
 
 	m.rpm.OnAddPod(pod3)
 
-	require.Equal(t, 2, len(m.rpm.policyPods))
-	require.Equal(t, 1, len(m.rpm.policyPods[pod3ID]))
+	require.Len(t, m.rpm.policyPods, 2)
+	require.Len(t, m.rpm.policyPods[pod3ID], 1)
 	require.Equal(t, configAddrType.id, m.rpm.policyPods[pod1ID][0])
-	require.Equal(t, 4, len(configAddrType.frontendMappings[0].podBackends))
+	require.Len(t, configAddrType.frontendMappings[0].podBackends, 4)
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes2[i], configAddrType.frontendMappings[0].podBackends[i])
 	}
@@ -449,9 +449,9 @@ func TestManager_AddrMatcherConfigSinglePort(t *testing.T) {
 	pod3.Status.Conditions = []slimcorev1.PodCondition{podNotReady}
 	m.rpm.OnUpdatePod(pod3, false, false)
 
-	require.Equal(t, 2, len(m.rpm.policyPods))
-	require.Equal(t, 1, len(m.rpm.policyPods[pod3ID]))
-	require.Equal(t, 2, len(configAddrType.frontendMappings[0].podBackends))
+	require.Len(t, m.rpm.policyPods, 2)
+	require.Len(t, m.rpm.policyPods[pod3ID], 1)
+	require.Len(t, configAddrType.frontendMappings[0].podBackends, 2)
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes[i], configAddrType.frontendMappings[0].podBackends[i])
 	}
@@ -460,10 +460,10 @@ func TestManager_AddrMatcherConfigSinglePort(t *testing.T) {
 	pod3.Status.Conditions = []slimcorev1.PodCondition{podReady}
 	m.rpm.OnUpdatePod(pod3, false, true)
 
-	require.Equal(t, 2, len(m.rpm.policyPods))
-	require.Equal(t, 1, len(m.rpm.policyPods[pod3ID]))
+	require.Len(t, m.rpm.policyPods, 2)
+	require.Len(t, m.rpm.policyPods[pod3ID], 1)
 	require.Equal(t, configAddrType.id, m.rpm.policyPods[pod1ID][0])
-	require.Equal(t, 4, len(configAddrType.frontendMappings[0].podBackends))
+	require.Len(t, configAddrType.frontendMappings[0].podBackends, 4)
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes2[i], configAddrType.frontendMappings[0].podBackends[i])
 	}
@@ -471,10 +471,10 @@ func TestManager_AddrMatcherConfigSinglePort(t *testing.T) {
 	// Delete the pod. This should delete the pod's backends.
 	m.rpm.OnDeletePod(pod3)
 
-	require.Equal(t, 1, len(m.rpm.policyPods))
+	require.Len(t, m.rpm.policyPods, 1)
 	_, found := m.rpm.policyPods[pod3ID]
-	require.Equal(t, false, found)
-	require.Equal(t, 2, len(configAddrType.frontendMappings[0].podBackends))
+	require.False(t, found)
+	require.Len(t, configAddrType.frontendMappings[0].podBackends, 2)
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes[i], configAddrType.frontendMappings[0].podBackends[i])
 	}
@@ -482,10 +482,10 @@ func TestManager_AddrMatcherConfigSinglePort(t *testing.T) {
 	// Delete the LRP.
 	err = m.rpm.DeleteRedirectPolicy(configAddrType)
 
-	require.Nil(t, err)
-	require.Equal(t, 0, len(m.rpm.policyFrontendsByHash))
-	require.Equal(t, 0, len(m.rpm.policyPods))
-	require.Equal(t, 0, len(m.rpm.policyConfigs))
+	require.NoError(t, err)
+	require.Empty(t, m.rpm.policyFrontendsByHash)
+	require.Empty(t, m.rpm.policyPods)
+	require.Empty(t, m.rpm.policyConfigs)
 }
 
 // Tests add redirect policy, add pod, delete pod and delete redirect policy events
@@ -517,12 +517,12 @@ func TestManager_AddrMatcherConfigMultiplePorts(t *testing.T) {
 
 	added, err := m.rpm.AddRedirectPolicy(configAddrType)
 
-	require.Equal(t, true, added)
-	require.Nil(t, err)
-	require.Equal(t, 1, len(m.rpm.policyConfigs))
+	require.True(t, added)
+	require.NoError(t, err)
+	require.Len(t, m.rpm.policyConfigs, 1)
 	require.Equal(t, configAddrType.id.Name, m.rpm.policyConfigs[configAddrType.id].id.Name)
 	require.Equal(t, configAddrType.id.Namespace, m.rpm.policyConfigs[configAddrType.id].id.Namespace)
-	require.Equal(t, 2, len(m.rpm.policyFrontendsByHash))
+	require.Len(t, m.rpm.policyFrontendsByHash, 2)
 	for _, id := range m.rpm.policyFrontendsByHash {
 		require.Equal(t, configAddrType.id, id)
 	}
@@ -530,7 +530,7 @@ func TestManager_AddrMatcherConfigMultiplePorts(t *testing.T) {
 	for _, feM := range configAddrType.frontendMappings {
 		switch feM.fePort {
 		case "test1":
-			require.Equal(t, 2, len(feM.podBackends))
+			require.Len(t, feM.podBackends, 2)
 			for i := range podIPs {
 				expectedbes[i] = backend{
 					L3n4Addr: lb.L3n4Addr{AddrCluster: cmtypes.MustParseAddrCluster(podIPs[i]), L4Addr: beP1.l4Addr},
@@ -541,7 +541,7 @@ func TestManager_AddrMatcherConfigMultiplePorts(t *testing.T) {
 				require.Equal(t, expectedbes[i], feM.podBackends[i])
 			}
 		case "test2":
-			require.Equal(t, 2, len(feM.podBackends))
+			require.Len(t, feM.podBackends, 2)
 			for i := range podIPs {
 				expectedbes[i] = backend{
 					L3n4Addr: lb.L3n4Addr{AddrCluster: cmtypes.MustParseAddrCluster(podIPs[i]), L4Addr: beP2.l4Addr},
@@ -555,17 +555,17 @@ func TestManager_AddrMatcherConfigMultiplePorts(t *testing.T) {
 			log.Errorf("Unknown port %s", feM.fePort)
 		}
 	}
-	require.Equal(t, 1, len(m.rpm.policyPods))
-	require.Equal(t, 1, len(m.rpm.policyPods[pod1ID]))
+	require.Len(t, m.rpm.policyPods, 1)
+	require.Len(t, m.rpm.policyPods[pod1ID], 1)
 	require.Equal(t, configAddrType.id, m.rpm.policyPods[pod1ID][0])
 
 	// Delete the LRP.
 	err = m.rpm.DeleteRedirectPolicy(configAddrType)
 
-	require.Nil(t, err)
-	require.Equal(t, 0, len(m.rpm.policyFrontendsByHash))
-	require.Equal(t, 0, len(m.rpm.policyPods))
-	require.Equal(t, 0, len(m.rpm.policyConfigs))
+	require.NoError(t, err)
+	require.Empty(t, m.rpm.policyFrontendsByHash)
+	require.Empty(t, m.rpm.policyPods)
+	require.Empty(t, m.rpm.policyConfigs)
 }
 
 // Tests if frontend ipv4 and ipv6 addresses are mapped to the ipv4 and ipv6
@@ -601,8 +601,8 @@ func TestManager_AddrMatcherConfigDualStack(t *testing.T) {
 
 	added, err := m.rpm.AddRedirectPolicy(configAddrType)
 
-	require.Equal(t, true, added)
-	require.Nil(t, err)
+	require.True(t, added)
+	require.NoError(t, err)
 	require.Equal(t, len(expectedbes4), len(configAddrType.frontendMappings[0].podBackends))
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes4[i], configAddrType.frontendMappings[0].podBackends[i])
@@ -618,8 +618,8 @@ func TestManager_AddrMatcherConfigDualStack(t *testing.T) {
 
 	added, err = m.rpm.AddRedirectPolicy(configAddrType)
 
-	require.Equal(t, true, added)
-	require.Nil(t, err)
+	require.True(t, added)
+	require.NoError(t, err)
 	require.Equal(t, len(expectedbes6), len(configAddrType.frontendMappings[0].podBackends))
 
 	for i := range configAddrType.frontendMappings[0].podBackends {
@@ -645,16 +645,16 @@ func TestManager_OnAddandUpdatePod(t *testing.T) {
 	m.rpm.OnAddPod(pod)
 
 	// Namespace mismatched pod not selected.
-	require.Equal(t, 0, len(m.rpm.policyPods))
+	require.Empty(t, m.rpm.policyPods)
 	_, found := m.rpm.policyPods[podID]
-	require.Equal(t, false, found)
+	require.False(t, found)
 
 	m.rpm.OnUpdatePod(pod, true, true)
 
 	// Namespace mismatched pod not selected.
-	require.Equal(t, 0, len(m.rpm.policyPods))
+	require.Empty(t, m.rpm.policyPods)
 	_, found = m.rpm.policyPods[podID]
-	require.Equal(t, false, found)
+	require.False(t, found)
 }
 
 // Tests policies with skipRedirectFromBackend flag set.
@@ -692,8 +692,8 @@ func TestManager_OnAddRedirectPolicy(t *testing.T) {
 
 	added, err := m.rpm.AddRedirectPolicy(pc)
 
-	require.Equal(t, true, added)
-	require.Nil(t, err)
+	require.True(t, added)
+	require.NoError(t, err)
 
 	wg := sync.WaitGroup{}
 	// Asserts skipLBMap events
@@ -714,7 +714,7 @@ func TestManager_OnAddRedirectPolicy(t *testing.T) {
 
 		require.Equal(t, lb.SVCTypeLocalRedirect, ev.Type)
 		require.Equal(t, configAddrType.frontendMappings[0].feAddr.String(), ev.Frontend.String())
-		require.Equal(t, 1, len(ev.Backends))
+		require.Len(t, ev.Backends, 1)
 		require.Equal(t, backend{
 			L3n4Addr: lb.L3n4Addr{AddrCluster: cmtypes.MustParseAddrCluster(pod1.Status.PodIP), L4Addr: beP1.l4Addr},
 			podID:    pod1ID,
@@ -775,7 +775,7 @@ func TestManager_OnAddRedirectPolicy(t *testing.T) {
 
 		require.Equal(t, lb.SVCTypeLocalRedirect, ev.Type)
 		require.Equal(t, configAddrType.frontendMappings[0].feAddr.String(), ev.Frontend.String())
-		require.Equal(t, 1, len(ev.Backends))
+		require.Len(t, ev.Backends, 1)
 		require.Equal(t, backend{
 			L3n4Addr: lb.L3n4Addr{AddrCluster: cmtypes.MustParseAddrCluster(pod.Status.PodIP), L4Addr: beP1.l4Addr},
 			podID:    pod1ID,
@@ -787,8 +787,8 @@ func TestManager_OnAddRedirectPolicy(t *testing.T) {
 	// Policy is added.
 	added, err = m.rpm.AddRedirectPolicy(pc)
 
-	require.Equal(t, true, added)
-	require.Nil(t, err)
+	require.True(t, added)
+	require.NoError(t, err)
 
 	wg.Wait()
 
@@ -839,7 +839,7 @@ func TestManager_OnAddRedirectPolicy(t *testing.T) {
 
 		require.Equal(t, lb.SVCTypeLocalRedirect, ev.Type)
 		require.Equal(t, configAddrType.frontendMappings[0].feAddr.String(), ev.Frontend.String())
-		require.Equal(t, 1, len(ev.Backends))
+		require.Len(t, ev.Backends, 1)
 		require.Equal(t, backend{
 			L3n4Addr: lb.L3n4Addr{AddrCluster: cmtypes.MustParseAddrCluster(pod.Status.PodIP), L4Addr: beP1.l4Addr},
 			podID:    pod1ID,
@@ -850,8 +850,8 @@ func TestManager_OnAddRedirectPolicy(t *testing.T) {
 
 	// Policy is added.
 	added, err = m.rpm.AddRedirectPolicy(pc)
-	require.Equal(t, true, added)
-	require.Nil(t, err)
+	require.True(t, added)
+	require.NoError(t, err)
 
 	// Pod selected by the policy added.
 	m.rpm.OnAddPod(pod)

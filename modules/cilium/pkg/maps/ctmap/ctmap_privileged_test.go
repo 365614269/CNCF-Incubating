@@ -31,7 +31,7 @@ func setupCTMap(tb testing.TB) {
 
 	bpf.CheckOrMountFS("")
 	err := rlimit.RemoveMemlock()
-	require.Nil(tb, err)
+	require.NoError(tb, err)
 }
 
 func BenchmarkMapBatchLookup(b *testing.B) {
@@ -57,7 +57,7 @@ func Benchmark_MapUpdate(b *testing.B) {
 	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal)
 	err := m.OpenOrCreate()
 	defer m.Map.Unpin()
-	require.Nil(b, err)
+	require.NoError(b, err)
 
 	key := &CtKey4{
 		tuple.TupleKey4{
@@ -82,12 +82,12 @@ func Benchmark_MapUpdate(b *testing.B) {
 		LastRxReport:     15856,
 	}
 
-	require.Equal(b, true, b.N < 0xFFFF*0xFFFF)
+	require.Less(b, b.N, 0xFFFF*0xFFFF)
 	for i := 0; i < b.N; i++ {
 		key.DestPort = uint16(i % 0xFFFF)
 		key.SourcePort = uint16(i / 0xFFFF)
 		err := m.Map.Update(key, value)
-		require.Nil(b, err)
+		require.NoError(b, err)
 	}
 
 	a1 := make([]CtKey, 1)
@@ -103,7 +103,7 @@ func Benchmark_MapUpdate(b *testing.B) {
 
 	b.ResetTimer()
 	err = m.DumpWithCallback(cb)
-	require.Nil(b, err)
+	require.NoError(b, err)
 	t := m.Flush()
 	require.Equal(b, b.N, t)
 }
@@ -116,7 +116,7 @@ func TestCtGcIcmp(t *testing.T) {
 	// Init maps
 	natMap := nat.NewMap("cilium_nat_any4_test", nat.IPv4, 1000)
 	err := natMap.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer natMap.Map.Unpin()
 
 	ctMapName := MapNameAny4Global + "_test"
@@ -126,7 +126,7 @@ func TestCtGcIcmp(t *testing.T) {
 
 	ctMap := newMap(ctMapName, mapTypeIPv4AnyGlobal)
 	err = ctMap.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
 
 	// Create the following entries and check that they get GC-ed:
@@ -152,7 +152,7 @@ func TestCtGcIcmp(t *testing.T) {
 		Lifetime: 37459,
 	}
 	err = ctMap.Map.Update(ctKey, ctVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	natKey := &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
@@ -173,7 +173,7 @@ func TestCtGcIcmp(t *testing.T) {
 		Port:    0x3195,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	natKey = &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
 			TupleKey4: tuple.TupleKey4{
@@ -193,17 +193,17 @@ func TestCtGcIcmp(t *testing.T) {
 		Port:    0x3195,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	buf := make(map[string][]string)
 	err = ctMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 1, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 1)
 
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 2, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 2)
 
 	// GC and check whether NAT entries have been collected
 	filter := GCFilter{
@@ -216,8 +216,8 @@ func TestCtGcIcmp(t *testing.T) {
 
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 }
 
 // TestCtGcTcp tests whether TCP SNAT entries are removed upon a removal of
@@ -227,7 +227,7 @@ func TestCtGcTcp(t *testing.T) {
 	// Init maps
 	natMap := nat.NewMap("cilium_nat_any4_test", nat.IPv4, 1000)
 	err := natMap.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer natMap.Map.Unpin()
 
 	ctMapName := MapNameTCP4Global + "_test"
@@ -237,7 +237,7 @@ func TestCtGcTcp(t *testing.T) {
 
 	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
 	err = ctMap.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
 
 	// Create the following entries and check that they get GC-ed:
@@ -263,7 +263,7 @@ func TestCtGcTcp(t *testing.T) {
 		Lifetime: 37459,
 	}
 	err = ctMap.Map.Update(ctKey, ctVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	natKey := &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
@@ -284,7 +284,7 @@ func TestCtGcTcp(t *testing.T) {
 		Port:    0x3295,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	natKey = &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
 			TupleKey4: tuple.TupleKey4{
@@ -304,17 +304,17 @@ func TestCtGcTcp(t *testing.T) {
 		Port:    0x3195,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	buf := make(map[string][]string)
 	err = ctMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 1, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 1)
 
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 2, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 2)
 
 	// GC and check whether NAT entries have been collected
 	filter := GCFilter{
@@ -327,8 +327,8 @@ func TestCtGcTcp(t *testing.T) {
 
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 }
 
 // TestCtGcDsr tests whether DSR NAT entries are removed upon a removal of
@@ -339,7 +339,7 @@ func TestCtGcDsr(t *testing.T) {
 	// Init maps
 	natMap := nat.NewMap("cilium_nat_any4_test", nat.IPv4, 1000)
 	err := natMap.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer natMap.Map.Unpin()
 
 	ctMapName := MapNameTCP4Global + "_test"
@@ -349,7 +349,7 @@ func TestCtGcDsr(t *testing.T) {
 
 	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
 	err = ctMap.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
 
 	// Create the following entries and check that they get GC-ed:
@@ -375,7 +375,7 @@ func TestCtGcDsr(t *testing.T) {
 		Flags:    DSRInternal,
 	}
 	err = ctMap.Map.Update(ctKey, ctVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	natKey := &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
@@ -395,17 +395,17 @@ func TestCtGcDsr(t *testing.T) {
 		Port:    0x50,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	buf := make(map[string][]string)
 	err = ctMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 1, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 1)
 
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 1, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 1)
 
 	// GC and check whether NAT entry has been collected
 	filter := GCFilter{
@@ -418,8 +418,8 @@ func TestCtGcDsr(t *testing.T) {
 
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 }
 
 // TestOrphanNat checks whether dangling NAT entries are GC'd (GH#12686)
@@ -429,7 +429,7 @@ func TestOrphanNatGC(t *testing.T) {
 	// Init maps
 	natMap := nat.NewMap("cilium_nat_any4_test", nat.IPv4, 1000)
 	err := natMap.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer natMap.Map.Unpin()
 
 	ctMapAnyName := MapNameAny4Global + "_test"
@@ -438,7 +438,7 @@ func TestOrphanNatGC(t *testing.T) {
 	}
 	ctMapAny := newMap(ctMapAnyName, mapTypeIPv4AnyGlobal)
 	err = ctMapAny.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer ctMapAny.Map.Unpin()
 
 	ctMapTCPName := MapNameTCP4Global + "_test"
@@ -447,7 +447,7 @@ func TestOrphanNatGC(t *testing.T) {
 	}
 	ctMapTCP := newMap(ctMapTCPName, mapTypeIPv4TCPGlobal)
 	err = ctMapTCP.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer ctMapTCP.Map.Unpin()
 
 	// Create the following entries and check that SNAT entries are NOT GC-ed
@@ -489,7 +489,7 @@ func TestOrphanNatGC(t *testing.T) {
 		Lifetime: 37459,
 	}
 	err = ctMapAny.Map.Update(ctKey, ctVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	natKey := &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
@@ -510,7 +510,7 @@ func TestOrphanNatGC(t *testing.T) {
 		Port:    0x51d6,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	natKey = &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
 			TupleKey4: tuple.TupleKey4{
@@ -530,7 +530,7 @@ func TestOrphanNatGC(t *testing.T) {
 		Port:    0x50d6,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	stats := PurgeOrphanNATEntries(ctMapTCP, ctMapAny)
 	require.Equal(t, uint32(1), stats.IngressAlive)
@@ -540,12 +540,12 @@ func TestOrphanNatGC(t *testing.T) {
 	// Check that both entries haven't removed
 	buf := make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 2, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 2)
 
 	// Now remove the CT entry which should remove both NAT entries
 	err = ctMapAny.Map.Delete(ctKey)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	stats = PurgeOrphanNATEntries(ctMapTCP, ctMapAny)
 	require.Equal(t, uint32(1), stats.IngressDeleted)
 	require.Equal(t, uint32(0), stats.IngressAlive)
@@ -554,20 +554,20 @@ func TestOrphanNatGC(t *testing.T) {
 	// Check that both orphan NAT entries have been removed
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 
 	// Create only CT_INGRESS NAT entry which should be removed
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	stats = PurgeOrphanNATEntries(ctMapTCP, ctMapAny)
 	require.Equal(t, uint32(1), stats.IngressDeleted)
 	require.Equal(t, uint32(0), stats.EgressDeleted)
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 
 	// Test DSR (new, tracked by nodeport.h)
 	//
@@ -596,7 +596,7 @@ func TestOrphanNatGC(t *testing.T) {
 		Flags:    DSRInternal,
 	}
 	err = ctMapTCP.Map.Update(ctKey, ctVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	natKey = &nat.NatKey4{
 		TupleKey4Global: tuple.TupleKey4Global{
@@ -616,7 +616,7 @@ func TestOrphanNatGC(t *testing.T) {
 		Port:    0x409c,
 	}
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	stats = PurgeOrphanNATEntries(ctMapTCP, ctMapTCP)
 	require.Equal(t, uint32(0), stats.IngressAlive)
@@ -626,12 +626,12 @@ func TestOrphanNatGC(t *testing.T) {
 	// Check that the entry hasn't been removed
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 1, len(buf))
+	require.NoError(t, err)
+	require.Len(t, buf, 1)
 
 	// Now remove the CT entry which should remove the NAT entry
 	err = ctMapTCP.Map.Delete(ctKey)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	stats = PurgeOrphanNATEntries(ctMapTCP, ctMapTCP)
 	require.Equal(t, uint32(0), stats.IngressAlive)
 	require.Equal(t, uint32(0), stats.IngressDeleted)
@@ -640,8 +640,8 @@ func TestOrphanNatGC(t *testing.T) {
 	// Check that the orphan NAT entry has been removed
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 
 	// When a connection is re-opened and switches from DSR to local-backend,
 	// its CT entry gets re-created but uses the same CT tuple as key.
@@ -650,10 +650,10 @@ func TestOrphanNatGC(t *testing.T) {
 	ctVal.Flags = 0
 
 	err = ctMapTCP.Map.Update(ctKey, ctVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	err = natMap.Map.Update(natKey, natVal)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	stats = PurgeOrphanNATEntries(ctMapTCP, ctMapTCP)
 	require.Equal(t, uint32(0), stats.IngressAlive)
@@ -663,14 +663,14 @@ func TestOrphanNatGC(t *testing.T) {
 	// Check that the orphan NAT entry has been removed
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 
 	// Let's check IPv6
 
 	natMapV6 := nat.NewMap("cilium_nat_any6_test", nat.IPv6, 1000)
 	err = natMapV6.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer natMapV6.Map.Unpin()
 
 	ctMapAnyName = MapNameAny6Global + "_test"
@@ -679,7 +679,7 @@ func TestOrphanNatGC(t *testing.T) {
 	}
 	ctMapAnyV6 := newMap(ctMapAnyName, mapTypeIPv6AnyGlobal)
 	err = ctMapAnyV6.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer ctMapAnyV6.Map.Unpin()
 
 	ctMapTCPName = MapNameTCP6Global + "_test"
@@ -688,7 +688,7 @@ func TestOrphanNatGC(t *testing.T) {
 	}
 	ctMapTCPV6 := newMap(ctMapTCPName, mapTypeIPv6TCPGlobal)
 	err = ctMapTCP.OpenOrCreate()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer ctMapTCPV6.Map.Unpin()
 
 	natKeyV6 := &nat.NatKey6{
@@ -710,15 +710,15 @@ func TestOrphanNatGC(t *testing.T) {
 		Port:    0x51d6,
 	}
 	err = natMapV6.Map.Update(natKeyV6, natValV6)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	stats = PurgeOrphanNATEntries(ctMapTCPV6, ctMapAnyV6)
 	require.Equal(t, uint32(1), stats.IngressDeleted)
 	require.Equal(t, uint32(0), stats.EgressDeleted)
 	buf = make(map[string][]string)
 	err = natMap.Map.Dump(buf)
-	require.Nil(t, err)
-	require.Equal(t, 0, len(buf))
+	require.NoError(t, err)
+	require.Empty(t, buf)
 }
 
 // TestCount checks whether the CT map batch lookup dumps the count of the

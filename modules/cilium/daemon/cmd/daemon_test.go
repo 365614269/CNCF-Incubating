@@ -152,10 +152,10 @@ func setupDaemonSuite(tb testing.TB) *DaemonSuite {
 
 	ds.log = hivetest.Logger(tb)
 	err := ds.hive.Start(ds.log, ctx)
-	require.Nil(tb, err)
+	require.NoError(tb, err)
 
 	ds.d, err = daemonPromise.Await(ctx)
-	require.Nil(tb, err)
+	require.NoError(tb, err)
 
 	kvstore.Client().DeletePrefix(ctx, kvstore.OperationalPath)
 	kvstore.Client().DeletePrefix(ctx, kvstore.BaseKeyPrefix)
@@ -190,7 +190,7 @@ func setupDaemonSuite(tb testing.TB) *DaemonSuite {
 		policy.SetPolicyEnabled(ds.oldPolicyEnabled)
 
 		err := ds.hive.Stop(ds.log, ctx)
-		require.Nil(tb, err)
+		require.NoError(tb, err)
 
 		ds.d.Close()
 	})
@@ -238,8 +238,8 @@ func setupDaemonEtcdSuite(tb testing.TB) *DaemonEtcdSuite {
 }
 
 func TestMinimumWorkerThreadsIsSet(t *testing.T) {
-	require.Equal(t, true, numWorkerThreads() >= 2)
-	require.Equal(t, true, numWorkerThreads() >= runtime.NumCPU())
+	require.GreaterOrEqual(t, numWorkerThreads(), 2)
+	require.GreaterOrEqual(t, numWorkerThreads(), runtime.NumCPU())
 }
 
 func (ds *DaemonSuite) GetPolicyRepository() *policy.Repository {

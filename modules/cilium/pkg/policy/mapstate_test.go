@@ -75,10 +75,10 @@ func (e MapStateEntry) WithDependents(keys ...Key) MapStateEntry {
 func TestPolicyKeyTrafficDirection(t *testing.T) {
 	k := IngressKey()
 	require.True(t, k.IsIngress())
-	require.Equal(t, false, k.IsEgress())
+	require.False(t, k.IsEgress())
 
 	k = EgressKey()
-	require.Equal(t, false, k.IsIngress())
+	require.False(t, k.IsIngress())
 	require.True(t, k.IsEgress())
 }
 
@@ -2749,5 +2749,5 @@ func TestDenyPreferredInsertLogic(t *testing.T) {
 
 	n := epPolicy.policyMapState.Len()
 	p.Detach()
-	assert.True(t, n > 0)
+	assert.Positive(t, n)
 }

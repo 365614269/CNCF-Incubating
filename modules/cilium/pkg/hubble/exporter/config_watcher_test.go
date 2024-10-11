@@ -25,7 +25,7 @@ func TestYamlConfigFileUnmarshalling(t *testing.T) {
 	assert.NoError(t, err)
 
 	// then
-	assert.Equal(t, 3, len(config.FlowLogs))
+	assert.Len(t, config.FlowLogs, 3)
 
 	assert.Equal(t, uint64(0x912a996c7b013eb3), hash, "hash should match")
 
@@ -89,7 +89,7 @@ func TestEmptyYamlConfigFileUnmarshalling(t *testing.T) {
 	assert.NoError(t, err)
 
 	// then
-	assert.Equal(t, 0, len(config.FlowLogs))
+	assert.Empty(t, config.FlowLogs)
 	assert.Equal(t, uint64(0x4b2008fd98c1dd4), hash)
 }
 
