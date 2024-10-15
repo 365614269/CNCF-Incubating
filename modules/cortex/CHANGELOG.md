@@ -2,6 +2,7 @@
 
 ## master / unreleased
 
+* [CHANGE] Change default value of `-blocks-storage.bucket-store.index-cache.memcached.max-async-concurrency` from `50` to `3` #6265
 * [CHANGE] Enable Compactor and Alertmanager in target all. #6204
 * [FEATURE] Query Frontend/Querier: Add protobuf codec `-api.querier-default-codec` and the option to choose response compression type `-querier.response-compression`. #5527
 * [FEATURE] Ruler: Experimental: Add `ruler.frontend-address` to allow query to query frontends instead of ingesters. #6151
@@ -19,6 +20,7 @@
 * [ENHANCEMENT] StoreGateway: Implement metadata API limit in queryable. #6195
 * [ENHANCEMENT] Ingester: Add matchers to ingester LabelNames() and LabelNamesStream() RPC. #6209
 * [ENHANCEMENT] Ingester/Store Gateway Clients: Introduce an experimental HealthCheck handler to quickly fail requests directed to unhealthy targets. #6225 #6257
+* [ENHANCEMENT] Upgrade build image and Go version to 1.23.2. #6261 #6262
 * [BUGFIX] Runtime-config: Handle absolute file paths when working directory is not / #6224
 
 ## 1.18.0 2024-09-03
