@@ -696,6 +696,8 @@ type VirtualMachineInstanceNetworkInterface struct {
 	Name string `json:"name,omitempty"`
 	// List of all IP addresses of a Virtual Machine interface
 	IPs []string `json:"ipAddresses,omitempty"`
+	// PodInterfaceName represents the name of the pod network interface
+	PodInterfaceName string `json:"podInterfaceName,omitempty"`
 	// The interface name inside the Virtual Machine
 	InterfaceName string `json:"interfaceName,omitempty"`
 	// Specifies the origin of the interface data collected. values: domain, guest-agent, multus-status.
@@ -1701,8 +1703,6 @@ type VolumeMigrationState struct {
 	// +listType=atomic
 	// +optional
 	MigratedVolumes []StorageMigratedVolumeInfo `json:"migratedVolumes,omitempty"`
-	// ManualRecoveryRequired indicates if the update due to the migration failed and the volumes set needs to be manually restored
-	ManualRecoveryRequired *bool `json:"manualRecoveryRequired,omitempty"`
 }
 
 type VolumeSnapshotStatus struct {
@@ -1761,6 +1761,9 @@ const (
 
 	// VirtualMachineRestartRequired is added when changes made to the VM can't be live-propagated to the VMI
 	VirtualMachineRestartRequired VirtualMachineConditionType = "RestartRequired"
+
+	// VirtualMachineManualRecoveryRequired is added when the VM spec needs to be manually recovered by the user
+	VirtualMachineManualRecoveryRequired VirtualMachineConditionType = "ManualRecoveryRequired"
 )
 
 type HostDiskType string
@@ -2869,7 +2872,7 @@ type InterfaceBindingPlugin struct {
 	// version: 1alphav1
 	NetworkAttachmentDefinition string `json:"networkAttachmentDefinition,omitempty"`
 	// DomainAttachmentType is a standard domain network attachment method kubevirt supports.
-	// Supported values: "tap".
+	// Supported values: "tap", "managedTap" (since v1.4).
 	// The standard domain attachment can be used instead or in addition to the sidecarImage.
 	// version: 1alphav1
 	DomainAttachmentType DomainAttachmentType `json:"domainAttachmentType,omitempty"`
@@ -2909,6 +2912,9 @@ const (
 	// Tap domain attachment type is a generic way to bind ethernet connection into guests using tap device
 	// https://libvirt.org/formatdomain.html#generic-ethernet-connection.
 	Tap DomainAttachmentType = "tap"
+	// ManagedTap domain attachment type is binding an ethernet connection into guests using a tap device.
+	// The tap device is created (unless already present) on the network pod interface with a Linux bridge.
+	ManagedTap DomainAttachmentType = "managedTap"
 )
 
 type NetworkBindingDownwardAPIType string

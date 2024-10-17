@@ -187,13 +187,14 @@ func (VirtualMachineInstanceMigrationCondition) SwaggerDoc() map[string]string {
 
 func (VirtualMachineInstanceNetworkInterface) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"ipAddress":     "IP address of a Virtual Machine interface. It is always the first item of\nIPs",
-		"mac":           "Hardware address of a Virtual Machine interface",
-		"name":          "Name of the interface, corresponds to name of the network assigned to the interface",
-		"ipAddresses":   "List of all IP addresses of a Virtual Machine interface",
-		"interfaceName": "The interface name inside the Virtual Machine",
-		"infoSource":    "Specifies the origin of the interface data collected. values: domain, guest-agent, multus-status.",
-		"queueCount":    "Specifies how many queues are allocated by MultiQueue",
+		"ipAddress":        "IP address of a Virtual Machine interface. It is always the first item of\nIPs",
+		"mac":              "Hardware address of a Virtual Machine interface",
+		"name":             "Name of the interface, corresponds to name of the network assigned to the interface",
+		"ipAddresses":      "List of all IP addresses of a Virtual Machine interface",
+		"podInterfaceName": "PodInterfaceName represents the name of the pod network interface",
+		"interfaceName":    "The interface name inside the Virtual Machine",
+		"infoSource":       "Specifies the origin of the interface data collected. values: domain, guest-agent, multus-status.",
+		"queueCount":       "Specifies how many queues are allocated by MultiQueue",
 	}
 }
 
@@ -415,8 +416,7 @@ func (VolumeUpdateState) SwaggerDoc() map[string]string {
 
 func (VolumeMigrationState) SwaggerDoc() map[string]string {
 	return map[string]string{
-		"migratedVolumes":        "MigratedVolumes lists the source and destination volumes during the volume migration\n+listType=atomic\n+optional",
-		"manualRecoveryRequired": "ManualRecoveryRequired indicates if the update due to the migration failed and the volumes set needs to be manually restored",
+		"migratedVolumes": "MigratedVolumes lists the source and destination volumes during the volume migration\n+listType=atomic\n+optional",
 	}
 }
 
@@ -956,7 +956,7 @@ func (InterfaceBindingPlugin) SwaggerDoc() map[string]string {
 	return map[string]string{
 		"sidecarImage":                "SidecarImage references a container image that runs in the virt-launcher pod.\nThe sidecar handles (libvirt) domain configuration and optional services.\nversion: 1alphav1",
 		"networkAttachmentDefinition": "NetworkAttachmentDefinition references to a NetworkAttachmentDefinition CR object.\nFormat: <name>, <namespace>/<name>.\nIf namespace is not specified, VMI namespace is assumed.\nversion: 1alphav1",
-		"domainAttachmentType":        "DomainAttachmentType is a standard domain network attachment method kubevirt supports.\nSupported values: \"tap\".\nThe standard domain attachment can be used instead or in addition to the sidecarImage.\nversion: 1alphav1",
+		"domainAttachmentType":        "DomainAttachmentType is a standard domain network attachment method kubevirt supports.\nSupported values: \"tap\", \"managedTap\" (since v1.4).\nThe standard domain attachment can be used instead or in addition to the sidecarImage.\nversion: 1alphav1",
 		"migration":                   "Migration means the VM using the plugin can be safely migrated\nversion: 1alphav1",
 		"downwardAPI":                 "DownwardAPI specifies what kind of data should be exposed to the binding plugin sidecar.\nSupported values: \"device-info\"\nversion: v1alphav1\n+optional",
 		"computeResourceOverhead":     "ComputeResourceOverhead specifies the resource overhead that should be added to the compute container when using the binding.\nversion: v1alphav1\n+optional",

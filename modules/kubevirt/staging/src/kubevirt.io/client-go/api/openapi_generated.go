@@ -20385,7 +20385,7 @@ func schema_kubevirtio_api_core_v1_InterfaceBindingPlugin(ref common.ReferenceCa
 					},
 					"domainAttachmentType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DomainAttachmentType is a standard domain network attachment method kubevirt supports. Supported values: \"tap\". The standard domain attachment can be used instead or in addition to the sidecarImage. version: 1alphav1",
+							Description: "DomainAttachmentType is a standard domain network attachment method kubevirt supports. Supported values: \"tap\", \"managedTap\" (since v1.4). The standard domain attachment can be used instead or in addition to the sidecarImage. version: 1alphav1",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -25420,6 +25420,13 @@ func schema_kubevirtio_api_core_v1_VirtualMachineInstanceNetworkInterface(ref co
 							},
 						},
 					},
+					"podInterfaceName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodInterfaceName represents the name of the pod network interface",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"interfaceName": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The interface name inside the Virtual Machine",
@@ -26942,13 +26949,6 @@ func schema_kubevirtio_api_core_v1_VolumeMigrationState(ref common.ReferenceCall
 									},
 								},
 							},
-						},
-					},
-					"manualRecoveryRequired": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ManualRecoveryRequired indicates if the update due to the migration failed and the volumes set needs to be manually restored",
-							Type:        []string{"boolean"},
-							Format:      "",
 						},
 					},
 				},

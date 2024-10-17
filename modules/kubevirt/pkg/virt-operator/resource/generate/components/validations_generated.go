@@ -1306,7 +1306,7 @@ var CRDsValidation map[string]string = map[string]string{
                       domainAttachmentType:
                         description: |-
                           DomainAttachmentType is a standard domain network attachment method kubevirt supports.
-                          Supported values: "tap".
+                          Supported values: "tap", "managedTap" (since v1.4).
                           The standard domain attachment can be used instead or in addition to the sidecarImage.
                           version: 1alphav1
                         type: string
@@ -8437,11 +8437,6 @@ var CRDsValidation map[string]string = map[string]string{
               description: VolumeMigrationState tracks the information related to
                 the volume migration
               properties:
-                manualRecoveryRequired:
-                  description: ManualRecoveryRequired indicates if the update due
-                    to the migration failed and the volumes set needs to be manually
-                    restored
-                  type: boolean
                 migratedVolumes:
                   description: MigratedVolumes lists the source and destination volumes
                     during the volume migration
@@ -13340,6 +13335,10 @@ var CRDsValidation map[string]string = map[string]string{
               name:
                 description: Name of the interface, corresponds to name of the network
                   assigned to the interface
+                type: string
+              podInterfaceName:
+                description: PodInterfaceName represents the name of the pod network
+                  interface
                 type: string
               queueCount:
                 description: Specifies how many queues are allocated by MultiQueue
@@ -28969,11 +28968,6 @@ var CRDsValidation map[string]string = map[string]string{
                           description: VolumeMigrationState tracks the information
                             related to the volume migration
                           properties:
-                            manualRecoveryRequired:
-                              description: ManualRecoveryRequired indicates if the
-                                update due to the migration failed and the volumes
-                                set needs to be manually restored
-                              type: boolean
                             migratedVolumes:
                               description: MigratedVolumes lists the source and destination
                                 volumes during the volume migration
