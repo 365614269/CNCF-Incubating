@@ -21,7 +21,12 @@
 * [ENHANCEMENT] Ingester: Add matchers to ingester LabelNames() and LabelNamesStream() RPC. #6209
 * [ENHANCEMENT] Ingester/Store Gateway Clients: Introduce an experimental HealthCheck handler to quickly fail requests directed to unhealthy targets. #6225 #6257
 * [ENHANCEMENT] Upgrade build image and Go version to 1.23.2. #6261 #6262
+* [ENHANCEMENT] Querier/Ruler: Expose `store_gateway_consistency_check_max_attempts` for max retries when querying store gateway in consistency check. #6276
 * [BUGFIX] Runtime-config: Handle absolute file paths when working directory is not / #6224
+
+## 1.18.1 2024-10-14
+
+* [BUGFIX] Backporting upgrade to go 1.22.7 to patch CVE-2024-34155, CVE-2024-34156, CVE-2024-34158 #6217 #6264
 
 ## 1.18.0 2024-09-03
 
