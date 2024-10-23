@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"testing"
 
 	"github.com/cilium/hive/cell"
 	"github.com/sirupsen/logrus"
@@ -320,6 +319,7 @@ type Endpoint struct {
 
 	// proxyStatisticsMutex is the mutex that must be held to read or write
 	// proxyStatistics.
+	// No other locks may be taken while holding proxyStatisticsMutex.
 	proxyStatisticsMutex lock.RWMutex
 
 	proxy EndpointProxy
@@ -358,11 +358,6 @@ type Endpoint struct {
 	// controllers is the list of async controllers syncing the endpoint to
 	// other resources
 	controllers *controller.Manager
-
-	// realizedRedirects maps the ID of each proxy redirect that has been
-	// successfully added into a proxy for this endpoint, to the redirect's
-	// proxy port number.
-	realizedRedirects atomic.Pointer[map[string]uint16]
 
 	// ctCleaned indicates whether the conntrack table has already been
 	// cleaned when this endpoint was first created
@@ -420,13 +415,6 @@ type Endpoint struct {
 
 	// NetNsCookie is the network namespace cookie of the Endpoint.
 	NetNsCookie uint64
-}
-
-func (e *Endpoint) GetRealizedRedirects() (redirects map[string]uint16) {
-	if p := e.realizedRedirects.Load(); p != nil {
-		redirects = *p
-	}
-	return redirects
 }
 
 func (e *Endpoint) GetReporter(name string) cell.Health {
@@ -544,7 +532,9 @@ func (e *Endpoint) waitForProxyCompletions(proxyWaitGroup *completion.WaitGroup)
 }
 
 // NewTestEndpointWithState creates a new endpoint useful for testing purposes
-func NewTestEndpointWithState(_ testing.TB, owner regeneration.Owner, policyGetter policyRepoGetter, namedPortsGetter namedPortsGetter, proxy EndpointProxy, allocator cache.IdentityAllocator, ID uint16, state State) *Endpoint {
+//
+// Note: This function is intended for testing purposes only and should not be used in production code.
+func NewTestEndpointWithState(owner regeneration.Owner, policyGetter policyRepoGetter, namedPortsGetter namedPortsGetter, proxy EndpointProxy, allocator cache.IdentityAllocator, ID uint16, state State) *Endpoint {
 	endpointQueueName := "endpoint-" + strconv.FormatUint(uint64(ID), 10)
 	ep := createEndpoint(owner, policyGetter, namedPortsGetter, proxy, allocator, ID, "")
 	ep.SetPropertyValue(PropertyFakeEndpoint, true)
@@ -1194,24 +1184,22 @@ type DeleteConfig struct {
 // endpoints which failed to be restored. Any cleanup routine of leaveLocked()
 // which depends on kvstore connectivity must be protected by a flag in
 // DeleteConfig and the restore logic must opt-out of it.
-func (e *Endpoint) leaveLocked(proxyWaitGroup *completion.WaitGroup, conf DeleteConfig) []error {
+func (e *Endpoint) leaveLocked(conf DeleteConfig) []error {
 	errs := []error{}
 
 	// Remove policy references from shared policy structures
 	e.desiredPolicy.Detach()
-	e.realizedPolicy.Detach()
+	// Passing a new map of nil will purge all redirects
+	e.removeOldRedirects(nil, e.desiredPolicy.Redirects)
+
+	if e.realizedPolicy != e.desiredPolicy {
+		e.realizedPolicy.Detach()
+		// Passing a new map of nil will purge all redirects
+		e.removeOldRedirects(nil, e.realizedPolicy.Redirects)
+	}
 
 	// Remove restored rules of cleaned endpoint
 	e.owner.RemoveRestoredDNSRules(e.ID)
-
-	realizedRedirects := e.GetRealizedRedirects()
-	if e.SecurityIdentity != nil && len(realizedRedirects) > 0 {
-		// Passing a new map of nil will purge all redirects
-		finalize, _ := e.removeOldRedirects(nil, realizedRedirects, proxyWaitGroup)
-		if finalize != nil {
-			finalize()
-		}
-	}
 
 	if e.policyMap != nil {
 		if err := e.policyMap.Close(); err != nil {
@@ -2529,17 +2517,8 @@ func (e *Endpoint) Delete(conf DeleteConfig) []error {
 		}
 	}
 
-	completionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	proxyWaitGroup := completion.NewWaitGroup(completionCtx)
-
-	errs = append(errs, e.leaveLocked(proxyWaitGroup, conf)...)
+	errs = append(errs, e.leaveLocked(conf)...)
 	e.unlock()
-
-	err := e.waitForProxyCompletions(proxyWaitGroup)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("unable to remove proxy redirects: %w", err))
-	}
-	cancel()
 
 	return errs
 }

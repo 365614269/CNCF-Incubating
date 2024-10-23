@@ -119,6 +119,8 @@ type XDSServer interface {
 	//
 	// Only used for testing
 	GetNetworkPolicies(resourceNames []string) (map[string]*cilium.NetworkPolicy, error)
+	// UseCurrentNetworkPolicy waits for any pending update on NetworkPolicy to be acked.
+	UseCurrentNetworkPolicy(ep endpoint.EndpointUpdater, policy *policy.L4Policy, wg *completion.WaitGroup)
 	// UpdateNetworkPolicy adds or updates a network policy in the set published to L7 proxies.
 	// When the proxy acknowledges the network policy update, it will result in
 	// a subsequent call to the endpoint's OnProxyPolicyUpdate() function.
@@ -390,6 +392,16 @@ func (s *xdsServer) getHttpFilterChainProto(clusterName string, tls bool, isIngr
 				ConfigType: &envoy_config_http.HttpFilter_TypedConfig{
 					TypedConfig: toAny(&envoy_extensions_filters_http_router_v3.Router{}),
 				},
+			},
+		},
+		InternalAddressConfig: &envoy_config_http.HttpConnectionManager_InternalAddressConfig{
+			UnixSockets: false,
+			CidrRanges: []*envoy_config_core.CidrRange{
+				{AddressPrefix: "10.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: 8}},
+				{AddressPrefix: "172.16.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: 12}},
+				{AddressPrefix: "192.168.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: 16}},
+				{AddressPrefix: "127.0.0.1", PrefixLen: &wrapperspb.UInt32Value{Value: 32}},
+				{AddressPrefix: "::1", PrefixLen: &wrapperspb.UInt32Value{Value: 128}},
 			},
 		},
 		StreamIdleTimeout: &durationpb.Duration{}, // 0 == disabled
@@ -1585,8 +1597,6 @@ func getWildcardNetworkPolicyRule(version *versioned.VersionHandle, selectors po
 }
 
 func getDirectionNetworkPolicy(ep endpoint.EndpointUpdater, l4Policy policy.L4PolicyMap, policyEnforced bool, useFullTLSContext bool, dir string) []*cilium.PortNetworkPolicy {
-	version := ep.GetPolicyVersionHandle()
-
 	// TODO: integrate visibility with enforced policy
 	if !policyEnforced {
 		// Always allow all ports
@@ -1596,6 +1606,8 @@ func getDirectionNetworkPolicy(ep endpoint.EndpointUpdater, l4Policy policy.L4Po
 	if l4Policy == nil || l4Policy.Len() == 0 {
 		return nil
 	}
+
+	version := ep.GetPolicyVersionHandle()
 
 	PerPortPolicies := make([]*cilium.PortNetworkPolicy, 0, l4Policy.Len())
 	l4Policy.ForEach(func(l4 *policy.L4Filter) bool {
@@ -1755,6 +1767,23 @@ func getNodeIDs(ep endpoint.EndpointUpdater, policy *policy.L4Policy) []string {
 	return nodeIDs
 }
 
+func (s *xdsServer) UseCurrentNetworkPolicy(ep endpoint.EndpointUpdater, policy *policy.L4Policy, wg *completion.WaitGroup) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	// If there are no listeners configured, the local node's Envoy proxy won't
+	// query for network policies and therefore will never ACK them, and we'd
+	// wait forever.
+	if s.proxyListeners == 0 {
+		wg = nil
+	}
+
+	nodeIDs := getNodeIDs(ep, policy)
+
+	// only wait for the most current policy to be acked when no (new) policy is given
+	s.NetworkPolicyMutator.UseCurrent(NetworkPolicyTypeURL, nodeIDs, wg)
+}
+
 func (s *xdsServer) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, policy *policy.L4Policy,
 	ingressPolicyEnforced, egressPolicyEnforced bool, wg *completion.WaitGroup,
 ) (error, func() error) {
@@ -1787,8 +1816,6 @@ func (s *xdsServer) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, policy *pol
 		return fmt.Errorf("error validating generated NetworkPolicy for Endpoint %d: %w", ep.GetID(), err), nil
 	}
 
-	nodeIDs := getNodeIDs(ep, policy)
-
 	// If there are no listeners configured, the local node's Envoy proxy won't
 	// query for network policies and therefore will never ACK them, and we'd
 	// wait forever.
@@ -1807,6 +1834,7 @@ func (s *xdsServer) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, policy *pol
 		}
 	}
 	epID := ep.GetID()
+	nodeIDs := getNodeIDs(ep, policy)
 	resourceName := strconv.FormatUint(epID, 10)
 	revertFunc := s.NetworkPolicyMutator.Upsert(NetworkPolicyTypeURL, resourceName, networkPolicy, nodeIDs, wg, callback)
 	revertUpdatedNetworkPolicyEndpoints := make(map[string]endpoint.EndpointUpdater, len(ips))

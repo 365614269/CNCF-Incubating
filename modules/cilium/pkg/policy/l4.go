@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"testing"
 
 	cilium "github.com/cilium/proxy/go/cilium/api"
 	"github.com/sirupsen/logrus"
@@ -505,7 +504,7 @@ func (l4 *L4Filter) GetPort() uint16 {
 }
 
 // Equals returns true if two L4Filters are equal
-func (l4 *L4Filter) Equals(_ *testing.T, bL4 *L4Filter) bool {
+func (l4 *L4Filter) Equals(bL4 *L4Filter) bool {
 	if l4.Port == bL4.Port &&
 		l4.EndPort == bL4.EndPort &&
 		l4.PortName == bL4.PortName &&
@@ -549,7 +548,7 @@ func (c *ChangeState) Empty() bool {
 // 'redirects' is the map of currently realized redirects, it is used to find the proxy port for any redirects.
 // p.SelectorCache is used as Identities interface during this call, which only has GetPrefix() that
 // needs no lock.
-func (l4 *L4Filter) toMapState(p *EndpointPolicy, features policyFeatures, redirects map[string]uint16, changes ChangeState) {
+func (l4 *L4Filter) toMapState(p *EndpointPolicy, features policyFeatures, changes ChangeState) {
 	port := l4.Port
 	proto := l4.U8Proto
 
@@ -616,14 +615,13 @@ func (l4 *L4Filter) toMapState(p *EndpointPolicy, features policyFeatures, redir
 		hasAuth, authType := currentRule.GetAuthType()
 		var proxyPort uint16
 		if isRedirect {
-			var exists bool
-			proxyID := ProxyID(uint16(p.PolicyOwner.GetID()), l4.Ingress, string(l4.Protocol), port, listener)
-			proxyPort, exists = redirects[proxyID]
-			if !exists {
+			var err error
+			proxyPort, err = p.LookupRedirectPort(l4.Ingress, string(l4.Protocol), port, listener)
+			if err != nil {
 				// Skip unrealized redirects; this happens routineously just
 				// before new redirects are realized. Once created, we are called
 				// again.
-				logger.WithField(logfields.EndpointSelector, cs).Debugf("Skipping unrealized redirect %s (%v)", proxyID, redirects)
+				logger.WithError(err).WithField(logfields.EndpointSelector, cs).Debugf("Skipping unrealized redirect")
 				continue
 			}
 		}
@@ -1148,8 +1146,8 @@ type L4PolicyMap interface {
 	IngressCoversContext(ctx *SearchContext) api.Decision
 	EgressCoversContext(ctx *SearchContext) api.Decision
 	ForEach(func(l4 *L4Filter) bool)
-	Equals(t *testing.T, bMap L4PolicyMap) bool
-	Diff(t *testing.T, expectedMap L4PolicyMap) string
+	TestingOnlyEquals(bMap L4PolicyMap) bool
+	TestingOnlyDiff(expectedMap L4PolicyMap) string
 	Len() int
 }
 
@@ -1340,7 +1338,7 @@ func (l4M *l4PolicyMap) ForEach(fn func(l4 *L4Filter) bool) {
 }
 
 // Equals returns true if both L4PolicyMaps are equal.
-func (l4M *l4PolicyMap) Equals(_ *testing.T, bMap L4PolicyMap) bool {
+func (l4M *l4PolicyMap) TestingOnlyEquals(bMap L4PolicyMap) bool {
 	if l4M.Len() != bMap.Len() {
 		return false
 	}
@@ -1351,14 +1349,14 @@ func (l4M *l4PolicyMap) Equals(_ *testing.T, bMap L4PolicyMap) bool {
 			port = fmt.Sprintf("%d", l4.Port)
 		}
 		l4B := bMap.ExactLookup(port, l4.EndPort, string(l4.Protocol))
-		equal = l4.Equals(nil, l4B)
+		equal = l4.Equals(l4B)
 		return equal
 	})
 	return equal
 }
 
 // Diff returns the difference between to L4PolicyMaps.
-func (l4M *l4PolicyMap) Diff(_ *testing.T, expected L4PolicyMap) (res string) {
+func (l4M *l4PolicyMap) TestingOnlyDiff(expected L4PolicyMap) (res string) {
 	res += "Missing (-), Unexpected (+):\n"
 	expected.ForEach(func(eV *L4Filter) bool {
 		port := eV.PortName
@@ -1367,7 +1365,7 @@ func (l4M *l4PolicyMap) Diff(_ *testing.T, expected L4PolicyMap) (res string) {
 		}
 		oV := l4M.ExactLookup(port, eV.Port, string(eV.Protocol))
 		if oV != nil {
-			if !eV.Equals(nil, oV) {
+			if !eV.Equals(oV) {
 				res += "- " + eV.String() + "\n"
 				res += "+ " + oV.String() + "\n"
 			}
@@ -1619,7 +1617,7 @@ func (l4Policy *L4Policy) AccumulateMapChanges(l4 *L4Filter, cs CachedSelector, 
 		var proxyPort uint16
 		if redirect {
 			var err error
-			proxyPort, err = epPolicy.PolicyOwner.LookupRedirectPort(l4.Ingress, string(l4.Protocol), port, listener)
+			proxyPort, err = epPolicy.LookupRedirectPort(l4.Ingress, string(l4.Protocol), port, listener)
 			if err != nil {
 				// This happens for new redirects that have not been realized
 				// yet. The accumulated changes should only be consumed after new
@@ -1662,6 +1660,7 @@ func (l4Policy *L4Policy) AccumulateMapChanges(l4 *L4Filter, cs CachedSelector, 
 func (l4Policy *L4Policy) SyncMapChanges(l4 *L4Filter, txn *versioned.Tx) {
 	// SelectorCache may not be called into while holding this lock!
 	l4Policy.mutex.RLock()
+
 	for epPolicy := range l4Policy.users {
 		epPolicy.policyMapChanges.SyncMapChanges(txn)
 	}

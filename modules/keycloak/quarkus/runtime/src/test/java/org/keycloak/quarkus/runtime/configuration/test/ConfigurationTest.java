@@ -23,6 +23,8 @@ import static org.junit.Assert.assertTrue;
 import static org.keycloak.quarkus.runtime.Environment.isWindows;
 import static org.keycloak.quarkus.runtime.configuration.ConfigArgsConfigSource.CLI_ARGS;
 
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -219,12 +221,12 @@ public class ConfigurationTest extends AbstractConfigurationTest {
                 .toString()
                 .replaceFirst(isWindows() ? "file:///" : "file://", "");
 
-        assertEquals("jdbc:h2:file:" + userHomeUri + "data/h2/keycloakdb;NON_KEYWORDS=VALUE", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
+        assertEquals("jdbc:h2:file:" + userHomeUri + "data/h2/keycloakdb;NON_KEYWORDS=VALUE;DB_CLOSE_ON_EXIT=FALSE;DB_CLOSE_DELAY=0", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
 
         ConfigArgsConfigSource.setCliArgs("--db=dev-mem");
         config = createConfig();
         assertEquals(H2Dialect.class.getName(), config.getConfigValue("kc.db-dialect").getValue());
-        assertEquals("jdbc:h2:mem:keycloakdb;NON_KEYWORDS=VALUE", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
+        assertEquals("jdbc:h2:mem:keycloakdb;NON_KEYWORDS=VALUE;DB_CLOSE_ON_EXIT=FALSE;DB_CLOSE_DELAY=0", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
         assertEquals("h2", config.getConfigValue("quarkus.datasource.db-kind").getValue());
 
         ConfigArgsConfigSource.setCliArgs("--db=dev-mem", "--db-username=other");
@@ -302,13 +304,13 @@ public class ConfigurationTest extends AbstractConfigurationTest {
         ConfigArgsConfigSource.setCliArgs("--db=dev-file");
         SmallRyeConfig config = createConfig();
         assertEquals(H2Dialect.class.getName(), config.getConfigValue("kc.db-dialect").getValue());
-        assertEquals("jdbc:h2:file:test-dir/data/h2/keycloakdb;;test=test;test1=test1;NON_KEYWORDS=VALUE", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
+        assertEquals("jdbc:h2:file:test-dir/data/h2/keycloakdb;;test=test;test1=test1;NON_KEYWORDS=VALUE;DB_CLOSE_ON_EXIT=FALSE;DB_CLOSE_DELAY=0", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
         assertEquals("xa", config.getConfigValue("quarkus.datasource.jdbc.transactions").getValue());
 
         ConfigArgsConfigSource.setCliArgs("");
         config = createConfig();
         assertEquals(H2Dialect.class.getName(), config.getConfigValue("kc.db-dialect").getValue());
-        assertEquals("jdbc:h2:file:test-dir/data/h2/keycloakdb;;test=test;test1=test1;NON_KEYWORDS=VALUE", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
+        assertEquals("jdbc:h2:file:test-dir/data/h2/keycloakdb;;test=test;test1=test1;NON_KEYWORDS=VALUE;DB_CLOSE_ON_EXIT=FALSE;DB_CLOSE_DELAY=0", config.getConfigValue("quarkus.datasource.jdbc.url").getValue());
 
         System.setProperty("kc.db-url-properties", "?test=test&test1=test1");
         ConfigArgsConfigSource.setCliArgs("--db=mariadb");
@@ -491,7 +493,18 @@ public class ConfigurationTest extends AbstractConfigurationTest {
         ConfigArgsConfigSource.setCliArgs("--https-certificates-reload-period=2h");
         assertEquals("2h", createConfig().getConfigValue("quarkus.http.ssl.certificate.reload-period").getValue());
     }
+    
+    @Test
+    public void testHttpsPaths() {
+        ConfigArgsConfigSource.setCliArgs("--https-certificate-file=\\some\\file");
 
+        String expected = "\\some\\file";
+        if (FileSystems.getDefault().getSeparator().equals("\\")) {
+            expected = "/some/file";
+        }
+        assertEquals(expected, createConfig().getConfigValue("quarkus.http.ssl.certificate.files").getValue());
+    }
+    
     @Test
     public void testCacheMaxCount() {
         int maxCount = 500;

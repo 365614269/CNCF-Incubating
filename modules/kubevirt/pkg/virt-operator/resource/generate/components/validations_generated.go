@@ -1049,6 +1049,23 @@ var CRDsValidation map[string]string = map[string]string{
               description: PullPolicy describes a policy for if/when to pull a container
                 image
               type: string
+            instancetype:
+              description: Instancetype configuration
+              nullable: true
+              properties:
+                referencePolicy:
+                  description: |-
+                    ReferencePolicy defines how an instance type or preference should be referenced by the VM after submission, supported values are:
+                    reference (default) - Where a copy of the original object is stashed in a ControllerRevision and referenced by the VM.
+                    expand - Where the instance type or preference are expanded into the VM if no revisionNames have been populated.
+                    expandAll - Where the instance type or preference are expanded into the VM regardless of revisionNames previously being populated.
+                  enum:
+                  - reference
+                  - expand
+                  - expandAll
+                  nullable: true
+                  type: string
+              type: object
             ksmConfiguration:
               description: KSMConfiguration holds the information regarding the enabling
                 the KSM in the nodes (if available).
@@ -13643,6 +13660,10 @@ var CRDsValidation map[string]string = map[string]string{
             sourceNode:
               description: The source node that the VMI originated on
               type: string
+            sourcePersistentStatePVCName:
+              description: If the VMI being migrated uses persistent features (backend-storage),
+                its source PVC name is saved here
+              type: string
             sourcePod:
               type: string
             startTimestamp:
@@ -13685,6 +13706,10 @@ var CRDsValidation map[string]string = map[string]string{
               description: |-
                 If the VMI requires dedicated CPUs, this field will
                 hold the numa topology on the target node
+              type: string
+            targetPersistentStatePVCName:
+              description: If the VMI being migrated uses persistent features (backend-storage),
+                its target PVC name is saved here
               type: string
             targetPod:
               description: The target pod that the VMI is moving to
@@ -14057,6 +14082,10 @@ var CRDsValidation map[string]string = map[string]string{
             sourceNode:
               description: The source node that the VMI originated on
               type: string
+            sourcePersistentStatePVCName:
+              description: If the VMI being migrated uses persistent features (backend-storage),
+                its source PVC name is saved here
+              type: string
             sourcePod:
               type: string
             startTimestamp:
@@ -14099,6 +14128,10 @@ var CRDsValidation map[string]string = map[string]string{
               description: |-
                 If the VMI requires dedicated CPUs, this field will
                 hold the numa topology on the target node
+              type: string
+            targetPersistentStatePVCName:
+              description: If the VMI being migrated uses persistent features (backend-storage),
+                its target PVC name is saved here
               type: string
             targetPod:
               description: The target pod that the VMI is moving to
