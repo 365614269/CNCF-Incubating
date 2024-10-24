@@ -360,8 +360,38 @@ depending on the external and internal traffic policies:
 | Local    | Local    | Node-local only         | Node-local only       |
 +----------+----------+-------------------------+-----------------------+
 
-Selective Service Exposure
-**************************
+Selective Service Type Exposure
+*******************************
+
+By default, for a ``LoadBalancer`` service Cilium exposes corresponding
+``NodePort`` and ``ClusterIP`` services. Likewise, for a new ``NodePort``
+service, Cilium exposes the corresponding ``ClusterIP`` service.
+
+If this behavior is not desired, then the ``service.cilium.io/type``
+annotation can be used to pin the service creation only to a specific
+service type:
+
+.. code-block:: yaml
+
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: example-service
+    annotations:
+      service.cilium.io/type: LoadBalancer
+  spec:
+    ports:
+      - port: 80
+        targetPort: 80
+    type: LoadBalancer
+
+In the above example only the ``LoadBalancer`` service is created without
+corresponding ``NodePort`` and ``ClusterIP`` services. If the annotation
+would be set to e.g. ``service.cilium.io/type: NodePort``, then only the
+``NodePort`` service would be installed.
+
+Selective Service Node Exposure
+*******************************
 
 By default, Cilium exposes Kubernetes services on all nodes in the cluster. To expose a
 service only on a subset of the nodes instead, use the ``service.cilium.io/node`` label for
@@ -1392,13 +1422,44 @@ ignore the field regardless whether it is set. This means that any pod or any ho
 process in the cluster will be able to access the ``LoadBalancer`` service internally.
 
 The load balancer source range check feature is enabled by default, and it can be
-disabled by setting ``config.svcSourceRangeCheck=false``. It makes sense to disable
-the check when running on some cloud providers. E.g. `Amazon NLB
+disabled by setting ``config.svcSourceRangeCheck=false``.
+
+It makes sense to disable the check when running on some cloud providers e.g. `Amazon NLB
 <https://kubernetes.io/docs/concepts/services-networking/service/#aws-nlb-support>`__
 natively implements the check, so the kube-proxy replacement's feature can be disabled.
 Meanwhile `GKE internal TCP/UDP load balancer
 <https://cloud.google.com/kubernetes-engine/docs/how-to/service-parameters#lb_source_ranges>`__
 does not, so the feature must be kept enabled in order to restrict the access.
+
+By default the specified white-listed CIDRs in ``spec.loadBalancerSourceRanges``
+only apply to the ``LoadBalancer`` service, but not the corresponding ``NodePort``
+or ``ClusterIP`` service which get installed along with the ``LoadBalancer`` service.
+
+If this behavior is not desired, then there are two options available: One possibility
+is to avoid the creation of corresponding ``NodePort`` and ``ClusterIP`` services via
+``service.cilium.io/type`` annotation:
+
+.. code-block:: yaml
+
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: example-service
+    annotations:
+      service.cilium.io/type: LoadBalancer
+  spec:
+    ports:
+      - port: 80
+        targetPort: 80
+    type: LoadBalancer
+    loadBalancerSourceRanges:
+    - 192.168.1.0/24
+
+The other possibility is to propagate the white-listed CIDRs to all externally
+exposed service types. Meaning, ``NodePort`` as well as ``ClusterIP`` (if
+externally accessible, see :ref:`External Access To ClusterIP Services <external_access_to_clusterip_services>`
+section) also filter traffic based on the source IP addresses.
+This option can be enabled in Helm via ``bpf.lbSourceRangeAllTypes=true``.
 
 Service Proxy Name Configuration
 ********************************

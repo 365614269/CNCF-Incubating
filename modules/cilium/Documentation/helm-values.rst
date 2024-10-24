@@ -376,6 +376,10 @@
      - Configure the maximum number of service entries in the load balancer maps.
      - int
      - ``65536``
+   * - :spelling:ignore:`bpf.lbSourceRangeAllTypes`
+     - Enable loadBalancerSourceRanges CIDR filtering for all service types, not just LoadBalancer services. The corresponding NodePort and ClusterIP (if enabled for cluster-external traffic) will also apply the CIDR filter.
+     - bool
+     - ``false``
    * - :spelling:ignore:`bpf.mapDynamicSizeRatio`
      - Configure auto-sizing for all BPF maps based on available memory. ref: https://docs.cilium.io/en/stable/network/ebpf/maps/
      - float64
@@ -1275,7 +1279,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:41dc6530936fe06c462fca9c33ff31600a3dbc3b12b576448fe7b9aa6ee25672","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.30.6-1728896639-536a3fff090a10674376a0cfd97d8527b453a455","useDigest":true}``
+     - ``{"digest":"sha256:4bf4d4dfd23477666d9d2c05b701954df268902d9f31d691e1a0dc85661ac5ac","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.30.6-1729608965-1e298fad5ecff399849a689fb0730551afe42422","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
