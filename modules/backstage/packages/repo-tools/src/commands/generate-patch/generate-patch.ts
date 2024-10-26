@@ -43,6 +43,14 @@ const PATCH_GITIGNORE = [
   '/docs',
 ];
 
+// More predictable git behavior, see https://github.com/yarnpkg/berry/blob/f59bbf9f3828865c14b06a3e5cc3ae284a0db78d/packages/plugin-patch/sources/patchUtils.ts#L291
+const GIT_ENV = {
+  GIT_CONFIG_NOSYSTEM: '1',
+  HOME: '',
+  XDG_CONFIG_HOME: '',
+  USERPROFILE: '',
+};
+
 interface PatchContext {
   sourceRepo: Packages;
   targetRepo: Packages;
@@ -226,16 +234,10 @@ async function loadTrimmedRootPkg(ctx: PatchContext, query?: string) {
 
 // Verify that a repo is using a supported Yarn version
 async function verifyYarnVersion(cwd: string) {
-  const { stdout } = await exec('yarn', ['--version'], {
-    cwd,
-  });
-  const version = stdout.toString('utf8').trim();
-
-  if (version.startsWith('1.')) {
+  const exists = await fs.pathExists(joinPath(cwd, '.yarnrc.yml'));
+  if (!exists) {
     throw new Error(
-      `Unsupported Yarn version in target repository, got ${stdout
-        .toString('utf8')
-        .trim()} but 2+ is required`,
+      `Missing .yarnrc.yml in ${cwd}, Yarn v1 (classic) is not support by this command`,
     );
   }
 }
@@ -259,6 +261,7 @@ async function generatePatch(
     ['describe', '--always', '--dirty', "--exclude='*'"],
     {
       cwd: ctx.sourceRepo.root.dir,
+      env: { ...process.env, ...GIT_ENV },
     },
   );
   const describe = describeResult.stdout.toString('utf8').trim();
@@ -398,8 +401,14 @@ async function generatePatchForArchives(
   );
 
   // Init git and populate index
-  await exec('git', ['init'], { cwd: patchDir });
-  await exec('git', ['add', '.'], { cwd: patchDir });
+  await exec('git', ['init'], {
+    cwd: patchDir,
+    env: { ...process.env, ...GIT_ENV },
+  });
+  await exec('git', ['add', '.'], {
+    cwd: patchDir,
+    env: { ...process.env, ...GIT_ENV },
+  });
 
   // Remove all existing files
   for (const path of await fs.readdir(patchDir)) {
@@ -415,6 +424,23 @@ async function generatePatchForArchives(
   // Extract the target archive to use a target for the patch
   await tar.extract({ file: headPath, cwd: patchDir, strip: 1 });
 
-  const { stdout: patch } = await exec('git', ['diff'], { cwd: patchDir });
+  const { stdout: patch } = await exec(
+    'git',
+    [
+      '-c',
+      'core.safecrlf=false',
+      'diff',
+      '--src-prefix=a/',
+      '--dst-prefix=b/',
+      '--ignore-cr-at-eol',
+      '--full-index',
+      '--no-renames',
+      '--text',
+    ],
+    {
+      cwd: patchDir,
+      env: { ...process.env, ...GIT_ENV },
+    },
+  );
   return patch.toString('utf8');
 }
