@@ -253,6 +253,16 @@ to change the packet scheduling algorithm.
 
         CONFIG_NET_SCH_FQ=m
 
+Requirements for Netkit Device Mode
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :ref:`netkit` requires the following kernel configuration option
+to create netkit devices.
+
+::
+
+        CONFIG_NETKIT=y
+
 .. _advanced_features:
 
 Required Kernel Versions for Advanced Features
@@ -265,9 +275,6 @@ enabled by upgrading to more recent kernel versions as detailed below.
 ====================================================== ===============================
 Cilium Feature                                         Minimum Kernel Version
 ====================================================== ===============================
-:ref:`bandwidth-manager`                               >= 5.1
-:ref:`egress-gateway`                                  >= 5.2
-VXLAN Tunnel Endpoint (VTEP) Integration               >= 5.2
 :ref:`encryption_wg`                                   >= 5.6
 Full support for :ref:`session-affinity`               >= 5.7
 BPF-based proxy redirection                            >= 5.7

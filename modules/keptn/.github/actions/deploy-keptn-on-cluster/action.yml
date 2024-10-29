@@ -30,7 +30,7 @@ runs:
   using: "composite"
   steps:
     - name: Set up Go 1.x
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5
+      uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
       with:
         go-version: ${{ env.GO_VERSION }}
         cache: true
@@ -64,7 +64,7 @@ runs:
       if: inputs.cert-manager-io-enabled == 'cert_manager_io_on'
       env:
         # renovate: datasource=github-releases depName=cert-manager/cert-manager
-        CERT_MANAGER_IO_VERSION: "v1.15.3"
+        CERT_MANAGER_IO_VERSION: "v1.16.1"
       shell: bash
       run: |
         kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/$CERT_MANAGER_IO_VERSION/cert-manager.yaml
