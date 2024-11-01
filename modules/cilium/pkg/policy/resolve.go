@@ -4,12 +4,14 @@
 package policy
 
 import (
+	"errors"
 	"fmt"
 	"iter"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/container/versioned"
+	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
@@ -62,7 +64,7 @@ type EndpointPolicy struct {
 	// Proxy port 0 indicates no proxy redirection.
 	// All fields within the Key and the proxy port must be in host byte-order.
 	// Must only be accessed with PolicyOwner (aka Endpoint) lock taken.
-	policyMapState MapState
+	policyMapState *mapState
 
 	// policyMapChanges collects pending changes to the PolicyMapState
 	policyMapChanges MapChanges
@@ -149,7 +151,7 @@ func (p *selectorPolicy) DistillPolicy(policyOwner PolicyOwner, redirects map[st
 		calculatedPolicy = &EndpointPolicy{
 			selectorPolicy: p,
 			VersionHandle:  version,
-			policyMapState: NewMapState(),
+			policyMapState: newMapState(),
 			policyMapChanges: MapChanges{
 				firstVersion: version.Version(),
 			},
@@ -186,23 +188,6 @@ func (p *EndpointPolicy) Ready() (err error) {
 	return err
 }
 
-// GetPolicyMap gets the policy map state as the interface
-// MapState
-func (p *EndpointPolicy) GetPolicyMap() MapState {
-	return p.policyMapState
-}
-
-// SetPolicyMap sets the policy map state as the interface
-// MapState. If the main argument is nil, then this method
-// will initialize a new MapState object for the caller.
-func (p *EndpointPolicy) SetPolicyMap(ms MapState) {
-	if ms == nil {
-		p.policyMapState = NewMapState()
-		return
-	}
-	p.policyMapState = ms
-}
-
 // Detach removes EndpointPolicy references from selectorPolicy
 // to allow the EndpointPolicy to be GC'd.
 // PolicyOwner (aka Endpoint) is also locked during this call.
@@ -219,25 +204,110 @@ func (p *EndpointPolicy) Detach() {
 	p.policyMapChanges.detach()
 }
 
-// NewMapStateWithInsert returns a new MapState and an insert function that can be used to populate
-// it. We keep general insert functions private so that the caller can only insert to this specific
-// map.
-func NewMapStateWithInsert() (MapState, func(k Key, e MapStateEntry)) {
-	currentMap := NewMapState()
+func (p *EndpointPolicy) Len() int {
+	return p.policyMapState.Len()
+}
 
-	return currentMap, func(k Key, e MapStateEntry) {
-		currentMap.insert(k, e)
+func (p *EndpointPolicy) Get(key Key) (MapStateEntry, bool) {
+	return p.policyMapState.Get(key)
+}
+
+var errMissingKey = errors.New("Key not found")
+
+// GetRuleLabels returns the list of labels of the rules that contributed
+// to the entry at this key.
+// The returned LabelArrayList is shallow-copied and therefore must not be mutated.
+func (p *EndpointPolicy) GetRuleLabels(k Key) (labels.LabelArrayList, error) {
+	entry, ok := p.policyMapState.get(k)
+	if !ok {
+		return nil, errMissingKey
+	}
+	return entry.GetRuleLabels(), nil
+}
+
+func (p *EndpointPolicy) Entries() iter.Seq2[Key, MapStateEntry] {
+	return func(yield func(Key, MapStateEntry) bool) {
+		p.policyMapState.ForEach(yield)
 	}
 }
 
-func (p *EndpointPolicy) InsertMapState(key Key, entry MapStateEntry) {
-	// SelectorCache used as Identities interface which only has GetPrefix() that needs no lock
-	p.policyMapState.insert(key, entry)
+func (p *EndpointPolicy) Equals(other MapStateMap) bool {
+	return p.policyMapState.Equals(other)
 }
 
-func (p *EndpointPolicy) DeleteMapState(key Key) {
-	// SelectorCache used as Identities interface which only has GetPrefix() that needs no lock
-	p.policyMapState.delete(key)
+func (p *EndpointPolicy) Diff(expected MapStateMap) string {
+	return p.policyMapState.Diff(expected)
+}
+
+func (p *EndpointPolicy) Empty() bool {
+	return p.policyMapState.Empty()
+}
+
+// Updated returns an iterator for all key/entry pairs in 'p' that are either new or updated
+// compared to the entries in 'realized'.
+// Here 'realized' is another EndpointPolicy.
+// This can be used to figure out which entries need to be added to or updated in 'realised'.
+func (p *EndpointPolicy) Updated(realized *EndpointPolicy) iter.Seq2[Key, MapStateEntry] {
+	return func(yield func(Key, MapStateEntry) bool) {
+		p.policyMapState.ForEach(func(key Key, entry MapStateEntry) bool {
+			if oldEntry, ok := realized.policyMapState.Get(key); !ok || oldEntry != entry {
+				if !yield(key, entry) {
+					return false
+				}
+			}
+			return true
+		})
+	}
+}
+
+// Missing returns an iterator for all key/entry pairs in 'realized' that missing from 'p'.
+// Here 'realized' is another EndpointPolicy.
+// This can be used to figure out which entries in 'realised' need to be deleted.
+func (p *EndpointPolicy) Missing(realized *EndpointPolicy) iter.Seq2[Key, MapStateEntry] {
+	return func(yield func(Key, MapStateEntry) bool) {
+		realized.policyMapState.ForEach(func(key Key, entry MapStateEntry) bool {
+			// If key that is in realized state is not in desired state, just remove it.
+			if _, ok := p.policyMapState.Get(key); !ok {
+				if !yield(key, entry) {
+					return false
+				}
+			}
+			return true
+		})
+	}
+}
+
+// UpdatedMap returns an iterator for all key/entry pairs in 'p' that are either new or updated
+// compared to the entries in 'realized'.
+// Here 'realized' is MapStateMap.
+// This can be used to figure out which entries need to be added to or updated in 'realised'.
+func (p *EndpointPolicy) UpdatedMap(realized MapStateMap) iter.Seq2[Key, MapStateEntry] {
+	return func(yield func(Key, MapStateEntry) bool) {
+		p.policyMapState.ForEach(func(key Key, entry MapStateEntry) bool {
+			if oldEntry, ok := realized[key]; !ok || oldEntry != entry {
+				if !yield(key, entry) {
+					return false
+				}
+			}
+			return true
+		})
+	}
+}
+
+// Missing returns an iterator for all key/entry pairs in 'realized' that missing from 'p'.
+// Here 'realized' is MapStateMap.
+// This can be used to figure out which entries in 'realised' need to be deleted.
+func (p *EndpointPolicy) MissingMap(realized MapStateMap) iter.Seq2[Key, MapStateEntry] {
+	return func(yield func(Key, MapStateEntry) bool) {
+		for k, v := range realized {
+			// If key that is in realized state is not in desired state, just remove it.
+			if _, ok := p.policyMapState.Get(k); !ok {
+				if !yield(k, v) {
+					break
+				}
+			}
+		}
+	}
 }
 
 func (p *EndpointPolicy) RevertChanges(changes ChangeState) {
@@ -335,6 +405,6 @@ func (p *EndpointPolicy) ConsumeMapChanges() (closer func(), changes ChangeState
 func NewEndpointPolicy(repo PolicyRepository) *EndpointPolicy {
 	return &EndpointPolicy{
 		selectorPolicy: newSelectorPolicy(repo.GetSelectorCache()),
-		policyMapState: NewMapState(),
+		policyMapState: newMapState(),
 	}
 }

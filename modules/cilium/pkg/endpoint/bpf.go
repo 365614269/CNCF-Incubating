@@ -481,8 +481,17 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	stats.mapSync.Start()
 	// Nothing to do if the desired policy is already fully realized.
 	if e.realizedPolicy != e.desiredPolicy {
-		// Diffs between the maps are expected here, so do not bother collecting them
-		_, _, err = e.syncPolicyMapWith(e.realizedPolicy.GetPolicyMap(), false)
+		if e.realizedPolicy.Empty() {
+			// Realized policy is empty, sync with the dump from the datapath
+			var policyMapDump policy.MapStateMap
+			policyMapDump, err = e.dumpPolicyMapToMapStateMap()
+			if err != nil {
+				return 0, err
+			}
+			_, _, err = e.syncPolicyMapWith(policyMapDump, false)
+		} else {
+			err = e.syncPolicyMap()
+		}
 	}
 	stats.mapSync.End(err == nil)
 	if err != nil {
@@ -662,16 +671,6 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext) (pr
 		if err != nil {
 			return err
 		}
-
-		// Synchronize the in-memory realized state with BPF map entries,
-		// so that any potential discrepancy between desired and realized
-		// state would be dealt with by the following e.syncPolicyMapWith.
-		pm, err := e.dumpPolicyMapToMapState()
-		if err != nil {
-			return err
-		}
-		e.realizedPolicy.SetPolicyMap(pm)
-		e.updatePolicyMapPressureMetric()
 	}
 
 	if e.isProperty(PropertySkipBPFRegeneration) {
@@ -871,14 +870,14 @@ type policyMapPressureUpdater interface {
 }
 
 func (e *Endpoint) updatePolicyMapPressureMetric() {
-	value := float64(e.realizedPolicy.GetPolicyMap().Len()) / float64(e.policyMap.MaxEntries())
+	value := float64(e.realizedPolicy.Len()) / float64(e.policyMap.MaxEntries())
 	e.PolicyMapPressureUpdater.Update(PolicyMapPressureEvent{
 		Value:      value,
 		EndpointID: e.ID,
 	})
 }
 
-func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) bool {
+func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key) bool {
 	// Convert from policy.Key to policymap.Key
 	policymapKey := policymap.NewKey(keyToDelete.TrafficDirection(), keyToDelete.Identity, keyToDelete.Nexthdr, keyToDelete.DestPort, keyToDelete.PortPrefixLen())
 
@@ -896,22 +895,16 @@ func (e *Endpoint) deletePolicyKey(keyToDelete policy.Key, incremental bool) boo
 		return false
 	}
 
-	entry, ok := e.realizedPolicy.GetPolicyMap().Get(keyToDelete)
-	// Operation was successful, remove from realized state.
-	if ok {
-		e.realizedPolicy.DeleteMapState(keyToDelete)
-		e.updatePolicyMapPressureMetric()
+	e.updatePolicyMapPressureMetric()
 
-		e.PolicyDebug(logrus.Fields{
-			logfields.BPFMapKey:   keyToDelete,
-			logfields.BPFMapValue: entry,
-			"incremental":         incremental,
-		}, "deletePolicyKey")
-	}
+	e.PolicyDebug(logrus.Fields{
+		logfields.BPFMapKey: keyToDelete,
+	}, "deletePolicyKey")
+
 	return true
 }
 
-func (e *Endpoint) addPolicyKey(keyToAdd policy.Key, entry policy.MapStateEntry, incremental bool) bool {
+func (e *Endpoint) addPolicyKey(keyToAdd policy.Key, entry policy.MapStateEntry) bool {
 	// Convert from policy.Key to policymap.Key
 	policymapKey := policymap.NewKey(keyToAdd.TrafficDirection(), keyToAdd.Identity, keyToAdd.Nexthdr, keyToAdd.DestPort, keyToAdd.PortPrefixLen())
 
@@ -929,14 +922,11 @@ func (e *Endpoint) addPolicyKey(keyToAdd policy.Key, entry policy.MapStateEntry,
 		return false
 	}
 
-	// Operation was successful, add to realized state.
-	e.realizedPolicy.InsertMapState(keyToAdd, entry)
 	e.updatePolicyMapPressureMetric()
 
 	e.PolicyDebug(logrus.Fields{
 		logfields.BPFMapKey:   keyToAdd,
 		logfields.BPFMapValue: entry,
-		"incremental":         incremental,
 	}, "addPolicyKey")
 	return true
 }
@@ -1060,7 +1050,7 @@ func (e *Endpoint) applyPolicyMapChanges(regenContext *regenerationContext, hasN
 	// Add policy map entries before deleting to avoid transient drops
 	errors := 0
 	for keyToAdd := range changes.Adds {
-		entry, exists := e.desiredPolicy.GetPolicyMap().Get(keyToAdd)
+		entry, exists := e.desiredPolicy.Get(keyToAdd)
 		if !exists {
 			e.getLogger().WithFields(logrus.Fields{
 				logfields.AddedPolicyID: keyToAdd,
@@ -1068,13 +1058,13 @@ func (e *Endpoint) applyPolicyMapChanges(regenContext *regenerationContext, hasN
 			continue
 		}
 
-		if !e.addPolicyKey(keyToAdd, entry, true) {
+		if !e.addPolicyKey(keyToAdd, entry) {
 			errors++
 		}
 	}
 
 	for keyToDelete := range changes.Deletes {
-		if !e.deletePolicyKey(keyToDelete, true) {
+		if !e.deletePolicyKey(keyToDelete) {
 			errors++
 		}
 	}
@@ -1091,69 +1081,119 @@ func (e *Endpoint) applyPolicyMapChanges(regenContext *regenerationContext, hasN
 	return nil
 }
 
-// syncPolicyMapWith updates the bpf policy map state based on the
-// difference between the given 'realized' and desired policy state without
+// syncPolicyMap updates the bpf policy map state based on the
+// difference between the realized and desired policy state without
 // dumping the bpf policy map.
-// Changes are synced to endpoint's realized policy mapstate, 'realized' is
-// not modified.
-func (e *Endpoint) syncPolicyMapWith(realized policy.MapState, withDiffs bool) (diffCount int, diffs []policy.MapChange, err error) {
-	errors := 0
+// Only called when desired and realized policies are not the same.
+func (e *Endpoint) syncPolicyMap() error {
+	addErrors, deleteErrors := 0, 0
 
 	// Add policy map entries before deleting to avoid transient drops
-	var adds []policy.MapChange
-	e.desiredPolicy.GetPolicyMap().ForEach(func(keyToAdd policy.Key, entry policy.MapStateEntry) bool {
-		if oldEntry, ok := realized.Get(keyToAdd); !ok || !oldEntry.DatapathEqual(&entry) {
-			adds = append(adds, policy.MapChange{
-				Add:   true,
-				Key:   keyToAdd,
-				Value: entry,
-			})
-		}
-		return true
-	})
-	for _, add := range adds {
-		if oldEntry, ok := realized.Get(add.Key); !ok || !oldEntry.DatapathEqual(&add.Value) {
-			if !e.addPolicyKey(add.Key, add.Value, false) {
-				errors++
-			}
-			diffCount++
-			if withDiffs {
-				diffs = append(diffs, add)
-			}
+	for k, v := range e.desiredPolicy.Updated(e.realizedPolicy) {
+		if !e.addPolicyKey(k, v) {
+			addErrors++
 		}
 	}
-	var deletes []policy.MapChange
+
 	// Delete policy keys present in the realized state, but not present in the desired state
-	realized.ForEach(func(keyToDelete policy.Key, _ policy.MapStateEntry) bool {
-		// If key that is in realized state is not in desired state, just remove it.
-		if entry, ok := e.desiredPolicy.GetPolicyMap().Get(keyToDelete); !ok {
-			deletes = append(deletes, policy.MapChange{
-				Key:   keyToDelete,
-				Value: entry,
-			})
+	for k := range e.desiredPolicy.Missing(e.realizedPolicy) {
+		if !e.deletePolicyKey(k) {
+			deleteErrors++
 		}
-		return true
-	})
-	for _, del := range deletes {
-		if _, ok := e.desiredPolicy.GetPolicyMap().Get(del.Key); !ok {
-			if !e.deletePolicyKey(del.Key, false) {
-				errors++
-			}
-			diffCount++
-			if withDiffs {
-				diffs = append(diffs, del)
+	}
+
+	// Retry adds after deletes. If policy map became full, there might be some space if any
+	// keys were deleted
+	if addErrors > 0 {
+		addErrors = 0
+		// Add policy map entries before deleting to avoid transient drops
+		for k, v := range e.desiredPolicy.Updated(e.realizedPolicy) {
+			if !e.addPolicyKey(k, v) {
+				addErrors++
 			}
 		}
 	}
 
-	if errors > 0 {
-		err = fmt.Errorf("syncPolicyMap failed")
+	if addErrors > 0 || deleteErrors > 0 {
+		return fmt.Errorf("syncRealizedPolicyMap failed")
+	}
+	return nil
+}
+
+// syncPolicyMapWith updates the bpf policy map state based on the
+// difference between a realized MapStateMap from a recent policy map dump
+// and desired policy state.
+func (e *Endpoint) syncPolicyMapWith(realized policy.MapStateMap, withDiffs bool) (diffCount int, diffs []policy.MapChange, err error) {
+	addErrors, deleteErrors := 0, 0
+
+	// Add policy map entries before deleting to avoid transient drops
+	for k, v := range e.desiredPolicy.UpdatedMap(realized) {
+		if !e.addPolicyKey(k, v) {
+			addErrors++
+			continue
+		}
+		diffCount++
+		if withDiffs {
+			diffs = append(diffs, policy.MapChange{
+				Add:   true,
+				Key:   k,
+				Value: v,
+			})
+		}
+	}
+	if addErrors > 0 {
+		// Retrying adds below, so clear collected state
+		diffCount = 0
+		if withDiffs {
+			diffs = diffs[:0]
+		}
+	}
+
+	// Delete policy keys present in the realized state, but not present in the desired state
+	for k, v := range e.desiredPolicy.MissingMap(realized) {
+		if !e.deletePolicyKey(k) {
+			deleteErrors++
+			continue
+		}
+		diffCount++
+		if withDiffs {
+			diffs = append(diffs, policy.MapChange{
+				Key:   k,
+				Value: v,
+			})
+		}
+	}
+
+	// Retry adds after deletes. If policy map became full, there might be some space if any
+	// keys were deleted
+	if addErrors > 0 {
+		addErrors = 0
+		for k, v := range e.desiredPolicy.UpdatedMap(realized) {
+			if !e.addPolicyKey(k, v) {
+				addErrors++
+				continue
+			}
+			diffCount++
+			if withDiffs {
+				diffs = append(diffs, policy.MapChange{
+					Add:   true,
+					Key:   k,
+					Value: v,
+				})
+			}
+		}
+	}
+
+	if addErrors > 0 || deleteErrors > 0 {
+		err = fmt.Errorf("syncPolicyMapWith failed")
 	}
 	return diffCount, diffs, err
 }
 
-func (e *Endpoint) dumpPolicyMapToMapState() (policy.MapState, error) {
-	currentMap, insert := policy.NewMapStateWithInsert()
+// dumpPolicyMapToMapStateMap dumps the current bpf policy map for this endpoint
+// into a MapStateMap.
+func (e *Endpoint) dumpPolicyMapToMapStateMap() (policy.MapStateMap, error) {
+	currentMap := make(policy.MapStateMap)
 
 	cb := func(policymapKey *policymap.PolicyKey, policymapEntry *policymap.PolicyEntry) {
 		// Convert from policymap.Key to policy.Key
@@ -1166,7 +1206,7 @@ func (e *Endpoint) dumpPolicyMapToMapState() (policy.MapState, error) {
 			IsDeny:    policymapEntry.IsDeny(),
 			AuthType:  policy.AuthType(policymapEntry.AuthType),
 		}
-		insert(policyKey, policyEntry)
+		currentMap[policyKey] = policyEntry
 	}
 	err := e.policyMap.DumpValid(cb)
 
@@ -1193,7 +1233,7 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 		return nil
 	}
 
-	currentMap, err := e.dumpPolicyMapToMapState()
+	currentMap, err := e.dumpPolicyMapToMapStateMap()
 	// If map is unable to be dumped, attempt to close map and open it again.
 	// See GH-4229.
 	if err != nil {
@@ -1213,7 +1253,7 @@ func (e *Endpoint) syncPolicyMapWithDump() error {
 		}
 
 		// Try to dump again, fail if error occurs.
-		currentMap, err = e.dumpPolicyMapToMapState()
+		currentMap, err = e.dumpPolicyMapToMapStateMap()
 		if err != nil {
 			return err
 		}
