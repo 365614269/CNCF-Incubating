@@ -37,17 +37,16 @@ metadata:
 spec:
   topic: orders
   routes:
-    default: /checkout
+    default: /orders
   pubsubname: pubsub
 scopes:
 - orderprocessing
-- checkout
 ```
 
 Here the subscription called `order`: 
 - Uses the pub/sub component called `pubsub` to subscribes to the topic called `orders`.
-- Sets the `route` field to send all topic messages to the `/checkout` endpoint in the app.
-- Sets `scopes` field to scope this subscription for access only by apps with IDs `orderprocessing` and `checkout`.
+- Sets the `route` field to send all topic messages to the `/orders` endpoint in the app.
+- Sets `scopes` field to scope this subscription for access only by apps with ID `orderprocessing`.
 
 When running Dapr, set the YAML component file path to point Dapr to the component.
 
@@ -113,7 +112,7 @@ In your application code, subscribe to the topic specified in the Dapr pub/sub c
 
 ```csharp
  //Subscribe to a topic 
-[HttpPost("checkout")]
+[HttpPost("orders")]
 public void getCheckout([FromBody] int orderId)
 {
     Console.WriteLine("Subscriber received : " + orderId);
@@ -128,7 +127,7 @@ public void getCheckout([FromBody] int orderId)
 import io.dapr.client.domain.CloudEvent;
 
  //Subscribe to a topic
-@PostMapping(path = "/checkout")
+@PostMapping(path = "/orders")
 public Mono<Void> getCheckout(@RequestBody(required = false) CloudEvent<String> cloudEvent) {
     return Mono.fromRunnable(() -> {
         try {
@@ -146,7 +145,7 @@ public Mono<Void> getCheckout(@RequestBody(required = false) CloudEvent<String> 
 from cloudevents.sdk.event import v1
 
 #Subscribe to a topic 
-@app.route('/checkout', methods=['POST'])
+@app.route('/orders', methods=['POST'])
 def checkout(event: v1.Event) -> None:
     data = json.loads(event.Data())
     logging.info('Subscriber received: ' + str(data))
@@ -163,7 +162,7 @@ const app = express()
 app.use(bodyParser.json({ type: 'application/*+json' }));
 
 // listen to the declarative route
-app.post('/checkout', (req, res) => {
+app.post('/orders', (req, res) => {
   console.log(req.body);
   res.sendStatus(200);
 });
@@ -178,7 +177,7 @@ app.post('/checkout', (req, res) => {
 var sub = &common.Subscription{
 	PubsubName: "pubsub",
 	Topic:      "orders",
-	Route:      "/checkout",
+	Route:      "/orders",
 }
 
 func eventHandler(ctx context.Context, e *common.TopicEvent) (retry bool, err error) {
@@ -191,7 +190,7 @@ func eventHandler(ctx context.Context, e *common.TopicEvent) (retry bool, err er
 
 {{< /tabs >}}
 
-The `/checkout` endpoint matches the `route` defined in the subscriptions and this is where Dapr sends all topic messages to.
+The `/orders` endpoint matches the `route` defined in the subscriptions and this is where Dapr sends all topic messages to.
 
 ### Streaming subscriptions
 
@@ -325,7 +324,7 @@ In the example below, you define the values found in the [declarative YAML subsc
 
 ```csharp
 [Topic("pubsub", "orders")]
-[HttpPost("/checkout")]
+[HttpPost("/orders")]
 public async Task<ActionResult<Order>>Checkout(Order order, [FromServices] DaprClient daprClient)
 {
     // Logic
@@ -337,7 +336,7 @@ or
 
 ```csharp
 // Dapr subscription in [Topic] routes orders topic to this route
-app.MapPost("/checkout", [Topic("pubsub", "orders")] (Order order) => {
+app.MapPost("/orders", [Topic("pubsub", "orders")] (Order order) => {
     Console.WriteLine("Subscriber received : " + order);
     return Results.Ok(order);
 });
@@ -359,7 +358,7 @@ app.UseEndpoints(endpoints =>
 ```java
 private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-@Topic(name = "checkout", pubsubName = "pubsub")
+@Topic(name = "orders", pubsubName = "pubsub")
 @PostMapping(path = "/orders")
 public Mono<Void> handleMessage(@RequestBody(required = false) CloudEvent<String> cloudEvent) {
   return Mono.fromRunnable(() -> {
@@ -370,6 +369,7 @@ public Mono<Void> handleMessage(@RequestBody(required = false) CloudEvent<String
       throw new RuntimeException(e);
     }
   });
+}
 ```
 
 {{% /codetab %}}
@@ -382,7 +382,7 @@ def subscribe():
     subscriptions = [
       {
         'pubsubname': 'pubsub',
-        'topic': 'checkout',
+        'topic': 'orders',
         'routes': {
           'rules': [
             {
@@ -418,7 +418,7 @@ app.get('/dapr/subscribe', (req, res) => {
   res.json([
     {
       pubsubname: "pubsub",
-      topic: "checkout",
+      topic: "orders",
       routes: {
         rules: [
           {
@@ -480,7 +480,7 @@ func configureSubscribeHandler(w http.ResponseWriter, _ *http.Request) {
 	t := []subscription{
 		{
 			PubsubName: "pubsub",
-			Topic:      "checkout",
+			Topic:      "orders",
 			Routes: routes{
 				Rules: []rule{
 					{
