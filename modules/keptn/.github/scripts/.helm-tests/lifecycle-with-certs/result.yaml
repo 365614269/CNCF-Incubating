@@ -12,20 +12,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
----
-# Source: keptn/charts/lifecycleOperator/templates/deployment.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: keptn-scheduler
-  namespace: "helmtests"
-  labels:
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: cert-manager-0.2.6
 ---
 # Source: keptn/charts/lifecycleOperator/templates/deployment.yaml
 apiVersion: v1
@@ -38,7 +25,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 ---
 # Source: keptn/charts/lifecycleOperator/templates/lifecycle-manager-config.yaml
 apiVersion: v1
@@ -51,7 +38,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 data:
   controller_manager_config.yaml: |
     apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
@@ -65,31 +52,6 @@ data:
       bindAddress: "127.0.0.1:8080"
     webhook:
       port: 9443
----
-# Source: keptn/charts/lifecycleOperator/templates/scheduler-config.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: scheduler-config
-  namespace: "helmtests"
-  labels:
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
-data:
-  scheduler-config.yaml: |
-    apiVersion: kubescheduler.config.k8s.io/v1beta3
-    kind: KubeSchedulerConfiguration
-    leaderElection:
-      leaderElect: false
-    profiles: 
-      - plugins:
-          permit:
-            enabled:
-            - name: KLCPermit
-        schedulerName: keptn-scheduler
 ---
 # Source: keptn/charts/lifecycleOperator/templates/keptnapp-crd.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -106,7 +68,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   conversion:
     strategy: Webhook
@@ -531,7 +493,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -743,7 +705,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -892,7 +854,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   conversion:
     strategy: Webhook
@@ -2557,7 +2519,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: options.keptn.sh
   names:
@@ -2645,7 +2607,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -3356,7 +3318,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -3723,7 +3685,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -4489,7 +4451,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -9813,7 +9775,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -10353,7 +10315,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   group: lifecycle.keptn.sh
   names:
@@ -11362,7 +11324,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
+    helm.sh/chart: cert-manager-0.2.6
 rules:
 - apiGroups:
   - admissionregistration.k8s.io
@@ -11394,197 +11356,6 @@ rules:
   - list
   - watch
 ---
-# Source: keptn/charts/lifecycleOperator/templates/keptn-scheduler-rbac.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: keptn-scheduler
-  namespace: "helmtests"
-  labels:
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - namespaces
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  - events.k8s.io
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - create
-- apiGroups:
-  - coordination.k8s.io
-  resourceNames:
-  - kube-scheduler
-  resources:
-  - leases
-  verbs:
-  - get
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - endpoints
-  verbs:
-  - create
-- apiGroups:
-  - ""
-  resourceNames:
-  - kube-scheduler
-  resources:
-  - endpoints
-  verbs:
-  - get
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
-  - watch
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - delete
-  - get
-  - list
-  - watch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - bindings
-  - pods/binding
-  verbs:
-  - create
-- apiGroups:
-  - ""
-  resources:
-  - pods/status
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - replicationcontrollers
-  - services
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - apps
-  - extensions
-  resources:
-  - replicasets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - policy
-  resources:
-  - poddisruptionbudgets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims
-  - persistentvolumes
-  verbs:
-  - get
-  - list
-  - watch
-  - patch
-  - update
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
-- apiGroups:
-  - storage.k8s.io
-  resources:
-  - csinodes
-  - storageclasses
-  - csidrivers
-  - csistoragecapacities
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - scheduling.sigs.k8s.io
-  resources:
-  - podgroups
-  - elasticquotas
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - delete
-  - update
-  - patch
-- apiGroups:
-  - lifecycle.keptn.sh
-  resources:
-  - keptnworkloadversions
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
----
 # Source: keptn/charts/lifecycleOperator/templates/lifecycle-operator-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -11596,7 +11367,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 rules:
 - apiGroups:
   - ""
@@ -11780,7 +11551,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 rules:
 - apiGroups:
   - custom.metrics.k8s.io
@@ -11803,7 +11574,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
+    helm.sh/chart: cert-manager-0.2.6
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -11811,27 +11582,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: 'certificate-operator'
-  namespace: 'helmtests'
----
-# Source: keptn/charts/lifecycleOperator/templates/keptn-scheduler-rbac.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: keptn-scheduler
-  namespace: "helmtests"
-  labels:
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: 'keptn-scheduler'
-subjects:
-- kind: ServiceAccount
-  name: 'keptn-scheduler'
   namespace: 'helmtests'
 ---
 # Source: keptn/charts/lifecycleOperator/templates/lifecycle-operator-rbac.yaml
@@ -11845,7 +11595,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -11866,7 +11616,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
+    helm.sh/chart: cert-manager-0.2.6
 rules:
 - apiGroups:
   - ""
@@ -11911,7 +11661,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
+    helm.sh/chart: cert-manager-0.2.6
 rules:
 - apiGroups:
   - ""
@@ -11943,55 +11693,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
----
-# Source: keptn/charts/lifecycleOperator/templates/scheduler-leader-election-rbac.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: keptn-scheduler-leader-election-role
-  namespace: "helmtests"
-  labels:
-    app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: scheduler
-    app.kubernetes.io/part-of: keptn
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 rules:
 - apiGroups:
   - ""
@@ -12039,15 +11741,15 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
+    helm.sh/chart: cert-manager-0.2.6
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: 'certificate-operator-leader-election-role'
 subjects:
-- kind: ServiceAccount
-  name: 'certificate-operator'
-  namespace: 'helmtests'
+  - kind: ServiceAccount
+    name: 'certificate-operator'
+    namespace: 'helmtests'
 ---
 # Source: keptn/charts/certManager/templates/certificate-operator-role-binding-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -12063,7 +11765,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
+    helm.sh/chart: cert-manager-0.2.6
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -12071,27 +11773,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: 'certificate-operator'
-  namespace: 'helmtests'
----
-# Source: keptn/charts/lifecycleOperator/templates/extension-apiserver-authentication-reader-rbac.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: extension-apiserver-authentication-reader
-  namespace: "helmtests"
-  labels:
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: 'extension-apiserver-authentication-reader'
-subjects:
-- kind: ServiceAccount
-  name: 'keptn-scheduler'
   namespace: 'helmtests'
 ---
 # Source: keptn/charts/lifecycleOperator/templates/lifecycle-operator-leader-election-rbac.yaml
@@ -12105,7 +11786,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -12126,7 +11807,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -12134,27 +11815,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: 'lifecycle-operator'
-  namespace: 'helmtests'
----
-# Source: keptn/charts/lifecycleOperator/templates/scheduler-leader-election-rbac.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: keptn-scheduler-leader-election-rolebinding
-  namespace: "helmtests"
-  labels:
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: 'keptn-scheduler-leader-election-role'
-subjects:
-- kind: ServiceAccount
-  name: 'keptn-scheduler'
   namespace: 'helmtests'
 ---
 # Source: keptn/charts/lifecycleOperator/templates/lifecycle-operator-metrics-service.yaml
@@ -12169,7 +11829,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   type: ClusterIP
   selector:
@@ -12193,7 +11853,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   type: ClusterIP
   selector:
@@ -12219,7 +11879,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: cert-manager
     app.kubernetes.io/version: v2.2.2
-    helm.sh/chart: cert-manager-0.2.5
+    helm.sh/chart: cert-manager-0.2.6
 spec:
   replicas: 1
   selector:
@@ -12304,7 +11964,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 spec:
   replicas: 1
   selector:
@@ -12361,8 +12021,6 @@ spec:
           value: "2222"
         - name: OPTIONS_CONTROLLER_LOG_LEVEL
           value: "0"
-        - name: SCHEDULING_GATES_ENABLED
-          value: "false"
         - name: PROMOTION_TASKS_ENABLED
           value: "false"
         - name: KUBERNETES_CLUSTER_DOMAIN
@@ -12423,85 +12081,6 @@ spec:
         secret:
           secretName: keptn-certs
 ---
-# Source: keptn/charts/lifecycleOperator/templates/deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: scheduler
-  namespace: "helmtests"
-  labels:
-    component: scheduler
-    app.kubernetes.io/instance: keptn-test
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/name: lifecycle-operator
-    app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      component: scheduler
-      app.kubernetes.io/name: lifecycle-operator
-      app.kubernetes.io/instance: keptn-test
-  template:
-    metadata:
-      labels:
-        component: scheduler
-        app.kubernetes.io/name: lifecycle-operator
-        app.kubernetes.io/instance: keptn-test
-    spec:
-      containers:
-      - command:
-        - /bin/kube-scheduler
-        - --config=/etc/kubernetes/scheduler-config.yaml
-        env:
-        - name: OTEL_COLLECTOR_URL
-          value: "otel-collector:4317"
-        - name: KUBERNETES_CLUSTER_DOMAIN
-          value: cluster.local
-        image: ghcr.io/keptn/scheduler:v0.0.0
-        imagePullPolicy: Never
-        name: scheduler
-        resources:
-          limits:
-            cpu: 300m
-            memory: 100Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          privileged: false
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          runAsUser: 65532
-          seccompProfile:
-            type: RuntimeDefault
-        volumeMounts:
-        - mountPath: /etc/kubernetes
-          name: scheduler-config
-          readOnly: true
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 10259
-            scheme: HTTPS
-          initialDelaySeconds: 15
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 10259
-            scheme: HTTPS
-      
-      serviceAccountName: keptn-scheduler
-      volumes:
-      - configMap:
-          name: scheduler-config
-        name: scheduler-config
----
 # Source: keptn/charts/lifecycleOperator/templates/lifecycle-mutating-webhook-configuration.yaml
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
@@ -12514,7 +12093,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 webhooks:
 - admissionReviewVersions:
   - v1
@@ -12564,7 +12143,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: lifecycle-operator
     app.kubernetes.io/version: v1.2.0
-    helm.sh/chart: lifecycle-operator-0.4.1
+    helm.sh/chart: lifecycle-operator-0.5.0
 webhooks:
 - admissionReviewVersions:
   - v1

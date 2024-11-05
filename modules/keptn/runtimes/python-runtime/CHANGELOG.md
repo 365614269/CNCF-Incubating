@@ -1,6 +1,11 @@
 # Changelog
 
-## [1.0.7](https://github.com/keptn/lifecycle-toolkit/compare/python-runtime-v1.0.6...python-runtime-v1.0.7) (2024-10-29)
+## [1.0.7](https://github.com/keptn/lifecycle-toolkit/compare/python-runtime-v1.0.6...python-runtime-v1.0.7) (2024-11-04)
+
+
+### Other
+
+* release python-runtime 1.0.7 ([#3721](https://github.com/keptn/lifecycle-toolkit/issues/3721)) ([929c291](https://github.com/keptn/lifecycle-toolkit/commit/929c291ea3df3b7381dd955a92bce93fcf2dd8b7))
 
 
 ### Dependency Updates
