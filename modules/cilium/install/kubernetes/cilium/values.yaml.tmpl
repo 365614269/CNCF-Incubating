@@ -41,6 +41,9 @@ rbac:
 imagePullSecrets: []
 # - name: "image-pull-secret"
 
+# -- Configure iptables--random-fully. Disabled by default. View https://github.com/cilium/cilium/issues/13037 for more information.
+iptablesRandomFully: false
+
 # -- (string) Kubernetes config path
 # @default -- `"~/.kube/config"`
 kubeConfigPath: ""
@@ -1090,6 +1093,8 @@ socketLB:
   # hostNamespaceOnly: false
   # -- Enable terminating pod connections to deleted service backends.
   # terminatePodConnections: true
+  # -- Enables tracing for socket-based load balancing.
+  # tracing: true
 # -- Configure certificate generation for Hubble integration.
 # If hubble.tls.auto.method=cronJob, these values are used
 # for the Kubernetes CronJob which will be scheduled regularly to
@@ -2588,7 +2593,6 @@ routingMode: ""
 # @default -- Port 8472 for VXLAN, Port 6081 for Geneve
 tunnelPort: 0
 # -- Configure what the response should be to traffic for a service without backends.
-# "reject" only works on kernels >= 5.10, on lower kernels we fallback to "drop".
 # Possible values:
 #  - reject (default)
 #  - drop

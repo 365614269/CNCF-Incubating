@@ -2404,6 +2404,10 @@
      - The maximum queries per second when rate limiting access to external APIs. Also known as the bucket refill rate, which is used to refill the bucket up to the burst size capacity.
      - float
      - ``4.0``
+   * - :spelling:ignore:`iptablesRandomFully`
+     - Configure iptables--random-fully. Disabled by default. View https://github.com/cilium/cilium/issues/13037 for more information.
+     - bool
+     - ``false``
    * - :spelling:ignore:`ipv4.enabled`
      - Enable IPv4 support.
      - bool
@@ -3185,7 +3189,7 @@
      - bool
      - ``false``
    * - :spelling:ignore:`serviceNoBackendResponse`
-     - Configure what the response should be to traffic for a service without backends. "reject" only works on kernels >= 5.10, on lower kernels we fallback to "drop". Possible values:  - reject (default)  - drop
+     - Configure what the response should be to traffic for a service without backends. Possible values:  - reject (default)  - drop
      - string
      - ``"reject"``
    * - :spelling:ignore:`sleepAfterInit`

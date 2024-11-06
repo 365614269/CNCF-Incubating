@@ -348,8 +348,8 @@ __metadata:
   linkType: hard
 
 "@asyncapi/react-component@npm:^2.3.3":
-  version: 2.3.3
-  resolution: "@asyncapi/react-component@npm:2.3.3"
+  version: 2.4.3
+  resolution: "@asyncapi/react-component@npm:2.4.3"
   dependencies:
     "@asyncapi/avro-schema-parser": ^3.0.24
     "@asyncapi/openapi-schema-parser": ^3.0.24
@@ -363,7 +363,7 @@ __metadata:
   peerDependencies:
     react: ">=18.0.0"
     react-dom: ">=18.0.0"
-  checksum: 1d7eef64e596e559834ffcb305794cb457e7d7a891558dd3d9f39421d901176f47387db51b8e580bc2fe8fe919944ce8a672b5529c01acbf4fb87e26b2b197a3
+  checksum: a302bb0afac4952d77da6558fede68aecedd55096a322ad5b8ca0653aa6e001d21fe681914abea2656c14fb79e1dc6ef8e18ecefce44f877677f0f15fbf6c3c4
   languageName: node
   linkType: hard
 
@@ -5017,6 +5017,7 @@ __metadata:
     "@backstage/cli": "workspace:^"
     "@backstage/core-components": "workspace:^"
     "@backstage/core-plugin-api": "workspace:^"
+    "@backstage/frontend-defaults": "workspace:^"
     "@backstage/frontend-plugin-api": "workspace:^"
     "@material-ui/core": ^4.12.2
     "@material-ui/icons": ^4.9.1
@@ -9158,11 +9159,11 @@ __metadata:
   linkType: hard
 
 "@codemirror/legacy-modes@npm:^6.1.0":
-  version: 6.4.1
-  resolution: "@codemirror/legacy-modes@npm:6.4.1"
+  version: 6.4.2
+  resolution: "@codemirror/legacy-modes@npm:6.4.2"
   dependencies:
     "@codemirror/language": ^6.0.0
-  checksum: 3947842c5f06db49a152bf7dd03a626806c5f2e80abfa9840927396fef08ff8bc2dfb228e7231bd8d0b7bb1a84b7ef582df8361b2bef77419e0e04bf43cc6b7d
+  checksum: fe55df97efe980a573ff5572f480eae323d7652a4a61435c654a90142def7102218023590112de7cd826c495ecaadae68a89fb5e5d4323d207af267bcce1d0c1
   languageName: node
   linkType: hard
 
@@ -9208,13 +9209,13 @@ __metadata:
   linkType: hard
 
 "@codemirror/view@npm:^6.0.0, @codemirror/view@npm:^6.23.0":
-  version: 6.34.1
-  resolution: "@codemirror/view@npm:6.34.1"
+  version: 6.34.2
+  resolution: "@codemirror/view@npm:6.34.2"
   dependencies:
     "@codemirror/state": ^6.4.0
     style-mod: ^4.1.0
     w3c-keyname: ^2.2.4
-  checksum: 5c7bf199f0b45a3cc192f08c2ac89e5ab972f313cb4f2c979edf6e05b27bccd60c6cb42d5dacb6813ef3a928d75476eb0a00ffdeffd7431c8e9f44bab4f6e12e
+  checksum: 31c492e83b0a02c962203896f219c6184e4ee07832f3c71b0065a9bcad70158aa23f286ecfd2c251acde8061ba8dfa4d3a286da71be2951e995ad3e0d21f9e79
   languageName: node
   linkType: hard
 
@@ -9936,14 +9937,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@gitbeaker/core@npm:^40.5.1":
-  version: 40.5.1
-  resolution: "@gitbeaker/core@npm:40.5.1"
+"@gitbeaker/core@npm:^40.6.0":
+  version: 40.6.0
+  resolution: "@gitbeaker/core@npm:40.6.0"
   dependencies:
-    "@gitbeaker/requester-utils": ^40.5.1
+    "@gitbeaker/requester-utils": ^40.6.0
     qs: ^6.12.2
     xcase: ^2.0.1
-  checksum: 2e2344ac81b153ef64e93da7a94cc40ead9619e2aefcadb1bcae0b92c2c741e6c08faf36e3b150f15bc80ea35f73bfdc94fbe2792ae462ee8881354f4d7481fd
+  checksum: 3d75175f8adcf04294b5cfb8f040ad372d218473ec35d02b3b59c0538eb16228fc915a92a8582ecff5cad0a8dddcddb5a90b12cfe2ce5aaf9c3b6fccffe7259b
   languageName: node
   linkType: hard
 
@@ -9983,15 +9984,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@gitbeaker/requester-utils@npm:^40.5.1":
-  version: 40.5.1
-  resolution: "@gitbeaker/requester-utils@npm:40.5.1"
+"@gitbeaker/requester-utils@npm:^40.6.0":
+  version: 40.6.0
+  resolution: "@gitbeaker/requester-utils@npm:40.6.0"
   dependencies:
     picomatch-browser: ^2.2.6
     qs: ^6.12.2
     rate-limiter-flexible: ^4.0.1
     xcase: ^2.0.1
-  checksum: d39e9cc526f4969a6724dd2a0ae9c27f353e4e03b0b8ec569955d7a7b09c4520137b4768f0ec51a5f53f6156505ffa02164815702f77c1d460dd0f68d369af53
+  checksum: 8744487bdba27f2995e483473cb4c3d6926228fa2f0c842bec300e165a09508a5e5ad047d478aeebe226a8f264c92a1dcb0a21f6af316b8fe4ebb679d7283e49
   languageName: node
   linkType: hard
 
@@ -10006,12 +10007,12 @@ __metadata:
   linkType: hard
 
 "@gitbeaker/rest@npm:^40.0.3":
-  version: 40.5.1
-  resolution: "@gitbeaker/rest@npm:40.5.1"
+  version: 40.6.0
+  resolution: "@gitbeaker/rest@npm:40.6.0"
   dependencies:
-    "@gitbeaker/core": ^40.5.1
-    "@gitbeaker/requester-utils": ^40.5.1
-  checksum: 902ab38daad16dfd1638fce91a1c39baf6409e9bb17c1e13bd904801e85fa796a4cf015ebf4fe3d9cf0b0028a8b26493502a9f331cf990fa73398a752ee41d7e
+    "@gitbeaker/core": ^40.6.0
+    "@gitbeaker/requester-utils": ^40.6.0
+  checksum: e2ae3f460378c0fe226ac13dcc75bcddf44c8bd594c212020d2a088016a2d1735552639cb9a8fe43f85dad0305a918aef485313c5bed8ad62e351affee21da80
   languageName: node
   linkType: hard
 
@@ -31975,12 +31976,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jiti@npm:^2.0.0, jiti@npm:^2.3.3":
-  version: 2.3.3
-  resolution: "jiti@npm:2.3.3"
+"jiti@npm:^2.0.0, jiti@npm:^2.4.0":
+  version: 2.4.0
+  resolution: "jiti@npm:2.4.0"
   bin:
     jiti: lib/jiti-cli.mjs
-  checksum: f1a2b87d937569c966f00a8c9153c8f3e02445b31e034fdaed1b9639a4ecfae3c4df24c7644d5b4764c566f8dee09132a5b55cd049b48e618024accd31d8e6b3
+  checksum: b7d8c441214e48f6c1be2952a83f40e2b1eb6e94fe81b1fd89370d11a7e322c61eb3fbd9a8d47029e14338414091ebbb575e1a92c645ab30fea6240c5c4957c7
   languageName: node
   linkType: hard
 
@@ -32829,18 +32830,18 @@ __metadata:
   linkType: hard
 
 "knip@npm:^5.0.0":
-  version: 5.33.3
-  resolution: "knip@npm:5.33.3"
+  version: 5.36.2
+  resolution: "knip@npm:5.36.2"
   dependencies:
     "@nodelib/fs.walk": 1.2.8
     "@snyk/github-codeowners": 1.1.0
     easy-table: 1.2.0
     enhanced-resolve: ^5.17.1
     fast-glob: ^3.3.2
-    jiti: ^2.3.3
+    jiti: ^2.4.0
     js-yaml: ^4.1.0
     minimist: ^1.2.8
-    picocolors: ^1.0.0
+    picocolors: ^1.1.0
     picomatch: ^4.0.1
     pretty-ms: ^9.0.0
     smol-toml: ^1.3.0
@@ -32854,7 +32855,7 @@ __metadata:
   bin:
     knip: bin/knip.js
     knip-bun: bin/knip-bun.js
-  checksum: 636e26fde892c590a65326d370fc19f1d73575ac014fb84d55d67a71dc05ea0ba2114ae587ba0192232b4ac1094710ee7d9582cf3bbe0773f6c667c0bba9b3e4
+  checksum: add434c880a6346f6a660df4961a5e7e6be62aabbc148d8f401ff64423dabd96004ef9b21921682971ade0c7798faee967a9e4832bec647875fccf73674c9f8e
   languageName: node
   linkType: hard
 
@@ -37393,8 +37394,8 @@ __metadata:
   linkType: hard
 
 "pg@npm:^8.11.3, pg@npm:^8.9.0":
-  version: 8.13.0
-  resolution: "pg@npm:8.13.0"
+  version: 8.13.1
+  resolution: "pg@npm:8.13.1"
   dependencies:
     pg-cloudflare: ^1.1.1
     pg-connection-string: ^2.7.0
@@ -37410,7 +37411,7 @@ __metadata:
   peerDependenciesMeta:
     pg-native:
       optional: true
-  checksum: 81560755ff4ee62b71bf1204dd696f66451574d1db56cbd5aa514ce91c6474030ee8078461b3cb85cce8d2f185be5846e0a7a707a818f5e2e3fb198a7ea795ea
+  checksum: 22cb97fcbee3348d5ee0b195071cc572f9c88eb40cbb61fe6726af68d55d5962121b2d630509bb907703e1c8bdc33de775462029c5399e2a841fa9e6c9da0242
   languageName: node
   linkType: hard
 

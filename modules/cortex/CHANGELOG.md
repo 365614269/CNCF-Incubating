@@ -2,6 +2,10 @@
 
 ## master / unreleased
 
+* [CHANGE] OTLP: Change OTLP handler to be consistent with the Prometheus OTLP handler. #6272
+- `target_info` metric is enabled by default and can be disabled via `-distributor.otlp.disable-target-info=true` flag
+- Convert all attributes to labels is disabled by default and can be enabled via `-distributor.otlp.convert-all-attributes=true` flag
+- You can specify the attributes converted to labels via `-distributor.promote-resource-attributes` flag. Supported only if `-distributor.otlp.convert-all-attributes=false`
 * [CHANGE] Change all max async concurrency default values `50` to `3` #6268
 * [CHANGE] Change default value of `-blocks-storage.bucket-store.index-cache.multilevel.max-async-concurrency` from `50` to `3` #6265
 * [CHANGE] Enable Compactor and Alertmanager in target all. #6204
@@ -26,6 +30,7 @@
 * [ENHANCEMENT] Ingester: Add matchers to ingester LabelNames() and LabelNamesStream() RPC. #6209
 * [ENHANCEMENT] Ingester/Store Gateway Clients: Introduce an experimental HealthCheck handler to quickly fail requests directed to unhealthy targets. #6225 #6257
 * [ENHANCEMENT] Upgrade build image and Go version to 1.23.2. #6261 #6262
+* [ENHANCEMENT] Ingester: Introduce a new experimental feature for caching expanded postings on the ingester. #6296
 * [ENHANCEMENT] Querier/Ruler: Expose `store_gateway_consistency_check_max_attempts` for max retries when querying store gateway in consistency check. #6276
 * [ENHANCEMENT] StoreGateway: Add new `cortex_bucket_store_chunk_pool_inuse_bytes` metric to track the usage in chunk pool. #6310
 * [BUGFIX] Runtime-config: Handle absolute file paths when working directory is not / #6224
