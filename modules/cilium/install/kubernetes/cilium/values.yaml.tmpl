@@ -600,7 +600,7 @@ bpf:
   # @schema
   # type: [null, boolean]
   # @schema
-  # -- (bool) Configure the eBPF-based TPROXY to reduce reliance on iptables rules
+  # -- (bool) Configure the eBPF-based TPROXY (beta) to reduce reliance on iptables rules
   # for implementing Layer 7 policy.
   # @default -- `false`
   tproxy: ~
@@ -2292,6 +2292,8 @@ envoy:
     defaultLevel: ~
   # -- Time in seconds after which a TCP connection attempt times out
   connectTimeoutSeconds: 2
+  # -- Time in seconds after which the initial fetch on an xDS stream is considered timed out
+  initialFetchTimeoutSeconds: 30
   # -- ProxyMaxRequestsPerConnection specifies the max_requests_per_connection setting for Envoy
   maxRequestsPerConnection: 0
   # -- Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)
