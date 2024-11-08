@@ -371,7 +371,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:f89267235e105c008e00e8cac1c11b325b69dc25473c4170e2f1dfbe72303bc8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.30.7-1730450803-0a83534f8c57b4d24405b213ed4b65e4e4987d8d","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:5738b0d3d9e570ef17b97b828bdf41332251073131f0ed4e19fac803910b07c1","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.30.7-1730965050-cd22d9ffa21eb4f214bf059bcc5d2f40f0c47882","useDigest":true}` | Envoy container image. |
 | envoy.initialFetchTimeoutSeconds | int | `30` | Time in seconds after which the initial fetch on an xDS stream is considered timed out |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
@@ -859,7 +859,7 @@ contributors across the globe, there is almost always someone available to help.
 | sysctlfix | object | `{"enabled":true}` | Configure sysctl override described in #20072. |
 | sysctlfix.enabled | bool | `true` | Enable the sysctl override. When enabled, the init container will mount the /proc of the host so that the `sysctlfix` utility can execute. |
 | terminationGracePeriodSeconds | int | `1` | Configure termination grace period for cilium-agent DaemonSet. |
-| tls | object | `{"ca":{"cert":"","certValidityDuration":1095,"key":""},"caBundle":{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt","useSecret":false},"secretsBackend":"local"}` | Configure TLS configuration in the agent. |
+| tls | object | `{"ca":{"cert":"","certValidityDuration":1095,"key":""},"caBundle":{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt","useSecret":false},"secretSync":{"enabled":true,"secretsNamespace":{"create":true,"enabled":true,"name":"cilium-secrets"}},"secretsBackend":"local"}` | Configure TLS configuration in the agent. |
 | tls.ca | object | `{"cert":"","certValidityDuration":1095,"key":""}` | Base64 encoded PEM values for the CA certificate and private key. This can be used as common CA to generate certificates used by hubble and clustermesh components. It is neither required nor used when cert-manager is used to generate the certificates. |
 | tls.ca.cert | string | `""` | Optional CA cert. If it is provided, it will be used by cilium to generate all other certificates. Otherwise, an ephemeral CA is generated. |
 | tls.ca.certValidityDuration | int | `1095` | Generated certificates validity duration in days. This will be used for auto generated CA. |
@@ -869,6 +869,12 @@ contributors across the globe, there is almost always someone available to help.
 | tls.caBundle.key | string | `"ca.crt"` | Entry of the ConfigMap containing the CA trust bundle. |
 | tls.caBundle.name | string | `"cilium-root-ca.crt"` | Name of the ConfigMap containing the CA trust bundle. |
 | tls.caBundle.useSecret | bool | `false` | Use a Secret instead of a ConfigMap. |
+| tls.secretSync | object | `{"enabled":true,"secretsNamespace":{"create":true,"enabled":true,"name":"cilium-secrets"}}` | Configures settings for synchronization of TLS Interception Secrets |
+| tls.secretSync.enabled | bool | `true` | Enable synchronization of Secrets for TLS Interception. If disabled and tls.secretsBackend is set to 'k8s', then secrets will be read directly by the agent. |
+| tls.secretSync.secretsNamespace | object | `{"create":true,"enabled":true,"name":"cilium-secrets"}` | This configures secret synchronization for secrets used in CiliumNetworkPolicies |
+| tls.secretSync.secretsNamespace.create | bool | `true` | Create secrets namespace for TLS Interception secrets. |
+| tls.secretSync.secretsNamespace.enabled | bool | `true` | Enable secret sync, which will make sure all TLS secrets used by TLS Interception are synced to secretsNamespace.name. If disabled, TLS secrets must be maintained externally. |
+| tls.secretSync.secretsNamespace.name | string | `"cilium-secrets"` | Name of TLS Interception secret namespace. |
 | tls.secretsBackend | string | `"local"` | This configures how the Cilium agent loads the secrets used TLS-aware CiliumNetworkPolicies (namely the secrets referenced by terminatingTLS and originatingTLS). Possible values:   - local   - k8s |
 | tolerations | list | `[{"operator":"Exists"}]` | Node tolerations for agent scheduling to nodes with taints ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ |
 | tunnelPort | int | Port 8472 for VXLAN, Port 6081 for Geneve | Configure VXLAN and Geneve tunnel port. |

@@ -132,7 +132,7 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.23.2
+          go-version: 1.23.3
 
       - name: Build Ginkgo
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
@@ -273,7 +273,7 @@ jobs:
           persist-credentials: false
 
       - name: Install cilium-cli
-        uses: cilium/cilium-cli@6977c4a640ad45da3a95eb12054497f2bdd22c48 # v0.16.19
+        uses: cilium/cilium-cli@3286926bbf80fdd0103a372256459e577224f9f6 # v0.16.20
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           ci-version: ${{ env.CILIUM_CLI_VERSION }}
@@ -337,7 +337,7 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           # renovate: datasource=golang-version depName=go
-          go-version: 1.23.2
+          go-version: 1.23.3
 
       - name: Build Ginkgo
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}

@@ -1287,7 +1287,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:f89267235e105c008e00e8cac1c11b325b69dc25473c4170e2f1dfbe72303bc8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.30.7-1730450803-0a83534f8c57b4d24405b213ed4b65e4e4987d8d","useDigest":true}``
+     - ``{"digest":"sha256:5738b0d3d9e570ef17b97b828bdf41332251073131f0ed4e19fac803910b07c1","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.30.7-1730965050-cd22d9ffa21eb4f214bf059bcc5d2f40f0c47882","useDigest":true}``
    * - :spelling:ignore:`envoy.initialFetchTimeoutSeconds`
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
@@ -3239,7 +3239,7 @@
    * - :spelling:ignore:`tls`
      - Configure TLS configuration in the agent.
      - object
-     - ``{"ca":{"cert":"","certValidityDuration":1095,"key":""},"caBundle":{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt","useSecret":false},"secretsBackend":"local"}``
+     - ``{"ca":{"cert":"","certValidityDuration":1095,"key":""},"caBundle":{"enabled":false,"key":"ca.crt","name":"cilium-root-ca.crt","useSecret":false},"secretSync":{"enabled":true,"secretsNamespace":{"create":true,"enabled":true,"name":"cilium-secrets"}},"secretsBackend":"local"}``
    * - :spelling:ignore:`tls.ca`
      - Base64 encoded PEM values for the CA certificate and private key. This can be used as common CA to generate certificates used by hubble and clustermesh components. It is neither required nor used when cert-manager is used to generate the certificates.
      - object
@@ -3276,6 +3276,30 @@
      - Use a Secret instead of a ConfigMap.
      - bool
      - ``false``
+   * - :spelling:ignore:`tls.secretSync`
+     - Configures settings for synchronization of TLS Interception Secrets
+     - object
+     - ``{"enabled":true,"secretsNamespace":{"create":true,"enabled":true,"name":"cilium-secrets"}}``
+   * - :spelling:ignore:`tls.secretSync.enabled`
+     - Enable synchronization of Secrets for TLS Interception. If disabled and tls.secretsBackend is set to 'k8s', then secrets will be read directly by the agent.
+     - bool
+     - ``true``
+   * - :spelling:ignore:`tls.secretSync.secretsNamespace`
+     - This configures secret synchronization for secrets used in CiliumNetworkPolicies
+     - object
+     - ``{"create":true,"enabled":true,"name":"cilium-secrets"}``
+   * - :spelling:ignore:`tls.secretSync.secretsNamespace.create`
+     - Create secrets namespace for TLS Interception secrets.
+     - bool
+     - ``true``
+   * - :spelling:ignore:`tls.secretSync.secretsNamespace.enabled`
+     - Enable secret sync, which will make sure all TLS secrets used by TLS Interception are synced to secretsNamespace.name. If disabled, TLS secrets must be maintained externally.
+     - bool
+     - ``true``
+   * - :spelling:ignore:`tls.secretSync.secretsNamespace.name`
+     - Name of TLS Interception secret namespace.
+     - string
+     - ``"cilium-secrets"``
    * - :spelling:ignore:`tls.secretsBackend`
      - This configures how the Cilium agent loads the secrets used TLS-aware CiliumNetworkPolicies (namely the secrets referenced by terminatingTLS and originatingTLS). Possible values:   - local   - k8s
      - string

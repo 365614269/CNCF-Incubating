@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/completion"
@@ -185,6 +186,8 @@ type xdsServer struct {
 	restorerPromise promise.Promise[endpointstate.Restorer]
 
 	localEndpointStore *LocalEndpointStore
+
+	secretManager certificatemanager.SecretManager
 }
 
 func toAny(pb proto.Message) *anypb.Any {
@@ -210,7 +213,7 @@ type xdsServerConfig struct {
 }
 
 // newXDSServer creates a new xDS GRPC server.
-func newXDSServer(restorerPromise promise.Promise[endpointstate.Restorer], ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig) (*xdsServer, error) {
+func newXDSServer(restorerPromise promise.Promise[endpointstate.Restorer], ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig, secretManager certificatemanager.SecretManager) (*xdsServer, error) {
 	return &xdsServer{
 		restorerPromise:    restorerPromise,
 		listenerCount:      make(map[string]uint),
@@ -220,6 +223,7 @@ func newXDSServer(restorerPromise promise.Promise[endpointstate.Restorer], ipCac
 		socketPath:    getXDSSocketPath(config.envoySocketDir),
 		accessLogPath: getAccessLogSocketPath(config.envoySocketDir),
 		config:        config,
+		secretManager: secretManager,
 	}, nil
 }
 
@@ -316,7 +320,7 @@ func (s *xdsServer) newSocketListener() (*net.UnixListener, error) {
 	}
 
 	// Make the socket accessible by owner and group only.
-	if err = os.Chmod(s.socketPath, 0660); err != nil {
+	if err = os.Chmod(s.socketPath, 0o660); err != nil {
 		return nil, fmt.Errorf("failed to change mode of xDS listen socket at %s: %w", s.socketPath, err)
 	}
 	// Change the group to ProxyGID allowing access from any process from that group.
@@ -357,7 +361,6 @@ func GetUpstreamCodecFilter() *envoy_config_http.HttpFilter {
 }
 
 func (s *xdsServer) getHttpFilterChainProto(clusterName string, tls bool, isIngress bool) *envoy_config_listener.FilterChain {
-
 	requestTimeout := int64(s.config.httpRequestTimeout) // seconds
 	idleTimeout := int64(s.config.httpIdleTimeout)       // seconds
 	maxGRPCTimeout := int64(s.config.httpMaxGRPCTimeout) // seconds
@@ -1131,7 +1134,7 @@ func getSecretString(secretManager certificatemanager.SecretManager, hdr *api.He
 	return value, err
 }
 
-func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRuleHTTP, ns string) (*cilium.HttpNetworkPolicyRule, bool) {
+func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRuleHTTP, ns string, policySecretsNamespace string) (*cilium.HttpNetworkPolicyRule, bool) {
 	// Count the number of header matches we need
 	cnt := len(h.Headers) + len(h.HeaderMatches)
 	if h.Path != "" {
@@ -1244,27 +1247,21 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 				},
 				InvertMatch: true,
 			})
-		} else {
+		} else if value != "" {
+			// Inline value provided.
 			// Header presence and matching (literal) value needed.
 			if mismatch_action == cilium.HeaderMatch_FAIL_ON_MISMATCH {
-				if value != "" {
-					headers = append(headers, &envoy_config_route.HeaderMatcher{
-						Name: hdr.Name,
-						HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_StringMatch{
-							StringMatch: &envoy_type_matcher.StringMatcher{
-								MatchPattern: &envoy_type_matcher.StringMatcher_Exact{
-									Exact: value,
-								},
+				// fail on mismatch gets converted for regular HeaderMatcher
+				headers = append(headers, &envoy_config_route.HeaderMatcher{
+					Name: hdr.Name,
+					HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_StringMatch{
+						StringMatch: &envoy_type_matcher.StringMatcher{
+							MatchPattern: &envoy_type_matcher.StringMatcher_Exact{
+								Exact: value,
 							},
 						},
-					})
-				} else {
-					// Only header presence needed
-					headers = append(headers, &envoy_config_route.HeaderMatcher{
-						Name:                 hdr.Name,
-						HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_PresentMatch{PresentMatch: true},
-					})
-				}
+					},
+				})
 			} else {
 				log.Debugf("HeaderMatches: Adding %s", hdr.Name)
 				headerMatches = append(headerMatches, &cilium.HeaderMatch{
@@ -1273,6 +1270,35 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 					Value:          value,
 				})
 			}
+		} else if hdr.Secret == nil {
+			// No inline value and no secret.
+			// Header presence for FAIL_ON_MISMSTCH or matching empty value otherwise needed.
+			if mismatch_action == cilium.HeaderMatch_FAIL_ON_MISMATCH {
+				// Only header presence needed
+				headers = append(headers, &envoy_config_route.HeaderMatcher{
+					Name:                 hdr.Name,
+					HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_PresentMatch{PresentMatch: true},
+				})
+			} else {
+				log.Debugf("HeaderMatches: Adding %s for an empty value", hdr.Name)
+				headerMatches = append(headerMatches, &cilium.HeaderMatch{
+					MismatchAction: mismatch_action,
+					Name:           hdr.Name,
+				})
+			}
+		} else {
+			// A secret is set, so we transform to an SDS value.
+			// cilium-envoy takes care of treating this as a presence match if the
+			// secret exists with an empty value.
+			log.Debugf("HeaderMatches: Adding %s because SDS value is required", hdr.Name)
+			headerMatches = append(headerMatches, &cilium.HeaderMatch{
+				MismatchAction: mismatch_action,
+				Name:           hdr.Name,
+				ValueSdsSecret: namespacedNametoSyncedSDSSecretName(types.NamespacedName{
+					Namespace: hdr.Secret.Namespace,
+					Name:      hdr.Secret.Name,
+				}, policySecretsNamespace),
+			})
 		}
 	}
 	if len(headers) == 0 {
@@ -1318,24 +1344,38 @@ var CiliumXDSConfigSource = &envoy_config_core.ConfigSource{
 	},
 }
 
-// toEnvoyFullTLSContext converts a "policy" TLS context (i.e., from a CiliumNetworkPolicy or
-// CiliumClusterwideNetworkPolicy) into a "cilium envoy" TLS context (i.e., for the Cilium proxy plugin for Envoy).
-//
-// Deprecated: This includes both the CA *and* the cert/key. You almost certainly don't want this. Use
-// toEnvoyOriginatingTLSContext or toEnvoyTerminatingTLSContext instead.
-// x-ref: https://github.com/cilium/cilium/issues/31761
-func toEnvoyFullTLSContext(tls *policy.TLSContext) *cilium.TLSContext {
-	return &cilium.TLSContext{
-		TrustedCa:        tls.TrustedCA,
-		CertificateChain: tls.CertificateChain,
-		PrivateKey:       tls.PrivateKey,
-	}
-}
-
 // toEnvoyOriginatingTLSContext converts a "policy" TLS context (i.e., from a CiliumNetworkPolicy or
 // CiliumClusterwideNetworkPolicy) for originating TLS (i.e., verifying TLS connections from *outside*) into a "cilium
 // envoy" TLS context (i.e., for the Cilium proxy plugin for Envoy).
-func toEnvoyOriginatingTLSContext(tls *policy.TLSContext) *cilium.TLSContext {
+//
+// useFullTLSContext is used to retain an old, buggy behavior where Secrets may contain a `ca.crt` field as well, which can
+// lead Envoy to enforce client TLS between the client pod and the interception point in Envoy. In this case,
+// Secrets will be sent to Envoy via the old, inline-in-NPDS method, and _not_ via SDS, and so this method will
+// return whatever is in the *policy.TLSContext.
+func toEnvoyOriginatingTLSContext(tls *policy.TLSContext, policySecretsNamespace string, useFullTLSContext bool) *cilium.TLSContext {
+	if !tls.FromFile && policySecretsNamespace != "" {
+		// If values are not present in these fields, then we should be using SDS,
+		// and Secret should be populated.
+		if tls.Secret.String() != "/" {
+			return &cilium.TLSContext{
+				ValidationContextSdsSecret: namespacedNametoSyncedSDSSecretName(tls.Secret, policySecretsNamespace),
+			}
+		}
+		// This code _should_ be unreachable, because NetworkPolicy input validation does not allow
+		// the Secret fields to be empty, so panic.
+		panic("SDS Policy secrets cannot be empty, this should not be possible, please log an issue")
+	}
+
+	// If we are not using a synchronized secret or are reading from file, useFullTLSContext
+	// matters.
+	if useFullTLSContext {
+		return &cilium.TLSContext{
+			CertificateChain: tls.CertificateChain,
+			PrivateKey:       tls.PrivateKey,
+			TrustedCa:        tls.TrustedCA,
+		}
+	}
+
 	return &cilium.TLSContext{
 		TrustedCa: tls.TrustedCA,
 	}
@@ -1344,14 +1384,49 @@ func toEnvoyOriginatingTLSContext(tls *policy.TLSContext) *cilium.TLSContext {
 // toEnvoyTerminatingTLSContext converts a "policy" TLS context (i.e., from a CiliumNetworkPolicy or
 // CiliumClusterwideNetworkPolicy) for terminating TLS (i.e., providing a valid cert to clients *inside*) into a "cilium
 // envoy" TLS context (i.e., for the Cilium proxy plugin for Envoy).
-func toEnvoyTerminatingTLSContext(tls *policy.TLSContext) *cilium.TLSContext {
+//
+// useFullTLSContext is used to retain an old, buggy behavior where Secrets may contain a `ca.crt` field as well, which can
+// lead Envoy to enforce client TLS between the client pod and the interception point in Envoy. In this case,
+// Secrets will be sent to Envoy via the old, inline-in-NPDS method, and _not_ via SDS, and so this method will
+// return whatever is in the *policy.TLSContext.
+func toEnvoyTerminatingTLSContext(tls *policy.TLSContext, policySecretsNamespace string, useFullTLSContext bool) *cilium.TLSContext {
+	if !tls.FromFile && policySecretsNamespace != "" {
+		// If the values have been read from Kubernetes, then we should be using SDS,
+		// and Secret should be populated.
+		if tls.Secret.String() != "/" {
+			return &cilium.TLSContext{
+				TlsSdsSecret: namespacedNametoSyncedSDSSecretName(tls.Secret, policySecretsNamespace),
+			}
+		}
+		// This code _should_ be unreachable, because NetworkPolicy input validation does not allow
+		// the Secret fields to be empty, so panic.
+		panic("SDS Policy secrets cannot be empty, this should not be possible, please log an issue")
+	}
+
+	// If we are not using a synchronized secret or are reading from file, useFullTLSContext
+	// matters.
+	if useFullTLSContext {
+		return &cilium.TLSContext{
+			CertificateChain: tls.CertificateChain,
+			PrivateKey:       tls.PrivateKey,
+			TrustedCa:        tls.TrustedCA,
+		}
+	}
+
 	return &cilium.TLSContext{
 		CertificateChain: tls.CertificateChain,
 		PrivateKey:       tls.PrivateKey,
 	}
 }
 
-func GetEnvoyHTTPRules(secretManager certificatemanager.SecretManager, l7Rules *api.L7Rules, ns string) (*cilium.HttpNetworkPolicyRules, bool) {
+func namespacedNametoSyncedSDSSecretName(namespacedName types.NamespacedName, policySecretsNamespace string) string {
+	if policySecretsNamespace == "" {
+		return fmt.Sprintf("%s/%s", namespacedName.Namespace, namespacedName.Name)
+	}
+	return fmt.Sprintf("%s/%s-%s", policySecretsNamespace, namespacedName.Namespace, namespacedName.Name)
+}
+
+func GetEnvoyHTTPRules(secretManager certificatemanager.SecretManager, l7Rules *api.L7Rules, ns string, policySecretsNamespace string) (*cilium.HttpNetworkPolicyRules, bool) {
 	if len(l7Rules.HTTP) > 0 { // Just cautious. This should never be false.
 		// Assume none of the rules have side-effects so that rule evaluation can
 		// be stopped as soon as the first allowing rule is found. 'canShortCircuit'
@@ -1361,7 +1436,7 @@ func GetEnvoyHTTPRules(secretManager certificatemanager.SecretManager, l7Rules *
 		httpRules := make([]*cilium.HttpNetworkPolicyRule, 0, len(l7Rules.HTTP))
 		for _, l7 := range l7Rules.HTTP {
 			var cs bool
-			rule, cs := getHTTPRule(secretManager, &l7, ns)
+			rule, cs := getHTTPRule(secretManager, &l7, ns, policySecretsNamespace)
 			httpRules = append(httpRules, rule)
 			if !cs {
 				canShortCircuit = false
@@ -1375,7 +1450,7 @@ func GetEnvoyHTTPRules(secretManager certificatemanager.SecretManager, l7Rules *
 	return nil, true
 }
 
-func getPortNetworkPolicyRule(version *versioned.VersionHandle, sel policy.CachedSelector, wildcard bool, l7Parser policy.L7ParserType, l7Rules *policy.PerSelectorPolicy, useFullTLSContext bool) (*cilium.PortNetworkPolicyRule, bool) {
+func getPortNetworkPolicyRule(version *versioned.VersionHandle, sel policy.CachedSelector, wildcard bool, l7Parser policy.L7ParserType, l7Rules *policy.PerSelectorPolicy, useFullTLSContext bool, policySecretsNamespace string) (*cilium.PortNetworkPolicyRule, bool) {
 	r := &cilium.PortNetworkPolicyRule{}
 
 	// Optimize the policy if the endpoint selector is a wildcard by
@@ -1401,25 +1476,21 @@ func getPortNetworkPolicyRule(version *versioned.VersionHandle, sel policy.Cache
 		return r, false
 	}
 
-	if useFullTLSContext {
-		// Intentionally retain compatibility with older, buggy behaviour. In this mode the full contents of the
-		// Kubernetes secret identified by TLS context is copied into the downstream/upstream TLS context. For the
-		// downstream (i.e., in-cluster pod) this could include a CA bundle if a ca.crt key is present in the secret,
-		// which may incorrectly lead Envoy to require client certificates.
-		if l7Rules.TerminatingTLS != nil {
-			r.DownstreamTlsContext = toEnvoyFullTLSContext(l7Rules.TerminatingTLS)
-		}
-		if l7Rules.OriginatingTLS != nil {
-			r.UpstreamTlsContext = toEnvoyFullTLSContext(l7Rules.OriginatingTLS)
-		}
-	} else {
-		if l7Rules.TerminatingTLS != nil {
-			r.DownstreamTlsContext = toEnvoyTerminatingTLSContext(l7Rules.TerminatingTLS)
-		}
-		if l7Rules.OriginatingTLS != nil {
-			r.UpstreamTlsContext = toEnvoyOriginatingTLSContext(l7Rules.OriginatingTLS)
-		}
+	// If secret synchronization is disabled, policySecretsNamespace will be the empty string.
+	//
+	// In that case, useFullTLSContext is used to retain an old, buggy behavior where Secrets may contain a `ca.crt` field as well,
+	// which can lead Envoy to enforce client TLS between the client pod and the interception point in Envoy. In this case,
+	// Secrets will be sent to Envoy via the old, inline-in-NPDS method, and _not_ via SDS.
+	//
+	// If secret synchronization is enabled, useFullTLSContext is unused, as SDS handling can handle Secrets with extra
+	// keys correctly.
+	if l7Rules.TerminatingTLS != nil {
+		r.DownstreamTlsContext = toEnvoyTerminatingTLSContext(l7Rules.TerminatingTLS, policySecretsNamespace, useFullTLSContext)
 	}
+	if l7Rules.OriginatingTLS != nil {
+		r.UpstreamTlsContext = toEnvoyOriginatingTLSContext(l7Rules.OriginatingTLS, policySecretsNamespace, useFullTLSContext)
+	}
+
 	if len(l7Rules.ServerNames) > 0 {
 		r.ServerNames = make([]string, 0, len(l7Rules.ServerNames))
 		for sni := range l7Rules.ServerNames {
@@ -1444,7 +1515,7 @@ func getPortNetworkPolicyRule(version *versioned.VersionHandle, sel policy.Cache
 				httpRules = l7Rules.EnvoyHTTPRules
 				canShortCircuit = l7Rules.CanShortCircuit
 			} else {
-				httpRules, canShortCircuit = GetEnvoyHTTPRules(nil, &l7Rules.L7Rules, "")
+				httpRules, canShortCircuit = GetEnvoyHTTPRules(nil, &l7Rules.L7Rules, "", policySecretsNamespace)
 			}
 			r.L7 = &cilium.PortNetworkPolicyRule_HttpRules{
 				HttpRules: httpRules,
@@ -1545,7 +1616,7 @@ func getWildcardNetworkPolicyRule(version *versioned.VersionHandle, selectors po
 	}
 }
 
-func getDirectionNetworkPolicy(ep endpoint.EndpointUpdater, l4Policy policy.L4PolicyMap, policyEnforced bool, useFullTLSContext bool, dir string) []*cilium.PortNetworkPolicy {
+func getDirectionNetworkPolicy(ep endpoint.EndpointUpdater, l4Policy policy.L4PolicyMap, policyEnforced bool, useFullTLSContext bool, dir string, policySecretsNamespace string) []*cilium.PortNetworkPolicy {
 	// TODO: integrate visibility with enforced policy
 	if !policyEnforced {
 		// Always allow all ports
@@ -1614,7 +1685,7 @@ func getDirectionNetworkPolicy(ep endpoint.EndpointUpdater, l4Policy policy.L4Po
 				// then the proxy may need to drop some allowed l3 due to l7 rules potentially
 				// being different between the selectors.
 				wildcard := nSelectors == 1 || sel.IsWildcard()
-				rule, cs := getPortNetworkPolicyRule(version, sel, wildcard, l4.L7Parser, l7, useFullTLSContext)
+				rule, cs := getPortNetworkPolicyRule(version, sel, wildcard, l4.L7Parser, l7, useFullTLSContext, policySecretsNamespace)
 				if rule != nil {
 					if !cs {
 						canShortCircuit = false
@@ -1680,7 +1751,7 @@ func getDirectionNetworkPolicy(ep endpoint.EndpointUpdater, l4Policy policy.L4Po
 
 // getNetworkPolicy converts a network policy into a cilium.NetworkPolicy.
 func getNetworkPolicy(ep endpoint.EndpointUpdater, ips []string, l4Policy *policy.L4Policy,
-	ingressPolicyEnforced, egressPolicyEnforced, useFullTLSContext bool,
+	ingressPolicyEnforced, egressPolicyEnforced, useFullTLSContext bool, policySecretsNamespace string,
 ) *cilium.NetworkPolicy {
 	p := &cilium.NetworkPolicy{
 		EndpointIps:      ips,
@@ -1694,8 +1765,8 @@ func getNetworkPolicy(ep endpoint.EndpointUpdater, ips []string, l4Policy *polic
 		ingressMap = l4Policy.Ingress.PortRules
 		egressMap = l4Policy.Egress.PortRules
 	}
-	p.IngressPerPortPolicies = getDirectionNetworkPolicy(ep, ingressMap, ingressPolicyEnforced, useFullTLSContext, "ingress")
-	p.EgressPerPortPolicies = getDirectionNetworkPolicy(ep, egressMap, egressPolicyEnforced, useFullTLSContext, "egress")
+	p.IngressPerPortPolicies = getDirectionNetworkPolicy(ep, ingressMap, ingressPolicyEnforced, useFullTLSContext, "ingress", policySecretsNamespace)
+	p.EgressPerPortPolicies = getDirectionNetworkPolicy(ep, egressMap, egressPolicyEnforced, useFullTLSContext, "egress", policySecretsNamespace)
 
 	return p
 }
@@ -1757,7 +1828,7 @@ func (s *xdsServer) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, policy *pol
 		return nil, func() error { return nil }
 	}
 
-	networkPolicy := getNetworkPolicy(ep, ips, policy, ingressPolicyEnforced, egressPolicyEnforced, s.config.useFullTLSContext)
+	networkPolicy := getNetworkPolicy(ep, ips, policy, ingressPolicyEnforced, egressPolicyEnforced, s.config.useFullTLSContext, s.secretManager.GetSecretSyncNamespace())
 
 	// First, validate the policy
 	err := networkPolicy.Validate()

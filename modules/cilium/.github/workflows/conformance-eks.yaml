@@ -256,7 +256,7 @@ jobs:
           spot: false
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@6977c4a640ad45da3a95eb12054497f2bdd22c48 # v0.16.19
+        uses: cilium/cilium-cli@3286926bbf80fdd0103a372256459e577224f9f6 # v0.16.20
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
@@ -267,7 +267,7 @@ jobs:
         shell: bash
         run: |
           KEYID=15
-          kubectl create -n kube-system secret generic cilium-ipsec-keys --from-literal=keys="${KEYID} rfc4106(gcm(aes)) $(dd if=/dev/urandom count=20 bs=1 2> /dev/null | xxd -p -c 64) 128"
+          kubectl create -n kube-system secret generic cilium-ipsec-keys --from-literal=keys="${KEYID}+ rfc4106(gcm(aes)) $(dd if=/dev/urandom count=20 bs=1 2> /dev/null | xxd -p -c 64) 128"
 
       - name: Wait for images to be available
         timeout-minutes: 30
@@ -359,8 +359,8 @@ jobs:
         uses: ./.github/actions/ipsec-key-rotate
         with:
           key-algo: "gcm(aes)"
-          key-type-one: ""
-          key-type-two: ""
+          nb-nodes: 3
+          ipv6: false
 
       - name: Check conn-disrupt-test after rotating (${{ join(matrix.*, ', ') }})
         if: ${{ matrix.ipsec == true }}

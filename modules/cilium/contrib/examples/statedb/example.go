@@ -45,8 +45,9 @@ var (
 		FromObject: func(e Example) index.KeySet {
 			return index.NewKeySet(index.Uint64(e.ID))
 		},
-		FromKey: index.Uint64,
-		Unique:  true,
+		FromKey:    index.Uint64,
+		FromString: index.Uint64String,
+		Unique:     true,
 	}
 	// ByID exports the query function for the id index. It's a convention
 	// for providing a short readable short-hand for creating queries.
@@ -116,7 +117,7 @@ func (e *exampleController) loop(ctx context.Context, health cell.Health) error 
 		wtxn.Commit()
 
 		// Report the health of the job. This can be inspected with
-		// "cilium-dbg status --all-health" or with "cilium-dbg statedb health".
+		// "cilium-dbg status --all-health" or with "cilium-dbg shell -- db show health".
 		health.OK(fmt.Sprintf("%d examples inserted", id))
 	}
 }

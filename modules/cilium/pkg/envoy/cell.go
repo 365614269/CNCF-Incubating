@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
+	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -132,6 +133,8 @@ type xdsServerParams struct {
 	// Depend on ArtifactCopier to enforce init order and ensure that the additional artifacts are copied
 	// before starting the xDS server (and starting to configure Envoy).
 	ArtifactCopier *ArtifactCopier
+
+	SecretManager certificatemanager.SecretManager
 }
 
 func newEnvoyXDSServer(params xdsServerParams) (XDSServer, error) {
@@ -155,7 +158,8 @@ func newEnvoyXDSServer(params xdsServerParams) (XDSServer, error) {
 			useFullTLSContext:             params.EnvoyProxyConfig.UseFullTLSContext,
 			proxyXffNumTrustedHopsIngress: params.EnvoyProxyConfig.ProxyXffNumTrustedHopsIngress,
 			proxyXffNumTrustedHopsEgress:  params.EnvoyProxyConfig.ProxyXffNumTrustedHopsEgress,
-		})
+		},
+		params.SecretManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Envoy xDS server: %w", err)
 	}
@@ -314,8 +318,9 @@ type syncerParams struct {
 
 	K8sClientset client.Clientset
 
-	Config    secretSyncConfig
-	XdsServer XDSServer
+	Config        secretSyncConfig
+	XdsServer     XDSServer
+	SecretManager certificatemanager.SecretManager
 }
 
 func registerSecretSyncer(params syncerParams) error {
@@ -330,9 +335,10 @@ func registerSecretSyncer(params syncerParams) error {
 	namespaces := map[string]struct{}{}
 
 	for namespace, cond := range map[string]func() bool{
-		params.Config.EnvoySecretsNamespace:      func() bool { return option.Config.EnableEnvoyConfig },
-		params.Config.IngressSecretsNamespace:    func() bool { return params.Config.EnableIngressController },
-		params.Config.GatewayAPISecretsNamespace: func() bool { return params.Config.EnableGatewayAPI },
+		params.Config.EnvoySecretsNamespace:           func() bool { return option.Config.EnableEnvoyConfig },
+		params.Config.IngressSecretsNamespace:         func() bool { return params.Config.EnableIngressController },
+		params.Config.GatewayAPISecretsNamespace:      func() bool { return params.Config.EnableGatewayAPI },
+		params.SecretManager.GetSecretSyncNamespace(): func() bool { return params.SecretManager.PolicySecretSyncEnabled() },
 	} {
 		if len(namespace) > 0 && cond() {
 			namespaces[namespace] = struct{}{}
@@ -351,7 +357,11 @@ func registerSecretSyncer(params syncerParams) error {
 
 	params.Lifecycle.Append(jobGroup)
 
-	secretSyncer := newSecretSyncer(params.Logger, params.XdsServer)
+	secretSyncerLogger := params.Logger.WithField("controller", "secretSyncer")
+
+	secretSyncer := newSecretSyncer(secretSyncerLogger, params.XdsServer)
+
+	secretSyncerLogger.Debug("Watching namespaces for secrets", "namespaces", namespaces)
 
 	for ns := range namespaces {
 		jobGroup.Add(job.Observer(
