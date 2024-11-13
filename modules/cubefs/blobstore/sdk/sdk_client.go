@@ -548,12 +548,13 @@ func (s *sdkHandler) putPartsBatch(ctx context.Context, parts []blobPart) error 
 		})
 	}
 
-	if err := task.Run(context.Background(), tasks...); err != nil {
+	newCtx := trace.NewContextFromContext(ctx)
+	if err := task.Run(ctx, tasks...); err != nil {
 		for _, pt := range parts {
 			part := pt
 			// asynchronously delete blob
 			go func() {
-				s.deleteBlob(ctx, &acapi.DeleteBlobArgs{
+				s.deleteBlob(newCtx, &acapi.DeleteBlobArgs{
 					ClusterID: part.cid,
 					Vid:       part.vid,
 					BlobID:    part.bid,
@@ -629,16 +630,18 @@ func (s *sdkHandler) putParts(ctx context.Context, args *acapi.PutArgs) (acapi.L
 			return
 		}
 
+		// force to clean up, even canceled context
+		newCtx := trace.NewContextFromSpan(span)
 		locations := signArgs.Locations[:]
 		if len(locations) > 1 {
 			signArgs.Location = loc.Copy()
-			signResp, err := s.sign(ctx, &signArgs)
+			signResp, err := s.sign(newCtx, &signArgs)
 			if err == nil {
 				locations = []acapi.Location{signResp.Location.Copy()}
 			}
 		}
 		if len(locations) > 0 {
-			if _, err := s.Delete(ctx, &acapi.DeleteArgs{Locations: locations}); err != nil {
+			if _, err := s.Delete(newCtx, &acapi.DeleteArgs{Locations: locations}); err != nil {
 				span.Warnf("clean location '%+v' failed %s", locations, err.Error())
 			}
 		}

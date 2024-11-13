@@ -289,6 +289,10 @@ func TestAll(t *testing.T) {
 				s := setup(t, tt)
 				s.TestNodeChurnXFRMLeaks(t)
 			})
+			t.Run("TestNodeChurnXFRMLeaksSubnetMode", func(t *testing.T) {
+				s := setup(t, tt)
+				s.TestNodeChurnXFRMLeaksSubnetMode(t)
+			})
 			t.Run("TestNodeUpdateDirectRouting", func(t *testing.T) {
 				s := setup(t, tt)
 				s.TestNodeUpdateDirectRouting(t)
@@ -800,7 +804,6 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateIDs(t *testing.T) {
 
 // Tests that we don't leak XFRM policies and states as nodes come and go.
 func (s *linuxPrivilegedBaseTestSuite) TestNodeChurnXFRMLeaks(t *testing.T) {
-
 	// Cover the XFRM configuration for IPAM modes cluster-pool, kubernetes, etc.
 	config := s.nodeConfigTemplate
 	config.EnableIPSec = true
@@ -808,29 +811,21 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeChurnXFRMLeaks(t *testing.T) {
 }
 
 // Tests the same as linuxPrivilegedBaseTestSuite.TestNodeChurnXFRMLeaks just
-// for the subnet encryption. IPv4-only because of https://github.com/cilium/cilium/issues/27280.
-func TestNodeChurnXFRMLeaks(t *testing.T) {
-	s := setupLinuxPrivilegedIPv4OnlyTestSuite(t)
-
+// for the subnet encryption.
+func (s *linuxPrivilegedBaseTestSuite) TestNodeChurnXFRMLeaksSubnetMode(t *testing.T) {
 	externalNodeDevice := "ipsec_interface"
-
-	// Cover the XFRM configuration for IPAM modes cluster-pool, kubernetes, etc.
 	config := s.nodeConfigTemplate
 	config.EnableIPSec = true
-	s.testNodeChurnXFRMLeaksWithConfig(t, config)
 
-	// In the case of subnet encryption (tested below), the IPsec logic
-	// retrieves the IP address of the encryption interface directly so we need
-	// a dummy interface.
+	// In the case of subnet encryption, the IPsec logic retrieves the IP
+	// address of the encryption interface directly so we need a dummy
+	// interface.
 	removeDevice(externalNodeDevice)
 	_, err := setupDummyDevice(externalNodeDevice, net.ParseIP("1.1.1.1"), net.ParseIP("face::1"))
 	require.NoError(t, err)
 	defer removeDevice(externalNodeDevice)
 	option.Config.EncryptInterface = []string{externalNodeDevice}
 	option.Config.RoutingMode = option.RoutingModeNative
-
-	// Same test suite, remove previous IPSec key.
-	ipsec.UnsetTestIPSecKey()
 
 	// Cover the XFRM configuration for subnet encryption: IPAM modes AKS and EKS.
 	ipv4PodSubnets, err := cidr.ParseCIDR("4.4.0.0/16")
@@ -858,7 +853,7 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) TestEncryptedOverlayXFRMLeaks(t *test
 // feature is enabled and disabled.
 func (s *linuxPrivilegedIPv4OnlyTestSuite) testEncryptedOverlayXFRMLeaks(t *testing.T, config datapath.LocalNodeConfiguration) {
 	tlog := hivetest.Logger(t)
-	keys := bytes.NewReader([]byte("6 rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f1 128\n"))
+	keys := bytes.NewReader([]byte("6+ rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f1 128\n"))
 	_, _, err := ipsec.LoadIPSecKeys(tlog, keys)
 	require.NoError(t, err)
 
@@ -886,7 +881,7 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) testEncryptedOverlayXFRMLeaks(t *test
 			{IP: net.ParseIP("4.4.4.4"), Type: nodeaddressing.NodeCiliumInternalIP},
 		},
 		IPv4AllocCIDR: cidr.MustParseCIDR("4.4.4.0/24"),
-		BootID:        "test-boot-id",
+		BootID:        "b892866c-26cb-4018-8a55-c0330551a2be",
 	}
 	err = linuxNodeHandler.NodeAdd(node)
 	require.NoError(t, err)
@@ -914,7 +909,7 @@ func (s *linuxPrivilegedIPv4OnlyTestSuite) testEncryptedOverlayXFRMLeaks(t *test
 
 func (s *linuxPrivilegedBaseTestSuite) testNodeChurnXFRMLeaksWithConfig(t *testing.T, config datapath.LocalNodeConfiguration) {
 	log := hivetest.Logger(t)
-	keys := bytes.NewReader([]byte("6 rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f1 128\n"))
+	keys := bytes.NewReader([]byte("6+ rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f1 128\n"))
 	_, _, err := ipsec.LoadIPSecKeys(log, keys)
 	require.NoError(t, err)
 
@@ -929,11 +924,13 @@ func (s *linuxPrivilegedBaseTestSuite) testNodeChurnXFRMLeaksWithConfig(t *testi
 		Name: "node",
 		IPAddresses: []nodeTypes.Address{
 			{IP: net.ParseIP("4.4.4.4"), Type: nodeaddressing.NodeCiliumInternalIP},
+			{IP: net.ParseIP("3.3.3.3"), Type: nodeaddressing.NodeInternalIP},
 			{IP: net.ParseIP("2001:aaaa::1"), Type: nodeaddressing.NodeCiliumInternalIP},
+			{IP: net.ParseIP("2001:bbbb::1"), Type: nodeaddressing.NodeInternalIP},
 		},
 		IPv4AllocCIDR: cidr.MustParseCIDR("4.4.4.0/24"),
 		IPv6AllocCIDR: cidr.MustParseCIDR("2001:aaaa::/96"),
-		BootID:        "test-boot-id",
+		BootID:        "b892866c-26cb-4018-8a55-c0330551a2be",
 	}
 	err = linuxNodeHandler.NodeAdd(node)
 	require.NoError(t, err)

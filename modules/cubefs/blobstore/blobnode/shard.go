@@ -25,6 +25,7 @@ import (
 	bnapi "github.com/cubefs/cubefs/blobstore/api/blobnode"
 	"github.com/cubefs/cubefs/blobstore/blobnode/base"
 	"github.com/cubefs/cubefs/blobstore/blobnode/base/limitio"
+	"github.com/cubefs/cubefs/blobstore/blobnode/base/qos"
 	"github.com/cubefs/cubefs/blobstore/blobnode/core"
 	"github.com/cubefs/cubefs/blobstore/common/crc32block"
 	bloberr "github.com/cubefs/cubefs/blobstore/common/errors"
@@ -89,6 +90,11 @@ func (s *Service) ShardGet(c *rpc.Context) {
 	s.lock.RUnlock()
 	if !exist {
 		c.RespondError(bloberr.ErrNoSuchDisk)
+		return
+	}
+
+	if !ds.IsWritable() { // not normal disk, skip
+		c.RespondError(bloberr.ErrDiskBroken)
 		return
 	}
 
@@ -291,6 +297,11 @@ func (s *Service) ShardMarkdelete(c *rpc.Context) {
 		return
 	}
 
+	if !ds.IsWritable() { // not normal disk, skip
+		c.RespondError(bloberr.ErrDiskBroken)
+		return
+	}
+
 	cs, exist := ds.GetChunkStorage(args.Vuid)
 	if !exist {
 		c.RespondError(bloberr.ErrNoSuchVuid)
@@ -315,12 +326,12 @@ func (s *Service) ShardMarkdelete(c *rpc.Context) {
 	}
 	defer s.DeleteQpsLimitPerDisk.Release(perDiskLimitKey)
 
-	qos := ds.GetIoQos() // max io wait
-	if !qos.Allow() {
+	qosLmt := ds.GetIoQos() // max io wait
+	if !qosLmt.Allow(qos.IOTypeWrite) {
 		c.RespondError(bloberr.ErrOverload)
 		return
 	}
-	defer qos.Release()
+	defer qosLmt.Release(qos.IOTypeWrite)
 
 	err = cs.AllowModify()
 	if err != nil {
@@ -369,6 +380,11 @@ func (s *Service) ShardDelete(c *rpc.Context) {
 		return
 	}
 
+	if !ds.IsWritable() { // not normal disk, skip
+		c.RespondError(bloberr.ErrDiskBroken)
+		return
+	}
+
 	cs, exist := ds.GetChunkStorage(args.Vuid)
 	if !exist {
 		c.RespondError(bloberr.ErrNoSuchVuid)
@@ -384,12 +400,12 @@ func (s *Service) ShardDelete(c *rpc.Context) {
 	}
 	defer s.DeleteQpsLimitPerKey.Release(limitKey)
 
-	qos := ds.GetIoQos() // max io wait
-	if !qos.Allow() {
+	qosLmt := ds.GetIoQos() // max io wait
+	if !qosLmt.Allow(qos.IOTypeWrite) {
 		c.RespondError(bloberr.ErrOverload)
 		return
 	}
-	defer qos.Release()
+	defer qosLmt.Release(qos.IOTypeWrite)
 
 	perDiskLimitKey := cs.Disk().ID()
 	err = s.DeleteQpsLimitPerDisk.Acquire(perDiskLimitKey)

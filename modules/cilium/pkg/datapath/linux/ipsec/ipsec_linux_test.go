@@ -40,8 +40,14 @@ func setupIPSecSuitePrivileged(tb testing.TB) *slog.Logger {
 	return log
 }
 
+const (
+	path         = "ipsec_keys_test"
+	remoteNodeID = 1234
+	localBootID  = "5f616d5f-b237-aed6-4ac7-123456789abc"
+	remoteBootID = "5f616d5f-aed6-4ac7-b237-987654321abc"
+)
+
 var (
-	path           = "ipsec_keys_test"
 	keysDat        = []byte("1 hmac(sha256) 0123456789abcdef0123456789abcdef cbc(aes) 0123456789abcdef0123456789abcdef\n2 hmac(sha256) 0123456789abcdef0123456789abcdef cbc(aes) 0123456789abcdef0123456789abcdef\n3 digest_null \"\" cipher_null \"\"\n")
 	keysAeadDat    = []byte("4 rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f1 128\n")
 	keysAeadDat256 = []byte("5 rfc4106(gcm(aes)) 44434241343332312423222114131211f4f3f2f144434241343332312423222114131211 128\n")
@@ -69,9 +75,9 @@ func TestInvalidLoadKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	params := &IPSecParameters{
-		LocalBootID:    "local-boot-id",
-		RemoteBootID:   "remote-boot-id",
-		RemoteNodeID:   0,
+		LocalBootID:    localBootID,
+		RemoteBootID:   remoteBootID,
+		RemoteNodeID:   remoteNodeID,
 		Dir:            IPSecDirIn,
 		SourceSubnet:   local,
 		DestSubnet:     remote,
@@ -114,25 +120,21 @@ func TestParseSPI(t *testing.T) {
 		input    string
 		expSPI   uint8
 		expOff   int
-		expESN   bool
 		expError bool
 	}{
-		{"254", 0, 0, false, true},
-		{"15", 15, 0, false, false},
-		{"3+", 3, 0, true, false},
-		{"abc", 0, 0, false, true},
-		{"0", 0, 0, false, true},
+		{"254", 0, 0, true},
+		{"15", 15, 0, false},
+		{"3+", 3, 0, false},
+		{"abc", 0, 0, true},
+		{"0", 0, 0, true},
 	}
 	for _, tc := range testCases {
-		spi, off, esn, err := parseSPI(log, tc.input)
+		spi, off, err := parseSPI(log, tc.input)
 		if spi != tc.expSPI {
 			t.Fatalf("For input %q, expected SPI %d, but got %d", tc.input, tc.expSPI, spi)
 		}
 		if off != tc.expOff {
 			t.Fatalf("For input %q, expected base offset %d, but got %d", tc.input, tc.expOff, off)
-		}
-		if esn != tc.expESN {
-			t.Fatalf("For input %q, expected ESN %t, but got %t", tc.input, tc.expESN, esn)
 		}
 		if tc.expError {
 			require.Error(t, err)
@@ -165,9 +167,9 @@ func TestUpsertIPSecEquals(t *testing.T) {
 	ipSecKeysGlobal[""] = key
 
 	params := &IPSecParameters{
-		LocalBootID:    "local-boot-id",
-		RemoteBootID:   "remote-boot-id",
-		RemoteNodeID:   0,
+		LocalBootID:    localBootID,
+		RemoteBootID:   remoteBootID,
+		RemoteNodeID:   remoteNodeID,
 		Dir:            IPSecDirIn,
 		SourceSubnet:   local,
 		DestSubnet:     remote,
@@ -249,8 +251,8 @@ func TestUpsertIPSecEndpointOut(t *testing.T) {
 	ipSecKeysGlobal[""] = key
 
 	params := &IPSecParameters{
-		LocalBootID:    "local-boot-id",
-		RemoteBootID:   "remote-boot-id",
+		LocalBootID:    localBootID,
+		RemoteBootID:   remoteBootID,
 		RemoteNodeID:   0xBEEF,
 		Dir:            IPSecDirOut,
 		SourceSubnet:   local,
@@ -281,10 +283,12 @@ func TestUpsertIPSecEndpointOut(t *testing.T) {
 	require.Nil(t, state.Aead)
 	require.NotNil(t, state.Auth)
 	require.Equal(t, "hmac(sha256)", state.Auth.Name)
-	require.Equal(t, authKey, state.Auth.Key)
+	derivedAuthKey := computeNodeIPsecKey(authKey, local.IP, remote.IP, []byte(localBootID), []byte(remoteBootID))
+	require.Equal(t, derivedAuthKey, state.Auth.Key)
 	require.NotNil(t, state.Crypt)
 	require.Equal(t, "cbc(aes)", state.Crypt.Name)
-	require.Equal(t, cryptKey, state.Crypt.Key)
+	derivedCryptKey := computeNodeIPsecKey(cryptKey, local.IP, remote.IP, []byte(localBootID), []byte(remoteBootID))
+	require.Equal(t, derivedCryptKey, state.Crypt.Key)
 	// ESN bit is not set, so ReplayWindow should be 0
 	require.Equal(t, 0, state.ReplayWindow)
 	require.Equal(t, state.Mark, encryptionMark)
@@ -366,8 +370,8 @@ func TestUpsertIPSecEndpointFwd(t *testing.T) {
 	ipSecKeysGlobal[""] = key
 
 	params := &IPSecParameters{
-		LocalBootID:    "local-boot-id",
-		RemoteBootID:   "remote-boot-id",
+		LocalBootID:    localBootID,
+		RemoteBootID:   remoteBootID,
 		RemoteNodeID:   0xBEEF,
 		Dir:            IPSecDirFwd,
 		SourceSubnet:   wildcardCIDRv4,
@@ -417,11 +421,11 @@ func TestUpsertIPSecEndpointFwd(t *testing.T) {
 	if !policyTmpl.Src.Equal(wildcardIPv4) {
 		t.Fatalf("Expected Src to be %s, but got %s", wildcardIPv4.String(), policyTmpl.Src.String())
 	}
-	if !policyTmpl.Dst.Equal(local.IP) {
-		t.Fatalf("Expected Dst to be %s, but got %s", local.IP.String(), policyTmpl.Dst.String())
+	if !policyTmpl.Dst.Equal(wildcardIPv4) {
+		t.Fatalf("Expected Dst to be %s, but got %s", wildcardIPv4.String(), policyTmpl.Dst.String())
 	}
 	require.Equal(t, netlink.XFRM_PROTO_ESP, policyTmpl.Proto)
-	require.Equal(t, params.ReqID, policyTmpl.Reqid)
+	require.Equal(t, 0, policyTmpl.Reqid)
 	require.Equal(t, netlink.XFRM_MODE_TUNNEL, policyTmpl.Mode)
 	require.Equal(t, 1, policyTmpl.Optional)
 }
@@ -466,8 +470,8 @@ func TestUpsertIPSecEndpointIn(t *testing.T) {
 	ipSecKeysGlobal[""] = key
 
 	params := &IPSecParameters{
-		LocalBootID:    "local-boot-id",
-		RemoteBootID:   "remote-boot-id",
+		LocalBootID:    localBootID,
+		RemoteBootID:   remoteBootID,
 		RemoteNodeID:   0xBEEF,
 		Dir:            IPSecDirIn,
 		SourceSubnet:   remote,
@@ -496,105 +500,54 @@ func TestUpsertIPSecEndpointIn(t *testing.T) {
 	require.Nil(t, state.Aead)
 	require.NotNil(t, state.Auth)
 	require.Equal(t, "hmac(sha256)", state.Auth.Name)
-	require.Equal(t, authKey, state.Auth.Key)
+	derivedAuthKey := computeNodeIPsecKey(authKey, remote.IP, local.IP, []byte(remoteBootID), []byte(localBootID))
+	require.Equal(t, derivedAuthKey, state.Auth.Key)
 	require.NotNil(t, state.Crypt)
 	require.Equal(t, "cbc(aes)", state.Crypt.Name)
-	require.Equal(t, cryptKey, state.Crypt.Key)
+	derivedCryptKey := computeNodeIPsecKey(cryptKey, remote.IP, local.IP, []byte(remoteBootID), []byte(localBootID))
+	require.Equal(t, derivedCryptKey, state.Crypt.Key)
 	// ESN bit is not set, so ReplayWindow should be 0
 	require.Equal(t, 0, state.ReplayWindow)
 
 	tmpls := []netlink.XfrmPolicyTmpl{
 		{
-			Src:   remote.IP,
-			Dst:   local.IP,
+			Src:   wildcardIPv4,
+			Dst:   wildcardIPv4,
 			Proto: netlink.XFRM_PROTO_ESP,
-			Reqid: params.ReqID,
+			Reqid: 0,
 			Mode:  netlink.XFRM_MODE_TUNNEL,
 		},
 	}
 	policy, err := netlink.XfrmPolicyGet(&netlink.XfrmPolicy{
-		Src: remote,
-		Dst: local,
-		Dir: netlink.XFRM_DIR_IN,
-		Mark: &netlink.XfrmMark{
-			Mask:  linux_defaults.IPsecMarkBitMask,
-			Value: linux_defaults.RouteMarkDecrypt,
-		},
+		Src:   wildcardCIDRv4,
+		Dst:   wildcardCIDRv4,
+		Dir:   netlink.XFRM_DIR_IN,
 		Tmpls: tmpls,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, policy)
 
 	// ensure XFRM policy is as we want it...
-	if !policy.Src.IP.Equal(remote.IP) {
-		t.Fatalf("Expected Src to be %s, but got %s", remote.IP.String(), policy.Src.IP.String())
+	if !policy.Src.IP.Equal(wildcardIPv4) {
+		t.Fatalf("Expected Src to be %s, but got %s", wildcardIPv4.String(), policy.Src.IP.String())
 	}
-	if !policy.Dst.IP.Equal(local.IP) {
-		t.Fatalf("Expected Dst to be %s, but got %s", local.IP.String(), policy.Dst.IP.String())
+	if !policy.Dst.IP.Equal(wildcardIPv4) {
+		t.Fatalf("Expected Dst to be %s, but got %s", wildcardIPv4.String(), policy.Dst.IP.String())
 	}
 	require.Equal(t, netlink.XFRM_DIR_IN, policy.Dir)
-	require.Equal(t, uint32(linux_defaults.RouteMarkDecrypt), policy.Mark.Value)
-	require.Equal(t, uint32(linux_defaults.IPsecMarkBitMask), policy.Mark.Mask)
+	require.Nil(t, policy.Mark)
 	require.Len(t, policy.Tmpls, 1)
 
 	// ensure the template is correct as well...
 	policyTmpl := policy.Tmpls[0]
-	if !policyTmpl.Src.Equal(remote.IP) {
-		t.Fatalf("Expected Src to be %s, but got %s", remote.IP.String(), policyTmpl.Src.String())
-	}
-	if !policyTmpl.Dst.Equal(local.IP) {
-		t.Fatalf("Expected Dst to be %s, but got %s", local.IP.String(), policyTmpl.Dst.String())
-	}
-	require.Equal(t, netlink.XFRM_PROTO_ESP, policyTmpl.Proto)
-	require.Equal(t, params.ReqID, policyTmpl.Reqid)
-	require.Equal(t, netlink.XFRM_MODE_TUNNEL, policyTmpl.Mode)
-
-	// Confirm a policy was created for L7 traffic as well...
-	tmpls = []netlink.XfrmPolicyTmpl{
-		{
-			Src:   remote.IP,
-			Dst:   local.IP,
-			Proto: netlink.XFRM_PROTO_ESP,
-			Reqid: params.ReqID,
-			Mode:  netlink.XFRM_MODE_TUNNEL,
-		},
-	}
-	policy, err = netlink.XfrmPolicyGet(&netlink.XfrmPolicy{
-		Src: remote,
-		Dst: local,
-		Dir: netlink.XFRM_DIR_IN,
-		Mark: &netlink.XfrmMark{
-			Mask:  linux_defaults.IPsecMarkBitMask,
-			Value: linux_defaults.RouteMarkToProxy,
-		},
-		Tmpls: tmpls,
-	})
-	require.NoError(t, err)
-	require.NotNil(t, policy)
-
-	// ensure XFRM policy is as we want it...
-	if !policy.Src.IP.Equal(remote.IP) {
-		t.Fatalf("Expected Src to be %s, but got %s", remote.IP.String(), policy.Src.IP.String())
-	}
-	if !policy.Dst.IP.Equal(local.IP) {
-		t.Fatalf("Expected Dst to be %s, but got %s", local.IP.String(), policy.Dst.IP.String())
-	}
-	require.Equal(t, netlink.XFRM_DIR_IN, policy.Dir)
-	require.Equal(t, uint32(linux_defaults.RouteMarkToProxy), policy.Mark.Value)
-	require.Equal(t, uint32(linux_defaults.IPsecMarkBitMask), policy.Mark.Mask)
-	require.Len(t, policy.Tmpls, 1)
-
-	// ensure the template is correct as well...
-	policyTmpl = policy.Tmpls[0]
-	// l7 proxy policy has a wildcard source
 	if !policyTmpl.Src.Equal(wildcardIPv4) {
-		t.Fatalf("Expected Src to be %s, but got %s", remote.IP.String(), policyTmpl.Src.String())
+		t.Fatalf("Expected Src to be %s, but got %s", wildcardIPv4.String(), policyTmpl.Src.String())
 	}
-	if !policyTmpl.Dst.Equal(local.IP) {
-		t.Fatalf("Expected Dst to be %s, but got %s", local.IP.String(), policyTmpl.Dst.String())
+	if !policyTmpl.Dst.Equal(wildcardIPv4) {
+		t.Fatalf("Expected Dst to be %s, but got %s", wildcardIPv4.String(), policyTmpl.Dst.String())
 	}
 	require.Equal(t, netlink.XFRM_PROTO_ESP, policyTmpl.Proto)
-	require.Equal(t, params.ReqID, policyTmpl.Reqid)
+	require.Equal(t, 0, policyTmpl.Reqid)
 	require.Equal(t, netlink.XFRM_MODE_TUNNEL, policyTmpl.Mode)
 }
 
@@ -607,9 +560,9 @@ func TestUpsertIPSecKeyMissing(t *testing.T) {
 	require.NoError(t, err)
 
 	params := &IPSecParameters{
-		LocalBootID:    "local-boot-id",
-		RemoteBootID:   "remote-boot-id",
-		RemoteNodeID:   0,
+		LocalBootID:    localBootID,
+		RemoteBootID:   remoteBootID,
+		RemoteNodeID:   remoteNodeID,
 		Dir:            IPSecDirIn,
 		SourceSubnet:   remote,
 		DestSubnet:     local,
@@ -648,8 +601,8 @@ func TestUpdateExistingIPSecEndpoint(t *testing.T) {
 	ipSecKeysGlobal[""] = key
 
 	params := &IPSecParameters{
-		LocalBootID:    "local-boot-id",
-		RemoteBootID:   "remote-boot-id",
+		LocalBootID:    localBootID,
+		RemoteBootID:   remoteBootID,
 		RemoteNodeID:   0xBEEF,
 		Dir:            IPSecDirIn,
 		SourceSubnet:   remote,

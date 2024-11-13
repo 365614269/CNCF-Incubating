@@ -5,6 +5,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net"
@@ -330,9 +331,9 @@ func proxyNotFoundError(name string) error {
 }
 
 // must be called with mutex NOT held via p.proxyPortsTrigger
-func (p *Proxy) storeProxyPorts(reasons []string) {
+func (p *Proxy) storeProxyPorts(ctx context.Context) error {
 	if p.proxyPortsPath == "" {
-		return // this is a unit test
+		return nil // this is a unit test
 	}
 	log := log.WithField(logfields.Path, p.proxyPortsPath)
 
@@ -340,7 +341,7 @@ func (p *Proxy) storeProxyPorts(reasons []string) {
 	out, err := renameio.NewPendingFile(p.proxyPortsPath, renameio.WithExistingPermissions(), renameio.WithPermissions(0o600))
 	if err != nil {
 		log.WithError(err).Error("failed to prepare proxy ports file")
-		return
+		return err
 	}
 	defer out.Cleanup()
 
@@ -358,19 +359,33 @@ func (p *Proxy) storeProxyPorts(reasons []string) {
 
 	if err := jw.Encode(portsMap); err != nil {
 		log.WithError(err).Error("failed to marshal proxy ports state")
-		return
+		return err
 	}
 	if err := out.CloseAtomicallyReplace(); err != nil {
 		log.WithError(err).Error("failed to write proxy ports file")
-		return
+		return err
 	}
 	log.Debug("Wrote proxy ports state")
+	return nil
 }
+
+var (
+	staleProxyPortsFile = errors.New("proxy ports file is too old")
+)
 
 // restore proxy ports from file created earlier by stroreProxyPorts
 // must be called with mutex held
-func (p *Proxy) restoreProxyPortsFromFile() error {
+func (p *Proxy) restoreProxyPortsFromFile(restoredProxyPortsStaleLimit uint) error {
 	log := log.WithField(logfields.Path, p.proxyPortsPath)
+
+	// Check that the file exists and is not too old
+	stat, err := os.Stat(p.proxyPortsPath)
+	if err != nil {
+		return err
+	}
+	if time.Since(stat.ModTime()) > time.Duration(restoredProxyPortsStaleLimit)*time.Minute {
+		return staleProxyPortsFile
+	}
 
 	// Read in checkpoint file
 	fp, err := os.Open(p.proxyPortsPath)
@@ -433,13 +448,13 @@ func (p *Proxy) restoreProxyPortsFromIptables() {
 
 // RestoreProxyPorts tries to find earlier port numbers from datapath and use them
 // as defaults for proxy ports
-func (p *Proxy) RestoreProxyPorts() {
+func (p *Proxy) RestoreProxyPorts(restoredProxyPortsStaleLimit uint) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	err := p.restoreProxyPortsFromFile()
+	err := p.restoreProxyPortsFromFile(restoredProxyPortsStaleLimit)
 	if err != nil {
-		log.WithError(err).WithField(logfields.Path, p.proxyPortsPath).Info("No proxy ports file found, falling back to restoring from iptables rules")
+		log.WithError(err).WithField(logfields.Path, p.proxyPortsPath).Info("Resoring proxy ports from file failed, falling back to restoring from iptables rules")
 		p.restoreProxyPortsFromIptables()
 	}
 }

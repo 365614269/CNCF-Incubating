@@ -16,7 +16,6 @@ package blobnode
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"sync"
@@ -102,10 +101,17 @@ func isAllInConfig(ctx context.Context, registeredDisks []*bnapi.DiskInfo, conf 
 // call by heartbeat single, or datafile read/write concurrence
 func (s *Service) handleDiskIOError(ctx context.Context, diskID proto.DiskID, diskErr error) {
 	span := trace.SpanFromContextSafe(ctx)
+	span.Debugf("start to handle broken diskID:%d diskErr: %v", diskID, diskErr)
 
-	span.Debugf("diskID:%d diskErr: %v", diskID, diskErr)
+	// limit once. May be used by callback func, when concurrently read/write shard in datafile.go.
+	err := s.BrokenLimitPerDisk.Acquire(diskID)
+	if err != nil {
+		span.Warnf("There are too many the same request of broken disk:%d", diskID)
+		return
+	}
+	defer s.BrokenLimitPerDisk.Release(diskID)
 
-	// first: set disk broken in memory
+	// 1: set disk broken in memory
 	s.lock.RLock()
 	ds, exist := s.Disks[diskID]
 	s.lock.RUnlock()
@@ -114,13 +120,16 @@ func (s *Service) handleDiskIOError(ctx context.Context, diskID proto.DiskID, di
 		return
 	}
 
+	if !ds.IsWritable() {
+		return
+	}
+	ds.SetStatus(proto.DiskStatusBroken)
+
+	// 2: check lost disk
 	if diskutil.IsLostDisk(ds.DiskInfo().Path) {
-		lostCnt := 1
+		lostCnt := 0
 		diskStorages := s.copyDiskStorages(ctx)
 		for _, dsAPI := range diskStorages {
-			if dsAPI.ID() == diskID {
-				continue
-			}
 			if diskutil.IsLostDisk(dsAPI.DiskInfo().Path) {
 				lostCnt++
 				span.Errorf("open diskId: %v, path: %v, disk lost", dsAPI.ID(), dsAPI.DiskInfo().Path)
@@ -132,38 +141,21 @@ func (s *Service) handleDiskIOError(ctx context.Context, diskID proto.DiskID, di
 		}
 	}
 
-	ds.SetStatus(proto.DiskStatusBroken)
-
-	// May be used by callback func, when concurrently read/write shard in datafile.go. so limit do once
-	_, _, shared := s.groupRun.Do(fmt.Sprintf("diskID:%d", diskID), func() (interface{}, error) {
-		// second: notify cluster mgr
-		for {
-			err := s.ClusterMgrClient.SetDisk(ctx, diskID, proto.DiskStatusBroken)
-			// error is nil or already broken status
-			if err == nil || rpc.DetectStatusCode(err) == bloberr.CodeChangeDiskStatusNotAllow {
-				span.Infof("set disk(%d) broken success, err:%+v", diskID, err)
-				break
-			}
-			span.Errorf("set disk(%d) broken failed: %+v", diskID, err)
-			time.Sleep(3 * time.Second)
+	// 3: notify cluster mgr
+	for {
+		err := s.ClusterMgrClient.SetDisk(ctx, diskID, proto.DiskStatusBroken)
+		// error is nil or already broken status
+		if err == nil || rpc.DetectStatusCode(err) == bloberr.CodeChangeDiskStatusNotAllow {
+			span.Infof("set disk(%d) broken success, err:%+v", diskID, err)
+			break
 		}
+		span.Errorf("set disk(%d) broken failed: %+v", diskID, err)
+		time.Sleep(3 * time.Second)
+	}
+	// After the repair is triggered, the handle can be safely removed
+	go s.waitRepairAndClose(ctx, ds)
 
-		// After the repair is triggered, the handle can be safely removed
-		go s.waitRepairAndClose(ctx, ds)
-
-		// we already tell cm this disk is bad
-		dsInfo := ds.DiskInfo()
-		s.reportOnlineDisk(&core.HostInfo{
-			ClusterID: dsInfo.ClusterID,
-			IDC:       dsInfo.Idc,
-			Rack:      dsInfo.Rack,
-			Host:      dsInfo.Host,
-		}, dsInfo.Path)
-
-		return nil, nil
-	})
-
-	span.Debugf("diskID:%d diskErr: %+v, shared:%v", diskID, diskErr, shared)
+	span.Debugf("end to handle broken diskID:%d diskErr: %+v", diskID, diskErr)
 }
 
 func (s *Service) waitRepairAndClose(ctx context.Context, disk core.DiskAPI) {
@@ -192,6 +184,10 @@ func (s *Service) waitRepairAndClose(ctx context.Context, disk core.DiskAPI) {
 			break
 		}
 	}
+
+	// report OK, the bad disk is already being processed
+	config := disk.GetConfig()
+	s.reportOnlineDisk(&config.HostInfo, config.Path)
 
 	// after the repair is triggered, the handle can be safely removed
 	span.Infof("Delete %d from the map table of the service", diskID)
@@ -310,6 +306,7 @@ func NewService(conf Config) (svr *Service, err error) {
 		ChunkLimitPerVuid:     keycount.New(1),
 		DiskLimitPerKey:       keycount.New(1),
 		InspectLimiterPerKey:  keycount.New(1),
+		BrokenLimitPerDisk:    keycount.New(1),
 
 		closeCh: make(chan struct{}),
 	}
@@ -323,7 +320,6 @@ func NewService(conf Config) (svr *Service, err error) {
 	svr.ctx, svr.cancel = context.WithCancel(context.Background())
 
 	wg := sync.WaitGroup{}
-	errCh := make(chan error, len(conf.Disks))
 
 	lostCnt := int32(0)
 	for _, diskConf := range conf.Disks {
@@ -331,10 +327,7 @@ func NewService(conf Config) (svr *Service, err error) {
 
 		go func(diskConf core.Config) {
 			var err error
-			defer func() {
-				errCh <- err
-				wg.Done()
-			}()
+			defer wg.Done()
 
 			svr.fixDiskConf(&diskConf)
 
@@ -346,15 +339,14 @@ func NewService(conf Config) (svr *Service, err error) {
 				if lost >= LostDiskCount {
 					log.Fatalf("lost disk count:%d over threshold:%d", lost, LostDiskCount)
 				}
-				return
+				return // skip
 			}
 			// read disk meta. get DiskID
 			format, err := readFormatInfo(ctx, diskConf.Path)
 			if err != nil {
 				// todo: report to ums
 				span.Errorf("Failed read diskMeta:%s, err:%+v. skip init", diskConf.Path, err)
-				err = nil // skip
-				return
+				return // skip
 			}
 
 			span.Debugf("local disk meta: %v", format)
@@ -367,22 +359,22 @@ func NewService(conf Config) (svr *Service, err error) {
 			if nonNormal {
 				// todo: report to ums
 				span.Warnf("disk(%d):path(%s) is not normal, skip init", format.DiskID, diskConf.Path)
-				return
+				return // skip
 			}
 
 			ds, err := disk.NewDiskStorage(svr.ctx, diskConf)
 			if err != nil {
-				span.Errorf("Failed Open DiskStorage. conf:%v, err:%+v", diskConf, err)
+				span.Fatalf("Failed Open DiskStorage. conf:%v, err:%+v", diskConf, err)
 				return
 			}
 
 			if !foundInCluster || conf.HostInfo.ReAddDisk { // need to re-register all disks
 				span.Warnf("diskInfo:%v not found in cm, will register to cm, nodeID:%d", diskInfo, conf.NodeID)
 				diskInfo := ds.DiskInfo() // get nodeID to add disk
-				err := clusterMgrCli.AddDisk(ctx, &diskInfo)
+				err = clusterMgrCli.AddDisk(ctx, &diskInfo)
 				// if it need re-register disk, it is necessary to ignore duplicate registrations
 				if err != nil && (conf.HostInfo.ReAddDisk && rpc.DetectStatusCode(err) != http.StatusCreated) {
-					span.Errorf("Failed register disk: %v, err:%+v", diskInfo, err)
+					span.Fatalf("Failed register disk: %v, err:%+v", diskInfo, err)
 					return
 				}
 			}
@@ -396,13 +388,6 @@ func NewService(conf Config) (svr *Service, err error) {
 		}(diskConf)
 	}
 	wg.Wait()
-
-	close(errCh)
-	for err := range errCh {
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	if err = setDefaultIOStat(conf.DiskConfig.IOStatFileDryRun); err != nil {
 		span.Errorf("Failed set default iostat file, err:%v", err)
@@ -441,6 +426,7 @@ func NewService(conf Config) (svr *Service, err error) {
 }
 
 func registerNode(ctx context.Context, clusterMgrCli *cmapi.Client, conf *Config) error {
+	span := trace.SpanFromContextSafe(ctx)
 	if err := core.CheckNodeConf(&conf.HostInfo); err != nil {
 		return err
 	}
@@ -460,5 +446,6 @@ func registerNode(ctx context.Context, clusterMgrCli *cmapi.Client, conf *Config
 	}
 
 	conf.NodeID = nodeID // we update nodeID, which can be used in the subsequent process. e.g. to add disk
+	span.Infof("add node success, nodeID=%d", nodeID)
 	return nil
 }

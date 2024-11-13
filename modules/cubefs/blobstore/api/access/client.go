@@ -450,7 +450,8 @@ func (c *client) putPartsBatch(ctx context.Context, parts []blobPart) error {
 		})
 	}
 
-	if err := task.Run(context.Background(), tasks...); err != nil {
+	newCtx := trace.NewContextFromContext(ctx)
+	if err := task.Run(ctx, tasks...); err != nil {
 		for _, part := range parts {
 			part := part
 			// asynchronously delete blob
@@ -461,7 +462,7 @@ func (c *client) putPartsBatch(ctx context.Context, parts []blobPart) error {
 				if err != nil {
 					return
 				}
-				rpcClient.DoWith(ctx, req, nil)
+				rpcClient.DoWith(newCtx, req, nil)
 			}()
 		}
 		return err
@@ -532,16 +533,18 @@ func (c *client) putParts(ctx context.Context, args *PutArgs) (Location, HashSum
 			return
 		}
 
+		// force to clean up, even canceled context
+		newCtx := trace.NewContextFromSpan(span)
 		locations := signArgs.Locations[:]
 		if len(locations) > 1 {
 			signArgs.Location = loc.Copy()
 			signResp := &SignResp{}
-			if err := rpcClient.PostWith(ctx, "/sign", signResp, signArgs); err == nil {
+			if err := rpcClient.PostWith(newCtx, "/sign", signResp, signArgs); err == nil {
 				locations = []Location{signResp.Location.Copy()}
 			}
 		}
 		if len(locations) > 0 {
-			if _, err := c.Delete(ctx, &DeleteArgs{Locations: locations}); err != nil {
+			if _, err := c.Delete(newCtx, &DeleteArgs{Locations: locations}); err != nil {
 				span.Warnf("clean location '%+v' failed %s", locations, err.Error())
 			}
 		}
