@@ -117,7 +117,6 @@ func (e *Endpoint) setNextPolicyRevision(revision uint64) {
 
 type policyGenerateResult struct {
 	policyRevision   uint64
-	selectorPolicy   policy.SelectorPolicy
 	endpointPolicy   *policy.EndpointPolicy
 	identityRevision int
 }
@@ -162,7 +161,7 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 	)
 
 	// lock the endpoint, read our values, then unlock
-	err = e.rlockAlive()
+	err = e.lockAlive()
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +169,7 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 	// No point in calculating policy if endpoint does not have an identity yet.
 	if e.SecurityIdentity == nil {
 		e.getLogger().Warn("Endpoint lacks identity, skipping policy calculation")
-		e.runlock()
+		e.unlock()
 		return nil, nil
 	}
 
@@ -185,70 +184,34 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 	e.forcePolicyCompute = false
 
 	result := &policyGenerateResult{
-		selectorPolicy:   e.selectorPolicy,
 		endpointPolicy:   e.desiredPolicy,
 		identityRevision: e.identityRevision,
 	}
-	e.runlock()
+	e.unlock()
 
 	e.getLogger().Debug("Starting policy recalculation...")
-
-	stats.waitingForPolicyRepository.Start()
-	repo := e.policyGetter.GetPolicyRepository()
-	repo.RLock() // Be sure to release this lock!
-	stats.waitingForPolicyRepository.End(true)
-
-	result.policyRevision = repo.GetRevision()
-
-	// Recompute policy for this endpoint only if not already done for this revision
-	// and identity.
-	if e.nextPolicyRevision >= result.policyRevision &&
-		e.desiredPolicy != nil && result.selectorPolicy != nil {
-
-		if !forcePolicyCompute {
-			if logger := e.getLogger(); logging.CanLogAt(logger.Logger, logrus.DebugLevel) {
-				e.getLogger().WithFields(logrus.Fields{
-					"policyRevision.next": e.nextPolicyRevision,
-					"policyRevision.repo": result.policyRevision,
-					"policyChanged":       e.nextPolicyRevision > e.policyRevision,
-				}).Debug("Skipping unnecessary endpoint policy recalculation")
-			}
-			repo.RUnlock()
-			return result, nil
-		} else {
-			e.getLogger().Debug("Forced policy recalculation")
-		}
+	skipPolicyRevision := e.nextPolicyRevision
+	if forcePolicyCompute || e.desiredPolicy == nil {
+		e.getLogger().Debug("Forced policy recalculation")
+		skipPolicyRevision = 0
 	}
 
-	stats.policyCalculation.Start()
-	defer func() { stats.policyCalculation.End(err == nil) }()
-	if result.selectorPolicy == nil {
-		// Upon initial insertion or restore, there's currently no good
-		// trigger point to ensure that the security Identity is
-		// assigned after the endpoint is added to the endpointmanager
-		// (and hence also the identitymanager). In that case, detect
-		// that the selectorPolicy is not set and find it.
-		result.selectorPolicy = repo.GetPolicyCache().Lookup(securityIdentity)
-		if result.selectorPolicy == nil {
-			err := fmt.Errorf("no cached selectorPolicy found")
-			e.getLogger().WithError(err).Warning("Failed to regenerate from cached policy")
-			repo.RUnlock()
-			return result, err
-		}
-	}
-
-	// UpdatePolicy ensures the SelectorPolicy is fully resolved.
-	// Endpoint lock must not be held!
-	// TODO: GH-7515: Consider ways to compute policy outside of the
-	// endpoint regeneration process, ideally as part of the policy change
-	// handler.
-	err = repo.GetPolicyCache().UpdatePolicy(securityIdentity)
+	var selectorPolicy policy.SelectorPolicy
+	selectorPolicy, result.policyRevision, err = e.policyGetter.GetPolicyRepository().GetSelectorPolicy(securityIdentity, skipPolicyRevision, stats)
 	if err != nil {
-		e.getLogger().WithError(err).Warning("Failed to update policy")
-		repo.RUnlock()
+		e.getLogger().WithError(err).Warning("Failed to calculate SelectorPolicy")
 		return nil, err
 	}
-	repo.RUnlock() // Done with policy repository; release this now as Consume() can be slow
+
+	// selectorPolicy is nil if skipRevision was matched.
+	if selectorPolicy == nil {
+		e.getLogger().WithFields(logrus.Fields{
+			"policyRevision.next": e.nextPolicyRevision,
+			"policyRevision.repo": result.policyRevision,
+			"policyChanged":       e.nextPolicyRevision > e.policyRevision,
+		}).Debug("Skipping unnecessary endpoint policy recalculation")
+		return result, err
+	}
 
 	// Add new redirects before Consume() so that all required proxy ports are available for it.
 	var desiredRedirects map[string]uint16
@@ -259,7 +222,7 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 	// Ingress endpoint needs no redirects
 	if !e.isProperty(PropertySkipBPFPolicy) {
 		stats.proxyConfiguration.Start()
-		desiredRedirects, ff, rf = e.addNewRedirects(result.selectorPolicy, datapathRegenCtxt.proxyWaitGroup)
+		desiredRedirects, ff, rf = e.addNewRedirects(selectorPolicy, datapathRegenCtxt.proxyWaitGroup)
 		stats.proxyConfiguration.End(true)
 		datapathRegenCtxt.finalizeList.Append(ff)
 		datapathRegenCtxt.revertStack.Push(rf)
@@ -280,8 +243,8 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 	}
 	e.runlock()
 
-	// Consume converts a SelectorPolicy in to an EndpointPolicy
-	result.endpointPolicy = result.selectorPolicy.Consume(e, desiredRedirects)
+	// DistillPolicy converts a SelectorPolicy in to an EndpointPolicy
+	result.endpointPolicy = selectorPolicy.DistillPolicy(e, desiredRedirects)
 
 	return result, nil
 }
@@ -331,10 +294,6 @@ func (e *Endpoint) setDesiredPolicy(res *policyGenerateResult, datapathRegenCtxt
 	// Set the revision of this endpoint to the current revision of the policy
 	// repository.
 	e.setNextPolicyRevision(res.policyRevision)
-
-	// Move the newly computed policies to the endpoint's desired state
-	e.selectorPolicy = res.selectorPolicy
-	res.selectorPolicy = nil
 
 	if res.endpointPolicy != e.desiredPolicy {
 		if e.desiredPolicy != e.realizedPolicy {
@@ -903,9 +862,6 @@ func (e *Endpoint) SetIdentity(identity *identityPkg.Identity, newEndpoint bool)
 	}
 	e.SecurityIdentity = identity
 	e.replaceIdentityLabels(labels.LabelSourceAny, identity.Labels)
-
-	// Clear selectorPolicy. It will be determined at next regeneration.
-	e.selectorPolicy = nil
 
 	// Sets endpoint state to ready if was waiting for identity
 	if e.getState() == StateWaitingForIdentity {
