@@ -6,7 +6,7 @@ include:
     # renovate: datasource=docker
     kube-image: "quay.io/cilium/kindest-node:v1.31.0@sha256:d2b2a8cd6fa282b9a4126938341a4d2924dfa96f60b1f983d519498c9cde1a99"
     # renovate: datasource=docker depName=quay.io/lvh-images/kind
-    kernel: "bpf-next-20241105.013305@sha256:37d4f1825809f87b4cb5d3d415690dd00294861964780ea1cd440516a7a80ea5"
+    kernel: "bpf-next-20241118.013900@sha256:8a1c33294656a249b1b54a57a0fcfc842ed0f7a8231bfe5ec42ecdbb4bf9c64d"
 
   - k8s-version: "1.30"
     ip-family: "dual"
@@ -18,13 +18,13 @@ include:
   - k8s-version: "1.29"
     ip-family: "dual"
     # renovate: datasource=docker
-    kube-image: "kindest/node:v1.29.8@sha256:d46b7aa29567e93b27f7531d258c372e829d7224b25e3fc6ffdefed12476d3aa"
+    kube-image: "kindest/node:v1.29.10@sha256:3b2d8c31753e6c8069d4fc4517264cd20e86fd36220671fb7d0a5855103aa84b"
     # renovate: datasource=docker depName=quay.io/lvh-images/kind
     kernel: "rhel8.6-20241031.113911@sha256:6ab9f8d7488a85f05a0142289ba460c58a5f1394b9aa91059a4ff9bfc2137cb2"
 
   - k8s-version: "1.28"
     ip-family: "dual"
     # renovate: datasource=docker
-    kube-image: "kindest/node:v1.28.13@sha256:45d319897776e11167e4698f6b14938eb4d52eb381d9e3d7a9086c16c69a8110"
+    kube-image: "kindest/node:v1.28.15@sha256:a7c05c7ae043a0b8c818f5a06188bc2c4098f6cb59ca7d1856df00375d839251"
     # renovate: datasource=docker depName=quay.io/lvh-images/kind
-    kernel: "5.4-20241104.124130@sha256:6ba4cc3bbc0e6513a0f62b9224ef3dace5b29358b73e956d332fe9812656037b"
+    kernel: "5.4-20241107.001101@sha256:5ae09e46bf871787890d65d6b989d84bac6df81133c4d6e3883b428ac9c9de60"

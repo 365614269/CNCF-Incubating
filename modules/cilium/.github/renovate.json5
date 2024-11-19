@@ -566,7 +566,8 @@
     },
     {
       matchPackageNames: [
-        "protocolbuffers/protobuf"
+        "protocolbuffers/protobuf",
+        "quay.io/goswagger/swagger"
       ],
       "postUpgradeTasks": {
         "commands": [
@@ -592,7 +593,7 @@
         "quay.io/cilium/cilium-envoy"
       ],
       "versioning": "regex:v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+)-(?<revision>.*)$",
-      "allowedVersions": "/^v1\\.30\\.([0-9]+)-([0-9]+)-.*$/",
+      "allowedVersions": "/^v1\\.31\\.([0-9]+)-([0-9]+)-.*$/",
       "matchBaseBranches": [
         "main",
       ]

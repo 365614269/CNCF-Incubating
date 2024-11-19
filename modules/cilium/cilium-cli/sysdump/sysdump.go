@@ -1227,20 +1227,6 @@ func (c *Collector) Run() error {
 		},
 		{
 			CreatesSubtasks: true,
-			Description:     "Collecting profiling data from Cilium pods",
-			Quick:           false,
-			Task: func(_ context.Context) error {
-				if !c.Options.Profiling {
-					return nil
-				}
-				if err := c.SubmitProfilingGopsSubtasks(c.CiliumPods, ciliumAgentContainerName); err != nil {
-					return fmt.Errorf("failed to collect profiling data from Cilium pods: %w", err)
-				}
-				return nil
-			},
-		},
-		{
-			CreatesSubtasks: true,
 			Description:     "Collecting profiling data from Cilium Operator pods",
 			Quick:           false,
 			Task: func(_ context.Context) error {
@@ -1456,6 +1442,19 @@ func (c *Collector) Run() error {
 		tasks = append(tasks, ciliumTasks...)
 
 		serialTasks = append(serialTasks, Task{
+			CreatesSubtasks: true,
+			Description:     "Collecting profiling data from Cilium pods",
+			Quick:           false,
+			Task: func(_ context.Context) error {
+				if !c.Options.Profiling {
+					return nil
+				}
+				if err := c.SubmitProfilingGopsSubtasks(c.CiliumPods, ciliumAgentContainerName); err != nil {
+					return fmt.Errorf("failed to collect profiling data from Cilium pods: %w", err)
+				}
+				return nil
+			},
+		}, Task{
 			CreatesSubtasks: true,
 			Description:     "Collecting tracing data from Cilium pods",
 			Quick:           false,
@@ -1683,7 +1682,7 @@ func (c *Collector) Run() error {
 
 		// Adjust the worker count to make enough headroom for tasks that submit sub-tasks.
 		// This is necessary because 'Submit' is blocking.
-		wc := 1
+		wc := max(1, c.Options.WorkerCount)
 		if t.CreatesSubtasks {
 			wc++
 		}
@@ -1717,16 +1716,8 @@ func (c *Collector) Run() error {
 
 	// Adjust the worker count to make enough headroom for tasks that submit sub-tasks.
 	// This is necessary because 'Submit' is blocking.
-	wc := 1
-	for _, t := range tasks {
-		if t.CreatesSubtasks && !c.shouldSkipTask(t) {
-			wc++
-		}
-	}
-	// Take the maximum between the specified worker count and the minimum number of workers required.
-	if wc < c.Options.WorkerCount {
-		wc = c.Options.WorkerCount
-	}
+	wc := max(2, c.Options.WorkerCount)
+
 	c.Pool = workerpool.New(wc)
 	c.logDebug("Using %d workers (requested: %d)", wc, c.Options.WorkerCount)
 
@@ -1750,10 +1741,13 @@ func (c *Collector) Run() error {
 		}); err != nil {
 			return fmt.Errorf("failed to submit task to the worker pool: %w", err)
 		}
+
+		if t.CreatesSubtasks {
+			c.subtasksWg.Wait()
+		}
 	}
 
-	// Wait for the all subtasks to be submitted and then call 'Drain' to wait for everything to finish.
-	c.subtasksWg.Wait()
+	// Wait for all tasks to finish.
 	results, err := c.Pool.Drain()
 	if err != nil {
 		return fmt.Errorf("failed to drain the worker pool: %w", err)
