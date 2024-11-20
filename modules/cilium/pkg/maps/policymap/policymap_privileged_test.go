@@ -14,6 +14,7 @@ import (
 	"github.com/cilium/cilium/pkg/bpf"
 
 	"github.com/cilium/cilium/pkg/policy/trafficdirection"
+	policyTypes "github.com/cilium/cilium/pkg/policy/types"
 	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
@@ -44,19 +45,22 @@ func setupPolicyMapPrivilegedTestSuite(tb testing.TB) *PolicyMap {
 func TestPolicyMapDumpToSlice(t *testing.T) {
 	testMap := setupPolicyMapPrivilegedTestSuite(t)
 
-	fooEntry := NewKey(1, 1, 1, 1, SinglePortPrefixLen)
-	err := testMap.AllowKey(fooEntry, 0, 0)
+	fooKey := NewKey(1, 1, 1, 1, SinglePortPrefixLen)
+	err := testMap.AllowKey(fooKey, policyTypes.AuthTypeSpire.AsDerivedRequirement(), 0)
 	require.NoError(t, err)
 
 	dump, err := testMap.DumpToSlice()
 	require.NoError(t, err)
 	require.Len(t, dump, 1)
 
-	require.EqualValues(t, fooEntry, dump[0].Key)
+	require.EqualValues(t, fooKey, dump[0].Key)
+
+	require.False(t, dump[0].PolicyEntry.AuthRequirement.IsExplicit())
+	require.Equal(t, policyTypes.AuthType(1), dump[0].PolicyEntry.AuthRequirement.AuthType())
 
 	// Special case: allow-all entry
 	barEntry := NewKey(0, 0, 0, 0, 0)
-	err = testMap.AllowKey(barEntry, 0, 0)
+	err = testMap.AllowKey(barEntry, policyTypes.AuthRequirement(0), 0)
 	require.NoError(t, err)
 
 	dump, err = testMap.DumpToSlice()

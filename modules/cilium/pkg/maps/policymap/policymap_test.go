@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/cilium/pkg/byteorder"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/policy/trafficdirection"
+	policyTypes "github.com/cilium/cilium/pkg/policy/types"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
 
@@ -177,7 +178,7 @@ func TestPolicyMapWildcarding(t *testing.T) {
 		dportPrefixLen   uint8
 		proto            u8proto.U8proto
 		trafficDirection trafficdirection.TrafficDirection
-		authType         int
+		authReq          policyTypes.AuthRequirement
 		proxyPort        uint16
 	}
 	tests := []struct {
@@ -189,8 +190,12 @@ func TestPolicyMapWildcarding(t *testing.T) {
 			args: args{allow, 42, 80, 16, 6, ingress, 0, 0},
 		},
 		{
-			name: "Allow, no wildcarding, with redirection and auth",
-			args: args{allow, 42, 80, 16, 6, ingress, 1, 23767},
+			name: "Allow, no wildcarding, with redirection and defaulted auth",
+			args: args{allow, 42, 80, 16, 6, ingress, policyTypes.AuthTypeSpire.AsDerivedRequirement(), 23767},
+		},
+		{
+			name: "Allow, no wildcarding, with redirection and explicit auth",
+			args: args{allow, 42, 80, 16, 6, ingress, policyTypes.AuthTypeSpire.AsExplicitRequirement(), 23767},
 		},
 		{
 			name: "Allow, wildcarded port, no redirection",
@@ -225,8 +230,12 @@ func TestPolicyMapWildcarding(t *testing.T) {
 			args: args{allow, 0, 80, 16, 6, ingress, 0, 0},
 		},
 		{
-			name: "Allow, wildcarded id, no port wildcarding, with redirection and auth",
-			args: args{allow, 0, 80, 16, 6, ingress, 1, 23767},
+			name: "Allow, wildcarded id, no port wildcarding, with redirection and defaulted auth",
+			args: args{allow, 0, 80, 16, 6, ingress, policyTypes.AuthTypeSpire.AsDerivedRequirement(), 23767},
+		},
+		{
+			name: "Allow, wildcarded id, no port wildcarding, with redirection and explicit auth",
+			args: args{allow, 0, 80, 16, 6, ingress, policyTypes.AuthTypeSpire.AsExplicitRequirement(), 23767},
 		},
 		{
 			name: "Allow, wildcarded id, wildcarded port, no redirection",
@@ -269,7 +278,7 @@ func TestPolicyMapWildcarding(t *testing.T) {
 		}
 		if tt.args.op == deny {
 			require.Equal(t, uint16(0), tt.args.proxyPort, "Test: %s data error: proxyPort must be zero with a deny key", tt.name)
-			require.Equal(t, 0, tt.args.authType, "Test: %s data error: authType must be zero with a deny key", tt.name)
+			require.Equal(t, policyTypes.AuthRequirement(0), tt.args.authReq, "Test: %s data error: authType must be zero with a deny key", tt.name)
 		}
 
 		// Get key
@@ -279,16 +288,16 @@ func TestPolicyMapWildcarding(t *testing.T) {
 		var entry PolicyEntry
 		switch tt.args.op {
 		case allow:
-			entry = newAllowEntry(key, uint8(tt.args.authType), uint16(tt.args.proxyPort))
+			entry = newAllowEntry(key, tt.args.authReq, uint16(tt.args.proxyPort))
 
 			require.Equal(t, policyEntryFlags(0), entry.Flags&policyFlagDeny)
-			require.Equal(t, uint8(tt.args.authType), entry.AuthType)
+			require.Equal(t, tt.args.authReq, entry.AuthRequirement)
 			require.Equal(t, uint16(tt.args.proxyPort), byteorder.NetworkToHost16(entry.ProxyPortNetwork))
 		case deny:
 			entry = newDenyEntry(key)
 
 			require.Equal(t, policyFlagDeny, entry.Flags&policyFlagDeny)
-			require.Equal(t, uint8(0), entry.AuthType)
+			require.Equal(t, policyTypes.AuthRequirement(0), entry.AuthRequirement)
 			require.Equal(t, uint16(0), entry.ProxyPortNetwork)
 		}
 
@@ -296,7 +305,8 @@ func TestPolicyMapWildcarding(t *testing.T) {
 		require.Equal(t, uint8(tt.args.proto), key.Nexthdr)
 
 		// key and entry need to agree on the prefix length
-		require.Equal(t, StaticPrefixBits+uint32(entry.GetPrefixLen()), key.Prefixlen)
+		prefixLen := uint8(entry.Flags >> policyFlagLPMShift)
+		require.Equal(t, StaticPrefixBits+uint32(prefixLen), key.Prefixlen)
 
 		if key.Nexthdr == 0 {
 			require.Equal(t, uint16(0), key.DestPortNetwork)

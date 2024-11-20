@@ -37,10 +37,16 @@ public class RealmSupplier implements Supplier<ManagedRealm, InjectRealm> {
             realmRepresentation.setRealm(realmName);
         }
 
+        if (realmRepresentation.getId() == null) {
+            realmRepresentation.setId(realmRepresentation.getRealm());
+        }
+
         String realmName = realmRepresentation.getRealm();
         instanceContext.addNote(REALM_NAME_KEY, realmName);
 
-        adminClient.realms().create(realmRepresentation);
+        if (instanceContext.getAnnotation().createRealm()) {
+            adminClient.realms().create(realmRepresentation);
+        }
 
         // TODO Token needs to be invalidated after creating realm to have roles for new realm in the token. Maybe lightweight access tokens could help.
         adminClient.tokenManager().invalidate(adminClient.tokenManager().getAccessTokenString());
@@ -56,7 +62,9 @@ public class RealmSupplier implements Supplier<ManagedRealm, InjectRealm> {
 
     @Override
     public void close(InstanceContext<ManagedRealm, InjectRealm> instanceContext) {
-        instanceContext.getValue().admin().remove();
+        if (instanceContext.getAnnotation().createRealm()) {
+            instanceContext.getValue().admin().remove();
+        }
     }
 
 }

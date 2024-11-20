@@ -347,9 +347,9 @@ func TestL7WithIngressWildcard(t *testing.T) {
 	policy.policyMapChanges.mutex = lock.Mutex{}
 	policy.policyMapChanges.firstVersion = 0
 	// policyMapState cannot be compared via DeepEqual
-	require.Truef(t, policy.policyMapState.deepEquals(expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(expectedEndpointPolicy.policyMapState))
-	policy.policyMapState = nil
-	expectedEndpointPolicy.policyMapState = nil
+	require.Truef(t, policy.policyMapState.Equal(&expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(&expectedEndpointPolicy.policyMapState))
+	policy.policyMapState = mapState{}
+	expectedEndpointPolicy.policyMapState = mapState{}
 	require.Equal(t, &expectedEndpointPolicy, policy)
 }
 
@@ -458,9 +458,9 @@ func TestL7WithLocalHostWildcard(t *testing.T) {
 	policy.policyMapChanges.mutex = lock.Mutex{}
 	policy.policyMapChanges.firstVersion = 0
 	// policyMapState cannot be compared via DeepEqual
-	require.Truef(t, policy.policyMapState.deepEquals(expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(expectedEndpointPolicy.policyMapState))
-	policy.policyMapState = nil
-	expectedEndpointPolicy.policyMapState = nil
+	require.Truef(t, policy.policyMapState.Equal(&expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(&expectedEndpointPolicy.policyMapState))
+	policy.policyMapState = mapState{}
+	expectedEndpointPolicy.policyMapState = mapState{}
 	require.Equal(t, &expectedEndpointPolicy, policy)
 }
 
@@ -511,8 +511,8 @@ func TestMapStateWithIngressWildcard(t *testing.T) {
 	policy := selPolicy.DistillPolicy(DummyOwner{}, testRedirects)
 	policy.Ready()
 
-	rule1MapStateEntry := newMapStateEntry(td.wildcardCachedSelector, labels.LabelArrayList{ruleLabel}, 0, 0, false, DefaultAuthType, AuthTypeDisabled)
-	allowEgressMapStateEntry := newMapStateEntry(nil, labels.LabelArrayList{ruleLabelAllowAnyEgress}, 0, 0, false, ExplicitAuthType, AuthTypeDisabled)
+	rule1MapStateEntry := newAllowEntryWithLabels(ruleLabel).withOwners(td.wildcardCachedSelector)
+	allowEgressMapStateEntry := newAllowEntryWithLabels(ruleLabelAllowAnyEgress)
 
 	expectedEndpointPolicy := EndpointPolicy{
 		Redirects: testRedirects,
@@ -565,9 +565,9 @@ func TestMapStateWithIngressWildcard(t *testing.T) {
 	policy.policyMapChanges.mutex = lock.Mutex{}
 	policy.policyMapChanges.firstVersion = 0
 	// policyMapState cannot be compared via DeepEqual
-	require.Truef(t, policy.policyMapState.deepEquals(expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(expectedEndpointPolicy.policyMapState))
-	policy.policyMapState = nil
-	expectedEndpointPolicy.policyMapState = nil
+	require.Truef(t, policy.policyMapState.Equal(&expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(&expectedEndpointPolicy.policyMapState))
+	policy.policyMapState = mapState{}
+	expectedEndpointPolicy.policyMapState = mapState{}
 	require.Equal(t, &expectedEndpointPolicy, policy)
 }
 
@@ -670,8 +670,8 @@ func TestMapStateWithIngress(t *testing.T) {
 	cachedSelectorTest := td.sc.FindCachedIdentitySelector(api.NewESFromLabels(lblTest))
 	require.NotNil(t, cachedSelectorTest)
 
-	rule1MapStateEntry := newMapStateEntry(cachedSelectorTest, labels.LabelArrayList{ruleLabel}, 0, 0, false, DefaultAuthType, AuthTypeDisabled)
-	allowEgressMapStateEntry := newMapStateEntry(nil, labels.LabelArrayList{ruleLabelAllowAnyEgress}, 0, 0, false, ExplicitAuthType, AuthTypeDisabled)
+	rule1MapStateEntry := newAllowEntryWithLabels(ruleLabel).withOwners(cachedSelectorTest)
+	allowEgressMapStateEntry := newAllowEntryWithLabels(ruleLabelAllowAnyEgress)
 
 	expectedEndpointPolicy := EndpointPolicy{
 		Redirects: testRedirects,
@@ -716,11 +716,11 @@ func TestMapStateWithIngress(t *testing.T) {
 		PolicyOwner: DummyOwner{},
 		policyMapState: newMapState().withState(map[Key]mapStateEntry{
 			EgressKey(): allowEgressMapStateEntry,
-			IngressKey().WithIdentity(identity.ReservedIdentityWorld).WithTCPPort(80):     rule1MapStateEntry.WithOwners(cachedSelectorWorld),
-			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv4).WithTCPPort(80): rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV4),
-			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv6).WithTCPPort(80): rule1MapStateEntry.WithOwners(cachedSelectorWorld, cachedSelectorWorldV6),
-			IngressKey().WithIdentity(192).WithTCPPort(80):                                rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
-			IngressKey().WithIdentity(194).WithTCPPort(80):                                rule1MapStateEntry.WithAuthType(AuthTypeDisabled),
+			IngressKey().WithIdentity(identity.ReservedIdentityWorld).WithTCPPort(80):     rule1MapStateEntry.withOwners(cachedSelectorWorld),
+			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv4).WithTCPPort(80): rule1MapStateEntry.withOwners(cachedSelectorWorld, cachedSelectorWorldV4),
+			IngressKey().WithIdentity(identity.ReservedIdentityWorldIPv6).WithTCPPort(80): rule1MapStateEntry.withOwners(cachedSelectorWorld, cachedSelectorWorldV6),
+			IngressKey().WithIdentity(192).WithTCPPort(80):                                rule1MapStateEntry.withExplicitAuth(AuthTypeDisabled),
+			IngressKey().WithIdentity(194).WithTCPPort(80):                                rule1MapStateEntry.withExplicitAuth(AuthTypeDisabled),
 		}),
 	}
 
@@ -751,9 +751,7 @@ func TestMapStateWithIngress(t *testing.T) {
 	policy.policyMapChanges.mutex = lock.Mutex{}
 	policy.policyMapChanges.firstVersion = 0
 	// policyMapState cannot be compared via DeepEqual
-	require.Truef(t, policy.policyMapState.deepEquals(expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(expectedEndpointPolicy.policyMapState))
-	policy.policyMapState = nil
-	expectedEndpointPolicy.policyMapState = nil
+	require.Truef(t, policy.policyMapState.Equal(&expectedEndpointPolicy.policyMapState), policy.policyMapState.diff(&expectedEndpointPolicy.policyMapState))
 	require.EqualExportedValues(t, &expectedEndpointPolicy, policy)
 }
 
@@ -787,7 +785,7 @@ func (p *EndpointPolicy) allowsIdentity(identity identity.NumericIdentity) (ingr
 func TestEndpointPolicy_AllowsIdentity(t *testing.T) {
 	type fields struct {
 		selectorPolicy *selectorPolicy
-		PolicyMapState *mapState
+		PolicyMapState mapState
 	}
 	type args struct {
 		identity identity.NumericIdentity
