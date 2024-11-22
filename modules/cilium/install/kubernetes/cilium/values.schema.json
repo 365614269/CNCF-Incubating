@@ -489,6 +489,14 @@
             }
           },
           "type": "object"
+        },
+        "statusReport": {
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
         }
       },
       "type": "object"
@@ -5331,9 +5339,6 @@
             "secretsNamespace": {
               "properties": {
                 "create": {
-                  "type": "boolean"
-                },
-                "enabled": {
                   "type": "boolean"
                 },
                 "name": {

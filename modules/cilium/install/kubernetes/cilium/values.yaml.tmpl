@@ -459,6 +459,12 @@ bgpControlPlane:
     create: false
     # -- The name of the secret namespace to which Cilium agents are given read access
     name: kube-system
+  # -- Status reporting settings (BGPv2 only)
+  statusReport:
+    # -- Enable/Disable BGPv2 status reporting
+    # It is recommended to enable status reporting in general, but if you have any issue
+    # such as high API server load, you can disable it by setting this to false.
+    enabled: true
 pmtuDiscovery:
   # -- Enable path MTU discovery to send ICMP fragmentation-needed replies to
   # the client.
@@ -2554,9 +2560,6 @@ tls:
       create: true
       # -- Name of TLS Interception secret namespace.
       name: cilium-secrets
-      # -- Enable secret sync, which will make sure all TLS secrets used by TLS Interception are synced to secretsNamespace.name.
-      # If disabled, TLS secrets must be maintained externally.
-      enabled: true
   # -- Base64 encoded PEM values for the CA certificate and private key.
   # This can be used as common CA to generate certificates used by hubble and clustermesh components.
   # It is neither required nor used when cert-manager is used to generate the certificates.

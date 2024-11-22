@@ -81,20 +81,20 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1
       '@patternfly/react-core':
-        specifier: ^5.4.9
-        version: 5.4.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^5.4.10
+        version: 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-icons':
         specifier: ^5.4.2
         version: 5.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-table':
-        specifier: ^5.4.10
-        version: 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^5.4.11
+        version: 5.4.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       i18next:
         specifier: ^23.16.6
         version: 23.16.6
       i18next-http-backend:
-        specifier: ^2.6.2
-        version: 2.6.2
+        specifier: ^3.0.1
+        version: 3.0.1
       keycloak-js:
         specifier: workspace:*
         version: link:../../libs/keycloak-js
@@ -160,11 +160,11 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1
       '@patternfly/react-code-editor':
-        specifier: ^5.4.12
-        version: 5.4.12(monaco-editor@0.52.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^5.4.13
+        version: 5.4.13(monaco-editor@0.52.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-core':
-        specifier: ^5.4.9
-        version: 5.4.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^5.4.10
+        version: 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-icons':
         specifier: ^5.4.2
         version: 5.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -172,8 +172,8 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1
       '@patternfly/react-table':
-        specifier: ^5.4.10
-        version: 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^5.4.11
+        version: 5.4.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       admin-ui:
         specifier: 'file:'
         version: '@keycloak/keycloak-admin-ui@file:js/apps/admin-ui(@types/react@18.3.12)'
@@ -190,8 +190,8 @@ importers:
         specifier: ^23.16.6
         version: 23.16.6
       i18next-http-backend:
-        specifier: ^2.6.2
-        version: 2.6.2
+        specifier: ^3.0.1
+        version: 3.0.1
       keycloak-js:
         specifier: workspace:*
         version: link:../../libs/keycloak-js
@@ -269,8 +269,8 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0(axe-core@4.10.1)(cypress@13.16.0)
       cypress-split:
-        specifier: ^1.24.5
-        version: 1.24.5(@babel/core@7.25.8)
+        specifier: ^1.24.6
+        version: 1.24.6(@babel/core@7.25.8)
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
@@ -357,8 +357,8 @@ importers:
         specifier: ^4.17.12
         version: 4.17.12
       '@types/mocha':
-        specifier: ^10.0.9
-        version: 10.0.9
+        specifier: ^10.0.10
+        version: 10.0.10
       '@types/node':
         specifier: ^22.9.1
         version: 22.9.1
@@ -383,8 +383,8 @@ importers:
         specifier: workspace:*
         version: link:../keycloak-admin-client
       '@patternfly/react-core':
-        specifier: ^5.4.9
-        version: 5.4.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^5.4.10
+        version: 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-icons':
         specifier: ^5.4.2
         version: 5.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -392,8 +392,8 @@ importers:
         specifier: ^5.4.1
         version: 5.4.1
       '@patternfly/react-table':
-        specifier: ^5.4.10
-        version: 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^5.4.11
+        version: 5.4.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       i18next:
         specifier: ^23.16.6
         version: 23.16.6
@@ -1203,14 +1203,14 @@ packages:
   '@patternfly/patternfly@5.4.1':
     resolution: {integrity: sha512-0+KxsQJrFzOMANALW82BHAO7bSm9tEbG1RrOlGT23ME1CaBoetGSMRLymutvojn/b/EKfJIr5rLzQa+14Lvg2g==}
 
-  '@patternfly/react-code-editor@5.4.12':
-    resolution: {integrity: sha512-ffPLa5P4wZSVdFm37hHgrv8YUA6L59zHtknDmSUHxtEFwY4BsWlcBKB0vtm0ZfKpkreXtKLOLX8MjcYm48DfdQ==}
+  '@patternfly/react-code-editor@5.4.13':
+    resolution: {integrity: sha512-HLtVxPqIeHKMtnkPr5LrbDzs6LfCNYclIoVOTOVOFy+UETj0wE7Rl4QwFsi8L92vfDyM+PciBD58MfyOQWRdVA==}
     peerDependencies:
       react: ^17 || ^18
       react-dom: ^17 || ^18
 
-  '@patternfly/react-core@5.4.9':
-    resolution: {integrity: sha512-BPWwAYEa7yLV+lgi0WT6fTgd1Ru8yonuPhvG3hZkSP/Oaom3+Ck2DJAX6jZarvKeK2cYdPzxSel6Pep1YSpmuA==}
+  '@patternfly/react-core@5.4.10':
+    resolution: {integrity: sha512-lThdXKqHc9sN5AqPskZa1YmUmSwbjdkaT8neTCdMjfnBaBanYCmSCNUMYUsoB0L/2siu2Vlcp12RRaG5hZeN2g==}
     peerDependencies:
       react: ^17 || ^18
       react-dom: ^17 || ^18
@@ -1224,8 +1224,8 @@ packages:
   '@patternfly/react-styles@5.4.1':
     resolution: {integrity: sha512-XA8PXksD8uiA3RTwxdUwJXOCf+V6sVd+2HKapWAdRLvtSV+Sdk7NgCvalb4IAQncsddLopjPQD8gAHA298+N8w==}
 
-  '@patternfly/react-table@5.4.10':
-    resolution: {integrity: sha512-5p95UZer+4GJyS9pXUEqYal/bixuyNn4GhH/Hyk3dj/MeLKZrQWD6hmRaj7/SqJiVC2FhZBoQoDGEeXElqkc0g==}
+  '@patternfly/react-table@5.4.11':
+    resolution: {integrity: sha512-TlEPx4G+49QYZxk649WUIHkRPA/JB//i29fUosrJdI6EEzpTe8keHLXe5wA9KkhCxOtna7iHPTPWv5qRiDJKSg==}
     peerDependencies:
       react: ^17 || ^18
       react-dom: ^17 || ^18
@@ -1774,8 +1774,8 @@ packages:
   '@types/lodash@4.17.12':
     resolution: {integrity: sha512-sviUmCE8AYdaF/KIHLDJBQgeYzPBI0vf/17NaYehBJfYD1j6/L95Slh07NlyK2iNyBNaEkb3En2jRt+a8y3xZQ==}
 
-  '@types/mocha@10.0.9':
-    resolution: {integrity: sha512-sicdRoWtYevwxjOHNMPTl3vSfJM6oyW8o1wXeI7uww6b6xHg8eBznQDNSGBCDJmsE8UMxP05JgZRtsKbTqt//Q==}
+  '@types/mocha@10.0.10':
+    resolution: {integrity: sha512-xPyYSz1cMPnJQhl0CLMH68j3gprKZaTjG3s5Vi+fDgx+uhG9NOXwbVt52eFS8ECyXhyKcjDLCBEqBExKuiZb7Q==}
 
   '@types/node@22.9.0':
     resolution: {integrity: sha512-vuyHg81vvWA1Z1ELfvLko2c8f34gyA0zaic0+Rllc5lbCnbSyuvb2Oxpm6TAUAC/2xZN3QGqxBNggD1nNR2AfQ==}
@@ -2444,8 +2444,8 @@ packages:
       axe-core: ^3 || ^4
       cypress: ^10 || ^11 || ^12 || ^13
 
-  cypress-split@1.24.5:
-    resolution: {integrity: sha512-7c58IyRtT79wSffrJ78pbKtvhYsjhF6OD5Jhe/32mJ6ue9YFocHIy8D2LM5imM6UcDri6pPMROLMlIyxPElfIg==}
+  cypress-split@1.24.6:
+    resolution: {integrity: sha512-1/qyie/fh632msYuIw2IqKuhst0dPptV16iFNnmri/OeRzpAuFhYg2Qc/Jacj907b2a4+FGfh8UF9PgwAnptkw==}
     hasBin: true
 
   cypress@13.16.0:
@@ -2985,8 +2985,8 @@ packages:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
     engines: {node: '>=8'}
 
-  find-cypress-specs@1.45.2:
-    resolution: {integrity: sha512-D289NM0Dpqoz4+yl8oEtbioqm7zPKQo0hLcvwlg5Z9iBm7EioMIFiOYgluthDNPxUES/aJF+1xHRHAJpC3ejcA==}
+  find-cypress-specs@1.46.2:
+    resolution: {integrity: sha512-eXvGQMftYDTbQflVX6TzJj7hA0ypO5+FfUrnMdRf1+yCu5xVY5wPv721AWp/xPBOpQXwx5jdoZRH9m95U/1c7A==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -3014,8 +3014,8 @@ packages:
   flatted@3.3.1:
     resolution: {integrity: sha512-X8cqMLLie7KsNUDSdzeN8FYK9rEt4Dt67OsG/DNGnYTSDBG4uFAJFBnUeiV+zCVAvwFy56IjM9sH51jVaEhNxw==}
 
-  focus-trap@7.6.0:
-    resolution: {integrity: sha512-1td0l3pMkWJLFipobUcGaf+5DTY4PLDDrcqoSaKP8ediO/CoWCCYk/fT/Y2A4e6TNB+Sh6clRJCjOPPnKoNHnQ==}
+  focus-trap@7.6.2:
+    resolution: {integrity: sha512-9FhUxK1hVju2+AiQIDJ5Dd//9R2n2RAfJ0qfhF4IHGHgcoEUTMpbTeG/zbEuwaiYXfuAH6XE0/aCyxDdRM+W5w==}
 
   font-awesome@4.7.0:
     resolution: {integrity: sha512-U6kGnykA/6bFmg1M/oT9EkFeIYv7JlX3bozwQJWiiLz6L0w3F5vBVPxHlwyX/vtNq1ckcpRKOB9f2Qal/VtFpg==}
@@ -3251,8 +3251,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  i18next-http-backend@2.6.2:
-    resolution: {integrity: sha512-Hp/kd8/VuoxIHmxsknJXjkTYYHzivAyAF15pzliKzk2TiXC25rZCEerb1pUFoxz4IVrG3fCvQSY51/Lu4ECV4A==}
+  i18next-http-backend@3.0.1:
+    resolution: {integrity: sha512-XT2lYSkbAtDE55c6m7CtKxxrsfuRQO3rUfHzj8ZyRtY9CkIX3aRGwXGTkUhpGWce+J8n7sfu3J0f2wTzo7Lw0A==}
 
   i18next@23.16.6:
     resolution: {integrity: sha512-wGdE5rUfkZtrL5k6MCptxbpjmgwku4rBRVU/YOJ7Xfd841fgaZjlxHpVJ5NIz8sfSvAJhEhJrvJ8qE7AWXE4Xg==}
@@ -5665,16 +5665,16 @@ snapshots:
       '@keycloak/keycloak-admin-client': link:js/libs/keycloak-admin-client
       '@keycloak/keycloak-ui-shared': link:js/libs/ui-shared
       '@patternfly/patternfly': 5.4.1
-      '@patternfly/react-code-editor': 5.4.12(monaco-editor@0.52.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@patternfly/react-core': 5.4.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@patternfly/react-code-editor': 5.4.13(monaco-editor@0.52.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@patternfly/react-core': 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-icons': 5.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-styles': 5.4.1
-      '@patternfly/react-table': 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@patternfly/react-table': 5.4.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       dagre: 0.8.5
       file-saver: 2.0.5
       flat: 6.0.1
       i18next: 23.16.6
-      i18next-http-backend: 2.6.2
+      i18next-http-backend: 3.0.1
       keycloak-js: link:js/libs/keycloak-js
       lodash-es: 4.17.21
       monaco-editor: 0.52.0
@@ -5826,10 +5826,10 @@ snapshots:
 
   '@patternfly/patternfly@5.4.1': {}
 
-  '@patternfly/react-code-editor@5.4.12(monaco-editor@0.52.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@patternfly/react-code-editor@5.4.13(monaco-editor@0.52.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@monaco-editor/react': 4.6.0(monaco-editor@0.52.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@patternfly/react-core': 5.4.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@patternfly/react-core': 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-icons': 5.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-styles': 5.4.1
       react: 18.3.1
@@ -5839,12 +5839,12 @@ snapshots:
     transitivePeerDependencies:
       - monaco-editor
 
-  '@patternfly/react-core@5.4.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@patternfly/react-core@5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@patternfly/react-icons': 5.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-styles': 5.4.1
       '@patternfly/react-tokens': 5.4.1
-      focus-trap: 7.6.0
+      focus-trap: 7.6.2
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       react-dropzone: 14.2.10(react@18.3.1)
@@ -5857,9 +5857,9 @@ snapshots:
 
   '@patternfly/react-styles@5.4.1': {}
 
-  '@patternfly/react-table@5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@patternfly/react-table@5.4.11(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
-      '@patternfly/react-core': 5.4.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@patternfly/react-core': 5.4.10(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-icons': 5.4.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@patternfly/react-styles': 5.4.1
       '@patternfly/react-tokens': 5.4.1
@@ -6387,7 +6387,7 @@ snapshots:
 
   '@types/lodash@4.17.12': {}
 
-  '@types/mocha@10.0.9': {}
+  '@types/mocha@10.0.10': {}
 
   '@types/node@22.9.0':
     dependencies:
@@ -7108,14 +7108,14 @@ snapshots:
       axe-core: 4.10.1
       cypress: 13.16.0
 
-  cypress-split@1.24.5(@babel/core@7.25.8):
+  cypress-split@1.24.6(@babel/core@7.25.8):
     dependencies:
       '@actions/core': 1.11.1
       arg: 5.0.2
       console.table: 0.10.0
       debug: 4.3.7(supports-color@8.1.1)
       fast-shuffle: 6.1.0
-      find-cypress-specs: 1.45.2(@babel/core@7.25.8)
+      find-cypress-specs: 1.46.2(@babel/core@7.25.8)
       globby: 11.1.0
       humanize-duration: 3.32.1
     transitivePeerDependencies:
@@ -7874,7 +7874,7 @@ snapshots:
     dependencies:
       to-regex-range: 5.0.1
 
-  find-cypress-specs@1.45.2(@babel/core@7.25.8):
+  find-cypress-specs@1.46.2(@babel/core@7.25.8):
     dependencies:
       '@actions/core': 1.11.1
       arg: 5.0.2
@@ -7920,7 +7920,7 @@ snapshots:
 
   flatted@3.3.1: {}
 
-  focus-trap@7.6.0:
+  focus-trap@7.6.2:
     dependencies:
       tabbable: 6.2.0
 
@@ -8165,7 +8165,7 @@ snapshots:
 
   husky@9.1.7: {}
 
-  i18next-http-backend@2.6.2:
+  i18next-http-backend@3.0.1:
     dependencies:
       cross-fetch: 4.0.0
     transitivePeerDependencies:
