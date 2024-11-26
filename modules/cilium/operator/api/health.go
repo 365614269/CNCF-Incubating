@@ -11,10 +11,12 @@ import (
 	"github.com/go-openapi/runtime/middleware"
 	"k8s.io/client-go/discovery"
 
+	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/api/v1/operator/server/restapi/operator"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/option"
 )
 
 type kvstoreEnabledFunc func() bool
@@ -83,8 +85,15 @@ func (h *healthHandler) checkStatus() error {
 		if client == nil {
 			return errors.New("kvstore client not configured")
 		}
-		if _, err := client.Status(); err != nil {
-			return err
+
+		status := client.Status()
+		if status.State != models.StatusStateOk &&
+			// Don't treat warnings as errors when the support for running
+			// etcd in pod network is enabled. This is necessary to allow
+			// Cilium turning ready even before connecting to the kvstore,
+			// and break the chicken-and-egg dependency during startup.
+			!(status.State == models.StatusStateWarning && option.Config.KVstorePodNetworkSupport) {
+			return errors.New(status.Msg)
 		}
 	}
 	_, err := h.discovery.ServerVersion()

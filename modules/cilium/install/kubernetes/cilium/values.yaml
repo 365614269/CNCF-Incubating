@@ -9,6 +9,11 @@
 # This property allows to use Cilium as part of an Umbrella Chart with different targets.
 namespaceOverride: ""
 # @schema
+# type: [null, object]
+# @schema
+# -- commonLabels allows users to add common labels for all Cilium resources.
+commonLabels: {}
+# @schema
 # type: [null, string]
 # @schema
 # -- upgradeCompatibility helps users upgrading to ensure that the configMap for
@@ -2179,6 +2184,7 @@ pprof:
   port: 6060
 # -- Configure prometheus metrics on the configured port at /metrics
 prometheus:
+  metricsService: false
   enabled: false
   port: 9962
   serviceMonitor:
@@ -2761,6 +2767,7 @@ operator:
   # -- Enable prometheus metrics for cilium-operator on the configured port at
   # /metrics
   prometheus:
+    metricsService: false
     enabled: true
     port: 9963
     serviceMonitor:

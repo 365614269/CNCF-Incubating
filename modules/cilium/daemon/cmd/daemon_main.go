@@ -361,9 +361,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableHostLegacyRouting, defaults.EnableHostLegacyRouting, "Enable the legacy host forwarding model which does not bypass upper stack in host namespace")
 	option.BindEnv(vp, option.EnableHostLegacyRouting)
 
-	flags.Bool(option.EnableXTSocketFallbackName, defaults.EnableXTSocketFallback, "Enable fallback for missing xt_socket module")
-	option.BindEnv(vp, option.EnableXTSocketFallbackName)
-
 	flags.String(option.EnablePolicy, option.DefaultEnforcement, "Enable policy enforcement")
 	option.BindEnv(vp, option.EnablePolicy)
 
@@ -588,6 +585,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.String(option.LoadBalancerMode, option.NodePortModeSNAT, "BPF load balancing mode (\"snat\", \"dsr\", \"hybrid\")")
 	option.BindEnv(vp, option.LoadBalancerMode)
+
+	flags.Bool(option.LoadBalancerAlgAnnotation, false, "Tells whether controller should check service level annotation for configuring bpf load balancing algorithm.")
+	option.BindEnv(vp, option.LoadBalancerAlgAnnotation)
 
 	flags.String(option.LoadBalancerAlg, option.NodePortAlgRandom, "BPF load balancing algorithm (\"random\", \"maglev\")")
 	option.BindEnv(vp, option.LoadBalancerAlg)
@@ -1869,7 +1869,9 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	}
 	bootstrapStats.healthCheck.End(true)
 
-	d.startStatusCollector(cleaner)
+	if err := d.startStatusCollector(d.ctx, cleaner); err != nil {
+		return fmt.Errorf("failed to start status collector: %w", err)
+	}
 
 	d.startAgentHealthHTTPService()
 	if option.Config.KubeProxyReplacementHealthzBindAddr != "" {

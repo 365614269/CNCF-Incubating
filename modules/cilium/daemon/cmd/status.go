@@ -307,6 +307,9 @@ func (d *Daemon) getKubeProxyReplacementStatus() *models.KubeProxyReplacement {
 			features.NodePort.Algorithm = models.KubeProxyReplacementFeaturesNodePortAlgorithmMaglev
 			features.NodePort.LutSize = int64(option.Config.MaglevTableSize)
 		}
+		if option.Config.LoadBalancerAlgAnnotation {
+			features.NodePort.LutSize = int64(option.Config.MaglevTableSize)
+		}
 		if option.Config.NodePortAcceleration == option.NodePortAccelerationGeneric {
 			features.NodePort.Acceleration = models.KubeProxyReplacementFeaturesNodePortAccelerationGeneric
 		} else {
@@ -524,7 +527,9 @@ func (d *Daemon) getStatus(brief bool, requireK8sConnectivity bool) models.Statu
 			State: models.StatusStateWarning,
 			Msg:   fmt.Sprintf("%s    %s", ciliumVer, msg),
 		}
-	case d.statusResponse.Kvstore != nil && d.statusResponse.Kvstore.State != models.StatusStateOk:
+	case d.statusResponse.Kvstore != nil &&
+		d.statusResponse.Kvstore.State != models.StatusStateOk &&
+		d.statusResponse.Kvstore.State != models.StatusStateDisabled:
 		msg := "Kvstore service is not ready: " + d.statusResponse.Kvstore.Msg
 		sr.Cilium = &models.Status{
 			State: d.statusResponse.Kvstore.State,
@@ -570,51 +575,39 @@ func (d *Daemon) getIdentityRange() *models.IdentityRange {
 	return s
 }
 
-func (d *Daemon) startStatusCollector(cleaner *daemonCleanup) {
+func (d *Daemon) startStatusCollector(ctx context.Context, cleaner *daemonCleanup) error {
 	probes := []status.Probe{
-		{
-			Name: "check-locks",
-			Probe: func(ctx context.Context) (interface{}, error) {
-				// nothing to do any more.
-				return nil, nil
-			},
-			OnStatusUpdate: func(status status.Status) {
-				d.statusCollectMutex.Lock()
-				defer d.statusCollectMutex.Unlock()
-				// FIXME we have no field for the lock status
-			},
-		},
 		{
 			Name: "kvstore",
 			Probe: func(ctx context.Context) (interface{}, error) {
 				if option.Config.KVStore == "" {
-					return models.StatusStateDisabled, nil
+					return &models.Status{State: models.StatusStateDisabled}, nil
 				} else {
-					return kvstore.Client().Status()
+					return kvstore.Client().Status(), nil
 				}
 			},
 			OnStatusUpdate: func(status status.Status) {
-				var msg string
-				state := models.StatusStateOk
-				info, ok := status.Data.(string)
-
-				switch {
-				case ok && status.Err != nil:
-					state = models.StatusStateFailure
-					msg = fmt.Sprintf("Err: %s - %s", status.Err, info)
-				case status.Err != nil:
-					state = models.StatusStateFailure
-					msg = fmt.Sprintf("Err: %s", status.Err)
-				case ok:
-					msg = info
-				}
-
 				d.statusCollectMutex.Lock()
 				defer d.statusCollectMutex.Unlock()
 
-				d.statusResponse.Kvstore = &models.Status{
-					State: state,
-					Msg:   msg,
+				if status.Err != nil {
+					d.statusResponse.Kvstore = &models.Status{
+						State: models.StatusStateFailure,
+						Msg:   status.Err.Error(),
+					}
+					return
+				}
+
+				if kvstore, ok := status.Data.(*models.Status); ok {
+					if kvstore.State == models.StatusStateWarning && option.Config.KVstorePodNetworkSupport {
+						// Don't treat warnings as errors when the support for running
+						// etcd in pod network is enabled. This is necessary to allow
+						// Cilium turning ready even before connecting to the kvstore,
+						// and break the chicken-and-egg dependency during startup.
+						kvstore.State = models.StatusStateOk
+					}
+
+					d.statusResponse.Kvstore = kvstore
 				}
 			},
 		},
@@ -941,11 +934,18 @@ func (d *Daemon) startStatusCollector(cleaner *daemonCleanup) {
 
 	d.statusCollector = status.NewCollector(probes, status.DefaultConfig)
 
+	// Block until all probes have been executed at least once, to make sure that
+	// the status has been fully initialized once we exit from this function.
+	if err := d.statusCollector.WaitForFirstRun(ctx); err != nil {
+		return fmt.Errorf("waiting for first run: %w", err)
+	}
+
 	// Set up a signal handler function which prints out logs related to daemon status.
 	cleaner.cleanupFuncs.Add(func() {
 		// If the KVstore state is not OK, print help for user.
 		if d.statusResponse.Kvstore != nil &&
-			d.statusResponse.Kvstore.State != models.StatusStateOk {
+			d.statusResponse.Kvstore.State != models.StatusStateOk &&
+			d.statusResponse.Kvstore.State != models.StatusStateDisabled {
 			helpMsg := "cilium-agent depends on the availability of cilium-operator/etcd-cluster. " +
 				"Check if the cilium-operator pod and etcd-cluster are running and do not have any " +
 				"warnings or error messages."
@@ -958,4 +958,6 @@ func (d *Daemon) startStatusCollector(cleaner *daemonCleanup) {
 
 		d.statusCollector.Close()
 	})
+
+	return nil
 }

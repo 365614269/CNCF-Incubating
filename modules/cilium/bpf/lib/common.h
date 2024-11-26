@@ -338,7 +338,8 @@ struct endpoint_info {
 	mac_t		mac;
 	mac_t		node_mac;
 	__u32		sec_id;
-	__u32		pad[3];
+	__u32		parent_ifindex;
+	__u32		pad[2];
 };
 
 struct edt_id {
@@ -835,15 +836,16 @@ enum {
 #define	CB_ENCRYPT_MAGIC	CB_SRC_LABEL	/* Alias, non-overlapping */
 #define	CB_DST_ENDPOINT_ID	CB_SRC_LABEL    /* Alias, non-overlapping */
 #define CB_SRV6_SID_1		CB_SRC_LABEL	/* Alias, non-overlapping */
-	CB_IFINDEX,
-#define	CB_NAT_46X64		CB_IFINDEX	/* Alias, non-overlapping */
-#define	CB_ADDR_V4		CB_IFINDEX	/* Alias, non-overlapping */
-#define	CB_ADDR_V6_1		CB_IFINDEX	/* Alias, non-overlapping */
-#define	CB_IPCACHE_SRC_LABEL	CB_IFINDEX	/* Alias, non-overlapping */
-#define CB_SRV6_SID_2		CB_IFINDEX	/* Alias, non-overlapping */
-#define CB_CLUSTER_ID_EGRESS	CB_IFINDEX	/* Alias, non-overlapping */
-#define CB_HSIPC_ADDR_V4	CB_IFINDEX	/* Alias, non-overlapping */
-#define CB_TRACED		CB_IFINDEX	/* Alias, non-overlapping */
+	CB_1,
+#define	CB_DELIVERY_REDIRECT	CB_1		/* Alias, non-overlapping */
+#define	CB_NAT_46X64		CB_1		/* Alias, non-overlapping */
+#define	CB_ADDR_V4		CB_1		/* Alias, non-overlapping */
+#define	CB_ADDR_V6_1		CB_1		/* Alias, non-overlapping */
+#define	CB_IPCACHE_SRC_LABEL	CB_1		/* Alias, non-overlapping */
+#define	CB_SRV6_SID_2		CB_1		/* Alias, non-overlapping */
+#define	CB_CLUSTER_ID_EGRESS	CB_1		/* Alias, non-overlapping */
+#define	CB_HSIPC_ADDR_V4	CB_1		/* Alias, non-overlapping */
+#define	CB_TRACED		CB_1		/* Alias, non-overlapping */
 	CB_2,
 #define	CB_ADDR_V6_2		CB_2		/* Alias, non-overlapping */
 #define CB_SRV6_SID_3		CB_2		/* Alias, non-overlapping */
@@ -1022,6 +1024,14 @@ struct lb6_service {
 	 * slots under quarantine (otherwise zero).
 	 */
 	__u16 qcount;
+#ifdef LB_ALG_PER_SERVICE
+    /* Load balancer algorithm
+     * 1 - random
+     * 2 - maglev
+     */
+    __u8 lb_alg;
+    __u8 pad[3];
+#endif
 };
 
 /* See lb4_backend comments */
@@ -1086,6 +1096,14 @@ struct lb4_service {
 	 * slots under quarantine (otherwise zero).
 	 */
 	__u16 qcount;
+#ifdef LB_ALG_PER_SERVICE
+    /* Load balancer algorithm
+     * 1 - random
+     * 2 - maglev
+     */
+    __u8 lb_alg;
+    __u8 pad[3];
+#endif
 };
 
 struct lb4_backend {
