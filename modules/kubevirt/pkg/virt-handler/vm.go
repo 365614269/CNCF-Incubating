@@ -220,7 +220,10 @@ func NewController(
 	netBindingPluginMemoryCalculator netBindingPluginMemoryCalculator,
 ) (*VirtualMachineController, error) {
 
-	queue := workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "virt-handler-vm")
+	queue := workqueue.NewTypedRateLimitingQueueWithConfig[string](
+		workqueue.DefaultTypedControllerRateLimiter[string](),
+		workqueue.TypedRateLimitingQueueConfig[string]{Name: "virt-handler-vm"},
+	)
 
 	containerDiskState := filepath.Join(virtPrivateDir, "container-disk-mount-state")
 	if err := os.MkdirAll(containerDiskState, 0700); err != nil {
@@ -331,7 +334,7 @@ type VirtualMachineController struct {
 	migrationIpAddress       string
 	virtShareDir             string
 	virtPrivateDir           string
-	queue                    workqueue.RateLimitingInterface
+	queue                    workqueue.TypedRateLimitingInterface[string]
 	vmiSourceStore           cache.Store
 	vmiTargetStore           cache.Store
 	domainStore              cache.Store
@@ -1803,7 +1806,7 @@ func (c *VirtualMachineController) Execute() bool {
 		return false
 	}
 	defer c.queue.Done(key)
-	if err := c.execute(key.(string)); err != nil {
+	if err := c.execute(key); err != nil {
 		log.Log.Reason(err).Infof("re-enqueuing VirtualMachineInstance %v", key)
 		c.queue.AddRateLimited(key)
 	} else {
@@ -2839,6 +2842,8 @@ func (d *VirtualMachineController) vmUpdateHelperMigrationTarget(origVMI *v1.Vir
 		}
 		log.Log.Object(vmi).Infof("Signaled target pod for failed migration to clean up")
 		// nothing left to do here if the migration failed.
+		// Re-enqueue to trigger handler final cleanup
+		d.queue.AddAfter(controller.VirtualMachineInstanceKey(vmi), time.Second)
 		return nil
 	} else if migrations.IsMigrating(vmi) {
 		// If the migration has already started,

@@ -1998,11 +1998,8 @@ type DaemonConfig struct {
 	IPv6NativeRoutingCIDR *cidr.CIDR
 
 	// MasqueradeInterfaces is the selector used to select interfaces subject
-	// to egress masquerading. EgressMasqueradeInterfaces is the same but as
-	// a string representation. It's deprecated and can be removed once the GH
-	// issue https://github.com/cilium/cilium-cli/issues/1896 is fixed.
-	MasqueradeInterfaces       []string
-	EgressMasqueradeInterfaces string
+	// to egress masquerading.
+	MasqueradeInterfaces []string
 
 	// PolicyTriggerInterval is the amount of time between when policy updates
 	// are triggered.
@@ -2835,8 +2832,9 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableXDPPrefilter = vp.GetBool(EnableXDPPrefilter)
 	c.EnableTCX = vp.GetBool(EnableTCX)
 	c.DisableCiliumEndpointCRD = vp.GetBool(DisableCiliumEndpointCRDName)
-	c.MasqueradeInterfaces = vp.GetStringSlice(MasqueradeInterfaces)
-	c.EgressMasqueradeInterfaces = strings.Join(c.MasqueradeInterfaces, ",")
+	if masqInfs := vp.GetString(MasqueradeInterfaces); masqInfs != "" {
+		c.MasqueradeInterfaces = strings.Split(masqInfs, ",")
+	}
 	c.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
 	c.EnableSocketLB = vp.GetBool(EnableSocketLB)
 	c.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)

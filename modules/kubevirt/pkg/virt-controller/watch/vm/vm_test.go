@@ -15,7 +15,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	k8sv1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,6 +42,7 @@ import (
 
 	"kubevirt.io/kubevirt/pkg/controller"
 	virtcontroller "kubevirt.io/kubevirt/pkg/controller"
+	controllertesting "kubevirt.io/kubevirt/pkg/controller/testing"
 	"kubevirt.io/kubevirt/pkg/instancetype"
 	"kubevirt.io/kubevirt/pkg/pointer"
 	"kubevirt.io/kubevirt/pkg/testutils"
@@ -70,7 +70,7 @@ var _ = Describe("VirtualMachine", func() {
 
 		var controller *Controller
 		var recorder *record.FakeRecorder
-		var mockQueue *testutils.MockWorkQueue
+		var mockQueue *testutils.MockWorkQueue[string]
 		var cdiClient *cdifake.Clientset
 		var k8sClient *k8sfake.Clientset
 		var virtClient *kubecli.MockKubevirtClient
@@ -311,9 +311,10 @@ var _ = Describe("VirtualMachine", func() {
 		}
 
 		sanityExecute := func(vm *v1.VirtualMachine) {
-			added := vm.DeepCopy()
-			controller.Execute()
-			Expect(equality.Semantic.DeepEqual(vm, added)).To(BeTrue(), "A cached VM was modified")
+			controllertesting.SanityExecute(controller, []cache.Store{
+				controller.vmiIndexer, controller.vmIndexer, controller.dataSourceStore, controller.dataVolumeStore,
+				controller.namespaceStore, controller.pvcStore, controller.crIndexer,
+			}, Default)
 		}
 
 		It("should update conditions when failed creating DataVolume for virtualMachineInstance", func() {
