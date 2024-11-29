@@ -488,25 +488,15 @@ data:
   {{- if ne (.Values.routingMode | default "native") "native" }}
     {{- fail (printf "RoutingMode must be set to native when gke.enabled=true" )}}
   {{- end }}
-  routing-mode: "native"
   enable-endpoint-routes: "true"
 {{- else if .Values.aksbyocni.enabled }}
   {{- if ne (.Values.routingMode | default "tunnel") "tunnel" }}
     {{- fail (printf "RoutingMode must be set to tunnel when aksbyocni.enabled=true" )}}
   {{- end }}
-  routing-mode: "tunnel"
-  tunnel-protocol: "vxlan"
-{{- else if .Values.routingMode }}
-  routing-mode: {{ .Values.routingMode | quote }}
-{{- else }}
-  # Default case
-  routing-mode: "tunnel"
-  tunnel-protocol: "vxlan"
 {{- end }}
 
-{{- if .Values.tunnelProtocol }}
-  tunnel-protocol: {{ .Values.tunnelProtocol | quote }}
-{{- end }}
+  routing-mode: {{ .Values.routingMode | default (ternary "native" "tunnel" .Values.gke.enabled) | quote }}
+  tunnel-protocol: {{ .Values.tunnelProtocol | default "vxlan" | quote }}
 
 {{- if .Values.tunnelPort }}
   tunnel-port: {{ .Values.tunnelPort | quote }}
@@ -997,6 +987,10 @@ data:
   hubble-flowlogs-config-path: /flowlog-config/flowlogs.yaml
 {{- end }}
 {{- end }}
+{{- if .Values.hubble.metrics.dynamic.enabled }}
+  hubble-dynamic-metrics-config-path: /dynamic-metrics-config/dynamic-metrics.yaml
+  hubble-metrics-server: ":{{ .Values.hubble.metrics.port }}"
+{{- end }}
 {{- if hasKey .Values.hubble "listenAddress" }}
   # An additional address for Hubble server to listen to (e.g. ":4244").
   hubble-listen-address: {{ .Values.hubble.listenAddress | quote }}
@@ -1029,6 +1023,9 @@ data:
   ipam: "cluster-pool"
 {{- else }}
   ipam: {{ $ipam | quote }}
+{{- end }}
+{{- if hasKey .Values.ipam "multiPoolPreAllocation" }}
+  ipam-multi-pool-pre-allocation: {{ .Values.ipam.multiPoolPreAllocation }}
 {{- end }}
 
 {{- if .Values.ipam.ciliumNodeUpdateRate }}

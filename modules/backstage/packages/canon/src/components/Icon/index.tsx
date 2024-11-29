@@ -15,5 +15,4 @@
  */
 
 export * from './Icon';
-export { IconProvider } from './context';
-export type { IconNames } from './context';
+export type * from './types';

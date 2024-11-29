@@ -829,7 +829,7 @@ func (e *Endpoint) garbageCollectConntrack(filter ctmap.GCFilter) {
 		}
 		defer m.Close()
 
-		ctmap.GC(m, filter)
+		e.ctMapGC.Run(m, filter)
 	}
 }
 

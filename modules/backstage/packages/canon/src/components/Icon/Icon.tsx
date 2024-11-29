@@ -15,18 +15,19 @@
  */
 
 import React from 'react';
-import { useIcons, IconNames } from './context';
+import { useTheme } from '../../theme/context';
+import type { IconNames } from './types';
 
 /** @public */
 export const Icon = ({ name }: { name: IconNames }) => {
-  const { icons } = useIcons();
+  const { icons } = useTheme();
 
-  const LucideIcon = icons[name];
+  const RemixIcon = icons[name];
 
-  if (!LucideIcon) {
+  if (!RemixIcon) {
     console.error(`Icon "${name}" not found.`);
     return <svg />; // Return default icon perhaps?
   }
 
-  return <LucideIcon />;
+  return <RemixIcon />;
 };
