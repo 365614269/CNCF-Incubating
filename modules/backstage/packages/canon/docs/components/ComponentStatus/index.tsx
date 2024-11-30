@@ -24,7 +24,7 @@ export const ComponentStatus = ({
   link,
 }: {
   name: string;
-  status: 'notStarted' | 'inProgress' | 'done';
+  status: 'notStarted' | 'inProgress' | 'alpha' | 'beta' | 'stable';
   style?: React.CSSProperties;
   link?: string;
 }) => {
@@ -40,7 +40,9 @@ export const ComponentStatus = ({
       <span className={pill({ status })}>
         {status === 'notStarted' && 'Not Started'}
         {status === 'inProgress' && 'In Progress'}
-        {status === 'done' && 'Done'}
+        {status === 'alpha' && 'Alpha'}
+        {status === 'beta' && 'Beta'}
+        {status === 'stable' && 'Stable'}
       </span>
     </div>
   );

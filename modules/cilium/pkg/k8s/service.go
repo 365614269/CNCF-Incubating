@@ -16,6 +16,7 @@ import (
 	"github.com/cilium/cilium/pkg/annotation"
 	"github.com/cilium/cilium/pkg/cidr"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
+	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/ip"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/k8s/utils"
@@ -76,16 +77,16 @@ func getAnnotationServiceForwardingMode(svc *slim_corev1.Service) loadbalancer.S
 
 	return loadbalancer.SVCForwardingModeSNAT
 }
-func getAnnotationServiceLoadBalancingAlgo(svc *slim_corev1.Service) (loadbalancer.SVCLoadBalancingAlgo, error) {
-	if value, ok := annotation.Get(svc, annotation.ServiceLoadBalancingAlgo); ok {
-		val := loadbalancer.ToSVCLoadBalancingAlgo(strings.ToLower(value))
-		if val != loadbalancer.SVCLoadBalancingAlgoUndef {
+func getAnnotationServiceLoadBalancingAlgorithm(svc *slim_corev1.Service) (loadbalancer.SVCLoadBalancingAlgorithm, error) {
+	if value, ok := annotation.Get(svc, annotation.ServiceLoadBalancingAlgorithm); ok {
+		val := loadbalancer.ToSVCLoadBalancingAlgorithm(strings.ToLower(value))
+		if val != loadbalancer.SVCLoadBalancingAlgorithmUndef {
 			return val, nil
 		}
-		return loadbalancer.ToSVCLoadBalancingAlgo(option.Config.NodePortAlg), fmt.Errorf("Value %q is not supported for %q", val, annotation.ServiceLoadBalancingAlgo)
+		return loadbalancer.ToSVCLoadBalancingAlgorithm(option.Config.NodePortAlg), fmt.Errorf("Value %q is not supported for %q", val, annotation.ServiceLoadBalancingAlgorithm)
 	}
 
-	return loadbalancer.ToSVCLoadBalancingAlgo(option.Config.NodePortAlg), nil
+	return loadbalancer.ToSVCLoadBalancingAlgorithm(option.Config.NodePortAlg), nil
 }
 
 func getTopologyAware(svc *slim_corev1.Service) bool {
@@ -273,14 +274,14 @@ func ParseService(svc *slim_corev1.Service, nodePortAddrs []netip.Addr) (Service
 	svcInfo.ServiceAffinity = getAnnotationServiceAffinity(svc)
 	svcInfo.Shared = getAnnotationShared(svc)
 
-	if option.Config.LoadBalancerAlgAnnotation {
+	if option.Config.LoadBalancerAlgorithmAnnotation {
 		var err error
-		svcInfo.LoadBalancerAlgo, err = getAnnotationServiceLoadBalancingAlgo(svc)
+		svcInfo.LoadBalancerAlgorithm, err = getAnnotationServiceLoadBalancingAlgorithm(svc)
 		if err != nil {
-			scopedLog.WithError(err).Warnf("Ignoring %q annotation, applying global configuration: %v", annotation.ServiceLoadBalancingAlgo, svcInfo.LoadBalancerAlgo)
+			scopedLog.WithError(err).Warnf("Ignoring %q annotation, applying global configuration: %v", annotation.ServiceLoadBalancingAlgorithm, svcInfo.LoadBalancerAlgorithm)
 		}
 	} else {
-		svcInfo.LoadBalancerAlgo = loadbalancer.ToSVCLoadBalancingAlgo(option.Config.NodePortAlg)
+		svcInfo.LoadBalancerAlgorithm = loadbalancer.ToSVCLoadBalancingAlgorithm(option.Config.NodePortAlg)
 	}
 
 	if svc.Spec.SessionAffinity == slim_corev1.ServiceAffinityClientIP {
@@ -290,6 +291,11 @@ func ParseService(svc *slim_corev1.Service, nodePortAddrs []netip.Addr) (Service
 		}
 		if svcInfo.SessionAffinityTimeoutSec == 0 {
 			svcInfo.SessionAffinityTimeoutSec = uint32(v1.DefaultClientIPServiceAffinitySeconds)
+		}
+		if svcInfo.SessionAffinityTimeoutSec > defaults.SessionAffinityTimeoutMaxFallback {
+			scopedLog.Warnf("Clamping maximum possible session affinity timeout from %d to %d seconds",
+				svcInfo.SessionAffinityTimeoutSec, defaults.SessionAffinityTimeoutMaxFallback)
+			svcInfo.SessionAffinityTimeoutSec = defaults.SessionAffinityTimeoutMaxFallback
 		}
 	}
 
@@ -463,8 +469,8 @@ type Service struct {
 	// +deepequal-gen=false
 	K8sExternalIPs map[string]net.IP
 
-	// LoadBalancerAlgo indicates which backend selection algorithm to use.
-	LoadBalancerAlgo loadbalancer.SVCLoadBalancingAlgo
+	// LoadBalancerAlgorithm indicates which backend selection algorithm to use.
+	LoadBalancerAlgorithm loadbalancer.SVCLoadBalancingAlgorithm
 
 	// LoadBalancerIPs stores LB IPs assigned to the service (string(IP) => IP).
 	//
