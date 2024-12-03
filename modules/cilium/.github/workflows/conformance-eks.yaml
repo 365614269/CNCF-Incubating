@@ -185,7 +185,7 @@ jobs:
         id: default_vars
         uses: ./.github/actions/helm-default
         with:
-          image-tag: ${{ inputs.SHA }}
+          image-tag: ${{ inputs.SHA || github.sha }}
           chart-dir: ./untrusted/install/kubernetes/cilium
 
       - name: Set up job variables
@@ -366,6 +366,7 @@ jobs:
         with:
           key-algo: "gcm(aes)"
           nb-nodes: 3
+          tunnel: "disabled"
           ipv6: false
 
       - name: Check conn-disrupt-test after rotating (${{ join(matrix.*, ', ') }})

@@ -1096,19 +1096,6 @@ do_netdev(struct __ctx_buff *ctx, __u16 proto, const bool from_host)
 
 #ifdef ENABLE_IPSEC
 	if (!from_host) {
-#ifdef ENABLE_ENCRYPTED_OVERLAY
-		/* EncryptedOverlay XFRM policies set the output mark to the literal
-		 * MARK_MAGIC_DECRYPTED_OVERLAY value.
-		 *
-		 * If we see this here, its decrypted overlay traffic from these
-		 * XFRM policies. We can punt this directly to ingress side of vxlan
-		 * interface for decap.
-		 */
-		if (ctx->mark == MARK_MAGIC_DECRYPTED_OVERLAY) {
-			ret = ctx_redirect(ctx, ENCAP_IFINDEX, BPF_F_INGRESS);
-			return ret;
-		}
-#endif /* ENABLED_ENCRYPTED_OVERLAY */
 		/* If the packet needs decryption, we want to send it straight to the
 		 * stack. There's no need to run service handling logic, host firewall,
 		 * etc. on an encrypted packet.
@@ -1511,7 +1498,7 @@ skip_host_firewall:
 			 */
 			send_trace_notify(ctx, TRACE_TO_STACK, src_sec_identity,
 					  dst_sec_identity,
-					  TRACE_EP_ID_UNKNOWN, NATIVE_DEV_IFINDEX,
+					  TRACE_EP_ID_UNKNOWN, THIS_INTERFACE_IFINDEX,
 					  TRACE_REASON_ENCRYPT_OVERLAY, 0);
 			return ret;
 		}
@@ -1649,7 +1636,7 @@ exit:
 
 	send_trace_notify(ctx, TRACE_TO_NETWORK, src_sec_identity, dst_sec_identity,
 			  TRACE_EP_ID_UNKNOWN,
-			  NATIVE_DEV_IFINDEX, trace.reason, trace.monitor);
+			  THIS_INTERFACE_IFINDEX, trace.reason, trace.monitor);
 
 	return ret;
 
