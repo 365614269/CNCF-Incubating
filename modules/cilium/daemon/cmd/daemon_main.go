@@ -584,10 +584,13 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.NodePortAcceleration)
 	option.BindEnv(vp, option.NodePortAcceleration)
 
+	flags.Bool(option.LoadBalancerModeAnnotation, false, "Enable service-level annotation for configuring BPF load balancing mode")
+	option.BindEnv(vp, option.LoadBalancerModeAnnotation)
+
 	flags.String(option.LoadBalancerMode, option.NodePortModeSNAT, "BPF load balancing mode (\"snat\", \"dsr\", \"hybrid\")")
 	option.BindEnv(vp, option.LoadBalancerMode)
 
-	flags.Bool(option.LoadBalancerAlgorithmAnnotation, false, "Tells whether controller should check service level annotation for configuring bpf load balancing algorithm.")
+	flags.Bool(option.LoadBalancerAlgorithmAnnotation, false, "Enable service-level annotation for configuring BPF load balancing algorithm")
 	option.BindEnv(vp, option.LoadBalancerAlgorithmAnnotation)
 
 	flags.String(option.LoadBalancerAlgorithm, option.NodePortAlgRandom, "BPF load balancing algorithm (\"random\", \"maglev\")")

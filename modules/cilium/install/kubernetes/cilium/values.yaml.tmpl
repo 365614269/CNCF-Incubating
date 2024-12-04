@@ -587,6 +587,10 @@ bpf:
   # a per-service basis through service.cilium.io/lb-algorithm annotation.
   # @default -- `false`
   lbAlgorithmAnnotation: false
+  # -- (bool) Enable the option to define the load balancing mode (SNAT or DSR)
+  # on a per-service basis through service.cilium.io/forwarding-mode annotation.
+  # @default -- `false`
+  lbModeAnnotation: false
   # @schema
   # type: [null, boolean]
   # @schema
@@ -2123,7 +2127,7 @@ loadBalancer:
   # algorithm: random
 
   # -- mode is the operation mode of load balancing for remote backends
-  # e.g. snat, dsr, hybrid, annotation
+  # e.g. snat, dsr, hybrid
   # mode: snat
 
   # -- acceleration is the option to accelerate service handling via XDP

@@ -46,6 +46,8 @@ jobs:
               - '!(test|Documentation)/**'
 
   conformance-test-ipv6:
+    env:
+      job_name: "Conformance Smoke Test with IPv6"
     needs: check_changes
     if: ${{ needs.check_changes.outputs.tested == 'true' }}
     runs-on: ubuntu-24.04
@@ -68,7 +70,7 @@ jobs:
         id: default_vars
         uses: ./.github/actions/helm-default
         with:
-          image-tag: ${{ github.event.pull_request.head.sha }}
+          image-tag: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set image tag
         id: sha

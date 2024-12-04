@@ -3546,6 +3546,9 @@ query_rejection:
 # CLI flag: -ruler.query-offset
 [ruler_query_offset: <duration> | default = 0s]
 
+# external labels for alerting rules
+[ruler_external_labels: <map of string (labelName) to string (labelValue)> | default = []]
+
 # The default tenant's shard size when the shuffle-sharding strategy is used.
 # Must be set when the store-gateway sharding is enabled with the
 # shuffle-sharding strategy. When this setting is specified in the per-tenant
@@ -5661,6 +5664,23 @@ sharding_ring:
 # tenant(s) for processing will ignore them instead.
 # CLI flag: -store-gateway.disabled-tenants
 [disabled_tenants: <string> | default = ""]
+
+hedged_request:
+  # If true, hedged requests are applied to object store calls. It can help with
+  # reducing tail latency.
+  # CLI flag: -store-gateway.hedged-request.enabled
+  [enabled: <boolean> | default = false]
+
+  # Maximum number of hedged requests allowed for each initial request. A high
+  # number can reduce latency but increase internal calls.
+  # CLI flag: -store-gateway.hedged-request.max-requests
+  [max_requests: <int> | default = 3]
+
+  # It is used to calculate a latency threshold to trigger hedged requests. For
+  # example, additional requests are triggered when the initial request response
+  # time exceeds the 90th percentile.
+  # CLI flag: -store-gateway.hedged-request.quantile
+  [quantile: <float> | default = 0.9]
 ```
 
 ### `tracing_config`

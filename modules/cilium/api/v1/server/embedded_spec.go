@@ -1234,28 +1234,6 @@ func init() {
         }
       }
     },
-    "/metrics/": {
-      "get": {
-        "tags": [
-          "metrics"
-        ],
-        "summary": "Retrieve cilium metrics",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/Metric"
-              }
-            }
-          },
-          "500": {
-            "description": "Metrics cannot be retrieved"
-          }
-        }
-      }
-    },
     "/node/ids": {
       "get": {
         "description": "Retrieves a list of node IDs allocated by the agent and their\nassociated node IP addresses.\n",
@@ -3859,8 +3837,7 @@ func init() {
                   "enum": [
                     "SNAT",
                     "DSR",
-                    "Hybrid",
-                    "Annotation"
+                    "Hybrid"
                   ]
                 },
                 "portMax": {
@@ -6891,28 +6868,6 @@ func init() {
         }
       }
     },
-    "/metrics/": {
-      "get": {
-        "tags": [
-          "metrics"
-        ],
-        "summary": "Retrieve cilium metrics",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/Metric"
-              }
-            }
-          },
-          "500": {
-            "description": "Metrics cannot be retrieved"
-          }
-        }
-      }
-    },
     "/node/ids": {
       "get": {
         "description": "Retrieves a list of node IDs allocated by the agent and their\nassociated node IP addresses.\n",
@@ -9680,8 +9635,7 @@ func init() {
                   "enum": [
                     "SNAT",
                     "DSR",
-                    "Hybrid",
-                    "Annotation"
+                    "Hybrid"
                   ]
                 },
                 "portMax": {
@@ -9868,8 +9822,7 @@ func init() {
               "enum": [
                 "SNAT",
                 "DSR",
-                "Hybrid",
-                "Annotation"
+                "Hybrid"
               ]
             },
             "portMax": {
@@ -10047,8 +10000,7 @@ func init() {
           "enum": [
             "SNAT",
             "DSR",
-            "Hybrid",
-            "Annotation"
+            "Hybrid"
           ]
         },
         "portMax": {
