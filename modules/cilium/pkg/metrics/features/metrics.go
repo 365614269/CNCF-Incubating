@@ -46,6 +46,27 @@ type Metrics struct {
 	ACLBL2PodAnnouncementEnabled     metric.Gauge
 	ACLBExternalEnvoyProxyEnabled    metric.Vec[metric.Gauge]
 	ACLBCiliumNodeConfigEnabled      metric.Gauge
+
+	NPL3Ingested                metric.Vec[metric.Counter]
+	NPHostNPIngested            metric.Vec[metric.Counter]
+	NPDNSIngested               metric.Vec[metric.Counter]
+	NPToFQDNsIngested           metric.Vec[metric.Counter]
+	NPHTTPIngested              metric.Vec[metric.Counter]
+	NPHTTPHeaderMatchesIngested metric.Vec[metric.Counter]
+	NPOtherL7Ingested           metric.Vec[metric.Counter]
+	NPDenyPoliciesIngested      metric.Vec[metric.Counter]
+	NPIngressCIDRGroupIngested  metric.Vec[metric.Counter]
+	NPMutualAuthIngested        metric.Vec[metric.Counter]
+	NPTLSInspectionIngested     metric.Vec[metric.Counter]
+	NPSNIAllowListIngested      metric.Vec[metric.Counter]
+	NPNonDefaultDenyIngested    metric.Vec[metric.Counter]
+	NPLRPIngested               metric.Vec[metric.Counter]
+	NPCNPIngested               metric.Vec[metric.Counter]
+	NPCCNPIngested              metric.Vec[metric.Counter]
+
+	ACLBInternalTrafficPolicyIngested        metric.Vec[metric.Counter]
+	ACLBCiliumEnvoyConfigIngested            metric.Vec[metric.Counter]
+	ACLBCiliumClusterwideEnvoyConfigIngested metric.Vec[metric.Counter]
 }
 
 const (
@@ -80,6 +101,8 @@ const (
 
 	advConnExtEnvoyProxyStandalone = "standalone"
 	advConnExtEnvoyProxyEmbedded   = "embedded"
+	actionAdd                      = "add"
+	actionDel                      = "delete"
 )
 
 var (
@@ -166,6 +189,10 @@ var (
 	defaultExternalEnvoyProxyModes = []string{
 		advConnExtEnvoyProxyStandalone,
 		advConnExtEnvoyProxyEmbedded,
+	}
+	defaultActions = []string{
+		actionAdd,
+		actionDel,
 	}
 )
 
@@ -512,6 +539,348 @@ func NewMetrics(withDefaults bool) Metrics {
 			Namespace: metrics.Namespace,
 			Subsystem: subsystemACLB,
 			Name:      "cilium_node_config_enabled",
+		}),
+
+		NPL3Ingested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Layer 3 and Layer 4 policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "l3_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPHostNPIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Host Network Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "host_network_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPDNSIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "DNS Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "dns_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPToFQDNsIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "ToFQDNs Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "fqdn_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPHTTPIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "HTTP/GRPC Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "http_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPHTTPHeaderMatchesIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "HTTP HeaderMatches Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "http_header_matches_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPOtherL7Ingested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Other L7 Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "other_l7_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPDenyPoliciesIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Deny Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "deny_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPIngressCIDRGroupIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Ingress CIDR Group Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "ingress_cidr_group_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPMutualAuthIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Mutual Auth Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "mutual_auth_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPTLSInspectionIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "TLS Inspection Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "tls_inspection_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPSNIAllowListIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "SNI Allow List Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "sni_allow_list_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPNonDefaultDenyIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Non DefaultDeny Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "non_defaultdeny_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPLRPIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Local Redirect Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "local_redirect_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		ACLBInternalTrafficPolicyIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "K8s Services with Internal Traffic Policy have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "internal_traffic_policy_services_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPCNPIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Cilium Network Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "cilium_network_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		NPCCNPIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Cilium Clusterwide Network Policies have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "cilium_clusterwide_network_policies_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		ACLBCiliumEnvoyConfigIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Cilium Envoy Config have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "cilium_envoy_config_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
+		}),
+
+		ACLBCiliumClusterwideEnvoyConfigIngested: metric.NewCounterVecWithLabels(metric.CounterOpts{
+			Help:      "Cilium Clusterwide Envoy Config have been ingested since the agent started",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemNP,
+			Name:      "cilium_clusterwide_envoy_config_total",
+		}, metric.Labels{
+			{
+				Name: "action", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						defaultActions...,
+					)
+				}(),
+			},
 		}),
 	}
 }

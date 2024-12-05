@@ -184,6 +184,7 @@ battlestation
 bcc
 behaviour
 benchmarking
+besteffort
 bgp
 blackholing
 blockedConfigOverrides
@@ -612,6 +613,7 @@ pluggable
 pmdabcc
 png
 podCIDR
+podSelector
 podippool
 policyCIDRMatchMode
 policymap

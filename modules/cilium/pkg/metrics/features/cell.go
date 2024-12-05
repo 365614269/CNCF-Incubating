@@ -12,13 +12,18 @@ import (
 
 	"github.com/cilium/cilium/daemon/cmd/cni"
 	"github.com/cilium/cilium/pkg/auth"
+	"github.com/cilium/cilium/pkg/ciliumenvoyconfig"
 	"github.com/cilium/cilium/pkg/datapath/garp"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/dynamicconfig"
+	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/policy/api"
+	k8s2 "github.com/cilium/cilium/pkg/policy/k8s"
 	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/redirectpolicy"
 )
 
 var (
@@ -36,6 +41,21 @@ var Cell = cell.Module(
 	cell.Invoke(updateAgentConfigMetricOnStart),
 	cell.Provide(
 		func(m Metrics) featureMetrics {
+			return m
+		},
+		func(m Metrics) api.PolicyMetrics {
+			return m
+		},
+		func(m Metrics) redirectpolicy.LRPMetrics {
+			return m
+		},
+		func(m Metrics) k8s.SVCMetrics {
+			return m
+		},
+		func(m Metrics) ciliumenvoyconfig.CECMetrics {
+			return m
+		},
+		func(m Metrics) k8s2.CNPMetrics {
 			return m
 		},
 	),

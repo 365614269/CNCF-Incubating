@@ -2635,6 +2635,10 @@ func init() {
           "description": "Immutable configuration (read-only)",
           "$ref": "#/definitions/ConfigurationMap"
         },
+        "installUplinkRoutesForDelegatedIPAM": {
+          "description": "Install ingress/egress routes through uplink on host for Pods when working with\ndelegated IPAM plugin.\n",
+          "type": "boolean"
+        },
         "ipLocalReservedPorts": {
           "description": "Comma-separated list of IP ports should be reserved in the workload network namespace",
           "type": "string"
@@ -3719,6 +3723,12 @@ func init() {
           "description": "\n\n+k8s:deepcopy-gen=true",
           "type": "object",
           "properties": {
+            "annotations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "bpfSocketLBHostnsOnly": {
               "description": "flag bpf-lb-sock-hostns-only",
               "type": "boolean"
@@ -8384,6 +8394,10 @@ func init() {
           "description": "Immutable configuration (read-only)",
           "$ref": "#/definitions/ConfigurationMap"
         },
+        "installUplinkRoutesForDelegatedIPAM": {
+          "description": "Install ingress/egress routes through uplink on host for Pods when working with\ndelegated IPAM plugin.\n",
+          "type": "boolean"
+        },
         "ipLocalReservedPorts": {
           "description": "Comma-separated list of IP ports should be reserved in the workload network namespace",
           "type": "string"
@@ -9517,6 +9531,12 @@ func init() {
           "description": "\n\n+k8s:deepcopy-gen=true",
           "type": "object",
           "properties": {
+            "annotations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "bpfSocketLBHostnsOnly": {
               "description": "flag bpf-lb-sock-hostns-only",
               "type": "boolean"
@@ -9704,6 +9724,12 @@ func init() {
       "description": "\n\n+k8s:deepcopy-gen=true",
       "type": "object",
       "properties": {
+        "annotations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "bpfSocketLBHostnsOnly": {
           "description": "flag bpf-lb-sock-hostns-only",
           "type": "boolean"

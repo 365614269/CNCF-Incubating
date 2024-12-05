@@ -69,6 +69,11 @@ const (
 // exist or it was expired.
 var ErrLockLeaseExpired = errors.New("transaction did not succeed: lock lease expired")
 
+// ErrOperationAbortedByInterceptor is an error that can be used by custom
+// interceptors to signal that the given operation has been intentionally
+// aborted, and should not be logged as an error.
+var ErrOperationAbortedByInterceptor = errors.New("operation aborted")
+
 type etcdModule struct {
 	opts   backendOptions
 	config *client.Config
@@ -663,8 +668,8 @@ func (e *etcdClient) asyncConnectEtcdClient(errChan chan<- error) {
 		e.statusChecker()
 	}()
 
-	watcher := e.ListAndWatch(ctx, HeartbeatPath, 0)
-	for event := range watcher.Events {
+	events := e.ListAndWatch(ctx, HeartbeatPath)
+	for event := range events {
 		switch event.Typ {
 		case EventTypeDelete:
 			// A deletion event is not an heartbeat signal
@@ -766,26 +771,17 @@ func (e *etcdClient) DeletePrefix(ctx context.Context, path string) (err error) 
 }
 
 // watch starts watching for changes in a prefix
-func (e *etcdClient) watch(ctx context.Context, w *Watcher) {
-	scope := GetScopeFromKey(strings.TrimRight(w.Prefix, "/"))
+func (e *etcdClient) watch(ctx context.Context, prefix string, events emitter) {
 	localCache := watcherCache{}
 	listSignalSent := false
 
+	scopedLog := e.logger.WithField(fieldPrefix, prefix)
+	scopedLog.Info("Starting watcher")
+
 	defer func() {
-		close(w.Events)
-		w.stopWait.Done()
-
-		// The watch might be aborted by closing
-		// the context instead of calling
-		// w.Stop() from outside. In that case
-		// we make sure to close everything and
-		// as this uses sync.Once it can be
-		// run multiple times (if that's the case).
-		w.Stop()
+		scopedLog.Info("Stopped watcher")
+		events.close()
 	}()
-
-	scopedLog := e.logger.WithField(fieldPrefix, w.Prefix)
-	scopedLog.Debug("Starting watcher...")
 
 	err := <-e.Connected(ctx)
 	if err != nil {
@@ -813,7 +809,7 @@ reList:
 		if err != nil {
 			continue
 		}
-		kvs, revision, err := e.paginatedList(ctx, scopedLog, w.Prefix)
+		kvs, revision, err := e.paginatedList(ctx, scopedLog, prefix)
 		if err != nil {
 			lr.Error(err, -1)
 
@@ -829,6 +825,11 @@ reList:
 		lr.Done()
 		errLimiter.Reset()
 
+		scopedLog.WithFields(logrus.Fields{
+			logfields.Count: len(kvs),
+			fieldRev:        revision,
+		}).Info("Successfully listed keys before starting watcher")
+
 		for _, key := range kvs {
 			t := EventTypeCreate
 			if localCache.Exists(key.Key) {
@@ -841,7 +842,7 @@ reList:
 				scopedLog.Debugf("Emitting list result as %s event for %s=%s", t, key.Key, key.Value)
 			}
 
-			if !w.emit(ctx, scope, KeyValueEvent{
+			if !events.emit(ctx, KeyValueEvent{
 				Key:   string(key.Key),
 				Value: key.Value,
 				Typ:   t,
@@ -864,21 +865,21 @@ reList:
 			if traceEnabled {
 				scopedLog.Debugf("Emitting EventTypeDelete event for %s", k)
 			}
-			return w.emit(ctx, scope, event)
+			return events.emit(ctx, event)
 		}) {
 			return
 		}
 
 		// Only send the list signal once
 		if !listSignalSent {
-			if !w.emit(ctx, scope, KeyValueEvent{Typ: EventTypeListDone}) {
+			if !events.emit(ctx, KeyValueEvent{Typ: EventTypeListDone}) {
 				return
 			}
 			listSignalSent = true
 		}
 
 	recreateWatcher:
-		scopedLog.WithField(fieldRev, nextRev).Debug("Starting to watch a prefix")
+		scopedLog.WithField(fieldRev, nextRev).Info("Starting to watch prefix")
 
 		lr, err = e.limiter.Wait(ctx)
 		if err != nil {
@@ -887,14 +888,12 @@ reList:
 				return
 			case <-ctx.Done():
 				return
-			case <-w.stopWatch:
-				return
 			default:
 				goto recreateWatcher
 			}
 		}
 
-		etcdWatch := e.client.Watch(client.WithRequireLeader(ctx), w.Prefix,
+		etcdWatch := e.client.Watch(client.WithRequireLeader(ctx), prefix,
 			client.WithPrefix(), client.WithRev(nextRev))
 		lr.Done()
 
@@ -903,8 +902,6 @@ reList:
 			case <-e.client.Ctx().Done():
 				return
 			case <-ctx.Done():
-				return
-			case <-w.stopWatch:
 				return
 			case r, ok := <-etcdWatch:
 				if !ok {
@@ -915,12 +912,18 @@ reList:
 				scopedLog := scopedLog.WithField(fieldRev, r.Header.Revision)
 
 				if err := r.Err(); err != nil {
-					// We tried to watch on a compacted
-					// revision that may no longer exist,
-					// recreate the watcher and try to
-					// watch on the next possible revision
-					if errors.Is(err, v3rpcErrors.ErrCompacted) {
-						scopedLog.WithError(Hint(err)).Debug("Tried watching on compacted revision")
+					switch {
+					case errors.Is(err, ErrOperationAbortedByInterceptor):
+						// Aborted on purpose by a custom interceptor.
+						scopedLog.WithError(Hint(err)).Debug("Etcd watcher aborted")
+					case errors.Is(err, v3rpcErrors.ErrCompacted):
+						// We tried to watch on a compacted
+						// revision that may no longer exist,
+						// recreate the watcher and try to
+						// watch on the next possible revision
+						scopedLog.WithError(Hint(err)).Info("Tried watching on compacted revision. Triggering relist of all keys")
+					default:
+						scopedLog.WithError(Hint(err)).Info("Etcd watcher errored. Triggering relist of all keys")
 					}
 
 					// mark all local keys in state for
@@ -957,7 +960,7 @@ reList:
 					if traceEnabled {
 						scopedLog.Debugf("Emitting %s event for %s=%s", event.Typ, event.Key, event.Value)
 					}
-					if !w.emit(ctx, scope, event) {
+					if !events.emit(ctx, event) {
 						return
 					}
 				}
@@ -1565,12 +1568,12 @@ func (e *etcdClient) Close() {
 }
 
 // ListAndWatch implements the BackendOperations.ListAndWatch using etcd
-func (e *etcdClient) ListAndWatch(ctx context.Context, prefix string, chanSize int) *Watcher {
-	w := newWatcher(prefix, chanSize)
+func (e *etcdClient) ListAndWatch(ctx context.Context, prefix string) EventChan {
+	events := make(chan KeyValueEvent)
 
-	go e.watch(ctx, w)
+	go e.watch(ctx, prefix, emitter{events: events, scope: GetScopeFromKey(strings.TrimRight(prefix, "/"))})
 
-	return w
+	return events
 }
 
 // RegisterLeaseExpiredObserver registers a function which is executed when

@@ -104,6 +104,11 @@ var (
 	// on IDNameKubeAPIServer.
 	LabelKubeAPIServer = Labels{IDNameKubeAPIServer: NewLabel(IDNameKubeAPIServer, "", LabelSourceReserved)}
 
+	LabelKubeAPIServerExt = Labels{
+		IDNameKubeAPIServer: NewLabel(IDNameKubeAPIServer, "", LabelSourceReserved),
+		IDNameWorld:         NewLabel(IDNameWorld, "", LabelSourceReserved),
+	}
+
 	// LabelIngress is the label used for Ingress proxies. See comment
 	// on IDNameIngress.
 	LabelIngress = Labels{IDNameIngress: NewLabel(IDNameIngress, "", LabelSourceReserved)}
@@ -143,6 +148,9 @@ const (
 
 	// LabelSourceCIDRGroup is the label source used for labels from CIDRGroups
 	LabelSourceCIDRGroup = "cidrgroup"
+
+	// LabelSourceCIDRGroupKeyPrefix is the source as a k8s selector key prefix
+	LabelSourceCIDRGroupKeyPrefix = LabelSourceCIDRGroup + "."
 
 	// LabelSourceNode is the label source for remote-nodes.
 	LabelSourceNode = "node"

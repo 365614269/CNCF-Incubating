@@ -1582,6 +1582,7 @@ var _ = Describe("Manager", func() {
 				ProgressTimeout:         3,
 				CompletionTimeoutPerGiB: 1,
 				AllowPostCopy:           true,
+				AllowWorkloadDisruption: true,
 			}
 			vmi := newVMI(testNamespace, testVmName)
 			vmi.Status.MigrationState = &v1.VirtualMachineInstanceMigrationState{
@@ -1631,6 +1632,7 @@ var _ = Describe("Manager", func() {
 				ProgressTimeout:         3,
 				CompletionTimeoutPerGiB: 1,
 				AllowPostCopy:           true,
+				AllowWorkloadDisruption: true,
 			}
 			vmi := newVMI(testNamespace, testVmName)
 			vmi.Status.MigrationState = &v1.VirtualMachineInstanceMigrationState{
@@ -1663,6 +1665,58 @@ var _ = Describe("Manager", func() {
 				}
 				return nil
 			})
+
+			monitor := newMigrationMonitor(vmi, manager, options, migrationErrorChan)
+			monitor.startMonitor()
+		})
+		It("migration should switch to Paused if AllowWorkloadDisruption is allowed and PostCopy is not", func() {
+			migrationErrorChan := make(chan error)
+			defer close(migrationErrorChan)
+			var migrationData = 32479827394
+			fake_jobinfo := func() *libvirt.DomainJobInfo {
+				// stop decreasing data and send a different event otherwise this
+				// job will run indefinitely until timeout
+				if migrationData <= 32479826519 {
+					return &libvirt.DomainJobInfo{
+						Type: libvirt.DOMAIN_JOB_COMPLETED,
+					}
+				}
+
+				migrationData -= 125
+				return &libvirt.DomainJobInfo{
+					Type:             libvirt.DOMAIN_JOB_UNBOUNDED,
+					DataRemaining:    uint64(migrationData),
+					DataRemainingSet: true,
+				}
+			}
+
+			options := &cmdclient.MigrationOptions{
+				Bandwidth:               resource.MustParse("64Mi"),
+				ProgressTimeout:         3,
+				CompletionTimeoutPerGiB: 1,
+				AllowPostCopy:           false,
+				AllowWorkloadDisruption: true,
+			}
+			vmi := newVMI(testNamespace, testVmName)
+			vmi.Status.MigrationState = &v1.VirtualMachineInstanceMigrationState{
+				MigrationUID: "111222333",
+			}
+
+			manager := &LibvirtDomainManager{
+				paused: pausedVMIs{
+					paused: make(map[types.UID]bool),
+				},
+				virConn:       mockConn,
+				virtShareDir:  testVirtShareDir,
+				metadataCache: metadataCache,
+			}
+
+			mockConn.EXPECT().LookupDomainByName(testDomainName).DoAndReturn(mockDomainWithFreeExpectation)
+			mockDomain.EXPECT().GetState().AnyTimes().Return(libvirt.DOMAIN_RUNNING, 1, nil)
+			mockDomain.EXPECT().GetJobStats(libvirt.DomainGetJobStatsFlags(0)).AnyTimes().DoAndReturn(func(flag libvirt.DomainGetJobStatsFlags) (*libvirt.DomainJobInfo, error) {
+				return fake_jobinfo(), nil
+			})
+			mockDomain.EXPECT().Suspend().Times(1).Return(nil)
 
 			monitor := newMigrationMonitor(vmi, manager, options, migrationErrorChan)
 			monitor.startMonitor()
@@ -1998,17 +2052,15 @@ var _ = Describe("Manager", func() {
 			isBlockMigration := migrationType == "block"
 			isVmiPaused := migrationType == "paused"
 
-			var parallelMigrationThreads *uint = nil
-			if migrationType == "parallel" {
-				var fakeNumberOfThreads uint = 123
-				parallelMigrationThreads = &fakeNumberOfThreads
+			options := &cmdclient.MigrationOptions{
+				UnsafeMigration:   migrationType == "unsafe",
+				AllowAutoConverge: migrationType == "autoConverge",
+				AllowPostCopy:     migrationType == "postCopy",
 			}
 
-			options := &cmdclient.MigrationOptions{
-				UnsafeMigration:          migrationType == "unsafe",
-				AllowAutoConverge:        migrationType == "autoConverge",
-				AllowPostCopy:            migrationType == "postCopy",
-				ParallelMigrationThreads: parallelMigrationThreads,
+			shouldConfigureParallel, parallelMigrationThreads := shouldConfigureParallelMigration(options)
+			if shouldConfigureParallel {
+				options.ParallelMigrationThreads = virtpointer.P(uint(parallelMigrationThreads))
 			}
 
 			flags := generateMigrationFlags(isBlockMigration, isVmiPaused, options)
@@ -2028,7 +2080,7 @@ var _ = Describe("Manager", func() {
 			if migrationType == "paused" {
 				expectedMigrateFlags |= libvirt.MIGRATE_PAUSED
 			}
-			if migrationType == "parallel" {
+			if shouldConfigureParallel {
 				expectedMigrateFlags |= libvirt.MIGRATE_PARALLEL
 			}
 			Expect(flags).To(Equal(expectedMigrateFlags), "libvirt migration flags are not set as expected")
@@ -2039,7 +2091,6 @@ var _ = Describe("Manager", func() {
 		Entry("migration auto converge", "autoConverge"),
 		Entry("migration using postcopy", "postCopy"),
 		Entry("migration of paused vmi", "paused"),
-		Entry("migration with parallel threads", "parallel"),
 	)
 
 	DescribeTable("on successful list all domains",
@@ -3062,6 +3113,27 @@ var _ = Describe("Manager helper functions", func() {
 			Entry("filesystem source and block destination with hostdisks", false, true, volHostDisk),
 			Entry("block source and filesystem destination with hostdisks", true, false, volHostDisk),
 		)
+	})
+
+	Context("shouldConfigureParallelMigration", func() {
+		DescribeTable("should not configure parallel migration", func(options *cmdclient.MigrationOptions) {
+			shouldConfigure, _ := shouldConfigureParallelMigration(options)
+			Expect(shouldConfigure).To(BeFalse())
+		},
+			Entry("with nil options", nil),
+			Entry("with nil migration threads", &cmdclient.MigrationOptions{ParallelMigrationThreads: nil}),
+			Entry("with nil migration threads and post-copy allowed", &cmdclient.MigrationOptions{ParallelMigrationThreads: nil, AllowPostCopy: true}),
+			Entry("with non-nil migration threads and post-copy allowed", &cmdclient.MigrationOptions{ParallelMigrationThreads: virtpointer.P(uint(3)), AllowPostCopy: true}),
+		)
+
+		It("should configure parallel migration with non-nil migration threads and post-copy not allowed", func() {
+			options := &cmdclient.MigrationOptions{
+				ParallelMigrationThreads: virtpointer.P(uint(3)),
+				AllowPostCopy:            false,
+			}
+			shouldConfigure, _ := shouldConfigureParallelMigration(options)
+			Expect(shouldConfigure).To(BeTrue())
+		})
 	})
 
 })
