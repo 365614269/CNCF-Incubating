@@ -575,8 +575,8 @@ Install Dragonfly with Binaries, refer to [Binaries](../../../getting-started/in
 
 To support preheating for harbor with self-signed certificates, the Manager configuration needs to be modified.
 
-Configure Manager yaml file, The default path in Linux is `/etc/dragonfly/manager.yaml` in linux,
-refer to [Manager](../../../reference/configuration/manager.md).
+Configure `manager.yaml`, the default path is `/etc/dragonfly/manager.yaml`,
+refer to [manager config](../../../reference/configuration/manager.md).
 
 > Notice: `yourdomain.crt` is Harbor's ca.crt.
 
@@ -606,8 +606,8 @@ job:
 
 ##### Setup Dfdaemon as Seed Peer and configure self-signed certificate
 
-Configure Dfdaemon yaml file, The default path in Linux is `/etc/dragonfly/dfdaemon.yaml` in linux,
-refer to [Dfdaemon](../../../reference/configuration/client/dfdaemon.md).
+Configure `dfdaemon.yaml`, the default path is `/etc/dragonfly/dfdaemon.yaml`,
+refer to [dfdaemon config](../../../reference/configuration/client/dfdaemon.md).
 
 ```shell
 manager:
@@ -631,8 +631,8 @@ proxy:
 
 ##### Setup Dfdaemon as Peer and configure self-signed certificate
 
-Configure Dfdaemon yaml file, The default path in Linux is `/etc/dragonfly/dfdaemon.yaml` in linux,
-refer to [Dfdaemon](../../../reference/configuration/client/dfdaemon.md).
+Configure `dfdaemon.yaml`, the default path is `/etc/dragonfly/dfdaemon.yaml`,
+refer to [dfdaemon config](../../../reference/configuration/client/dfdaemon.md).
 
 ```shell
 manager:

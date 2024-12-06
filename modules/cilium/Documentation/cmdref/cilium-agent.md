@@ -294,6 +294,7 @@ cilium-agent [flags]
       --kube-proxy-replacement-healthz-bind-address string        The IP address with port for kube-proxy replacement health check server to serve on (set to '0.0.0.0:10256' for all IPv4 interfaces and '[::]:10256' for all IPv6 interfaces). Set empty to disable.
       --kvstore string                                            Key-value store type
       --kvstore-connectivity-timeout duration                     Time after which an incomplete kvstore operation  is considered failed (default 2m0s)
+      --kvstore-lease-ttl duration                                Time-to-live for the KVstore lease. (default 15m0s)
       --kvstore-max-consecutive-quorum-errors uint                Max acceptable kvstore consecutive quorum errors before the agent assumes permanent failure (default 2)
       --kvstore-opt map                                           Key-value store options e.g. etcd.address=127.0.0.1:4001
       --kvstore-periodic-sync duration                            Periodic KVstore synchronization interval (default 5m0s)
@@ -367,7 +368,7 @@ cilium-agent [flags]
       --static-cnp-path string                                    Directory path to watch and load static cilium network policy yaml files.
       --tofqdns-dns-reject-response-code string                   DNS response code for rejecting DNS requests, available options are '[nameError refused]' (default "refused")
       --tofqdns-enable-dns-compression                            Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present (default true)
-      --tofqdns-endpoint-max-ip-per-hostname int                  Maximum number of IPs to maintain per FQDN name for each endpoint (default 50)
+      --tofqdns-endpoint-max-ip-per-hostname int                  Maximum number of IPs to maintain per FQDN name for each endpoint (default 1000)
       --tofqdns-idle-connection-grace-period duration             Time during which idle but previously active connections with expired DNS lookups are still considered alive (default 0s)
       --tofqdns-max-deferred-connection-deletes int               Maximum number of IPs to retain for expired DNS lookups with still-active connections (default 10000)
       --tofqdns-min-ttl int                                       The minimum time, in seconds, to use DNS data for toFQDNs policies
