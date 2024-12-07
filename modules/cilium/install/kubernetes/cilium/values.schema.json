@@ -1737,6 +1737,9 @@
       },
       "type": "object"
     },
+    "endpointLockdownOnMapOverflow": {
+      "type": "boolean"
+    },
     "endpointRoutes": {
       "properties": {
         "enabled": {
@@ -1975,6 +1978,9 @@
         "healthPort": {
           "type": "integer"
         },
+        "httpRetryCount": {
+          "type": "integer"
+        },
         "idleTimeoutDurationSeconds": {
           "type": "integer"
         },
@@ -2055,6 +2061,9 @@
             }
           },
           "type": "object"
+        },
+        "maxConcurrentRetries": {
+          "type": "integer"
         },
         "maxConnectionDurationSeconds": {
           "type": "integer"

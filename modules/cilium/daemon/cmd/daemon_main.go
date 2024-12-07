@@ -611,12 +611,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.LoadBalancerProtocolDifferentiation, true, "Enable support for service protocol differentiation (TCP, UDP, SCTP)")
 	option.BindEnv(vp, option.LoadBalancerProtocolDifferentiation)
 
-	flags.Uint(option.MaglevTableSize, maglev.DefaultTableSize, "Maglev per service backend table size (parameter M)")
-	option.BindEnv(vp, option.MaglevTableSize)
-
-	flags.String(option.MaglevHashSeed, maglev.DefaultHashSeed, "Maglev cluster-wide hash seed (base64 encoded)")
-	option.BindEnv(vp, option.MaglevHashSeed)
-
 	flags.Bool(option.EnableAutoProtectNodePortRange, true,
 		"Append NodePort range to net.ipv4.ip_local_reserved_ports if it overlaps "+
 			"with ephemeral port range (net.ipv4.ip_local_port_range)")
@@ -1050,6 +1044,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.LBSourceRangeAllTypes, false, "Propagate loadbalancerSourceRanges to all corresponding service types")
 	option.BindEnv(vp, option.LBSourceRangeAllTypes)
+
+	flags.Bool(option.EnableEndpointLockdownOnPolicyOverflow, false, "When an endpoint's policy map overflows, shutdown all (ingress and egress) network traffic for that endpoint.")
+	option.BindEnv(vp, option.EnableEndpointLockdownOnPolicyOverflow)
 
 	if err := vp.BindPFlags(flags); err != nil {
 		log.Fatalf("BindPFlags failed: %s", err)
@@ -1616,6 +1613,7 @@ type daemonParams struct {
 	IPTablesManager     datapath.IptablesManager
 	Hubble              hubblecell.HubbleIntegration
 	LRPManager          *redirectpolicy.Manager
+	MaglevConfig        maglev.Config
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {

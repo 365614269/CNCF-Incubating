@@ -861,6 +861,7 @@ data:
 {{- if hasKey .Values.k8sNetworkPolicy "enabled" }}
   enable-k8s-networkpolicy: {{ .Values.k8sNetworkPolicy.enabled | quote }}
 {{- end }}
+  enable-endpoint-lockdown-on-policy-overflow: {{ .Values.endpointLockdownOnMapOverflow | quote }}
 {{- if .Values.cni.configMap }}
   read-cni-conf: {{ .Values.cni.confFileMountPath }}/{{ .Values.cni.configMapKey }}
 {{- if .Values.cni.customConf  }}
@@ -1324,6 +1325,8 @@ data:
   proxy-max-requests-per-connection: {{ .Values.envoy.maxRequestsPerConnection | quote }}
   proxy-max-connection-duration-seconds: {{ .Values.envoy.maxConnectionDurationSeconds | quote }}
   proxy-idle-timeout-seconds: {{ .Values.envoy.idleTimeoutDurationSeconds | quote }}
+  proxy-max-concurrent-retries: {{ .Values.envoy.maxConcurrentRetries | quote }}
+  http-retry-count: {{ .Values.envoy.httpRetryCount | quote }}
 
   external-envoy-proxy: {{ include "envoyDaemonSetEnabled" . | quote }}
   envoy-base-id: {{ .Values.envoy.baseID | quote }}

@@ -302,6 +302,10 @@ type Endpoint struct {
 	// Immutable after Endpoint creation.
 	K8sUID string
 
+	// lockdown indicates whether the endpoint is locked down or not do to
+	// a policy map overflow.
+	lockdown bool
+
 	// pod
 	pod atomic.Pointer[slim_corev1.Pod]
 
@@ -807,7 +811,7 @@ func (e *Endpoint) Allows(id identity.NumericIdentity) bool {
 	keyToLookup := policy.IngressKey().WithIdentity(id)
 
 	v, ok := e.desiredPolicy.Get(keyToLookup)
-	return ok && !v.IsDeny
+	return ok && !v.IsDeny()
 }
 
 // String returns endpoint on a JSON format.

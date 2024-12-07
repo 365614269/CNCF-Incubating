@@ -44,7 +44,7 @@ cilium-agent [flags]
       --bpf-lb-dsr-dispatch string                                BPF load balancing DSR dispatch method ("opt", "ipip", "geneve") (default "opt")
       --bpf-lb-external-clusterip                                 Enable external access to ClusterIP services (default false)
       --bpf-lb-maglev-hash-seed string                            Maglev cluster-wide hash seed (base64 encoded) (default "JLfvgnHc2kaSUFaI")
-      --bpf-lb-maglev-table-size uint                             Maglev per service backend table size (parameter M) (default 16381)
+      --bpf-lb-maglev-table-size uint                             Maglev per service backend table size (parameter M, one of: [251 509 1021 2039 4093 8191 16381 32749 65521 131071]) (default 16381)
       --bpf-lb-map-max int                                        Maximum number of entries in Cilium BPF lbmap (default 65536)
       --bpf-lb-mode string                                        BPF load balancing mode ("snat", "dsr", "hybrid") (default "snat")
       --bpf-lb-mode-annotation                                    Enable service-level annotation for configuring BPF load balancing mode
@@ -119,6 +119,7 @@ cilium-agent [flags]
       --enable-dynamic-lifecycle-manager                          Enables support for dynamic lifecycle management
       --enable-encryption-strict-mode                             Enable encryption strict mode
       --enable-endpoint-health-checking                           Enable connectivity health checking between virtual endpoints (default true)
+      --enable-endpoint-lockdown-on-policy-overflow               When an endpoint's policy map overflows, shutdown all (ingress and egress) network traffic for that endpoint.
       --enable-endpoint-routes                                    Use per endpoint routes instead of routing via cilium_host
       --enable-envoy-config                                       Enable Envoy Config CRDs
       --enable-external-ips                                       Enable k8s service externalIPs feature (requires enabling enable-node-port)
@@ -188,6 +189,7 @@ cilium-agent [flags]
       --encryption-strict-mode-cidr string                        In strict-mode encryption, all unencrypted traffic coming from this CIDR and going to this same CIDR will be dropped
       --endpoint-bpf-prog-watchdog-interval duration              Interval to trigger endpoint BPF programs load check watchdog (default 30s)
       --endpoint-queue-size int                                   Size of EventQueue per-endpoint (default 25)
+      --endpoint-regen-interval duration                          Periodically recalculate and re-apply endpoint configuration. Set to 0 to disable (default 2m0s)
       --envoy-base-id uint                                        Envoy base ID
       --envoy-config-retry-interval duration                      Interval in which an attempt is made to reconcile failed EnvoyConfigs. If the duration is zero, the retry is deactivated. (default 15s)
       --envoy-config-timeout duration                             Timeout that determines how long to wait for Envoy to N/ACK CiliumEnvoyConfig resources (default 2m0s)
@@ -350,6 +352,7 @@ cilium-agent [flags]
       --proxy-gid uint                                            Group ID for proxy control plane sockets. (default 1337)
       --proxy-idle-timeout-seconds int                            Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s (default 60)
       --proxy-initial-fetch-timeout uint                          Time after which an xDS stream is considered timed out (in seconds) (default 30)
+      --proxy-max-concurrent-retries uint32                       Maximum number of concurrent retries on Envoy clusters (default 128)
       --proxy-max-connection-duration-seconds int                 Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)
       --proxy-max-requests-per-connection int                     Set Envoy HTTP option max_requests_per_connection. Default 0 (disable)
       --proxy-portrange-max uint16                                End of port range that is used to allocate ports for L7 proxies. (default 20000)

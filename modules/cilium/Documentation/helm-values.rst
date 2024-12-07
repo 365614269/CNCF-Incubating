@@ -1172,6 +1172,10 @@
      - Enable connectivity health checking between virtual endpoints.
      - bool
      - ``true``
+   * - :spelling:ignore:`endpointLockdownOnMapOverflow`
+     - Enable endpoint lockdown on policy map overflow.
+     - bool
+     - ``false``
    * - :spelling:ignore:`endpointRoutes.enabled`
      - Enable use of per endpoint routes instead of routing via the cilium_host interface.
      - bool
@@ -1284,6 +1288,10 @@
      - TCP port for the health API.
      - int
      - ``9878``
+   * - :spelling:ignore:`envoy.httpRetryCount`
+     - Maximum number of retries for each HTTP request
+     - int
+     - ``3``
    * - :spelling:ignore:`envoy.idleTimeoutDurationSeconds`
      - Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s
      - int
@@ -1320,6 +1328,10 @@
      - Path to a separate Envoy log file, if any. Defaults to /dev/stdout.
      - string
      - ``""``
+   * - :spelling:ignore:`envoy.maxConcurrentRetries`
+     - Maximum number of concurrent retries on Envoy clusters
+     - int
+     - ``128``
    * - :spelling:ignore:`envoy.maxConnectionDurationSeconds`
      - Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable)
      - int

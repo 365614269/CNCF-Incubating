@@ -343,6 +343,7 @@ contributors across the globe, there is almost always someone available to help.
 | encryption.type | string | `"ipsec"` | Encryption method. Can be either ipsec or wireguard. |
 | encryption.wireguard.persistentKeepalive | string | `"0s"` | Controls WireGuard PersistentKeepalive option. Set 0s to disable. |
 | endpointHealthChecking.enabled | bool | `true` | Enable connectivity health checking between virtual endpoints. |
+| endpointLockdownOnMapOverflow | bool | `false` | Enable endpoint lockdown on policy map overflow. |
 | endpointRoutes.enabled | bool | `false` | Enable use of per endpoint routes instead of routing via the cilium_host interface. |
 | eni.awsEnablePrefixDelegation | bool | `false` | Enable ENI prefix delegation |
 | eni.awsReleaseExcessIPs | bool | `false` | Release IPs not used from the ENI |
@@ -371,6 +372,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumeMounts | list | `[]` | Additional envoy volumeMounts. |
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
+| envoy.httpRetryCount | int | `3` | Maximum number of retries for each HTTP request |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
 | envoy.image | object | `{"digest":"sha256:8e2fa2d42ead99b63c8f47ceb978f2c10fe191a2c160dc2d1a2ba5de4d46996b","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.31.3-1733229491-16e43f505747e9351d9e96927f02d72eecffa3e4","useDigest":true}` | Envoy container image. |
 | envoy.initialFetchTimeoutSeconds | int | `30` | Time in seconds after which the initial fetch on an xDS stream is considered timed out |
@@ -380,6 +382,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.log.format | string | `"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"` | The format string to use for laying out the log message metadata of Envoy. If specified, Envoy will use text format output. This setting is mutually exclusive with envoy.log.format_json. |
 | envoy.log.format_json | string | `nil` | The JSON logging format to use for Envoy. This setting is mutually exclusive with envoy.log.format. ref: https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/bootstrap/v3/bootstrap.proto#envoy-v3-api-field-config-bootstrap-v3-bootstrap-applicationlogconfig-logformat-json-format |
 | envoy.log.path | string | `""` | Path to a separate Envoy log file, if any. Defaults to /dev/stdout. |
+| envoy.maxConcurrentRetries | int | `128` | Maximum number of concurrent retries on Envoy clusters |
 | envoy.maxConnectionDurationSeconds | int | `0` | Set Envoy HTTP option max_connection_duration seconds. Default 0 (disable) |
 | envoy.maxRequestsPerConnection | int | `0` | ProxyMaxRequestsPerConnection specifies the max_requests_per_connection setting for Envoy |
 | envoy.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for cilium-envoy. |

@@ -394,10 +394,16 @@ Added Metrics
 * ``cilium_node_health_connectivity_latency_seconds``
 * ``cilium_operator_unmanaged_pods``
 * ``cilium_policy_selector_match_count_max``
+* ``cilium_identity_cache_timer_duration``
+* ``cilium_identity_cache_timer_trigger_latency``
+* ``cilium_identity_cache_timer_trigger_folds``
 
 Removed Metrics
 ~~~~~~~~~~~~~~~
 * ``cilium_cidrgroup_translation_time_stats_seconds`` has been removed, as the measured code path no longer exists.
+* ``cilium_triggers_policy_update_total`` has been removed.
+* ``cilium_triggers_policy_update_folds`` has been removed.
+* ``cilium_triggers_policy_update_call_duration`` has been removed.
 
 Changed Metrics
 ~~~~~~~~~~~~~~~
