@@ -23,17 +23,17 @@ jobs:
     name: Check release-note label set
     runs-on: ubuntu-latest
     steps:
-    - uses: mheap/github-action-required-labels@d25134c992b943fb6ad00c25ea00eb5988c0a9dd # v5.4.2
+    - uses: mheap/github-action-required-labels@388fd6af37b34cdfe5a23b37060e763217e58b03 # v5.5
       with:
         mode: minimum
         count: 1
         labels: "release-note/major, release-note/minor, release-note/small, release-note/docs, release-note/infra, release-note/deprecation, release-note/none-required"
-    - uses: mheap/github-action-required-labels@d25134c992b943fb6ad00c25ea00eb5988c0a9dd # v5.4.2
+    - uses: mheap/github-action-required-labels@388fd6af37b34cdfe5a23b37060e763217e58b03 # v5.5
       with:
         mode: maximum
         count: 1
         labels: "release-note/major, release-note/minor, release-note/small, release-note/docs, release-note/infra, release-note/none-required"
-    - uses: mheap/github-action-required-labels@d25134c992b943fb6ad00c25ea00eb5988c0a9dd # v5.4.2
+    - uses: mheap/github-action-required-labels@388fd6af37b34cdfe5a23b37060e763217e58b03 # v5.5
       with:
         mode: maximum
         count: 1
@@ -46,7 +46,7 @@ jobs:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: false
-    - uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
+    - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
       with:
         # * Module download cache
         # * Build cache (Linux)

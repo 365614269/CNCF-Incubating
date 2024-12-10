@@ -1240,6 +1240,10 @@
      - Set Envoy'--base-id' to use when allocating shared memory regions. Only needs to be changed if multiple Envoy instances will run on the same node and may have conflicts. Supported values: 0 - 4294967295. Defaults to '0'
      - int
      - ``0``
+   * - :spelling:ignore:`envoy.bootstrapConfigMap`
+     - ADVANCED OPTION: Bring your own custom Envoy bootstrap ConfigMap. Provide the name of a ConfigMap with a ``bootstrap-config.json`` key. When specified, Envoy will use this ConfigMap instead of the default provided by the chart. WARNING: Use of this setting has the potential to prevent cilium-envoy from starting up, and can cause unexpected behavior (e.g. due to syntax error or semantically incorrect configuration). Before submitting an issue, please ensure you have disabled this feature, as support cannot be provided for custom Envoy bootstrap configs. @schema type: [null, string] @schema
+     - string
+     - ``nil``
    * - :spelling:ignore:`envoy.connectTimeoutSeconds`
      - Time in seconds after which a TCP connection attempt times out
      - int
@@ -1299,7 +1303,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:8e2fa2d42ead99b63c8f47ceb978f2c10fe191a2c160dc2d1a2ba5de4d46996b","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.31.3-1733229491-16e43f505747e9351d9e96927f02d72eecffa3e4","useDigest":true}``
+     - ``{"digest":"sha256:600888b5afbbd17d04b764fc9ae3a6a21e55546a92e3c325a42de5a500968bfe","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.31.4-1733710912-e119b3d3cbe9727886d0a502a5dcfc3d55acbe58","useDigest":true}``
    * - :spelling:ignore:`envoy.initialFetchTimeoutSeconds`
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
