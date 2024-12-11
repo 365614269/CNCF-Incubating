@@ -1,8 +1,13 @@
 name: CIFuzz
 on:
+  schedule:
+    # Run the Fuzzers every Monday at 7am
+    - cron: '0 7 * * 1'
+  workflow_dispatch: {}
   pull_request:
-    paths-ignore:
-      - 'Documentation/**'
+    paths:
+      - '.github/workflows/tests-cifuzz.yaml'
+      - '**/fuzz_test.go'
 permissions: read-all
 jobs:
   Fuzzing:
@@ -11,13 +16,13 @@ jobs:
     steps:
     - name: Build Fuzzers
       id: build
-      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@723bdbc7a8ee1e95af24284583b25d41efc0bd41
+      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@aa0dba641cb81070221554e0d2ed4f97aa46db35
       with:
         oss-fuzz-project-name: 'cilium'
         dry-run: false
         language: go
     - name: Run Fuzzers
-      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@723bdbc7a8ee1e95af24284583b25d41efc0bd41
+      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@aa0dba641cb81070221554e0d2ed4f97aa46db35
       with:
         oss-fuzz-project-name: 'cilium'
         fuzz-seconds: 600

@@ -1949,6 +1949,14 @@ bucket_store:
   # CLI flag: -blocks-storage.bucket-store.lazy-expanded-postings-enabled
   [lazy_expanded_postings_enabled: <boolean> | default = false]
 
+  # Mark posting group as lazy if it fetches more keys than R * max series the
+  # query should fetch. With R set to 100, a posting group which fetches 100K
+  # keys will be marked as lazy if the current query only fetches 1000 series.
+  # This config is only valid if lazy expanded posting is enabled. 0 disables
+  # the limit.
+  # CLI flag: -blocks-storage.bucket-store.lazy-expanded-posting-group-max-key-series-ratio
+  [lazy_expanded_posting_group_max_key_series_ratio: <float> | default = 100]
+
   # Controls how many series to fetch per batch in Store Gateway. Default value
   # is 10000.
   # CLI flag: -blocks-storage.bucket-store.series-batch-size
@@ -2692,6 +2700,13 @@ ring:
   # CLI flag: -distributor.ring.instance-interface-names
   [instance_interface_names: <list of string> | default = [eth0 en0]]
 
+# EXPERIMENTAL: Number of go routines to handle push calls from distributors to
+# ingesters. When no workers are available, a new goroutine will be spawned
+# automatically. If set to 0 (default), workers are disabled, and a new
+# goroutine will be created for each push request.
+# CLI flag: -distributor.num-push-workers
+[num_push_workers: <int> | default = 0]
+
 instance_limits:
   # Max ingestion rate (samples/sec) that this distributor will accept. This
   # limit is per-distributor, not per-tenant. Additional push requests will be
@@ -3241,17 +3256,17 @@ grpc_client_config:
   healthcheck_config:
     # The number of consecutive failed health checks required before considering
     # a target unhealthy. 0 means disabled.
-    # CLI flag: -ingester.client.unhealthy-threshold
+    # CLI flag: -ingester.client.healthcheck.unhealthy-threshold
     [unhealthy_threshold: <int> | default = 0]
 
     # The approximate amount of time between health checks of an individual
     # target.
-    # CLI flag: -ingester.client.interval
+    # CLI flag: -ingester.client.healthcheck.interval
     [interval: <duration> | default = 5s]
 
     # The amount of time during which no response from a target means a failed
     # health check.
-    # CLI flag: -ingester.client.timeout
+    # CLI flag: -ingester.client.healthcheck.timeout
     [timeout: <duration> | default = 1s]
 
 # Max inflight push requests that this ingester client can handle. This limit is
@@ -3989,17 +4004,17 @@ store_gateway_client:
   healthcheck_config:
     # The number of consecutive failed health checks required before considering
     # a target unhealthy. 0 means disabled.
-    # CLI flag: -querier.store-gateway-client.unhealthy-threshold
+    # CLI flag: -querier.store-gateway-client.healthcheck.unhealthy-threshold
     [unhealthy_threshold: <int> | default = 0]
 
     # The approximate amount of time between health checks of an individual
     # target.
-    # CLI flag: -querier.store-gateway-client.interval
+    # CLI flag: -querier.store-gateway-client.healthcheck.interval
     [interval: <duration> | default = 5s]
 
     # The amount of time during which no response from a target means a failed
     # health check.
-    # CLI flag: -querier.store-gateway-client.timeout
+    # CLI flag: -querier.store-gateway-client.healthcheck.timeout
     [timeout: <duration> | default = 1s]
 
 # If enabled, store gateway query stats will be logged using `info` log level.

@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 
 	"kubevirt.io/kubevirt/pkg/virtctl/guestfs"
-	"kubevirt.io/kubevirt/tests/clientcmd"
 	"kubevirt.io/kubevirt/tests/decorators"
 	"kubevirt.io/kubevirt/tests/exec"
 	"kubevirt.io/kubevirt/tests/framework/kubevirt"
@@ -97,7 +96,7 @@ var _ = Describe("[sig-storage][virtctl]Guestfs", decorators.SigStorage, func() 
 			})
 		})
 
-		It("[posneg:positive][test_id:6479]Should successfully run guestfs command on a block-based PVC", func() {
+		It("[posneg:positive][test_id:6479]Should successfully run guestfs command on a block-based PVC", decorators.RequiresBlockStorage, func() {
 			libstorage.CreateBlockPVC(pvcClaim, testsuite.GetTestNamespace(nil), "500Mi")
 			runGuestfsOnPVC(done, pvcClaim, testsuite.GetTestNamespace(nil), setGroup)
 			stdout, stderr, err := execCommandLibguestfsPod(
@@ -135,7 +134,7 @@ func guestfsCmd(pvcClaim, namespace string, setGroup bool, extraArgs ...string) 
 		const testGroup = "2000"
 		args = append(args, "--fsGroup", testGroup)
 	}
-	return clientcmd.NewRepeatableVirtctlCommand(args...)
+	return newRepeatableVirtctlCommand(args...)
 }
 
 func runGuestfsOnPVC(done chan struct{}, pvcClaim, namespace string, setGroup bool, extraArgs ...string) {
