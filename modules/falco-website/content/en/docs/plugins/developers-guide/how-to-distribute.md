@@ -145,7 +145,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: falcosecurity/falcoctl
-          ref: 0.5.0 # adapt to the latest version
+          ref: main
           path: tools/falcoctl
       - name: Setup Golang
         uses: actions/setup-go@v4
@@ -205,7 +205,7 @@ jobs:
 
 ```yaml
   release:
-    runs-on: ubuntu-latest[0-9]+\.[0-9]+\.[0-9]+
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
