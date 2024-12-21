@@ -21,22 +21,22 @@ the executable files separately according to the modules.
 ### Download the precompiled binaries {#download-the-precompiled-binaries}
 
 1. Download a binary package. You can download one of the latest builds for Dragonfly on the
-   [github releases page](https://github.com/dragonflyoss/Dragonfly2/releases)
+   [github releases page](https://github.com/dragonflyoss/dragonfly/releases)
 
    > Note: v2.x-rc.x rc indicates the candidate version and is not recommended to be deployed in a production environment
 
    ```bash
    version=2.0.2
 
-   wget -O Dragonfly2_linux_amd64.tar.gz \
-      https://github.com/dragonflyoss/Dragonfly2/releases/download/v${version}/Dragonfly2-${version}-linux-amd64.tar.gz
+   wget -O dragonfly_linux_amd64.tar.gz \
+      https://github.com/dragonflyoss/dragonfly/releases/download/v${version}/dragonfly-${version}-linux-amd64.tar.gz
    ```
 
 2. Unzip the package.
 
    ```bash
    # Replace `/path/to/dragonfly` with the installation directory.
-   tar -zxf Dragonfly2_linux_amd64.tar.gz -C /path/to/dragonfly
+   tar -zxf dragonfly_linux_amd64.tar.gz -C /path/to/dragonfly
    ```
 
 3. Configuration environment
@@ -50,13 +50,13 @@ the executable files separately according to the modules.
 1. Obtain the source code of Dragonfly.
 
    ```bash
-   git clone --recurse-submodules https://github.com/dragonflyoss/Dragonfly2.git
+   git clone --recurse-submodules https://github.com/dragonflyoss/dragonfly.git
    ```
 
 2. Enter the project directory.
 
    ```bash
-   cd Dragonfly2
+   cd dragonfly
    ```
 
 3. Compile the source code.

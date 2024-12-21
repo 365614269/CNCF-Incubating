@@ -6,12 +6,12 @@ slug: /setup/upgrade
 
 ## Upgrade the cluster deployed by Helm {#upgrade-the-cluster-deployed-by-helm}
 
-User can deploy a Dragonfly2 cluster on kubernetes with Helm.
-The [helm chart](https://github.com/dragonflyoss/helm-charts) is a project managed by Dragonfly2 Team.
+User can deploy a dragonfly cluster on kubernetes with Helm.
+The [helm chart](https://github.com/dragonflyoss/helm-charts) is a project managed by dragonfly Team.
 User can query and download the latest version chart or history version
 from [Artifact Hub](https://artifacthub.io/packages/helm/dragonfly/dragonfly).
 
-Before Upgrade, user must read the [Change Log](https://github.com/dragonflyoss/Dragonfly2/blob/main/CHANGELOG.md) to
+Before Upgrade, user must read the [Change Log](https://github.com/dragonflyoss/dragonfly/blob/main/CHANGELOG.md) to
 make sure the breaking changes between the current version and target version.
 
 ```shell script
@@ -43,7 +43,7 @@ helm upgrade --install -n dragonfly-system dragonfly dragonfly/dragonfly [--vers
 6. For those users can't fetch the chart from remote repo, follow this step:
 
    ```shell script
-   # download dragonfly2 helm chart from github source repo. use version 0.5.50 as an example
+   # download dragonfly helm chart from github source repo. use version 0.5.50 as an example
 
    # method 1：
    wget https://github.com/dragonflyoss/helm-charts/releases/download/dragonfly-0.5.50/dragonfly-0.5.50.tgz

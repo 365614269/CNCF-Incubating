@@ -500,7 +500,7 @@ golang.org/x/exp/typeparams
 # golang.org/x/mod v0.21.0
 ## explicit; go 1.22.0
 golang.org/x/mod/semver
-# golang.org/x/net v0.30.0
+# golang.org/x/net v0.33.0
 ## explicit; go 1.18
 golang.org/x/net/bpf
 golang.org/x/net/context
@@ -1299,8 +1299,8 @@ kubevirt.io/client-go/testing
 kubevirt.io/client-go/testutils
 kubevirt.io/client-go/util
 kubevirt.io/client-go/version
-# kubevirt.io/containerized-data-importer-api v1.57.0-alpha1
-## explicit; go 1.19
+# kubevirt.io/containerized-data-importer-api v1.60.3-0.20241105012228-50fbed985de9
+## explicit; go 1.22.0
 kubevirt.io/containerized-data-importer-api/pkg/apis/core
 kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1
 kubevirt.io/containerized-data-importer-api/pkg/apis/upload
@@ -1312,10 +1312,10 @@ kubevirt.io/controller-lifecycle-operator-sdk/api
 ## explicit; go 1.16
 kubevirt.io/qe-tools/pkg/ginkgo-reporters
 kubevirt.io/qe-tools/pkg/polarion-xml
-# libvirt.org/go/libvirt v1.10005.0
+# libvirt.org/go/libvirt v1.10009.1
 ## explicit; go 1.11
 libvirt.org/go/libvirt
-# libvirt.org/go/libvirtxml v1.10005.0
+# libvirt.org/go/libvirtxml v1.10009.0
 ## explicit; go 1.11
 libvirt.org/go/libvirtxml
 # mvdan.cc/editorconfig v0.2.1-0.20231228180347-1925077f8eb2

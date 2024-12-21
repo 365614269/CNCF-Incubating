@@ -24,8 +24,8 @@ the docker container engine and installed docker-compose on your machine.
 > ref [sed command with -i option failing on Mac, but works on Linux](https://stackoverflow.com/a/41416710)
 
 ```bash
-git clone https://github.com/dragonflyoss/Dragonfly2.git
-cd ./Dragonfly2/deploy/docker-compose/
+git clone https://github.com/dragonflyoss/dragonfly.git
+cd ./dragonfly/deploy/docker-compose/
 
 export IP=<host ip>
 ./run.sh

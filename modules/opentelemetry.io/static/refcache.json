@@ -59,6 +59,10 @@
     "StatusCode": 200,
     "LastSeen": "2024-08-09T10:46:17.075695-04:00"
   },
+  "https://adalogics.com/": {
+    "StatusCode": 200,
+    "LastSeen": "2024-12-20T14:53:22.847313555Z"
+  },
   "https://adri-v.medium.com/43dca4a857a0": {
     "StatusCode": 200,
     "LastSeen": "2024-02-23T23:30:53.006527-05:00"
@@ -3899,6 +3903,10 @@
     "StatusCode": 200,
     "LastSeen": "2024-08-06T15:19:48.633928+02:00"
   },
+  "https://github.com/AdamKorcz": {
+    "StatusCode": 200,
+    "LastSeen": "2024-12-20T14:53:22.289195232Z"
+  },
   "https://github.com/AkhigbeEromo": {
     "StatusCode": 200,
     "LastSeen": "2024-12-17T15:37:25.440239-05:00"
@@ -5251,6 +5259,10 @@
     "StatusCode": 200,
     "LastSeen": "2024-11-07T20:32:07.730871-05:00"
   },
+  "https://github.com/google/oss-fuzz": {
+    "StatusCode": 200,
+    "LastSeen": "2024-12-20T14:53:23.420338032Z"
+  },
   "https://github.com/google/pprof": {
     "StatusCode": 200,
     "LastSeen": "2024-10-24T15:10:16.695786+02:00"
@@ -5274,6 +5286,10 @@
   "https://github.com/grafana/alloy": {
     "StatusCode": 200,
     "LastSeen": "2024-04-10T00:09:46.144495+02:00"
+  },
+  "https://github.com/grafana/docker-otel-lgtm": {
+    "StatusCode": 206,
+    "LastSeen": "2024-12-19T14:40:49.726333554+01:00"
   },
   "https://github.com/grafana/grafana-opentelemetry-dotnet": {
     "StatusCode": 200,
