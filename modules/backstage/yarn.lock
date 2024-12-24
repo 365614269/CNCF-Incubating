@@ -4809,7 +4809,6 @@ __metadata:
   resolution: "@backstage/plugin-app-backend@workspace:plugins/app-backend"
   dependencies:
     "@backstage/backend-app-api": "workspace:^"
-    "@backstage/backend-common": ^0.25.0
     "@backstage/backend-defaults": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
@@ -5350,6 +5349,7 @@ __metadata:
   resolution: "@backstage/plugin-auth-node@workspace:plugins/auth-node"
   dependencies:
     "@backstage/backend-common": ^0.25.0
+    "@backstage/backend-defaults": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/catalog-client": "workspace:^"
@@ -5612,7 +5612,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-catalog-backend-module-gitlab-org@workspace:plugins/catalog-backend-module-gitlab-org"
   dependencies:
-    "@backstage/backend-common": ^0.25.0
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/cli": "workspace:^"
@@ -5736,19 +5735,15 @@ __metadata:
   resolution: "@backstage/plugin-catalog-backend-module-openapi@workspace:plugins/catalog-backend-module-openapi"
   dependencies:
     "@apidevtools/json-schema-ref-parser": ^11.0.0
-    "@backstage/backend-common": ^0.25.0
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/catalog-model": "workspace:^"
     "@backstage/cli": "workspace:^"
-    "@backstage/config": "workspace:^"
     "@backstage/integration": "workspace:^"
-    "@backstage/plugin-catalog-backend": "workspace:^"
     "@backstage/plugin-catalog-common": "workspace:^"
     "@backstage/plugin-catalog-node": "workspace:^"
     "@backstage/types": "workspace:^"
     openapi-types: ^12.0.0
-    winston: ^3.2.1
     yaml: ^2.1.1
   languageName: unknown
   linkType: soft
@@ -6914,6 +6909,7 @@ __metadata:
   resolution: "@backstage/plugin-permission-backend@workspace:plugins/permission-backend"
   dependencies:
     "@backstage/backend-common": ^0.25.0
+    "@backstage/backend-defaults": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/cli": "workspace:^"
@@ -6957,6 +6953,7 @@ __metadata:
   resolution: "@backstage/plugin-permission-node@workspace:plugins/permission-node"
   dependencies:
     "@backstage/backend-common": ^0.25.0
+    "@backstage/backend-defaults": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/cli": "workspace:^"

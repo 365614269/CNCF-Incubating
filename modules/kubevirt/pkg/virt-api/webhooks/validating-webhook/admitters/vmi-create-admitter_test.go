@@ -98,6 +98,25 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 		disableFeatureGates()
 	})
 
+	It("when spec validator pass, should allow", func() {
+		ar, err := newAdmissionReviewForVMICreation(newBaseVmi())
+		Expect(err).ToNot(HaveOccurred())
+
+		admitter := &VMICreateAdmitter{ClusterConfig: config, SpecValidators: []SpecValidator{newValidateStub()}}
+		resp := admitter.Admit(context.Background(), ar)
+		Expect(resp.Allowed).To(BeTrue())
+	})
+	It("when spec validator fail, should reject", func() {
+		expectedStatusCauses := []metav1.StatusCause{{Type: "test", Message: "test", Field: "test"}}
+		admitter := &VMICreateAdmitter{ClusterConfig: config, SpecValidators: []SpecValidator{newValidateStub(expectedStatusCauses...)}}
+		ar, err := newAdmissionReviewForVMICreation(newBaseVmi())
+		Expect(err).ToNot(HaveOccurred())
+
+		resp := admitter.Admit(context.Background(), ar)
+		Expect(resp.Allowed).To(BeFalse())
+		Expect(resp.Result.Details.Causes).To(Equal(expectedStatusCauses))
+	})
+
 	It("should reject invalid VirtualMachineInstance spec on create", func() {
 		vmi := newBaseVmi()
 		vmi.Spec.Domain.Devices.Disks = append(vmi.Spec.Domain.Devices.Disks, v1.Disk{
@@ -3833,66 +3852,9 @@ var _ = Describe("Validating VMICreate Admitter", func() {
 	})
 })
 
-var _ = Describe("Function getNumberOfPodInterfaces()", func() {
+var _ = Describe("additional tests", func() {
 	config, _, _ := testutils.NewFakeClusterConfigUsingKVConfig(&v1.KubeVirtConfiguration{})
 
-	It("should work for empty network list", func() {
-		spec := &v1.VirtualMachineInstanceSpec{}
-		Expect(getNumberOfPodInterfaces(spec)).To(Equal(0))
-	})
-
-	It("should work for non-empty network list without pod network", func() {
-		spec := &v1.VirtualMachineInstanceSpec{}
-		net := v1.Network{}
-		spec.Networks = []v1.Network{net}
-		Expect(getNumberOfPodInterfaces(spec)).To(Equal(0))
-	})
-
-	It("should work for pod network with missing pod interface", func() {
-		spec := &v1.VirtualMachineInstanceSpec{}
-		net := v1.Network{
-			NetworkSource: v1.NetworkSource{
-				Pod: &v1.PodNetwork{},
-			},
-		}
-		spec.Networks = []v1.Network{net}
-		Expect(getNumberOfPodInterfaces(spec)).To(Equal(0))
-	})
-
-	It("should work for valid pod network / interface combination", func() {
-		spec := &v1.VirtualMachineInstanceSpec{}
-		net := v1.Network{
-			NetworkSource: v1.NetworkSource{
-				Pod: &v1.PodNetwork{},
-			},
-			Name: "testnet",
-		}
-		iface := v1.Interface{Name: net.Name}
-		spec.Networks = []v1.Network{net}
-		spec.Domain.Devices.Interfaces = []v1.Interface{iface}
-		Expect(getNumberOfPodInterfaces(spec)).To(Equal(1))
-	})
-
-	It("should work for multiple pod network / interface combinations", func() {
-		spec := &v1.VirtualMachineInstanceSpec{}
-		net1 := v1.Network{
-			NetworkSource: v1.NetworkSource{
-				Pod: &v1.PodNetwork{},
-			},
-			Name: "testnet1",
-		}
-		iface1 := v1.Interface{Name: net1.Name}
-		net2 := v1.Network{
-			NetworkSource: v1.NetworkSource{
-				Pod: &v1.PodNetwork{},
-			},
-			Name: "testnet2",
-		}
-		iface2 := v1.Interface{Name: net2.Name}
-		spec.Networks = []v1.Network{net1, net2}
-		spec.Domain.Devices.Interfaces = []v1.Interface{iface1, iface2}
-		Expect(getNumberOfPodInterfaces(spec)).To(Equal(2))
-	})
 	It("should work when boot order is given to interfaces", func() {
 		spec := &v1.VirtualMachineInstanceSpec{}
 		net := v1.Network{
@@ -4253,5 +4215,11 @@ func withReadinessProbe(probe *v1.Probe) libvmi.Option {
 func withLivenessProbe(probe *v1.Probe) libvmi.Option {
 	return func(vmi *v1.VirtualMachineInstance) {
 		vmi.Spec.LivenessProbe = probe
+	}
+}
+
+func newValidateStub(statusCauses ...metav1.StatusCause) SpecValidator {
+	return func(_ *k8sfield.Path, _ *v1.VirtualMachineInstanceSpec, _ *virtconfig.ClusterConfig) []metav1.StatusCause {
+		return statusCauses
 	}
 }

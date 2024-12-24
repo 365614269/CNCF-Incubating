@@ -43,6 +43,7 @@ import (
 	"kubevirt.io/kubevirt/pkg/downwardmetrics"
 	"kubevirt.io/kubevirt/pkg/hooks"
 	netadmitter "kubevirt.io/kubevirt/pkg/network/admitter"
+	"kubevirt.io/kubevirt/pkg/network/vmispec"
 	"kubevirt.io/kubevirt/pkg/storage/reservation"
 	hwutil "kubevirt.io/kubevirt/pkg/util/hardware"
 	webhookutils "kubevirt.io/kubevirt/pkg/util/webhooks"
@@ -87,14 +88,17 @@ var restrictedVmiLabels = map[string]bool{
 
 const (
 	nameOfTypeNotFoundMessagePattern  = "%s '%s' not found."
-	listExceedsLimitMessagePattern    = "%s list exceeds the %d element limit in length"
 	valueMustBePositiveMessagePattern = "%s '%s': must be greater than or equal to 0."
 )
 
 var isValidExpression = regexp.MustCompile(`^[A-Za-z0-9_.+-]+$`).MatchString
 
+// SpecValidator validates the given VMI spec
+type SpecValidator func(*k8sfield.Path, *v1.VirtualMachineInstanceSpec, *virtconfig.ClusterConfig) []metav1.StatusCause
+
 type VMICreateAdmitter struct {
-	ClusterConfig *virtconfig.ClusterConfig
+	ClusterConfig  *virtconfig.ClusterConfig
+	SpecValidators []SpecValidator
 }
 
 func (admitter *VMICreateAdmitter) Admit(_ context.Context, ar *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
@@ -114,8 +118,9 @@ func (admitter *VMICreateAdmitter) Admit(_ context.Context, ar *admissionv1.Admi
 		causes = append(causes, deprecation.ValidateFeatureGates(devCfg.FeatureGates, &vmi.Spec)...)
 	}
 
-	netValidator := netadmitter.NewValidator(k8sfield.NewPath("spec"), &vmi.Spec, admitter.ClusterConfig)
-	causes = append(causes, netValidator.ValidateCreation()...)
+	for _, validateSpec := range admitter.SpecValidators {
+		causes = append(causes, validateSpec(k8sfield.NewPath("spec"), &vmi.Spec, admitter.ClusterConfig)...)
+	}
 
 	causes = append(causes, ValidateVirtualMachineInstanceSpec(k8sfield.NewPath("spec"), &vmi.Spec, admitter.ClusterConfig)...)
 	// We only want to validate that volumes are mapped to disks or filesystems during VMI admittance, thus this logic is seperated from the above call that is shared with the VM admitter.
@@ -186,7 +191,7 @@ func ValidateVirtualMachineInstanceSpec(field *k8sfield.Path, spec *v1.VirtualMa
 	causes = append(causes, validateProbe(field.Child("readinessProbe"), spec.ReadinessProbe)...)
 	causes = append(causes, validateProbe(field.Child("livenessProbe"), spec.LivenessProbe)...)
 
-	if getNumberOfPodInterfaces(spec) < 1 {
+	if podNetwork := vmispec.LookupPodNetwork(spec.Networks); podNetwork == nil {
 		causes = appendStatusCauseForProbeNotAllowedWithNoPodNetworkPresent(field.Child("readinessProbe"), spec.ReadinessProbe, causes)
 		causes = appendStatusCauseForProbeNotAllowedWithNoPodNetworkPresent(field.Child("livenessProbe"), spec.LivenessProbe, causes)
 	}
@@ -1818,21 +1823,6 @@ func validateDevices(field *k8sfield.Path, devices *v1.Devices) []metav1.StatusC
 	var causes []metav1.StatusCause
 	causes = append(causes, validateDisks(field.Child("disks"), devices.Disks)...)
 	return causes
-}
-
-func getNumberOfPodInterfaces(spec *v1.VirtualMachineInstanceSpec) int {
-	nPodInterfaces := 0
-	for _, net := range spec.Networks {
-		if net.Pod != nil {
-			for _, iface := range spec.Domain.Devices.Interfaces {
-				if iface.Name == net.Name {
-					nPodInterfaces++
-					break // we maintain 1-to-1 relationship between networks and interfaces
-				}
-			}
-		}
-	}
-	return nPodInterfaces
 }
 
 func validateDiskName(field *k8sfield.Path, idx int, disks []v1.Disk) []metav1.StatusCause {
