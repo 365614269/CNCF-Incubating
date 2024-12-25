@@ -7,21 +7,18 @@ import (
 	"fmt"
 	"math"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/cespare/xxhash"
-	"golang.org/x/exp/slices"
-
+	"github.com/cespare/xxhash/v2"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-
 	"github.com/pkg/errors"
 
 	"github.com/thanos-io/thanos/pkg/store/labelpb"
-
 	"github.com/thanos-io/thanos/pkg/store/storepb/prompb"
 )
 
