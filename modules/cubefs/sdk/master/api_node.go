@@ -37,10 +37,11 @@ func (api *NodeAPI) EncodingGzip() *NodeAPI {
 	return api.EncodingWith(encodingGzip)
 }
 
-func (api *NodeAPI) AddDataNode(serverAddr, zoneName string) (id uint64, err error) {
+func (api *NodeAPI) AddDataNode(serverAddr, zoneName string, mediaType uint32) (id uint64, err error) {
 	request := newRequest(get, proto.AddDataNode).Header(api.h)
 	request.addParam("addr", serverAddr)
 	request.addParam("zoneName", zoneName)
+	request.addParam("mediaType", strconv.Itoa(int(mediaType)))
 	var data []byte
 	if data, err = api.mc.serveRequest(request); err != nil {
 		return
@@ -49,11 +50,12 @@ func (api *NodeAPI) AddDataNode(serverAddr, zoneName string) (id uint64, err err
 	return
 }
 
-func (api *NodeAPI) AddDataNodeWithAuthNode(serverAddr, zoneName, clientIDKey string) (id uint64, err error) {
+func (api *NodeAPI) AddDataNodeWithAuthNode(serverAddr, zoneName, clientIDKey string, mediaType uint32) (id uint64, err error) {
 	request := newRequest(get, proto.AddDataNode).Header(api.h)
 	request.addParam("addr", serverAddr)
 	request.addParam("zoneName", zoneName)
 	request.addParam("clientIDKey", clientIDKey)
+	request.addParam("mediaType", strconv.Itoa(int(mediaType)))
 	var data []byte
 	if data, err = api.mc.serveRequest(request); err != nil {
 		return
@@ -107,11 +109,12 @@ func (api *NodeAPI) ResponseDataNodeTask(task *proto.AdminTask) (err error) {
 	return api.mc.request(newRequest(post, proto.GetDataNodeTaskResponse).Header(api.h).Body(task))
 }
 
-func (api *NodeAPI) DataNodeDecommission(nodeAddr string, count int, clientIDKey string) (err error) {
+func (api *NodeAPI) DataNodeDecommission(nodeAddr string, count int, clientIDKey string, raftForce bool) (err error) {
 	request := newRequest(get, proto.DecommissionDataNode).Header(api.h).NoTimeout()
 	request.addParam("addr", nodeAddr)
 	request.addParam("count", strconv.Itoa(count))
 	request.addParam("clientIDKey", clientIDKey)
+	request.addParam("raftForceDel", strconv.FormatBool(raftForce))
 	if _, err = api.mc.serveRequest(request); err != nil {
 		return
 	}
@@ -170,5 +173,10 @@ func (api *NodeAPI) ResponseLcNodeTask(task *proto.AdminTask) (err error) {
 func (api *NodeAPI) QueryDecommissionedDisks(addr string) (disks *proto.DecommissionedDisks, err error) {
 	disks = &proto.DecommissionedDisks{}
 	err = api.mc.requestWith(disks, newRequest(get, proto.QueryDisableDisk).Header(api.h).addParam("addr", addr))
+	return
+}
+
+func (api *NodeAPI) QueryCancelDecommissionedDataNode(addr string) (err error) {
+	err = api.mc.request(newRequest(get, proto.CancelDecommissionDataNode).Header(api.h).addParam("addr", addr))
 	return
 }

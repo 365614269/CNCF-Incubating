@@ -17,10 +17,13 @@ package proto
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/cubefs/cubefs/util"
+	"github.com/cubefs/cubefs/util/log"
 )
 
 type ContextUserKey string
@@ -47,7 +50,7 @@ const (
 	AdminQueryDataPartitionDecommissionStatus = "/dataPartition/queryDecommissionStatus"
 	AdminCheckReplicaMeta                     = "/dataPartition/checkReplicaMeta"
 	AdminRecoverReplicaMeta                   = "/dataPartition/recoverReplicaMeta"
-	AdminRecoverDiskErrorReplica              = "/dataPartition/recoverDiskErrorReplica"
+	AdminRecoverBackupDataReplica             = "/dataPartition/recoverBackupDataReplica"
 	AdminDeleteDataReplica                    = "/dataReplica/delete"
 	AdminAddDataReplica                       = "/dataReplica/add"
 	AdminDeleteVol                            = "/vol/delete"
@@ -90,6 +93,8 @@ const (
 	AdminQueryDecommissionFailedDisk          = "/admin/queryDecommissionFailedDisk"
 	AdminAbortDecommissionDisk                = "/admin/abortDecommissionDisk"
 	AdminResetDataPartitionRestoreStatus      = "/admin/resetDataPartitionRestoreStatus"
+	AdminGetOpLog                             = "/admin/getOpLog"
+
 	// #nosec G101
 	AdminQueryDecommissionToken = "/admin/queryDecommissionToken"
 	AdminSetFileStats           = "/admin/setFileStatsEnable"
@@ -115,6 +120,9 @@ const (
 	AdminVolumeAPI                = "/api/volume"
 	AdminSetDiskBrokenThreshold   = "/admin/setDiskBrokenThreshold"
 	AdminQueryDiskBrokenThreshold = "/admin/queryDiskBrokenThreshold"
+
+	AdminGetUpgradeCompatibleSettings = "/admin/getUpgradeCompatibleSettings"
+
 	// graphql coonsole api
 	ConsoleIQL        = "/iql"
 	ConsoleLoginAPI   = "/login"
@@ -130,6 +138,7 @@ const (
 	ClientMetaPartition      = "/metaPartition/get"
 	ClientVolStat            = "/client/volStat"
 	ClientMetaPartitions     = "/client/metaPartitions"
+	GetAllClients            = "/getAllClients"
 
 	// qos api
 	QosGetStatus           = "/qos/getStatus"
@@ -161,18 +170,24 @@ const (
 	MigrateDataNode                    = "/dataNode/migrate"
 	PauseDecommissionDataNode          = "/dataNode/pauseDecommission"
 	CancelDecommissionDataNode         = "/dataNode/cancelDecommission"
+	ResetDecommissionDataNodeStatus    = "/dataNode/resetDecommissionStatus"
 	DecommissionDisk                   = "/disk/decommission"
 	RecommissionDisk                   = "/disk/recommission"
 	QueryDiskDecoProgress              = "/disk/queryDecommissionProgress"
-	MarkDecoDiskFixed                  = "/disk/MarkDecommissionDiskFixed"
+	DeleteDecommissionDiskRecord       = "/disk/deleteDecommissionDiskRecord"
 	PauseDecommissionDisk              = "/disk/pauseDecommission"
 	CancelDecommissionDisk             = "/disk/cancelDecommission"
+	ResetDecommissionDiskStatus        = "/disk/resetDecommissionStatus"
 	QueryDecommissionDiskDecoFailedDps = "/disk/queryDecommissionFailedDps"
 	QueryBadDisks                      = "/disk/queryBadDisks"
 	QueryDisks                         = "/disk/queryDisks"
 	QueryDiskDetail                    = "/disk/detail"
 	RestoreStoppedAutoDecommissionDisk = "/disk/restoreStoppedAutoDecommissionDisk"
 	QueryAllDecommissionDisk           = "/disk/queryAllDecommissionDisk"
+	RecoverBadDisk                     = "/disk/recoverBadDisk"
+	QueryBadDiskRecoverProgress        = "/disk/queryBadDiskRecoverProgress"
+	DeleteBackupDirectories            = "/disk/deleteBackupDirectories"
+	QueryBackupDirectories             = "/disk/queryBackupDirectories"
 	GetDataNode                        = "/dataNode/get"
 	AddMetaNode                        = "/metaNode/add"
 	DecommissionMetaNode               = "/metaNode/decommission"
@@ -248,12 +263,16 @@ const (
 	// QuotaBatchModifyPath = "/quota/batchModifyPath"
 	QuotaListAll = "/quota/listAll"
 	// trash
-	AdminSetTrashInterval = "/vol/setTrashInterval"
+	AdminSetTrashInterval              = "/vol/setTrashInterval"
+	AdminSetVolAccessTimeValidInterval = "/vol/setAccessTimeValidInterval"
 
 	// s3 qos api
-	S3QoSSet    = "/s3/qos/set"
-	S3QoSGet    = "/s3/qos/get"
-	S3QoSDelete = "/s3/qos/delete"
+	S3QoSSet                     = "/s3/qos/set"
+	S3QoSGet                     = "/s3/qos/get"
+	S3QoSDelete                  = "/s3/qos/delete"
+	AdminEnablePersistAccessTime = "/vol/enablePersistAccessTime"
+
+	AdminVolAddAllowedStorageClass = "/vol/addAllowedStorageClass"
 )
 
 var GApiInfo map[string]string = map[string]string{
@@ -273,6 +292,7 @@ var GApiInfo map[string]string = map[string]string{
 	"adminupdatevol":                     AdminUpdateVol,
 	"adminvolshrink":                     AdminVolShrink,
 	"adminvolexpand":                     AdminVolExpand,
+	"adminvoladdallowedstorageclass":     AdminVolAddAllowedStorageClass,
 	"admincreatevol":                     AdminCreateVol,
 	"admingetvol":                        AdminGetVol,
 	"adminclusterfreeze":                 AdminClusterFreeze,
@@ -297,6 +317,7 @@ var GApiInfo map[string]string = map[string]string{
 	"admindatapartitionchangeleader":     AdminDataPartitionChangeLeader,
 	"adminsetdpdiscard":                  AdminSetDpDiscard,
 	"admingetdiscarddp":                  AdminGetDiscardDp,
+	"admingetoplog":                      AdminGetOpLog,
 
 	// "adminclusterapi":                 AdminClusterAPI,
 	// "adminuserapi":                    AdminUserAPI,
@@ -362,6 +383,16 @@ var GApiInfo map[string]string = map[string]string{
 	"usersofvol":                      UsersOfVol,
 }
 
+const (
+	MetaFollowerReadKey    = "metaFollowerRead"
+	LeaderRetryTimeoutKey  = "leaderRetryTimeout"
+	VolEnableDirectRead    = "directRead"
+	HostKey                = "host"
+	ClientVerKey           = "clientVer"
+	RoleKey                = "role"
+	BcacheOnlyForNotSSDKey = "enableBcacheNotSSD"
+)
+
 // const TimeFormat = "2006-01-02 15:04:05"
 
 const (
@@ -369,6 +400,35 @@ const (
 	DefaultDirChildrenNumLimit = 20000000
 	MinDirChildrenNumLimit     = 1000000
 )
+
+const (
+	CfgHttpPoolSize     = "httpPoolSize"
+	defaultHttpPoolSize = 128
+)
+
+type HttpCfg struct {
+	PoolSize int
+}
+
+func GetHttpTransporter(cfg *HttpCfg) *http.Transport {
+	if cfg.PoolSize < defaultHttpPoolSize {
+		cfg.PoolSize = defaultHttpPoolSize
+	}
+
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          cfg.PoolSize,
+		MaxIdleConnsPerHost:   cfg.PoolSize / 2,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+}
 
 // HTTPReply uniform response structure
 type HTTPReply struct {
@@ -520,6 +580,7 @@ type ClusterInfo struct {
 	ServicePath                 string
 	ClusterUuid                 string
 	ClusterUuidEnable           bool
+	ClusterEnableSnapshot       bool
 }
 
 // CreateDataPartitionRequest defines the request to create a data partition.
@@ -713,6 +774,11 @@ type HeartBeatRequest struct {
 	DisableAuditVols     []string
 	DecommissionDisks    []string // NOTE: for datanode
 	VolDpRepairBlockSize map[string]uint64
+	DpBackupTimeout      string
+
+	NotifyForbidWriteOpOfProtoVer0 bool     // whether forbid by node granularity, will notify to nodes
+	VolsForbidWriteOpOfProtoVer0   []string // whether forbid by volume granularity, will notify to partitions of volume in nodes
+	DirectReadVols                 []string
 }
 
 // DataPartitionReport defines the partition report.
@@ -729,6 +795,7 @@ type DataPartitionReport struct {
 	DecommissionRepairProgress float64
 	LocalPeers                 []Peer
 	TriggerDiskError           bool
+	ForbidWriteOpOfProtoVer0   bool
 }
 
 type DataNodeQosResponse struct {
@@ -762,56 +829,69 @@ type DiskStat struct {
 
 // DataNodeHeartbeatResponse defines the response to the data node heartbeat.
 type DataNodeHeartbeatResponse struct {
-	Total                uint64
-	Used                 uint64
-	Available            uint64
-	TotalPartitionSize   uint64 // volCnt * volsize
-	RemainingCapacity    uint64 // remaining capacity to create partition
-	CreatedPartitionCnt  uint32
-	MaxCapacity          uint64 // maximum capacity to create partition
-	StartTime            int64
-	ZoneName             string
-	PartitionReports     []*DataPartitionReport
-	Status               uint8
-	Result               string
-	AllDisks             []string
-	BadDisks             []string           // Keep this old field for compatibility
-	BadDiskStats         []BadDiskStat      // key: disk path
-	DiskStats            []DiskStat         // key: disk path
-	CpuUtil              float64            `json:"cpuUtil"`
-	IoUtils              map[string]float64 `json:"ioUtil"`
-	BackupDataPartitions []BackupDataPartitionInfo
+	Total                            uint64
+	Used                             uint64
+	Available                        uint64
+	TotalPartitionSize               uint64 // volCnt * volsize
+	RemainingCapacity                uint64 // remaining capacity to create partition
+	CreatedPartitionCnt              uint32
+	MaxCapacity                      uint64 // maximum capacity to create partition
+	StartTime                        int64
+	ZoneName                         string
+	PartitionReports                 []*DataPartitionReport
+	Status                           uint8
+	Result                           string
+	AllDisks                         []string
+	DiskStats                        []DiskStat
+	BadDisks                         []string           // Keep this old field for compatibility
+	BadDiskStats                     []BadDiskStat      // key: disk path
+	CpuUtil                          float64            `json:"cpuUtil"`
+	IoUtils                          map[string]float64 `json:"ioUtil"`
+	BackupDataPartitions             []BackupDataPartitionInfo
+	DiskOpLogs                       []OpLog `json:"DiskOpLog"`
+	DpOpLogs                         []OpLog `json:"DpOpLog"`
+	ReceivedForbidWriteOpOfProtoVer0 bool
+}
+
+type OpLog struct {
+	Name  string
+	Op    string
+	Count int32
 }
 
 // MetaPartitionReport defines the meta partition report.
 type MetaPartitionReport struct {
-	PartitionID      uint64
-	Start            uint64
-	End              uint64
-	Status           int
-	Size             uint64
-	MaxInodeID       uint64
-	IsLeader         bool
-	VolName          string
-	InodeCnt         uint64
-	DentryCnt        uint64
-	TxCnt            uint64
-	TxRbInoCnt       uint64
-	TxRbDenCnt       uint64
-	FreeListLen      uint64
-	UidInfo          []*UidReportSpaceInfo
-	QuotaReportInfos []*QuotaReportInfo
+	PartitionID               uint64
+	Start                     uint64
+	End                       uint64
+	Status                    int
+	Size                      uint64
+	MaxInodeID                uint64
+	IsLeader                  bool
+	VolName                   string
+	InodeCnt                  uint64
+	DentryCnt                 uint64
+	TxCnt                     uint64
+	TxRbInoCnt                uint64
+	TxRbDenCnt                uint64
+	FreeListLen               uint64
+	ForbidWriteOpOfProtoVer0  bool
+	UidInfo                   []*UidReportSpaceInfo
+	QuotaReportInfos          []*QuotaReportInfo
+	StatByStorageClass        []*StatOfStorageClass
+	StatByMigrateStorageClass []*StatOfStorageClass
 }
 
 // MetaNodeHeartbeatResponse defines the response to the meta node heartbeat request.
 type MetaNodeHeartbeatResponse struct {
-	ZoneName             string
-	Total                uint64
-	MemUsed              uint64
-	MetaPartitionReports []*MetaPartitionReport
-	Status               uint8
-	Result               string
-	CpuUtil              float64 `json:"cpuUtil"`
+	ZoneName                         string
+	Total                            uint64
+	Used                             uint64
+	MetaPartitionReports             []*MetaPartitionReport
+	Status                           uint8
+	Result                           string
+	CpuUtil                          float64 `json:"cpuUtil"`
+	ReceivedForbidWriteOpOfProtoVer0 bool
 }
 
 // LcNodeHeartbeatResponse defines the response to the lc node heartbeat.
@@ -911,12 +991,14 @@ type DataPartitionResponse struct {
 	IsRecover     bool
 	PartitionTTL  int64
 	IsDiscard     bool
+	MediaType     uint32
 }
 
 // DataPartitionsView defines the view of a data partition
 type DataPartitionsView struct {
 	DataPartitions []*DataPartitionResponse
-	VolReadOnly    bool // to notify client no readwrite dp
+	VolReadOnly    bool // if true, refresh dps even rw count less than 1
+	StatByClass    []*StatOfStorageClass
 }
 
 type DiskDataPartitionsView struct {
@@ -1021,11 +1103,13 @@ const (
 )
 
 const (
-	QosDefaultBurst                   = 16000000
+	QosDefaultBurst                   = 1600000
 	QosDefaultClientCnt        uint32 = 100
 	QosDefaultDiskMaxFLowLimit int    = 0x7FFFFFFF
 	QosDefaultDiskMaxIoLimit   int    = 100000
 )
+
+const DefaultDataPartitionBackupTimeOut = time.Hour * 24 * 7
 
 func QosTypeString(factorType uint32) string {
 	switch factorType {
@@ -1054,10 +1138,12 @@ type ClientReportLimitInfo struct {
 	FactorMap map[uint32]*ClientLimitInfo
 	Host      string
 	Status    uint8
+	Version   *VersionInfo
 	_         string // reserved
 }
 
 func NewClientReportLimitInfo() *ClientReportLimitInfo {
+	log.LogDebugf("NewClientReportLimitInfo %v", GetVersion("client"))
 	return &ClientReportLimitInfo{
 		FactorMap: make(map[uint32]*ClientLimitInfo),
 	}
@@ -1070,6 +1156,7 @@ type LimitRsp2Client struct {
 	HitTriggerCnt uint8
 	FactorMap     map[uint32]*ClientLimitInfo
 	Magnify       map[uint32]uint32
+	Version       *VersionInfo
 	_             string // reserved
 }
 
@@ -1103,6 +1190,8 @@ type SimpleVolView struct {
 	MpCnt                   int
 	DpCnt                   int
 	FollowerRead            bool
+	MetaFollowerRead        bool
+	DirectRead              bool
 	NeedToLowerReplica      bool
 	Authenticate            bool
 	CrossZone               bool
@@ -1110,6 +1199,7 @@ type SimpleVolView struct {
 	DomainOn                bool
 	CreateTime              string
 	DeleteLockTime          int64
+	LeaderRetryTimeOut      int64
 	EnableToken             bool
 	EnablePosixAcl          bool
 	EnableQuota             bool
@@ -1124,6 +1214,7 @@ type SimpleVolView struct {
 	DpSelectorParm          string
 	DefaultZonePrior        bool
 	DpReadOnlyWhenVolFull   bool
+	LeaderRetryTimeout      int64
 
 	VolType          int
 	ObjBlockSize     int
@@ -1140,12 +1231,21 @@ type SimpleVolView struct {
 	TrashInterval    int64
 
 	// multi version snapshot
-	LatestVer              uint64
-	Forbidden              bool
-	DisableAuditLog        bool
-	DeleteExecTime         time.Time
-	DpRepairBlockSize      uint64
-	EnableAutoDpMetaRepair bool
+	LatestVer               uint64
+	Forbidden               bool
+	DisableAuditLog         bool
+	DeleteExecTime          time.Time
+	DpRepairBlockSize       uint64
+	EnableAutoDpMetaRepair  bool
+	AccessTimeInterval      int64
+	EnablePersistAccessTime bool
+
+	// hybrid cloud
+	VolStorageClass          uint32
+	AllowedStorageClass      []uint32
+	CacheDpStorageClass      uint32
+	ForbidWriteOpOfProtoVer0 bool
+	QuotaOfStorageClass      []*StatOfStorageClass
 }
 
 type NodeSetInfo struct {
@@ -1218,6 +1318,7 @@ type ZoneView struct {
 	DataNodesetSelector string
 	MetaNodesetSelector string
 	NodeSet             map[uint64]*NodeSetView
+	DataMediaType       string
 }
 
 type NodeSetView struct {
@@ -1230,6 +1331,21 @@ type NodeSetView struct {
 // TopologyView provides the view of the topology view of the cluster
 type TopologyView struct {
 	Zones []*ZoneView
+}
+
+const (
+	Dp   = "dpop"
+	Disk = "diskop"
+	Node = "datanodeop"
+	Vol  = "volop"
+)
+
+// OpLogView defines the view of all opLogs
+type OpLogView struct {
+	DpOpLogs      []OpLog
+	DiskOpLogs    []OpLog
+	ClusterOpLogs []OpLog
+	VolOpLogs     []OpLog
 }
 
 const (
@@ -1263,8 +1379,9 @@ func IsPreLoadDp(typ int) bool {
 }
 
 const (
-	VolumeTypeHot  = 0
-	VolumeTypeCold = 1
+	VolumeTypeInvalid = -1
+	VolumeTypeHot     = 0
+	VolumeTypeCold    = 1
 )
 
 func IsCold(typ int) bool {
@@ -1287,9 +1404,9 @@ const (
 
 const (
 	InitialDecommission uint32 = iota
-	ManualDecommission         // used for queryAllDecommissionDisk
+	ManualDecommission
 	AutoDecommission
-	AllDecommission
+	QueryDecommission // used for querying decommission progress for ManualDecommission and AutoDecommission
 	AutoAddReplica
 	ManualAddReplica
 )
@@ -1304,3 +1421,141 @@ type RecoverBackupDataReplicaRequest struct {
 	PartitionId uint64
 	Disk        string
 }
+
+type RecoverBadDiskRequest struct {
+	DiskPath string
+}
+
+type DeleteBackupDirectoriesRequest struct {
+	DiskPath string
+}
+
+type DataPartitionDiskInfo struct {
+	PartitionId uint64
+	Disk        string
+}
+
+// data node hardware media type
+const (
+	MediaType_Unspecified uint32 = 0
+	MediaType_SSD         uint32 = 1
+	MediaType_HDD         uint32 = 2
+)
+
+var mediaTypeStringMap = map[uint32]string{
+	MediaType_Unspecified: "Unspecified",
+	MediaType_SSD:         "SSD",
+	MediaType_HDD:         "HDD",
+}
+
+func MediaTypeString(mediaType uint32) (value string) {
+	value, ok := mediaTypeStringMap[mediaType]
+	if !ok {
+		value = fmt.Sprintf("InvalidValue(%v)", mediaType)
+	}
+	return
+}
+
+func IsValidMediaType(mediaType uint32) bool {
+	if mediaType >= MediaType_SSD && mediaType <= MediaType_HDD {
+		return true
+	}
+
+	return false
+}
+
+type StorageClass uint32
+
+const (
+	StorageClass_Unspecified uint32 = 0
+	StorageClass_Replica_SSD uint32 = 1
+	StorageClass_Replica_HDD uint32 = 2
+	StorageClass_BlobStore   uint32 = 3
+)
+
+var storageClassStringMap = map[uint32]string{
+	StorageClass_Unspecified: "Unspecified",
+	StorageClass_Replica_SSD: "ReplicaSSD",
+	StorageClass_Replica_HDD: "ReplicaHDD",
+	StorageClass_BlobStore:   "BlobStore",
+}
+
+func StorageClassString(storageClass uint32) (value string) {
+	value, ok := storageClassStringMap[storageClass]
+	if !ok {
+		value = fmt.Sprintf("InvalidValue(%v)", storageClass)
+	}
+	return
+}
+
+func IsValidStorageClass(storageClass uint32) bool {
+	if storageClass >= StorageClass_Replica_SSD && storageClass <= StorageClass_BlobStore {
+		return true
+	}
+
+	return false
+}
+
+func IsStorageClassReplica(storageClass uint32) bool {
+	return storageClass == StorageClass_Replica_SSD || storageClass == StorageClass_Replica_HDD
+}
+
+// IsStorageClassBlobStore : encapsulate in a function in case there are more storage classes of blobstore in the future
+func IsStorageClassBlobStore(storageClass uint32) bool {
+	return storageClass == StorageClass_BlobStore
+}
+
+func IsVolSupportStorageClass(allowedStorageClass []uint32, storeClass uint32) bool {
+	for _, storageClass := range allowedStorageClass {
+		if storageClass == storeClass {
+			return true
+		}
+	}
+	return false
+}
+
+func GetVolTypeByStorageClass(storageClass uint32) (err error, volType int) {
+	if IsStorageClassReplica(storageClass) {
+		volType = VolumeTypeHot
+	} else if storageClass == StorageClass_BlobStore {
+		volType = VolumeTypeCold
+	} else {
+		err = fmt.Errorf("got invalid volType by storageClass(%v)", storageClass)
+		volType = VolumeTypeInvalid
+	}
+
+	return
+}
+
+func GetMediaTypeByStorageClass(storageClass uint32) (mediaType uint32) {
+	switch storageClass {
+	case StorageClass_Replica_SSD:
+		mediaType = MediaType_SSD
+	case StorageClass_Replica_HDD:
+		mediaType = MediaType_HDD
+	default:
+		mediaType = MediaType_Unspecified
+	}
+
+	return
+}
+
+func GetStorageClassByMediaType(mediaType uint32) (storageClass uint32) {
+	switch mediaType {
+	case MediaType_SSD:
+		storageClass = StorageClass_Replica_SSD
+	case MediaType_HDD:
+		storageClass = StorageClass_Replica_HDD
+	default:
+		storageClass = StorageClass_Unspecified
+	}
+
+	return
+}
+
+const (
+	ForbiddenMigrationRenewalPeriod = 1 * time.Hour
+	ForbiddenMigrationRenewalSeonds = 3600
+)
+
+// const ForbiddenMigrationRenewalPeriod = 10 * time.Second // for debug

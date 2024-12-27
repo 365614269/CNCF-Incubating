@@ -20,6 +20,12 @@ func NewSortedObjExtents() *SortedObjExtents {
 	}
 }
 
+func NewSortedObjExtentsFromObjEks(eks []proto.ObjExtentKey) *SortedObjExtents {
+	return &SortedObjExtents{
+		eks: eks,
+	}
+}
+
 func (se *SortedObjExtents) String() string {
 	se.RLock()
 	data, err := json.Marshal(se.eks)
@@ -28,6 +34,13 @@ func (se *SortedObjExtents) String() string {
 		return ""
 	}
 	return string(data)
+}
+
+func (se *SortedObjExtents) IsEmpty() bool {
+	se.RLock()
+	defer se.RUnlock()
+
+	return len(se.eks) == 0
 }
 
 func (se *SortedObjExtents) MarshalBinary() ([]byte, error) {
@@ -132,6 +145,20 @@ func (se *SortedObjExtents) Size() uint64 {
 	return se.eks[last-1].FileOffset + se.eks[last-1].Size
 }
 
+func (se *SortedObjExtents) LayerSize() (layerSize uint64) {
+	se.RLock()
+	defer se.RUnlock()
+
+	last := len(se.eks)
+	if last <= 0 {
+		return 0
+	}
+	for _, ek := range se.eks {
+		layerSize += ek.Size
+	}
+	return
+}
+
 func (se *SortedObjExtents) Range(f func(ek proto.ObjExtentKey) bool) {
 	se.RLock()
 	defer se.RUnlock()
@@ -165,4 +192,26 @@ func (se *SortedObjExtents) FindOffsetExist(fileOffset uint64) (bool, int) {
 		}
 	}
 	return false, 0
+}
+
+func (se *SortedObjExtents) Equals(other *SortedObjExtents) bool {
+	se.RLock()
+	defer se.RUnlock()
+
+	if other == nil {
+		return false
+	}
+
+	if len(se.eks) != len(other.eks) {
+		return false
+	}
+
+	for idx, seKey := range se.eks {
+		otherKey := other.eks[idx]
+		if !seKey.IsEquals(&otherKey) {
+			return false
+		}
+	}
+
+	return true
 }

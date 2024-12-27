@@ -59,9 +59,9 @@ func parseRequestForRaftNode(r *http.Request) (id uint64, host string, err error
 	return
 }
 
-func extractTxTimeout(r *http.Request) (timeout int64, err error) {
+func extractTxTimeout(r *http.Request, old int64) (timeout int64, err error) {
 	var txTimeout uint64
-	if txTimeout, err = extractUint64WithDefault(r, txTimeoutKey, proto.DefaultTransactionTimeout); err != nil {
+	if txTimeout, err = extractUint64WithDefault(r, txTimeoutKey, uint64(old)); err != nil {
 		return
 	}
 
@@ -72,9 +72,9 @@ func extractTxTimeout(r *http.Request) (timeout int64, err error) {
 	return timeout, nil
 }
 
-func extractTxConflictRetryNum(r *http.Request) (retryNum int64, err error) {
+func extractTxConflictRetryNum(r *http.Request, old int64) (retryNum int64, err error) {
 	var txRetryNum uint64
-	if txRetryNum, err = extractUint64WithDefault(r, txConflictRetryNumKey, proto.DefaultTxConflictRetryNum); err != nil {
+	if txRetryNum, err = extractUint64WithDefault(r, txConflictRetryNumKey, uint64(old)); err != nil {
 		return
 	}
 
@@ -85,9 +85,9 @@ func extractTxConflictRetryNum(r *http.Request) (retryNum int64, err error) {
 	return retryNum, nil
 }
 
-func extractTxConflictRetryInterval(r *http.Request) (interval int64, err error) {
+func extractTxConflictRetryInterval(r *http.Request, old int64) (interval int64, err error) {
 	var txInterval uint64
-	if txInterval, err = extractUint64WithDefault(r, txConflictRetryIntervalKey, proto.DefaultTxConflictRetryInterval); err != nil {
+	if txInterval, err = extractUint64WithDefault(r, txConflictRetryIntervalKey, uint64(old)); err != nil {
 		return
 	}
 
@@ -165,7 +165,7 @@ func parseRequestForUpdateMetaNode(r *http.Request) (nodeAddr string, id uint64,
 	return
 }
 
-func parseRequestForAddNode(r *http.Request) (nodeAddr, zoneName string, err error) {
+func parseRequestForAddNode(r *http.Request) (nodeAddr, zoneName string, mediaType uint32, err error) {
 	if err = r.ParseForm(); err != nil {
 		return
 	}
@@ -174,6 +174,9 @@ func parseRequestForAddNode(r *http.Request) (nodeAddr, zoneName string, err err
 	}
 	if zoneName = r.FormValue(zoneNameKey); zoneName == "" {
 		zoneName = DefaultZoneName
+	}
+	if mediaType, err = extractMediaType(r); err != nil {
+		return
 	}
 	return
 }
@@ -280,7 +283,7 @@ func parseGetVolParameter(r *http.Request) (p *getVolParameter, err error) {
 		return
 	}
 	if !volNameRegexp.MatchString(p.name) {
-		err = errors.New("name can only be number and letters")
+		err = proto.ErrVolNameRegExpNotMatch
 		return
 	}
 	if p.authKey = r.FormValue(volAuthKey); !p.skipOwnerValidation && len(p.authKey) == 0 {
@@ -328,6 +331,21 @@ func extractUintWithDefault(r *http.Request, key string, def int) (val int, err 
 	return val, nil
 }
 
+func extractUint32WithDefault(r *http.Request, key string, def uint32) (val uint32, err error) {
+	var str string
+	if str = r.FormValue(key); str == "" {
+		return def, nil
+	}
+
+	var valUint64 uint64
+	if valUint64, err = strconv.ParseUint(str, 10, 32); err != nil || valUint64 > math.MaxUint32 {
+		return 0, fmt.Errorf("parse [%s] is not valid uint32 [%d], err %v", key, val, err)
+	}
+
+	val = uint32(valUint64)
+	return val, nil
+}
+
 func extractUint64WithDefault(r *http.Request, key string, def uint64) (val uint64, err error) {
 	var str string
 	if str = r.FormValue(key); str == "" {
@@ -335,7 +353,7 @@ func extractUint64WithDefault(r *http.Request, key string, def uint64) (val uint
 	}
 
 	if val, err = strconv.ParseUint(str, 10, 64); err != nil {
-		return 0, fmt.Errorf("parse [%s] is not valid uint [%d], err %v", key, val, err)
+		return 0, fmt.Errorf("parse [%s] is not valid uint64 [%d], err %v", key, val, err)
 	}
 
 	return val, nil
@@ -376,34 +394,58 @@ func extractBoolWithDefault(r *http.Request, key string, def bool) (val bool, er
 }
 
 type updateVolReq struct {
-	name                    string
-	authKey                 string
-	capacity                uint64
-	deleteLockTime          int64
-	followerRead            bool
-	authenticate            bool
-	enablePosixAcl          bool
-	enableTransaction       proto.TxOpMask
-	txTimeout               int64
-	txConflictRetryNum      int64
-	txConflictRetryInterval int64
-	txOpLimit               int
-	zoneName                string
-	description             string
-	dpSelectorName          string
-	dpSelectorParm          string
-	replicaNum              int
-	coldArgs                *coldVolArgs
-	dpReadOnlyWhenVolFull   bool
-	enableQuota             bool
-	crossZone               bool
-	enableAutoDpMetaRepair  bool
+	name                     string
+	authKey                  string
+	capacity                 uint64
+	deleteLockTime           int64
+	followerRead             bool
+	metaFollowerRead         bool
+	directRead               bool
+	leaderRetryTimeout       int64
+	authenticate             bool
+	enablePosixAcl           bool
+	enableTransaction        proto.TxOpMask
+	txTimeout                int64
+	txConflictRetryNum       int64
+	txConflictRetryInterval  int64
+	txOpLimit                int
+	zoneName                 string
+	description              string
+	dpSelectorName           string
+	dpSelectorParm           string
+	replicaNum               int
+	coldArgs                 *coldVolArgs
+	dpReadOnlyWhenVolFull    bool
+	enableQuota              bool
+	crossZone                bool
+	trashInterval            int64
+	enableAutoDpMetaRepair   bool
+	accessTimeValidInterval  int64
+	enablePersistAccessTime  bool
+	volStorageClass          uint32
+	forbidWriteOpOfProtoVer0 bool
+	quotaOfClass             uint64
+	quotaClass               uint32
 }
 
 func parseColdVolUpdateArgs(r *http.Request, vol *Vol) (args *coldVolArgs, err error) {
 	args = &coldVolArgs{}
 
 	if args.objBlockSize, err = extractUintWithDefault(r, ebsBlkSizeKey, vol.EbsBlkSize); err != nil {
+		return
+	}
+
+	if vol.volStorageClass != proto.StorageClass_BlobStore {
+		log.LogInfof("[parseColdVolUpdateArgs] vol(%v) storageClass(%v) is not blobstore, skip parse cache args",
+			vol.Name, proto.StorageClassString(vol.volStorageClass))
+		args.cacheCap = vol.CacheCapacity
+		args.cacheAction = vol.CacheAction
+		args.cacheThreshold = vol.CacheThreshold
+		args.cacheTtl = vol.CacheTTL
+		args.cacheHighWater = vol.CacheHighWater
+		args.cacheLowWater = vol.CacheLowWater
+		args.cacheLRUInterval = vol.CacheLRUInterval
+		args.cacheRule = vol.CacheRule
 		return
 	}
 
@@ -485,6 +527,10 @@ func parseVolUpdateReq(r *http.Request, vol *Vol, req *updateVolReq) (err error)
 		return
 	}
 
+	if req.leaderRetryTimeout, err = extractInt64WithDefault(r, proto.LeaderRetryTimeoutKey, vol.LeaderRetryTimeout); err != nil {
+		return
+	}
+
 	if req.enablePosixAcl, err = extractBoolWithDefault(r, enablePosixAclKey, vol.enablePosixAcl); err != nil {
 		return
 	}
@@ -500,19 +546,19 @@ func parseVolUpdateReq(r *http.Request, vol *Vol, req *updateVolReq) (err error)
 	}
 
 	var txTimeout int64
-	if txTimeout, err = extractTxTimeout(r); err != nil {
+	if txTimeout, err = extractTxTimeout(r, vol.txTimeout); err != nil {
 		return
 	}
 	req.txTimeout = txTimeout
 
 	var txConflictRetryNum int64
-	if txConflictRetryNum, err = extractTxConflictRetryNum(r); err != nil {
+	if txConflictRetryNum, err = extractTxConflictRetryNum(r, vol.txConflictRetryNum); err != nil {
 		return
 	}
 	req.txConflictRetryNum = txConflictRetryNum
 
 	var txConflictRetryInterval int64
-	if txConflictRetryInterval, err = extractTxConflictRetryInterval(r); err != nil {
+	if txConflictRetryInterval, err = extractTxConflictRetryInterval(r, vol.txConflictRetryInterval); err != nil {
 		return
 	}
 	req.txConflictRetryInterval = txConflictRetryInterval
@@ -529,13 +575,35 @@ func parseVolUpdateReq(r *http.Request, vol *Vol, req *updateVolReq) (err error)
 		return
 	}
 
+	if req.metaFollowerRead, err = extractBoolWithDefault(r, proto.MetaFollowerReadKey, vol.MetaFollowerRead); err != nil {
+		return
+	}
+
+	if req.directRead, err = extractBoolWithDefault(r, proto.VolEnableDirectRead, vol.DirectRead); err != nil {
+		return
+	}
+
 	if req.dpReadOnlyWhenVolFull, err = extractBoolWithDefault(r, dpReadOnlyWhenVolFull, vol.DpReadOnlyWhenVolFull); err != nil {
 		return
 	}
 
+	if req.trashInterval, err = extractInt64WithDefault(r, trashIntervalKey, vol.TrashInterval); err != nil {
+		return
+	}
+	if req.accessTimeValidInterval, err = extractInt64WithDefault(r, accessTimeIntervalKey, vol.AccessTimeValidInterval); err != nil {
+		return
+	}
+	if req.enablePersistAccessTime, err = extractBoolWithDefault(r, enablePersistAccessTimeKey, vol.EnablePersistAccessTime); err != nil {
+		return
+	}
 	if req.enableAutoDpMetaRepair, err = extractBoolWithDefault(r, autoDpMetaRepairKey, vol.EnableAutoMetaRepair.Load()); err != nil {
 		return
 	}
+
+	if req.forbidWriteOpOfProtoVer0, err = extractBoolWithDefault(r, forbidWriteOpOfProtoVersion0, vol.ForbidWriteOpOfProtoVer0.Load()); err != nil {
+		return
+	}
+	log.LogDebugf("[parseVolUpdateReq] vol(%v) forbidWriteOpOfProtoVer0: %v", vol.Name, req.forbidWriteOpOfProtoVer0)
 
 	req.dpSelectorName = r.FormValue(dpSelectorNameKey)
 	req.dpSelectorParm = r.FormValue(dpSelectorParmKey)
@@ -549,34 +617,82 @@ func parseVolUpdateReq(r *http.Request, vol *Vol, req *updateVolReq) (err error)
 		req.dpSelectorParm = vol.dpSelectorParm
 	}
 
-	if proto.IsCold(vol.VolType) {
+	if req.volStorageClass, err = extractUint32WithDefault(r, volStorageClassKey, vol.volStorageClass); err != nil {
+		err = fmt.Errorf("failed to extract key: %v", volStorageClassKey)
+		log.LogErrorf("[parseVolUpdateReq] vol(%v) err: %v", vol.Name, err.Error())
+		return
+	}
+
+	req.quotaClass, err = extractUint32(r, quotaClass)
+	if err != nil {
+		log.LogErrorf("[parseVolUpdateReq] vol(%v) err: %v", vol.Name, err.Error())
+		return
+	}
+
+	if req.quotaClass != 0 && (!proto.IsStorageClassReplica(req.quotaClass) ||
+		!proto.IsVolSupportStorageClass(vol.allowedStorageClass, req.quotaClass)) {
+		return fmt.Errorf("%s is not vaild, only support update replica mode, and need in allowd class, now %d",
+			quotaClass, req.quotaClass)
+	}
+
+	if req.quotaClass != 0 && r.FormValue(quotaOfClass) == "" {
+		return fmt.Errorf("%s can't be emtpy when set capacityClass info. ", quotaOfClass)
+	}
+
+	req.quotaOfClass, err = extractUint64(r, quotaOfClass)
+	if err != nil {
+		log.LogErrorf("[parseVolUpdateReq] vol(%v) err: %v", vol.Name, err.Error())
+		return
+	}
+
+	if req.quotaOfClass > req.capacity {
+		return fmt.Errorf("parseVolUpdateReq: quotaOfClass %d can't bigger than capacity %d", req.quotaOfClass, req.capacity)
+	}
+
+	if vol.volStorageClass == proto.StorageClass_BlobStore {
+		if req.volStorageClass != vol.volStorageClass {
+			err = fmt.Errorf("volume volStorageClass is StorageClass_BlobStore, not allow to change it")
+			log.LogErrorf("[parseVolUpdateReq] vol(%v) err: %v", vol.Name, err.Error())
+			return
+		}
+	} else if proto.IsStorageClassReplica(vol.volStorageClass) {
+		if !proto.IsStorageClassReplica(req.volStorageClass) {
+			err = fmt.Errorf("volume volStorageClass is replica, not allow to change to: %v",
+				proto.StorageClassString(req.volStorageClass))
+			log.LogErrorf("[parseVolUpdateReq] vol(%v) err: %v", vol.Name, err.Error())
+			return
+		}
+
+		volStorageClassAllowed := false
+		for _, asc := range vol.allowedStorageClass {
+			if asc == req.volStorageClass {
+				volStorageClassAllowed = true
+			}
+		}
+		if !volStorageClassAllowed {
+			err = fmt.Errorf("requeset volStorageClass(%v) not in volume's allowedStorageClass",
+				proto.StorageClassString(req.volStorageClass))
+			log.LogErrorf("[parseVolUpdateReq] vol(%v) err: %v", vol.Name, err.Error())
+			return
+		}
+
+		if req.volStorageClass != vol.volStorageClass {
+			log.LogInfof("[parseVolUpdateReq] vol(%v) volStorageClass(%v) will be changed to: %v",
+				vol.Name, proto.StorageClassString(vol.volStorageClass), proto.StorageClassString(req.volStorageClass))
+		}
+	}
+
+	if proto.IsStorageClassBlobStore(vol.volStorageClass) {
 		req.followerRead = true
+	}
+
+	if proto.IsVolSupportStorageClass(vol.allowedStorageClass, proto.StorageClass_BlobStore) {
 		req.coldArgs, err = parseColdVolUpdateArgs(r, vol)
 		if err != nil {
 			return
 		}
 	}
 
-	return
-}
-
-func parseBoolFieldToUpdateVol(r *http.Request, vol *Vol) (followerRead, authenticate bool, err error) {
-	if followerReadStr := r.FormValue(followerReadKey); followerReadStr != "" {
-		if followerRead, err = strconv.ParseBool(followerReadStr); err != nil {
-			err = unmatchedKey(followerReadKey)
-			return
-		}
-	} else {
-		followerRead = vol.FollowerRead
-	}
-	if authenticateStr := r.FormValue(authenticateKey); authenticateStr != "" {
-		if authenticate, err = strconv.ParseBool(authenticateStr); err != nil {
-			err = unmatchedKey(authenticateKey)
-			return
-		}
-	} else {
-		authenticate = vol.authenticate
-	}
 	return
 }
 
@@ -638,45 +754,56 @@ func (qos *qosArgs) isArgsWork() bool {
 }
 
 type coldVolArgs struct {
-	objBlockSize     int
-	cacheCap         uint64
-	cacheAction      int
-	cacheThreshold   int
-	cacheTtl         int
-	cacheHighWater   int
-	cacheLowWater    int
-	cacheLRUInterval int
-	cacheRule        string
+	objBlockSize            int
+	cacheCap                uint64
+	cacheAction             int
+	cacheThreshold          int
+	cacheTtl                int
+	cacheHighWater          int
+	cacheLowWater           int
+	cacheLRUInterval        int
+	cacheRule               string
+	accessTimeValidInterval int64
+	trashInterval           int64
+	enablePersistAccessTime bool
 }
 
 type createVolReq struct {
-	name                                 string
-	owner                                string
-	dpSize                               int
-	mpCount                              int
-	dpCount                              int
-	dpReplicaNum                         uint8
-	capacity                             int
-	deleteLockTime                       int64
-	followerRead                         bool
-	authenticate                         bool
-	crossZone                            bool
-	normalZonesFirst                     bool
-	domainId                             uint64
-	zoneName                             string
-	description                          string
-	volType                              int
-	enablePosixAcl                       bool
-	DpReadOnlyWhenVolFull                bool
-	enableTransaction                    proto.TxOpMask
-	enableQuota                          bool
-	txTimeout                            int64
-	txConflictRetryNum                   int64
-	txConflictRetryInterval              int64
-	qosLimitArgs                         *qosArgs
-	clientReqPeriod, clientHitTriggerCnt uint32
+	name                    string
+	owner                   string
+	dpSize                  int
+	mpCount                 int
+	dpCount                 int
+	dpReplicaNum            uint8
+	capacity                int
+	deleteLockTime          int64
+	followerRead            bool
+	metaFollowerRead        bool
+	authenticate            bool
+	crossZone               bool
+	normalZonesFirst        bool
+	domainId                uint64
+	zoneName                string
+	description             string
+	volType                 int
+	enablePosixAcl          bool
+	DpReadOnlyWhenVolFull   bool
+	enableTransaction       proto.TxOpMask
+	enableQuota             bool
+	txTimeout               int64
+	txConflictRetryNum      int64
+	txConflictRetryInterval int64
+	qosLimitArgs            *qosArgs
+	trashInterval           int64
+	accessTimeValidInterval int64
+	enablePersistAccessTime bool
 	// cold vol args
 	coldArgs coldVolArgs
+
+	// hybrid cloud
+	volStorageClass     uint32
+	allowedStorageClass []uint32
+	cacheDpStorageClass uint32
 }
 
 func checkCacheAction(action int) error {
@@ -720,6 +847,36 @@ func parseColdArgs(r *http.Request) (args coldVolArgs, err error) {
 
 	if args.cacheLRUInterval, err = extractUint(r, cacheLRUIntervalKey); err != nil {
 		return
+	}
+
+	return
+}
+
+func parseAllowedStorageClass(r *http.Request) (allowedStorageClass []uint32, err error) {
+	allowedStorageClass = make([]uint32, 0)
+	allowedStorageClassString := extractStr(r, allowedStorageClassKey)
+	if allowedStorageClassString == "" {
+		return
+	}
+
+	allowedStorageClassStrList := strings.Split(allowedStorageClassString, ",")
+	encountered := map[uint64]bool{}
+	for _, ascStr := range allowedStorageClassStrList {
+		var ascUint64 uint64
+		if ascUint64, err = strconv.ParseUint(ascStr, 10, 32); err != nil || ascUint64 > math.MaxUint32 {
+			err = fmt.Errorf("parse (%s) failed, content(%v) is not valid uint32, err(%v)",
+				allowedStorageClassKey, allowedStorageClassString, err)
+			log.LogErrorf("[parseRequestToCreateVol] %v", err.Error())
+			return
+		}
+
+		// pick non-recurring elements
+		ascUint32 := uint32(ascUint64)
+		if !encountered[ascUint64] {
+			encountered[ascUint64] = true
+			allowedStorageClass = append(allowedStorageClass, ascUint32)
+			log.LogDebugf("[parseAllowedStorageClass] pick allowedStorageClass(%v)", proto.StorageClassString(ascUint32))
+		}
 	}
 
 	return
@@ -772,8 +929,35 @@ func parseRequestToCreateVol(r *http.Request, req *createVolReq) (err error) {
 		return
 	}
 
-	if req.volType, err = extractUint(r, volTypeKey); err != nil {
-		return
+	// handling compatibility
+	if vscStr := r.FormValue(volStorageClassKey); vscStr != "" {
+		// handling compatibility for new version requesters who send only volStorageClassKey, but no volTypeKey
+		if req.volStorageClass, err = extractUint32WithDefault(r, volStorageClassKey, proto.StorageClass_Unspecified); err != nil {
+			return
+		}
+
+		// StorageClass_Unspecified means let master determine SSD or HDD in subsequent procedure
+		if req.volStorageClass == proto.StorageClass_Unspecified || proto.IsStorageClassReplica(req.volStorageClass) {
+			req.volType = proto.VolumeTypeHot
+		} else if req.volStorageClass == proto.StorageClass_BlobStore {
+			req.volType = proto.VolumeTypeCold
+		}
+	} else {
+		// handling compatibility for old version requesters who send only volTypeKey,  but no volStorageClassKey
+		if req.volType, err = extractUint(r, volTypeKey); err != nil {
+			return
+		}
+
+		if proto.IsHot(req.volType) {
+			// let master determine SSD or HDD in subsequent procedure
+			req.volStorageClass = proto.StorageClass_Unspecified
+		} else if proto.IsCold(req.volType) {
+			req.volStorageClass = proto.StorageClass_BlobStore
+		} else {
+			err = fmt.Errorf("invalid volType: %v", req.volType)
+			log.LogErrorf("[parseRequestToCreateVol] err: %v", err)
+			return
+		}
 	}
 
 	followerRead, followerExist, err := extractFollowerRead(r)
@@ -785,8 +969,13 @@ func parseRequestToCreateVol(r *http.Request, req *createVolReq) (err error) {
 		return fmt.Errorf("vol with 1 ro 2 replia should enable followerRead")
 	}
 	req.followerRead = followerRead
-	if proto.IsHot(req.volType) && (req.dpReplicaNum == 1 || req.dpReplicaNum == 2) {
+	if !proto.IsStorageClassBlobStore(req.volStorageClass) && (req.dpReplicaNum == 1 || req.dpReplicaNum == 2) {
 		req.followerRead = true
+	}
+
+	req.metaFollowerRead, err = extractBoolWithDefault(r, proto.MetaFollowerReadKey, false)
+	if err != nil {
+		return
 	}
 
 	if req.authenticate, err = extractBoolWithDefault(r, authenticateKey, false); err != nil {
@@ -804,8 +993,10 @@ func parseRequestToCreateVol(r *http.Request, req *createVolReq) (err error) {
 	if req.qosLimitArgs, err = parseRequestQos(r, false, false); err != nil {
 		return err
 	}
+
 	req.zoneName = extractStr(r, zoneNameKey)
 	req.description = extractStr(r, descriptionKey)
+
 	req.domainId, err = extractUint64WithDefault(r, domainIdKey, 0)
 	if err != nil {
 		return
@@ -824,19 +1015,19 @@ func parseRequestToCreateVol(r *http.Request, req *createVolReq) (err error) {
 	req.enableTransaction = txMask
 
 	var txTimeout int64
-	if txTimeout, err = extractTxTimeout(r); err != nil {
+	if txTimeout, err = extractTxTimeout(r, proto.DefaultTransactionTimeout); err != nil {
 		return
 	}
 	req.txTimeout = txTimeout
 
 	var txConflictRetryNum int64
-	if txConflictRetryNum, err = extractTxConflictRetryNum(r); err != nil {
+	if txConflictRetryNum, err = extractTxConflictRetryNum(r, proto.DefaultTxConflictRetryNum); err != nil {
 		return
 	}
 	req.txConflictRetryNum = txConflictRetryNum
 
 	var txConflictRetryInterval int64
-	if txConflictRetryInterval, err = extractTxConflictRetryInterval(r); err != nil {
+	if txConflictRetryInterval, err = extractTxConflictRetryInterval(r, proto.DefaultTxConflictRetryInterval); err != nil {
 		return
 	}
 	req.txConflictRetryInterval = txConflictRetryInterval
@@ -845,10 +1036,23 @@ func parseRequestToCreateVol(r *http.Request, req *createVolReq) (err error) {
 		return
 	}
 
+	if req.trashInterval, err = extractInt64WithDefault(r, trashIntervalKey, 0); err != nil {
+		return
+	}
+	if req.accessTimeValidInterval, err = extractInt64WithDefault(r, accessTimeIntervalKey, proto.DefaultAccessTimeValidInterval); err != nil {
+		return
+	}
+	if req.enablePersistAccessTime, err = extractBoolWithDefault(r, enablePersistAccessTimeKey, false); err != nil {
+		return
+	}
+
+	if req.allowedStorageClass, err = parseAllowedStorageClass(r); err != nil {
+		return
+	}
 	return
 }
 
-func parseRequestToCreateDataPartition(r *http.Request) (count int, name string, err error) {
+func parseRequestToCreateDataPartition(r *http.Request) (count int, volName string, mediaType uint32, err error) {
 	if err = r.ParseForm(); err != nil {
 		return
 	}
@@ -859,9 +1063,14 @@ func parseRequestToCreateDataPartition(r *http.Request) (count int, name string,
 		err = unmatchedKey(countKey)
 		return
 	}
-	if name, err = extractName(r); err != nil {
+	if volName, err = extractName(r); err != nil {
 		return
 	}
+
+	if mediaType, err = extractMediaType(r); err != nil {
+		return
+	}
+
 	return
 }
 
@@ -1281,7 +1490,16 @@ func parseAndExtractSetNodeInfoParams(r *http.Request) (params map[string]interf
 		}
 		params[nodeDpRepairTimeOutKey] = val
 	}
-
+	if value = r.FormValue(nodeDpBackupKey); value != "" {
+		noParams = false
+		val := uint64(0)
+		val, err = strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			err = unmatchedKey(nodeDpBackupKey)
+			return
+		}
+		params[nodeDpBackupKey] = val
+	}
 	if value = r.FormValue(nodeDpMaxRepairErrCntKey); value != "" {
 		noParams = false
 		val := uint64(0)
@@ -1329,6 +1547,28 @@ func parseAndExtractSetNodeInfoParams(r *http.Request) (params map[string]interf
 		params[markDiskBrokenThresholdKey] = val
 	}
 
+	if value = r.FormValue(autoDecommissionDiskKey); value != "" {
+		noParams = false
+		val := false
+		val, err = strconv.ParseBool(value)
+		if err != nil {
+			err = unmatchedKey(autoDecommissionDiskKey)
+			return
+		}
+		params[autoDecommissionDiskKey] = val
+	}
+
+	if value = r.FormValue(autoDecommissionDiskIntervalKey); value != "" {
+		noParams = false
+		val := int64(0)
+		val, err = strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			err = unmatchedKey(autoDecommissionDiskIntervalKey)
+			return
+		}
+		params[autoDecommissionDiskIntervalKey] = time.Duration(val)
+	}
+
 	if value = r.FormValue(autoDpMetaRepairKey); value != "" {
 		noParams = false
 		val := false
@@ -1338,6 +1578,17 @@ func parseAndExtractSetNodeInfoParams(r *http.Request) (params map[string]interf
 			return
 		}
 		params[autoDpMetaRepairKey] = val
+	}
+
+	if value = r.FormValue(autoDpMetaRepairParallelCntKey); value != "" {
+		noParams = false
+		val := int64(0)
+		val, err = strconv.ParseInt(value, 10, 32)
+		if err != nil {
+			err = unmatchedKey(autoDpMetaRepairParallelCntKey)
+			return
+		}
+		params[autoDpMetaRepairParallelCntKey] = int(val)
 	}
 
 	if value = r.FormValue(dpTimeoutKey); value != "" {
@@ -1351,8 +1602,52 @@ func parseAndExtractSetNodeInfoParams(r *http.Request) (params map[string]interf
 		params[dpTimeoutKey] = val
 	}
 
+	if value = r.FormValue(decommissionLimit); value != "" {
+		noParams = false
+		val := uint64(0)
+		val, err = strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			err = unmatchedKey(decommissionLimit)
+			return
+		}
+		params[decommissionLimit] = val
+	}
+
+	if value = r.FormValue(decommissionDiskLimit); value != "" {
+		noParams = false
+		val := uint64(0)
+		val, err = strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			err = unmatchedKey(decommissionDiskLimit)
+			return
+		}
+		params[decommissionDiskLimit] = val
+	}
+
+	if value = r.FormValue(dataMediaTypeKey); value != "" {
+		noParams = false
+		val := uint64(0)
+		val, err = strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			err = unmatchedKey(dataMediaTypeKey)
+			return
+		}
+		params[dataMediaTypeKey] = val
+	}
+
+	if value = r.FormValue(forbidWriteOpOfProtoVersion0); value != "" {
+		noParams = false
+		val := false
+		val, err = strconv.ParseBool(value)
+		if err != nil {
+			err = unmatchedKey(forbidWriteOpOfProtoVersion0)
+			return
+		}
+		params[forbidWriteOpOfProtoVersion0] = val
+	}
+
 	if noParams {
-		err = keyNotFound(nodeDeleteBatchCountKey)
+		err = fmt.Errorf("no key assigned")
 		return
 	}
 	return
@@ -1466,7 +1761,7 @@ func extractName(r *http.Request) (name string, err error) {
 		return
 	}
 	if !volNameRegexp.MatchString(name) {
-		return "", errors.New("name can only be number and letters")
+		return "", proto.ErrVolNameRegExpNotMatch
 	}
 
 	return
@@ -1533,12 +1828,13 @@ func extractUint32(r *http.Request, key string) (val uint32, err error) {
 		return 0, nil
 	}
 
-	var tmp uint64
-	if tmp, err = strconv.ParseUint(str, 10, 32); err != nil {
-		return 0, fmt.Errorf("args [%s] is not legal, val %s", key, str)
+	var valUint64 uint64
+	if valUint64, err = strconv.ParseUint(str, 10, 32); err != nil || valUint64 > math.MaxUint32 {
+		return 0, fmt.Errorf("parse [%s] is not valid uint32 [%d], err %v", key, val, err)
 	}
 
-	return uint32(tmp), nil
+	val = uint32(valUint64)
+	return val, nil
 }
 
 func extractPositiveUint64(r *http.Request, key string) (val uint64, err error) {
@@ -1716,7 +2012,6 @@ func send(w http.ResponseWriter, r *http.Request, reply []byte) {
 		log.LogErrorf("fail to write http len[%d].URL[%v],remoteAddr[%v] err:[%v]", len(reply), r.URL, r.RemoteAddr, err)
 		return
 	}
-	log.LogInfof("URL[%v],remoteAddr[%v],response ok", r.URL, r.RemoteAddr)
 }
 
 func sendErrReply(w http.ResponseWriter, r *http.Request, httpReply *proto.HTTPReply) {
@@ -1884,7 +2179,7 @@ func parseRequestToSetTrashInterval(r *http.Request) (name, authKey string, inte
 	if authKey, err = extractAuthKey(r); err != nil {
 		return
 	}
-	if interval, err = extractInt64WithDefault(r, TrashIntervalKey, 0); err != nil {
+	if interval, err = extractInt64WithDefault(r, trashIntervalKey, 0); err != nil {
 		return
 	}
 	return
@@ -1946,5 +2241,17 @@ func parseRequestToResetDpRestoreStatus(r *http.Request) (dpId uint64, err error
 		return
 	}
 	dpId, err = extractDataPartitionID(r)
+	return
+}
+
+func extractMediaType(r *http.Request) (mediaType uint32, err error) {
+	var value string
+	if value = r.FormValue(mediaTypeKey); value == "" {
+		mediaType = proto.MediaType_Unspecified
+		return
+	}
+
+	parsedMediaType, err := strconv.ParseUint(value, 10, 32)
+	mediaType = uint32(parsedMediaType)
 	return
 }

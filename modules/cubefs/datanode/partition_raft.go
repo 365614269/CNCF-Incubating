@@ -27,30 +27,33 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cubefs/cubefs/datanode/repl"
 	raftproto "github.com/cubefs/cubefs/depends/tiglabs/raft/proto"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/raftstore"
-	"github.com/cubefs/cubefs/repl"
+	"github.com/cubefs/cubefs/util/auditlog"
 	"github.com/cubefs/cubefs/util/config"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
 )
 
 type dataPartitionCfg struct {
-	VolName           string              `json:"vol_name"`
-	ClusterID         string              `json:"cluster_id"`
-	PartitionID       uint64              `json:"partition_id"`
-	PartitionSize     int                 `json:"partition_size"`
-	PartitionType     int                 `json:"partition_type"`
-	Peers             []proto.Peer        `json:"peers"`
-	Hosts             []string            `json:"hosts"`
-	NodeID            uint64              `json:"-"`
-	RaftStore         raftstore.RaftStore `json:"-"`
-	ReplicaNum        int
-	VerSeq            uint64 `json:"ver_seq"`
-	CreateType        int
-	Forbidden         bool
-	DpRepairBlockSize uint64
+	VolName                  string              `json:"vol_name"`
+	ClusterID                string              `json:"cluster_id"`
+	PartitionID              uint64              `json:"partition_id"`
+	PartitionSize            int                 `json:"partition_size"`
+	PartitionType            int                 `json:"partition_type"`
+	Peers                    []proto.Peer        `json:"peers"`
+	Hosts                    []string            `json:"hosts"`
+	NodeID                   uint64              `json:"-"`
+	RaftStore                raftstore.RaftStore `json:"-"`
+	ReplicaNum               int
+	VerSeq                   uint64 `json:"ver_seq"`
+	CreateType               int
+	Forbidden                bool
+	DpRepairBlockSize        uint64
+	IsEnableSnapshot         bool
+	ForbidWriteOpOfProtoVer0 bool
 }
 
 func (dp *DataPartition) raftPort() (heartbeat, replica int, err error) {
@@ -80,7 +83,7 @@ func (dp *DataPartition) raftPort() (heartbeat, replica int, err error) {
 func (dp *DataPartition) StartRaft(isLoad bool) (err error) {
 	begin := time.Now()
 	defer func() {
-		log.LogInfof("[StartRaft] load dp(%v) start raft using time(%v), slow(%v)", dp.partitionID, time.Since(begin), time.Since(begin) > 1*time.Second)
+		log.LogInfof("[StartRaft] load dp(%v) start raft using time(%v), slow(%v)", dp.info(), time.Since(begin), time.Since(begin) > 1*time.Second)
 	}()
 
 	// cache or preload partition not support raft and repair.
@@ -121,8 +124,8 @@ func (dp *DataPartition) StartRaft(isLoad bool) (err error) {
 		}
 		peers = append(peers, rp)
 	}
-	log.LogDebugf("start partition(%v) raft peers: %s path: %s",
-		dp.partitionID, peers, dp.path)
+	log.LogDebugf("start partition(%v) raft peers: %s path: %s applyid:%v",
+		dp.partitionID, peers, dp.path, dp.appliedID)
 	pc := &raftstore.PartitionConfig{
 		ID:      uint64(dp.partitionID),
 		Applied: dp.appliedID,
@@ -146,14 +149,16 @@ func (dp *DataPartition) raftStopped() bool {
 func (dp *DataPartition) stopRaft() {
 	begin := time.Now()
 	defer func() {
-		log.LogInfof("[stopRaft] dp(%v) stop raft using time(%v)", dp.partitionID, time.Since(begin))
+		log.LogInfof("[stopRaft] dp(%v) stop raft using time(%v)", dp.info(), time.Since(begin))
 	}()
 	if atomic.CompareAndSwapInt32(&dp.raftStatus, RaftStatusRunning, RaftStatusStopped) {
 		// cache or preload partition not support raft and repair.
 		if !dp.isNormalType() {
 			return
 		}
-		log.LogErrorf("[FATAL] stop raft partition(%v)", dp.partitionID)
+		msg := fmt.Sprintf("stop raft partition(%v)", dp.info())
+		log.LogErrorf("[FATAL] %v", msg)
+		auditlog.LogDataNodeOp("DataPartitionStopRaft", msg, nil)
 		dp.raftPartition.Stop()
 	}
 }
@@ -243,7 +248,8 @@ func (dp *DataPartition) StartRaftLoggingSchedule() {
 			if dp.raftStopped() {
 				break
 			}
-
+			log.LogDebugf("[StartRaftLoggingSchedule] partition [%v] minAppliedID %v lastTruncateID %v",
+				dp.partitionID, dp.minAppliedID, dp.lastTruncateID)
 			if dp.minAppliedID > dp.lastTruncateID { // Has changed
 				appliedID := atomic.LoadUint64(&dp.appliedID)
 				if err := dp.storeAppliedID(appliedID); err != nil {
@@ -263,17 +269,27 @@ func (dp *DataPartition) StartRaftLoggingSchedule() {
 					truncateRaftLogTimer.Reset(time.Minute)
 					continue
 				}
-				log.LogInfof("[StartRaftLoggingSchedule] partition [%v] scheduled truncate raft log [applied: %v, truncated: %v]", dp.partitionID, appliedID, dp.minAppliedID)
+				log.LogInfof("[StartRaftLoggingSchedule] partition [%v] scheduled truncate raft log"+
+					" [minAppliedID %v, applied: %v, truncated: %v]", dp.partitionID, dp.minAppliedID, appliedID, dp.minAppliedID)
 			}
 			truncateRaftLogTimer.Reset(time.Minute)
 
 		case <-storeAppliedIDTimer.C:
 			appliedID := atomic.LoadUint64(&dp.appliedID)
+			log.LogDebugf("[StartRaftLoggingSchedule] partition [%v] persist applied id(%v)", dp.partitionID, appliedID)
 			if err := dp.storeAppliedID(appliedID); err != nil {
 				log.LogErrorf("partition [%v] scheduled persist applied ID [%v] failed: %v", dp.partitionID, appliedID, err)
 				dp.checkIsDiskError(err, WriteFlag)
 			}
 			storeAppliedIDTimer.Reset(time.Second * 10)
+		case req := <-dp.PersistApplyIdChan:
+			appliedID := atomic.LoadUint64(&dp.appliedID)
+			log.LogDebugf("[StartRaftLoggingSchedule] partition [%v] persist applied id(%v) immediately", dp.partitionID, appliedID)
+			if err := dp.storeAppliedID(appliedID); err != nil {
+				log.LogErrorf("partition [%v] scheduled persist applied ID [%v] immediately failed: %v", dp.partitionID, appliedID, err)
+				dp.checkIsDiskError(err, WriteFlag)
+			}
+			req.done <- struct{}{}
 		}
 	}
 }
@@ -291,6 +307,7 @@ func (dp *DataPartition) StartRaftAfterRepair(isLoad bool) {
 	var (
 		initPartitionSize, initMaxExtentID uint64
 		currLeaderPartitionSize            uint64
+		currLeaderRealUsedSize             uint64
 		err                                error
 	)
 	timer := time.NewTicker(5 * time.Second)
@@ -326,24 +343,28 @@ func (dp *DataPartition) StartRaftAfterRepair(isLoad bool) {
 			}
 
 			// get the partition size from the primary and compare it with the loparal one
-			currLeaderPartitionSize, err = dp.getLeaderPartitionSize(initMaxExtentID)
+			currLeaderPartitionSize, currLeaderRealUsedSize, err = dp.getLeaderPartitionSize(initMaxExtentID)
 			if err != nil {
 				log.LogErrorf("action[StartRaftAfterRepair] PartitionID(%v) get leader size err(%v)", dp.partitionID, err)
 				continue
 			}
 
-			dp.leaderSize = int(currLeaderPartitionSize)
+			dp.leaderSize = int(currLeaderRealUsedSize)
 
 			if currLeaderPartitionSize < initPartitionSize {
 				initPartitionSize = currLeaderPartitionSize
 			}
 			localSize := dp.extentStore.StoreSizeExtentID(initMaxExtentID)
-			dp.decommissionRepairProgress = float64(localSize) / float64(initPartitionSize)
+			if initPartitionSize == 0 {
+				dp.decommissionRepairProgress = 0
+			} else {
+				dp.decommissionRepairProgress = float64(localSize) / float64(initPartitionSize)
+			}
 			log.LogInfof("action[StartRaftAfterRepair] PartitionID(%v) initMaxExtentID(%v) initPartitionSize(%v) currLeaderPartitionSize(%v)"+
-				"localSize(%v)", dp.partitionID, initMaxExtentID, initPartitionSize, currLeaderPartitionSize, localSize)
+				"localSize(%v)decommissionRepairProgress(%v)", dp.partitionID, initMaxExtentID, initPartitionSize, currLeaderPartitionSize, localSize, dp.decommissionRepairProgress)
 
 			if initPartitionSize > localSize {
-				log.LogErrorf("action[StartRaftAfterRepair] PartitionID(%v) leader size(%v) local size(%v) wait snapshot recover", dp.partitionID, initPartitionSize, localSize)
+				log.LogWarnf("action[StartRaftAfterRepair] PartitionID(%v) leader size(%v) local size(%v) wait snapshot recover", dp.partitionID, initPartitionSize, localSize)
 				continue
 			}
 
@@ -354,6 +375,14 @@ func (dp *DataPartition) StartRaftAfterRepair(isLoad bool) {
 				dp.PersistMetadata()
 				return
 			}
+			// if dataNode recv message for deleting replica before startRaft, raft for this replica will keep running without
+			// root path of dp
+			if dp.dataNode.space.Partition(dp.partitionID) == nil {
+				log.LogWarnf("action[StartRaftAfterRepair] PartitionID(%v) is deleted, stop raft! ", dp.info())
+				dp.stopRaft()
+				return
+			}
+
 			// start raft
 			dp.DataPartitionCreateType = proto.NormalCreateDataPartition
 			log.LogInfof("action[StartRaftAfterRepair] PartitionID(%v) change to NormalCreateDataPartition",
@@ -491,7 +520,8 @@ func (dp *DataPartition) storeAppliedID(applyIndex uint64) (err error) {
 func (dp *DataPartition) LoadAppliedID() (err error) {
 	begin := time.Now()
 	defer func() {
-		log.LogInfof("[LoadAppliedID] load dp(%v) load applied id using time(%v)", dp.partitionID, time.Since(begin))
+		log.LogInfof("[LoadAppliedID] load dp(%v) load applied id(%v) using time(%v)", dp.partitionID,
+			dp.appliedID, time.Since(begin))
 	}()
 	filename := path.Join(dp.Path(), ApplyIndexFile)
 	if _, err = os.Stat(filename); err != nil {
@@ -676,7 +706,7 @@ func (dp *DataPartition) findMaxAppliedID(allAppliedIDs []uint64) (maxAppliedID 
 }
 
 // Get the partition size from the leader.
-func (dp *DataPartition) getLeaderPartitionSize(maxExtentID uint64) (size uint64, err error) {
+func (dp *DataPartition) getLeaderPartitionSize(maxExtentID uint64) (logicSize, realUsedSize uint64, err error) {
 	var conn *net.TCPConn
 
 	p := NewPacketToGetPartitionSize(dp.partitionID)
@@ -705,8 +735,13 @@ func (dp *DataPartition) getLeaderPartitionSize(maxExtentID uint64) (size uint64
 		err = errors.Trace(err, "partition(%v) result code not ok (%v) from host(%v)", dp.partitionID, p.ResultCode, target)
 		return
 	}
-	size = binary.BigEndian.Uint64(p.Data)
-	log.LogInfof("partition(%v) MaxExtentID(%v) size(%v)", dp.partitionID, maxExtentID, size)
+
+	logicSize = binary.BigEndian.Uint64(p.Data[:8])
+	if len(p.Data) > 8 {
+		realUsedSize = binary.BigEndian.Uint64(p.Data[8:])
+	}
+
+	log.LogInfof("partition(%v) MaxExtentID(%v) size(%v), usedSize (%v)", dp.partitionID, maxExtentID, logicSize, realUsedSize)
 
 	return
 }

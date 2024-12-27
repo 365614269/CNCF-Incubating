@@ -78,14 +78,20 @@ type Wrapper struct {
 	preload     bool
 	LocalIp     string
 
-	minWritableDataPartitionCnt int
-	verConfReadSeq              uint64
-	verReadSeq                  uint64
-	SimpleClient                SimpleClientInfo
+	verConfReadSeq    uint64
+	verReadSeq        uint64
+	SimpleClient      SimpleClientInfo
+	IsSnapshotEnabled bool
+
+	volStorageClass        uint32
+	volAllowedStorageClass []uint32
+	volStatByClass         map[uint32]*proto.StatOfStorageClass
 }
 
 // NewDataPartitionWrapper returns a new data partition wrapper.
-func NewDataPartitionWrapper(client SimpleClientInfo, volName string, masters []string, preload bool, minWritableDataPartitionCnt int, verReadSeq uint64) (w *Wrapper, err error) {
+func NewDataPartitionWrapper(client SimpleClientInfo, volName string, masters []string, preload bool,
+	minWriteAbleDataPartitionCnt int, verReadSeq uint64, volStorageClass uint32, volAllowedStorageClass []uint32,
+) (w *Wrapper, err error) {
 	log.LogInfof("action[NewDataPartitionWrapper] verReadSeq %v", verReadSeq)
 
 	w = new(Wrapper)
@@ -96,11 +102,8 @@ func NewDataPartitionWrapper(client SimpleClientInfo, volName string, masters []
 	w.partitions = make(map[uint64]*DataPartition)
 	w.HostsStatus = make(map[string]bool)
 	w.preload = preload
-
-	w.minWritableDataPartitionCnt = minWritableDataPartitionCnt
-	if w.minWritableDataPartitionCnt < 0 {
-		w.minWritableDataPartitionCnt = DefaultMinWritableDataPartitionCnt
-	}
+	w.volStorageClass = volStorageClass
+	w.volAllowedStorageClass = volAllowedStorageClass
 
 	if w.LocalIp, err = ump.GetLocalIpAddr(); err != nil {
 		err = errors.Trace(err, "NewDataPartitionWrapper:")
@@ -111,7 +114,6 @@ func NewDataPartitionWrapper(client SimpleClientInfo, volName string, masters []
 		err = errors.Trace(err, "NewDataPartitionWrapper:")
 		return
 	}
-
 	if err = w.GetSimpleVolView(); err != nil {
 		err = errors.Trace(err, "NewDataPartitionWrapper:")
 		return
@@ -178,6 +180,7 @@ func (w *Wrapper) updateClusterInfo() (err error) {
 	log.LogInfof("UpdateClusterInfo: get cluster info: cluster(%v) localIP(%v)", info.Cluster, info.Ip)
 	w.clusterName = info.Cluster
 	LocalIP = info.Ip
+	w.IsSnapshotEnabled = info.ClusterEnableSnapshot
 	return
 }
 
@@ -213,6 +216,7 @@ func (w *Wrapper) GetSimpleVolView() (err error) {
 	w.dpSelectorParm = view.DpSelectorParm
 	w.volType = view.VolType
 	w.EnablePosixAcl = view.EnablePosixAcl
+
 	w.UpdateUidsView(view)
 
 	log.LogDebugf("GetSimpleVolView: get volume simple info: ID(%v) name(%v) owner(%v) status(%v) capacity(%v) "+
@@ -226,10 +230,20 @@ func (w *Wrapper) GetSimpleVolView() (err error) {
 
 func (w *Wrapper) uploadFlowInfoByTick(clientInfo SimpleClientInfo) {
 	ticker := time.NewTicker(5 * time.Second)
+	lWork := true
 	for {
 		select {
 		case <-ticker.C:
-			w.UploadFlowInfo(clientInfo, false)
+			if bWork, err := w.UploadFlowInfo(clientInfo, false); err == nil {
+				if bWork != lWork {
+					if bWork {
+						ticker.Reset(5 * time.Second)
+					} else {
+						ticker.Reset(time.Minute)
+					}
+					lWork = bWork
+				}
+			}
 		case <-w.stopC:
 			return
 		}
@@ -256,15 +270,13 @@ func (w *Wrapper) update(clientInfo SimpleClientInfo) {
 	}
 }
 
-func (w *Wrapper) UploadFlowInfo(clientInfo SimpleClientInfo, init bool) (err error) {
-	var limitRsp *proto.LimitRsp2Client
+func (w *Wrapper) UploadFlowInfo(clientInfo SimpleClientInfo, init bool) (work bool, err error) {
+	var (
+		limitRsp *proto.LimitRsp2Client
+		flowInfo *proto.ClientReportLimitInfo
+	)
 
-	flowInfo, isNeedReport := clientInfo.GetFlowInfo()
-	if !isNeedReport {
-		log.LogDebugf("action[UploadFlowInfo] no need report!")
-		return nil
-	}
-
+	flowInfo, work = clientInfo.GetFlowInfo()
 	if limitRsp, err = w.mc.AdminAPI().UploadFlowInfo(w.volName, flowInfo); err != nil {
 		log.LogWarnf("UpdateSimpleVolView: get volume simple info fail: volume(%v) err(%v)", w.volName, err)
 		return
@@ -293,6 +305,9 @@ func (w *Wrapper) CheckPermission() {
 }
 
 func (w *Wrapper) updateVerlist(client SimpleClientInfo) (err error) {
+	if !w.IsSnapshotEnabled {
+		return
+	}
 	verList, err := w.mc.AdminAPI().GetVerList(w.volName)
 	if err != nil {
 		log.LogErrorf("CheckReadVerSeq: get cluster fail: err(%v)", err)
@@ -355,42 +370,65 @@ func (w *Wrapper) updateDataPartitionByRsp(forceUpdate bool, refreshPolicy Refre
 			ClientWrapper:         w,
 		}
 	}
-
-	if proto.IsCold(w.volType) {
+	if proto.IsCold(w.volType) || proto.IsStorageClassBlobStore(w.volStorageClass) { // avoid stuck on read from deleted cache-dp
 		w.clearPartitions()
 	}
+
+	ssdDpCount := 0
+	ssdDpWritableCount := 0
+	hddDpCount := 0
+	hddDpWritableCount := 0
 	rwPartitionGroups := make([]*DataPartition, 0)
 	for index, partition := range DataPartitions {
 		if partition == nil {
-			log.LogErrorf("action[updateDataPartitionByRsp] index [%v] is nil", index)
+			log.LogErrorf("[updateDataPartitionByRsp] index [%v] is nil", index)
 			continue
 		}
 		dp := convert(partition)
 		if w.followerRead && w.nearRead {
 			dp.NearHosts = w.sortHostsByDistance(dp.Hosts)
 		}
-		log.LogInfof("updateDataPartition: dp(%v)", dp)
+		log.LogInfof("[updateDataPartitionByRsp]: dp(%v)", dp)
 		w.replaceOrInsertPartition(dp)
+
+		if dp.MediaType == proto.MediaType_SSD {
+			ssdDpCount += 1
+		} else if dp.MediaType == proto.MediaType_HDD {
+			hddDpCount += 1
+		}
+
 		// do not insert preload dp in cold vol
-		if proto.IsCold(w.volType) && proto.IsPreLoadDp(dp.PartitionType) {
+		if (proto.IsCold(w.volType) || proto.IsStorageClassBlobStore(w.volStorageClass)) && proto.IsPreLoadDp(dp.PartitionType) {
 			continue
 		}
 		if dp.Status == proto.ReadWrite {
 			dp.MetricsRefresh()
 			rwPartitionGroups = append(rwPartitionGroups, dp)
-			log.LogInfof("updateDataPartition: dp(%v) address(%p) insert to rwPartitionGroups", dp.PartitionID, dp)
+			log.LogInfof("updateDataPartition: dpId(%v) mediaType(%v) address(%p) insert to rwPartitionGroups",
+				dp.PartitionID, proto.MediaTypeString(dp.MediaType), dp)
+			if dp.MediaType == proto.MediaType_SSD {
+				ssdDpWritableCount += 1
+			} else if dp.MediaType == proto.MediaType_HDD {
+				hddDpWritableCount += 1
+			}
 		}
 	}
 
 	// if not forceUpdate, at least keep 1 rw dp in the selector to avoid can't do write
 	if forceUpdate || len(rwPartitionGroups) >= 1 {
-		log.LogInfof("updateDataPartition: refresh dpSelector of volume(%v) with %v rw partitions(%v all), forceUpdate(%v) policy(%v)",
-			w.volName, len(rwPartitionGroups), len(DataPartitions), forceUpdate, refreshPolicy)
+		log.LogInfof("updateDataPartition: volume(%v) refresh dpSelector, forceUpdate(%v) policy(%v), "+
+			"allDp(%v) allWritableDp(%v), SsdDp(%v) SsdWritableDp(%v), hddDp(%v) hddWritableDp(%v)",
+			w.volName, forceUpdate, refreshPolicy, len(DataPartitions), len(rwPartitionGroups),
+			ssdDpCount, ssdDpWritableCount, hddDpCount, hddDpWritableCount)
 		w.refreshDpSelector(refreshPolicy, rwPartitionGroups)
 	} else {
-		err = errors.New("updateDataPartition: no writable data partition")
-		log.LogWarnf("updateDataPartition: no enough writable data partitions, volume(%v) with %v rw partitions(%v all), forceUpdate(%v)",
-			w.volName, len(rwPartitionGroups), len(DataPartitions), forceUpdate)
+		if len(DataPartitions) == 0 && (proto.IsCold(w.volType) || proto.IsStorageClassBlobStore(w.volStorageClass)) {
+			log.LogInfof("updateDataPartition: cold volume with no data partitions")
+		} else {
+			err = errors.New("updateDataPartition: no writable data partition")
+			log.LogWarnf("updateDataPartition: no enough writable data partitions, volume(%v) with %v rw partitions(%v all), forceUpdate(%v)",
+				w.volName, len(rwPartitionGroups), len(DataPartitions), forceUpdate)
+		}
 	}
 
 	log.LogInfof("updateDataPartition: finish")
@@ -414,7 +452,29 @@ func (w *Wrapper) updateDataPartition(isInit bool) (err error) {
 		forceUpdate = true
 	}
 
+	w.Lock.Lock()
+	m := make(map[uint32]*proto.StatOfStorageClass)
+	for _, st := range dpv.StatByClass {
+		m[st.StorageClass] = st
+		log.LogInfof("updateDataPartition: get storage class stat info: volume(%v) stat(%s) VolReadOnly(%v)",
+			w.volName, st.String(), dpv.VolReadOnly)
+	}
+	w.volStatByClass = m
+	w.Lock.Unlock()
+
 	return w.updateDataPartitionByRsp(forceUpdate, UpdateDpPolicy, dpv.DataPartitions)
+}
+
+func (w *Wrapper) CanWriteByClass(class uint32) bool {
+	w.Lock.RLock()
+	defer w.Lock.RUnlock()
+
+	if len(w.volStatByClass) == 0 {
+		return true
+	}
+
+	st := w.volStatByClass[class]
+	return !st.Full()
 }
 
 func (w *Wrapper) UpdateDataPartition() (err error) {
@@ -431,7 +491,8 @@ func (w *Wrapper) getDataPartitionFromMaster(dpId uint64) (err error) {
 		return
 	}
 
-	log.LogInfof("getDataPartitionFromMaster: get data partitions: volume(%v), dpId(%v)", w.volName, dpId)
+	log.LogInfof("getDataPartitionFromMaster: get data partitions: volume(%v), dpId(%v) mediaType(%v)",
+		w.volName, dpId, proto.MediaTypeString(dpInfo.MediaType))
 	var leaderAddr string
 	for _, replica := range dpInfo.Replicas {
 		if replica.IsLeader {
@@ -448,6 +509,7 @@ func (w *Wrapper) getDataPartitionFromMaster(dpId uint64) (err error) {
 	dpr.LeaderAddr = leaderAddr
 	dpr.IsRecover = dpInfo.IsRecover
 	dpr.IsDiscard = dpInfo.IsDiscard
+	dpr.MediaType = dpInfo.MediaType
 
 	DataPartitions := make([]*proto.DataPartitionResponse, 1)
 	DataPartitions = append(DataPartitions, dpr)
@@ -476,7 +538,7 @@ func (w *Wrapper) AllocatePreLoadDataPartition(volName string, count int, capaci
 	rwPartitionGroups := make([]*DataPartition, 0)
 	for _, partition := range dpv.DataPartitions {
 		dp := convert(partition)
-		if proto.IsCold(w.volType) && !proto.IsPreLoadDp(dp.PartitionType) {
+		if (proto.IsCold(w.volType) || proto.IsStorageClassBlobStore(w.volStorageClass)) && !proto.IsPreLoadDp(dp.PartitionType) {
 			continue
 		}
 		log.LogInfof("updateDataPartition: dp(%v)", dp)
@@ -518,16 +580,16 @@ func (w *Wrapper) replaceOrInsertPartition(dp *DataPartition) {
 // GetDataPartition returns the data partition based on the given partition ID.
 func (w *Wrapper) GetDataPartition(partitionID uint64) (*DataPartition, error) {
 	dp, ok := w.tryGetPartition(partitionID)
-	if !ok && !proto.IsCold(w.volType) { // cache miss && hot volume
+	if !ok && (!proto.IsCold(w.volType) || proto.IsStorageClassReplica(w.volStorageClass)) { // cache miss && hot volume
 		err := w.getDataPartitionFromMaster(partitionID)
 		if err == nil {
 			dp, ok = w.tryGetPartition(partitionID)
 			if !ok {
-				return nil, fmt.Errorf("partition[%v] not exsit", partitionID)
+				return nil, fmt.Errorf("after get from master, partition[%v] not exsit", partitionID)
 			}
 			return dp, nil
 		}
-		return nil, fmt.Errorf("partition[%v] not exsit", partitionID)
+		return nil, fmt.Errorf("get from master failed, partition[%v] not exsit", partitionID)
 	}
 	if !ok {
 		return nil, fmt.Errorf("partition[%v] not exsit", partitionID)
@@ -584,16 +646,16 @@ func (w *Wrapper) WarningMsg() string {
 }
 
 func (w *Wrapper) updateDataNodeStatus() (err error) {
-	var dataNodes []proto.NodeView
-	dataNodes, err = w.mc.AdminAPI().GetClusterDataNodes()
+	var cv *proto.ClusterView
+	cv, err = w.mc.AdminAPI().GetCluster(false)
 	if err != nil {
-		log.LogErrorf("updateDataNodeStatus: GetClusterDataNodes fail: err(%v)", err)
+		log.LogErrorf("updateDataNodeStatus: get cluster fail: err(%v)", err)
 		return
 	}
 
 	newHostsStatus := make(map[string]bool)
-	for _, node := range dataNodes {
-		newHostsStatus[node.Addr] = node.IsActive
+	for _, node := range cv.DataNodes {
+		newHostsStatus[node.Addr] = node.Status
 	}
 	log.LogInfof("updateDataNodeStatus: update %d hosts status", len(newHostsStatus))
 

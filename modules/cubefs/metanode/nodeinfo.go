@@ -57,7 +57,9 @@ func (m *MetaNode) startUpdateNodeInfo() {
 			return
 		case <-ticker.C:
 			m.updateNodeInfo()
-			m.metadataManager.checkVolVerList()
+			if m.clusterEnableSnapshot {
+				m.metadataManager.checkVolVerList()
+			}
 		}
 	}
 }
@@ -67,7 +69,6 @@ func (m *MetaNode) stopUpdateNodeInfo() {
 }
 
 func (m *MetaNode) updateNodeInfo() {
-	// clusterInfo, err := getClusterInfo()
 	clusterInfo, err := masterClient.AdminAPI().GetClusterInfo()
 	if err != nil {
 		log.LogErrorf("[updateNodeInfo] %s", err.Error())
@@ -84,6 +85,4 @@ func (m *MetaNode) updateNodeInfo() {
 		atomic.StoreUint32(&dirChildrenNumLimit, clusterInfo.DirChildrenNumLimit)
 		log.LogInfof("updateNodeInfo: DirChildrenNumLimit(%v)", clusterInfo.DirChildrenNumLimit)
 	}
-
-	// updateDirChildrenNumLimit(clusterInfo.DirChildrenNumLimit)
 }

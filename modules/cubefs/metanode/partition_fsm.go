@@ -38,6 +38,13 @@ import (
 func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, err error) {
 	msg := &MetaItem{}
 	defer func() {
+		if r := recover(); r != nil {
+			panicMsg := fmt.Sprintf("[metaPartition.Apply] mpId(%v) op(%v) occurred panic, err(%v), ",
+				mp.config.PartitionId, msg.Op, r)
+			log.LogWarn(panicMsg)
+			panic(panicMsg)
+		}
+
 		if err == nil {
 			mp.uploadApplyID(index)
 		}
@@ -90,13 +97,19 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		}
 		resp = mp.fsmUnlinkInode(ino, 0)
 	case opFSMUnlinkInodeOnce:
-		var inoOnce *InodeOnce
-		if inoOnce, err = InodeOnceUnmarshal(msg.V); err != nil {
+		var inoOnceWithVersion *InodeOnceWithVersion
+		if inoOnceWithVersion, err = InodeOnceUnmarshal(msg.V); err != nil {
 			return
 		}
-		ino := NewInode(inoOnce.Inode, 0)
-		ino.setVer(inoOnce.VerSeq)
-		resp = mp.fsmUnlinkInode(ino, inoOnce.UniqID)
+
+		status := mp.inodeInTx(inoOnceWithVersion.Inode)
+		if status != proto.OpOk {
+			resp = &InodeResponse{Status: status}
+			return
+		}
+		ino := NewInode(inoOnceWithVersion.Inode, 0)
+		ino.setVer(inoOnceWithVersion.VerSeq)
+		resp = mp.fsmUnlinkInode(ino, inoOnceWithVersion.UniqID)
 	case opFSMUnlinkInodeBatch:
 		inodes, err := InodeBatchUnmarshal(msg.V)
 		if err != nil {
@@ -121,12 +134,18 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		}
 		resp = mp.fsmCreateLinkInode(ino, 0)
 	case opFSMCreateLinkInodeOnce:
-		var inoOnce *InodeOnce
-		if inoOnce, err = InodeOnceUnmarshal(msg.V); err != nil {
+		var inoOnceWithVersion *InodeOnceWithVersion
+		if inoOnceWithVersion, err = InodeOnceUnmarshal(msg.V); err != nil {
 			return
 		}
-		ino := NewInode(inoOnce.Inode, 0)
-		resp = mp.fsmCreateLinkInode(ino, inoOnce.UniqID)
+		status := mp.inodeInTx(inoOnceWithVersion.Inode)
+		if status != proto.OpOk {
+			resp = &InodeResponse{Status: status}
+			return
+		}
+		ino := NewInode(inoOnceWithVersion.Inode, 0)
+		ino.setVer(inoOnceWithVersion.VerSeq)
+		resp = mp.fsmCreateLinkInode(ino, inoOnceWithVersion.UniqID)
 	case opFSMEvictInode:
 		ino := NewInode(0, 0)
 		if err = ino.Unmarshal(msg.V); err != nil {
@@ -172,7 +191,9 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 
 		status := mp.dentryInTx(den.ParentId, den.Name)
 		if status != proto.OpOk {
-			resp = status
+			resp = &DentryResponse{
+				Status: status,
+			}
 			return
 		}
 
@@ -239,6 +260,8 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		}
 		resp = mp.fsmClearInodeCache(ino)
 	case opFSMSentToChan:
+		resp = mp.fsmSendToChan(msg.V, false)
+	case opFSMSentToChanWithVer:
 		resp = mp.fsmSendToChan(msg.V, true)
 	case opFSMStoreTick:
 		inodeTree := mp.inodeTree.GetTree()
@@ -450,10 +473,53 @@ func (mp *metaPartition) Apply(command []byte, index uint64) (resp interface{}, 
 		err = mp.fsmUniqCheckerEvict(req)
 	case opFSMVersionOp:
 		err = mp.fsmVersionOp(msg.V)
+	case opFSMRenewalForbiddenMigration:
+		ino := NewInode(0, 0)
+		if err = ino.Unmarshal(msg.V); err != nil {
+			return
+		}
+		resp = mp.fsmRenewalInodeForbiddenMigration(ino)
+	case opFSMUpdateExtentKeyAfterMigration:
+		ino := NewInode(0, 0)
+		if err = ino.Unmarshal(msg.V); err != nil {
+			log.LogWarnf("[Apply] mp(%v) opFSMUpdateExtentKeyAfterMigration Unmarshal inode failed: %v",
+				mp.config.PartitionId, err.Error())
+			return
+		}
+		resp = mp.fsmUpdateExtentKeyAfterMigration(ino)
+	case opFSMSetInodeCreateTime:
+		req := &SetCreateTimeRequest{}
+		err = json.Unmarshal(msg.V, req)
+		if err != nil {
+			return
+		}
+		err = mp.fsmSetCreateTime(req)
+	case opFSMInternalBatchFreeInodeMigrationExtentKey:
+		err = mp.fsmInternalBatchFreeMigrationExtentKey(msg.V)
+	case opFSMSetMigrationExtentKeyDeleteImmediately:
+		ino := NewInode(0, 0)
+		if err = ino.Unmarshal(msg.V); err != nil {
+			log.LogWarnf("[Apply] mp(%v) opFSMSetMigrationExtentKeyDeleteImmediately Unmarshal inode failed: %v",
+				mp.config.PartitionId, err.Error())
+			return
+		}
+		resp = mp.fsmSetMigrationExtentKeyDeleteImmediately(ino)
 	default:
 		// do nothing
-	}
+	case opFSMSyncInodeAccessTime:
+		ino := NewInode(0, 0)
+		if err = ino.Unmarshal(msg.V); err != nil {
+			return
+		}
+		resp = mp.fsmSyncInodeAccessTime(ino)
+	case opFSMBatchSyncInodeATime:
+		if len(msg.V) < 8 || len(msg.V)%8 != 0 {
+			err = fmt.Errorf("opFSMBatchSyncInodeATime: msg is not valid, mp %d, len(%d)", mp.config.PartitionId, len(msg.V))
+			return
+		}
 
+		resp = mp.fsmBatchSyncInodeAccessTime(msg.V)
+	}
 	return
 }
 
@@ -471,6 +537,11 @@ func (mp *metaPartition) runVersionOp() {
 }
 
 func (mp *metaPartition) fsmVersionOp(reqData []byte) (err error) {
+	if mp.manager != nil && mp.manager.metaNode != nil && !mp.manager.metaNode.clusterEnableSnapshot {
+		err = fmt.Errorf("clusterEnableSnapshot not enabled")
+		log.LogErrorf("action[fsmVersionOp] mp[%v] err %v", mp.config.PartitionId, err)
+		return nil
+	}
 	mp.multiVersionList.RWLock.Lock()
 	defer mp.multiVersionList.RWLock.Unlock()
 
@@ -567,6 +638,9 @@ func (mp *metaPartition) fsmVersionOp(reqData []byte) (err error) {
 
 // ApplyMemberChange  apply changes to the raft member.
 func (mp *metaPartition) ApplyMemberChange(confChange *raftproto.ConfChange, index uint64) (resp interface{}, err error) {
+	mp.nonIdempotent.Lock()
+	defer mp.nonIdempotent.Unlock()
+
 	defer func() {
 		if err == nil {
 			mp.uploadApplyID(index)
@@ -875,6 +949,7 @@ func (mp *metaPartition) HandleFatalEvent(err *raft.FatalError) {
 // HandleLeaderChange handles the leader changes.
 func (mp *metaPartition) HandleLeaderChange(leader uint64) {
 	exporter.Warning(fmt.Sprintf("metaPartition(%v) changeLeader to (%v)", mp.config.PartitionId, leader))
+	log.LogDebugf(fmt.Sprintf("metaPartition(%v) changeLeader to (%v)", mp.config.PartitionId, leader))
 	if mp.config.NodeId == leader {
 		localIp := mp.manager.metaNode.localAddr
 		if localIp == "" {
@@ -888,14 +963,18 @@ func (mp *metaPartition) HandleLeaderChange(leader uint64) {
 			go mp.raftPartition.TryToLeader(mp.config.PartitionId)
 			return
 		}
-		log.LogDebugf("[metaPartition] HandleLeaderChange close conn %v, nodeId: %v, leader: %v", serverPort, mp.config.NodeId, leader)
-		exporter.Warning(fmt.Sprintf("[metaPartition]mp[%v] HandleLeaderChange close conn %v, nodeId: %v, leader: %v", mp.config.PartitionId, serverPort, mp.config.NodeId, leader))
+		log.LogDebugf("[metaPartition] pid: %v HandleLeaderChange close conn %v, nodeId: %v, leader: %v",
+			mp.config.PartitionId, serverPort, mp.config.NodeId, leader)
+		exporter.Warning(fmt.Sprintf("[metaPartition]mp[%v] HandleLeaderChange close conn %v, nodeId: %v, leader: %v",
+			mp.config.PartitionId, serverPort, mp.config.NodeId, leader))
 		conn.(*net.TCPConn).SetLinger(0)
 		conn.Close()
 	}
 	if mp.config.NodeId != leader {
-		log.LogDebugf("[metaPartition] pid: %v HandleLeaderChange become unleader nodeId: %v, leader: %v", mp.config.PartitionId, mp.config.NodeId, leader)
-		exporter.Warning(fmt.Sprintf("[metaPartition] pid: %v HandleLeaderChange become unleader nodeId: %v, leader: %v", mp.config.PartitionId, mp.config.NodeId, leader))
+		log.LogDebugf("[metaPartition] pid: %v HandleLeaderChange become unleader nodeId: %v, leader: %v",
+			mp.config.PartitionId, mp.config.NodeId, leader)
+		exporter.Warning(fmt.Sprintf("[metaPartition] pid: %v HandleLeaderChange become unleader nodeId: %v, leader: %v",
+			mp.config.PartitionId, mp.config.NodeId, leader))
 		mp.storeChan <- &storeMsg{
 			command: stopStoreTick,
 		}
@@ -905,8 +984,10 @@ func (mp *metaPartition) HandleLeaderChange(leader uint64) {
 		command: startStoreTick,
 	}
 
-	log.LogDebugf("[metaPartition] pid: %v HandleLeaderChange become leader conn %v, nodeId: %v, leader: %v", mp.config.PartitionId, serverPort, mp.config.NodeId, leader)
-	exporter.Warning(fmt.Sprintf("[metaPartition] pid: %v HandleLeaderChange become leader conn %v, nodeId: %v, leader: %v", mp.config.PartitionId, serverPort, mp.config.NodeId, leader))
+	log.LogDebugf("[metaPartition] pid: %v HandleLeaderChange become leader conn %v, nodeId: %v, leader: %v",
+		mp.config.PartitionId, serverPort, mp.config.NodeId, leader)
+	exporter.Warning(fmt.Sprintf("[metaPartition] pid: %v HandleLeaderChange become leader conn %v, nodeId: %v, leader: %v",
+		mp.config.PartitionId, serverPort, mp.config.NodeId, leader))
 	if mp.config.Start == 0 && mp.config.Cursor == 0 {
 		id, err := mp.nextInodeID()
 		if err != nil {
@@ -914,6 +995,7 @@ func (mp *metaPartition) HandleLeaderChange(leader uint64) {
 			exporter.Warning(fmt.Sprintf("[HandleLeaderChange] pid %v init root inode id: %s.", mp.config.PartitionId, err.Error()))
 		}
 		ino := NewInode(id, proto.Mode(os.ModePerm|os.ModeDir))
+		ino.StorageClass = mp.GetVolStorageClass()
 		go mp.initInode(ino)
 	}
 }

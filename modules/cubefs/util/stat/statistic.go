@@ -85,6 +85,7 @@ type Statistic struct {
 	typeInfoMap   map[string]*typeInfo
 	closeStat     bool
 	useMutex      bool
+	headRoom      int64
 	sync.Mutex
 }
 
@@ -113,6 +114,7 @@ func NewStatistic(dir, logModule string, logMaxSize int64, timeOutUs [MaxTimeout
 		closeStat:     false,
 		useMutex:      useMutex,
 		Mutex:         sync.Mutex{},
+		headRoom:      DefaultHeadRoom,
 	}
 
 	gSt = st
@@ -140,7 +142,7 @@ func (st *Statistic) flushScheduler() {
 			continue
 		}
 		diskSpaceLeft := int64(fs.Bavail * uint64(fs.Bsize))
-		diskSpaceLeft -= DefaultHeadRoom * 1024 * 1024
+		diskSpaceLeft -= st.headRoom * 1024 * 1024
 		removeLogFile(diskSpaceLeft, Stat_Module)
 	}
 }
@@ -392,6 +394,9 @@ func shiftFiles() error {
 }
 
 func StatBandWidth(typeName string, Size uint32) {
+	if gSt == nil {
+		return
+	}
 	EndStat(typeName+"[FLOW_KB]", nil, nil, Size/1024)
 }
 

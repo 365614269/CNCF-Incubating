@@ -36,8 +36,8 @@ type Packet struct {
 
 // String returns the string format of the packet.
 func (p *Packet) String() string {
-	return fmt.Sprintf("ReqID(%v)Op(%v)Inode(%v)FileOffset(%v)Size(%v)PartitionID(%v)ExtentID(%v)ExtentOffset(%v)CRC(%v)ResultCode(%v:%v)Seq(%v)",
-		p.ReqID, p.GetOpMsg(), p.inode, p.KernelOffset, p.Size, p.PartitionID, p.ExtentID, p.ExtentOffset, p.CRC, p.ResultCode, p.GetResultMsg(), p.VerSeq)
+	return fmt.Sprintf("ReqID(%v)Op(%v)Inode(%v)FileOffset(%v)Size(%v)PartitionID(%v)ExtentID(%v)ExtentOffset(%v)CRC(%v)ResultCode(%v:%v)Seq(%v), errCnt(%d)",
+		p.ReqID, p.GetOpMsg(), p.inode, p.KernelOffset, p.Size, p.PartitionID, p.ExtentID, p.ExtentOffset, p.CRC, p.ResultCode, p.GetResultMsg(), p.VerSeq, p.errCount)
 }
 
 func NewWriteTinyDirectly(inode uint64, dpID uint64, offset int, dp *wrapper.DataPartition) *Packet {
@@ -99,7 +99,7 @@ func NewOverwriteByAppendPacket(dp *wrapper.DataPartition, extentID uint64, exte
 }
 
 // NewOverwritePacket returns a new overwrite packet.
-func NewOverwritePacket(dp *wrapper.DataPartition, extentID uint64, extentOffset int, inode uint64, fileOffset int) *Packet {
+func NewOverwritePacket(dp *wrapper.DataPartition, extentID uint64, extentOffset int, inode uint64, fileOffset int, isSnap bool) *Packet {
 	p := new(Packet)
 	p.PartitionID = dp.PartitionID
 	p.Magic = proto.ProtoMagic
@@ -110,7 +110,11 @@ func NewOverwritePacket(dp *wrapper.DataPartition, extentID uint64, extentOffset
 	p.Arg = nil
 	p.ArgLen = 0
 	p.RemainingFollowers = 0
-	p.Opcode = proto.OpRandomWriteVer // proto.OpRandomWrite
+	if isSnap {
+		p.Opcode = proto.OpRandomWriteVer // proto.OpRandomWrite
+	} else {
+		p.Opcode = proto.OpRandomWrite // proto.OpRandomWrite
+	}
 	p.inode = inode
 	p.KernelOffset = uint64(fileOffset)
 	p.Data, _ = proto.Buffers.Get(util.BlockSize)
@@ -144,6 +148,7 @@ func NewCreateExtentPacket(dp *wrapper.DataPartition, inode uint64) *Packet {
 	p.PartitionID = dp.PartitionID
 	p.Magic = proto.ProtoMagic
 	p.ExtentType = proto.NormalExtentType
+	p.ExtentType |= proto.PacketProtocolVersionFlag
 	p.Arg = ([]byte)(dp.GetAllAddrs())
 	p.ArgLen = uint32(len(p.Arg))
 	p.RemainingFollowers = uint8(len(dp.Hosts) - 1)
@@ -198,6 +203,10 @@ func (p *Packet) readFromConn(c net.Conn, deadlineTime time.Duration) (err error
 		return
 	}
 	if err = p.UnmarshalHeader(header); err != nil {
+		return
+	}
+
+	if err = p.TryReadExtraFieldsFromConn(c); err != nil {
 		return
 	}
 

@@ -20,53 +20,90 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cubefs/cubefs/proto"
+
 	"github.com/cubefs/cubefs/util/btree"
 )
+
+type ExtendMultiSnap struct {
+	verSeq    uint64
+	multiVers []*Extend
+	versionMu sync.RWMutex
+}
 
 type Extend struct {
 	inode     uint64
 	dataMap   map[string][]byte
-	verSeq    uint64
-	multiVers []*Extend
-	versionMu sync.RWMutex
+	Quota     []byte
+	multiSnap *ExtendMultiSnap
 	mu        sync.RWMutex
 }
 
-func (e *Extend) checkSequence() (err error) {
-	e.versionMu.RLock()
-	defer e.versionMu.RUnlock()
+func (e *Extend) getVersion() uint64 {
+	if e.multiSnap == nil {
+		return 0
+	}
+	return e.multiSnap.verSeq
+}
 
-	lastSeq := e.verSeq
-	for id, extend := range e.multiVers {
-		if lastSeq <= extend.verSeq {
-			return fmt.Errorf("id[%v] seq [%v] not less than last seq [%v]", id, extend.verSeq, lastSeq)
+func (e *Extend) genSnap() {
+	if e.multiSnap == nil {
+		e.multiSnap = &ExtendMultiSnap{}
+	}
+	e.multiSnap.multiVers = append([]*Extend{e.Copy().(*Extend)}, e.multiSnap.multiVers...)
+}
+
+func (e *Extend) setVersion(seq uint64) {
+	if e.multiSnap == nil {
+		e.multiSnap = &ExtendMultiSnap{}
+	}
+	e.multiSnap.verSeq = seq
+}
+
+func (e *Extend) checkSequence() (err error) {
+	if e.multiSnap == nil {
+		return
+	}
+	e.multiSnap.versionMu.RLock()
+	defer e.multiSnap.versionMu.RUnlock()
+
+	lastSeq := e.getVersion()
+	for id, extend := range e.multiSnap.multiVers {
+		if lastSeq <= extend.getVersion() {
+			return fmt.Errorf("id[%v] seq [%v] not less than last seq [%v]", id, extend.getVersion(), lastSeq)
 		}
 	}
 	return
 }
 
 func (e *Extend) GetMinVer() uint64 {
-	if len(e.multiVers) == 0 {
-		return e.verSeq
+	if e.multiSnap == nil {
+		return 0
 	}
-	return e.multiVers[len(e.multiVers)-1].verSeq
+	if len(e.multiSnap.multiVers) == 0 {
+		return e.multiSnap.verSeq
+	}
+	return e.multiSnap.multiVers[len(e.multiSnap.multiVers)-1].getVersion()
 }
 
 func (e *Extend) GetExtentByVersion(ver uint64) (extend *Extend) {
 	if ver == 0 {
 		return e
 	}
+	if e.multiSnap == nil {
+		return
+	}
 	if isInitSnapVer(ver) {
 		if e.GetMinVer() != 0 {
 			return nil
 		}
-		return e.multiVers[len(e.multiVers)-1]
+		return e.multiSnap.multiVers[len(e.multiSnap.multiVers)-1]
 	}
-	e.versionMu.RLock()
-	defer e.versionMu.RUnlock()
-	for i := 0; i < len(e.multiVers)-1; i++ {
-		if e.multiVers[i].verSeq <= ver {
-			return e.multiVers[i]
+	e.multiSnap.versionMu.RLock()
+	defer e.multiSnap.versionMu.RUnlock()
+	for i := 0; i < len(e.multiSnap.multiVers)-1; i++ {
+		if e.multiSnap.multiVers[i].getVersion() <= ver {
+			return e.multiSnap.multiVers[i]
 		}
 	}
 	return
@@ -74,6 +111,10 @@ func (e *Extend) GetExtentByVersion(ver uint64) (extend *Extend) {
 
 func NewExtend(inode uint64) *Extend {
 	return &Extend{inode: inode, dataMap: make(map[string][]byte)}
+}
+
+func NewExtendWithQuota(inode uint64) *Extend {
+	return &Extend{inode: inode}
 }
 
 func NewExtendFromBytes(raw []byte) (*Extend, error) {
@@ -84,7 +125,7 @@ func NewExtendFromBytes(raw []byte) (*Extend, error) {
 	if inode, err = binary.ReadUvarint(buffer); err != nil {
 		return nil, err
 	}
-	ext := NewExtend(inode)
+	ext := NewExtendWithQuota(inode)
 	// decode number of key-value pairs
 	var numKV uint64
 	if numKV, err = binary.ReadUvarint(buffer); err != nil {
@@ -109,6 +150,13 @@ func NewExtendFromBytes(raw []byte) (*Extend, error) {
 		if v, err = readBytes(); err != nil {
 			return nil, err
 		}
+		if string(k) == proto.QuotaKey {
+			ext.Quota = v
+			continue
+		}
+		if ext.dataMap == nil {
+			ext.dataMap = make(map[string][]byte)
+		}
 		ext.Put(k, v, 0)
 	}
 
@@ -118,16 +166,18 @@ func NewExtendFromBytes(raw []byte) (*Extend, error) {
 		if err != nil {
 			return nil, err
 		}
-		ext.verSeq = verSeq
 
 		// read number of multiVers
 		numMultiVers, err := binary.ReadUvarint(buffer)
 		if err != nil {
 			return nil, err
 		}
+		if verSeq > 0 || numMultiVers > 0 {
+			ext.setVersion(verSeq)
+		}
 		if numMultiVers > 0 {
 			// read each multiVers
-			ext.multiVers = make([]*Extend, numMultiVers)
+			ext.multiSnap.multiVers = make([]*Extend, numMultiVers)
 			for i := uint64(0); i < numMultiVers; i++ {
 				// read multiVers length
 				mvLen, err := binary.ReadUvarint(buffer)
@@ -145,7 +195,7 @@ func NewExtendFromBytes(raw []byte) (*Extend, error) {
 					return nil, err
 				}
 
-				ext.multiVers[i] = mv
+				ext.multiSnap.multiVers[i] = mv
 			}
 		}
 	}
@@ -160,8 +210,13 @@ func (e *Extend) Less(than btree.Item) bool {
 func (e *Extend) Put(key, value []byte, verSeq uint64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.dataMap == nil {
+		e.dataMap = make(map[string][]byte)
+	}
 	e.dataMap[string(key)] = value
-	e.verSeq = verSeq
+	if verSeq > 0 {
+		e.setVersion(verSeq)
+	}
 }
 
 func (e *Extend) Get(key []byte) (value []byte, exist bool) {
@@ -173,8 +228,11 @@ func (e *Extend) Get(key []byte) (value []byte, exist bool) {
 
 func (e *Extend) Remove(key []byte) {
 	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.dataMap == nil {
+		return
+	}
 	delete(e.dataMap, string(key))
-	e.mu.Unlock()
 }
 
 func (e *Extend) Range(visitor func(key, value []byte) bool) {
@@ -190,6 +248,9 @@ func (e *Extend) Range(visitor func(key, value []byte) bool) {
 func (e *Extend) Merge(o *Extend, override bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.dataMap == nil {
+		e.dataMap = make(map[string][]byte)
+	}
 	o.Range(func(key, value []byte) bool {
 		strKey := string(key)
 		if _, exist := e.dataMap[strKey]; override || !exist {
@@ -202,14 +263,23 @@ func (e *Extend) Merge(o *Extend, override bool) {
 }
 
 func (e *Extend) Copy() btree.Item {
-	newExt := NewExtend(e.inode)
+	newExt := NewExtendWithQuota(e.inode)
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	for k, v := range e.dataMap {
-		newExt.dataMap[k] = v
+	if len(e.dataMap) > 0 {
+		newExt.dataMap = make(map[string][]byte, len(e.dataMap))
+		for k, v := range e.dataMap {
+			newExt.dataMap[k] = v
+		}
 	}
-	newExt.verSeq = e.verSeq
-	newExt.multiVers = e.multiVers
+	newExt.Quota = make([]byte, len(e.Quota))
+	copy(newExt.Quota, e.Quota)
+	if e.multiSnap == nil {
+		return newExt
+	}
+	newExt.multiSnap = &ExtendMultiSnap{}
+	newExt.multiSnap.verSeq = e.multiSnap.verSeq
+	newExt.multiSnap.multiVers = e.multiSnap.multiVers
 	return newExt
 }
 
@@ -226,7 +296,11 @@ func (e *Extend) Bytes() ([]byte, error) {
 		return nil, err
 	}
 	// write number of key-value pairs
-	n = binary.PutUvarint(tmp, uint64(len(e.dataMap)))
+	pairCnt := len(e.dataMap)
+	if len(e.Quota) > 0 {
+		pairCnt = pairCnt + 1
+	}
+	n = binary.PutUvarint(tmp, uint64(pairCnt))
 	if _, err = buffer.Write(tmp[:n]); err != nil {
 		return nil, err
 	}
@@ -251,23 +325,33 @@ func (e *Extend) Bytes() ([]byte, error) {
 			return nil, err
 		}
 	}
+	if len(e.Quota) > 0 {
+		// key
+		if err = writeBytes([]byte(proto.QuotaKey)); err != nil {
+			return nil, err
+		}
+		// value
+		if err = writeBytes(e.Quota); err != nil {
+			return nil, err
+		}
+	}
 
-	if e.verSeq > 0 {
+	if e.getVersion() > 0 {
 		// write verSeq
 		verSeqBytes := make([]byte, binary.MaxVarintLen64)
-		verSeqLen := binary.PutUvarint(verSeqBytes, e.verSeq)
+		verSeqLen := binary.PutUvarint(verSeqBytes, e.getVersion())
 		if _, err = buffer.Write(verSeqBytes[:verSeqLen]); err != nil {
 			return nil, err
 		}
 
 		// write number of multiVers
-		n = binary.PutUvarint(tmp, uint64(len(e.multiVers)))
+		n = binary.PutUvarint(tmp, uint64(len(e.multiSnap.multiVers)))
 		if _, err = buffer.Write(tmp[:n]); err != nil {
 			return nil, err
 		}
 
 		// write each multiVers
-		for _, mv := range e.multiVers {
+		for _, mv := range e.multiSnap.multiVers {
 			// write multiVers bytes
 			mvBytes, err := mv.Bytes()
 			if err != nil {

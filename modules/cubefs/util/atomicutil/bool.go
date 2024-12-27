@@ -45,3 +45,12 @@ func (b *Bool) CompareAndSwap(old bool, newVal bool) (swaped bool) {
 	swaped = atomic.CompareAndSwapUint32(&b.val, oldVal, val)
 	return
 }
+
+func (b *Bool) Swap(new bool) (old bool) {
+	tmp := uint32(0)
+	if new {
+		tmp = 1
+	}
+	old = atomic.SwapUint32(&b.val, tmp) == 1
+	return
+}

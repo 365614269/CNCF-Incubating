@@ -58,6 +58,8 @@ const (
 	statusTxTimeout
 	statusUploadPartConflict
 	statusNotEmpty
+	statusLeaseOccupiedByOthers
+	statusLeaseGenerationNotMatch
 )
 
 const (
@@ -98,7 +100,9 @@ type MetaConfig struct {
 	TrashTraverseLimit         int
 	TrashRebuildGoroutineLimit int
 
-	VerReadSeq uint64
+	VerReadSeq           uint64
+	InnerReq             bool
+	DisableTrashByClient bool
 }
 
 type MetaWrapper struct {
@@ -154,6 +158,7 @@ type MetaWrapper struct {
 	singleflight            singleflight.Group
 	EnableSummary           bool
 	metaSendTimeout         int64
+	leaderRetryTimeout      int64 // s
 	DirChildrenNumLimit     uint32
 	EnableTransaction       proto.TxOpMask
 	TxTimeout               int64
@@ -179,9 +184,14 @@ type MetaWrapper struct {
 
 	disableTrashByClient bool
 
-	VerReadSeq uint64
-	LastVerSeq uint64
-	Client     wrapper.SimpleClientInfo
+	VerReadSeq          uint64
+	LastVerSeq          uint64
+	Client              wrapper.SimpleClientInfo
+	IsSnapshotEnabled   bool
+	DefaultStorageClass uint32
+	CacheDpStorageClass uint32
+	InnerReq            bool
+	FollowerRead        bool
 }
 
 type uniqidRange struct {
@@ -244,6 +254,9 @@ func NewMetaWrapper(config *MetaConfig) (*MetaWrapper, error) {
 	mw.dirCache = make(map[uint64]dirInfoCache)
 	mw.subDir = config.SubDir
 	limit := MaxMountRetryLimit
+	mw.DefaultStorageClass = proto.StorageClass_Unspecified
+	mw.InnerReq = config.InnerReq
+	mw.disableTrashByClient = config.DisableTrashByClient
 
 	for limit > 0 {
 		err = mw.initMetaWrapper()
@@ -266,7 +279,9 @@ func NewMetaWrapper(config *MetaConfig) (*MetaWrapper, error) {
 		}
 		break
 	}
-	mw.enableTrash()
+	if !mw.disableTrashByClient {
+		mw.enableTrash()
+	}
 	if limit <= 0 && err != nil {
 		return nil, err
 	}
@@ -287,8 +302,11 @@ func (mw *MetaWrapper) enableTrash() {
 		var err error
 		mw.trashPolicy, err = NewTrash(mw, mw.TrashInterval, mw.subDir,
 			trashTraverseLimit, trashRebuildGoroutineLimit)
+
 		if err != nil {
 			log.LogErrorf("action[initMetaWrapper] init trash failed, err %s", err.Error())
+		} else {
+			mw.trashPolicy.StartScheduleTask()
 		}
 	}
 }
@@ -380,6 +398,10 @@ func parseStatus(result uint8) (status int) {
 		status = statusUploadPartConflict
 	case proto.OpForbidErr:
 		status = statusForbid
+	case proto.OpLeaseOccupiedByOthers:
+		status = statusLeaseOccupiedByOthers
+	case proto.OpLeaseGenerationNotMatch:
+		status = statusLeaseGenerationNotMatch
 	default:
 		status = statusError
 	}
@@ -431,6 +453,10 @@ func statusToErrno(status int) error {
 		return syscall.EEXIST
 	case statusForbid:
 		return syscall.EPERM
+	case statusLeaseOccupiedByOthers:
+		return errors.New("lease occupied by others")
+	case statusLeaseGenerationNotMatch:
+		return errors.New("lease generation not match")
 	default:
 	}
 	return syscall.EIO

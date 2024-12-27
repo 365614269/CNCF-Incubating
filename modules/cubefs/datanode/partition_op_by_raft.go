@@ -24,10 +24,10 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/cubefs/cubefs/datanode/repl"
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/repl"
-	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/log"
 )
@@ -340,6 +340,9 @@ func (dp *DataPartition) Submit(val []byte) (retCode uint8, err error) {
 }
 
 func (dp *DataPartition) CheckWriteVer(p *repl.Packet) (err error) {
+	if !dp.config.IsEnableSnapshot {
+		return
+	}
 	log.LogDebugf("action[CheckWriteVer] packet %v dpseq %v ", p, dp.verSeq)
 	if atomic.LoadUint64(&dp.verSeq) == p.VerSeq {
 		return

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
@@ -26,21 +27,27 @@ import (
 
 	"github.com/cubefs/cubefs/cmd/common"
 	"github.com/cubefs/cubefs/proto"
+	"github.com/cubefs/cubefs/sdk/data/stream"
 	"github.com/cubefs/cubefs/sdk/master"
+	"github.com/cubefs/cubefs/sdk/meta"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/config"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/log"
+	"github.com/gorilla/mux"
 	"golang.org/x/time/rate"
 )
 
 type LcNode struct {
 	listen           string
+	httpListen       string
 	localServerAddr  string
 	clusterID        string
 	nodeID           uint64
 	masters          []string
+	ebsAddr          string
+	logDir           string
 	mc               *master.MasterClient
 	scannerMutex     sync.RWMutex
 	stopC            chan bool
@@ -83,12 +90,15 @@ func doStart(s common.Server, cfg *config.Config) (err error) {
 	l.register()
 	l.lastHeartbeat = time.Now()
 
+	exporter.RegistConsul(l.clusterID, ModuleName, cfg)
+
 	go l.checkRegister()
 	if err = l.startServer(); err != nil {
 		return
 	}
 
-	exporter.RegistConsul(l.clusterID, ModuleName, cfg)
+	l.httpServiceStart()
+
 	log.LogInfo("lcnode start successfully")
 
 	return
@@ -103,6 +113,7 @@ func doShutdown(s common.Server) {
 }
 
 func (l *LcNode) parseConfig(cfg *config.Config) (err error) {
+	l.logDir = cfg.GetString("logDir")
 	// parse listen
 	listen := cfg.GetString(configListen)
 	if len(listen) == 0 {
@@ -113,101 +124,85 @@ func (l *LcNode) parseConfig(cfg *config.Config) (err error) {
 		return
 	}
 	l.listen = listen
-	log.LogInfof("loadConfig: setup config: %v(%v)", configListen, listen)
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configListen, listen)
+
+	var listenInt int
+	if listenInt, err = strconv.Atoi(listen); err != nil {
+		log.LogErrorf("parseConfig err: %v", err)
+		return
+	}
+	l.httpListen = strconv.Itoa(listenInt + 1)
+	log.LogWarnf("loadConfig: setup config: httpListen(%v)", l.httpListen)
 
 	// parse master config
 	masters := cfg.GetStringSlice(configMasterAddr)
 	if len(masters) == 0 {
 		return config.NewIllegalConfigError(configMasterAddr)
 	}
-	log.LogInfof("loadConfig: setup config: %v(%v)", configMasterAddr, strings.Join(masters, ","))
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configMasterAddr, strings.Join(masters, ","))
 	l.masters = masters
 	l.mc = master.NewMasterClient(masters, false)
 
-	// parse batchExpirationGetNum
-	begns := cfg.GetString(configBatchExpirationGetNumStr)
-	var batchNum int64
-	if begns != "" {
-		if batchNum, err = strconv.ParseInt(begns, 10, 64); err != nil {
-			return fmt.Errorf("%v,err:%v", proto.ErrInvalidCfg, err.Error())
-		}
-	}
-	batchExpirationGetNum = int(batchNum)
-	if batchExpirationGetNum <= 0 || batchExpirationGetNum > maxBatchExpirationGetNum {
-		batchExpirationGetNum = defaultBatchExpirationGetNum
-	}
-	log.LogInfof("loadConfig: setup config: %v(%v)", configBatchExpirationGetNumStr, batchExpirationGetNum)
-
 	// parse scanCheckInterval
-	scis := cfg.GetString(configScanCheckIntervalStr)
-	if scis != "" {
-		if scanCheckInterval, err = strconv.ParseInt(scis, 10, 64); err != nil {
-			return fmt.Errorf("%v,err:%v", proto.ErrInvalidCfg, err.Error())
-		}
-	}
+	scanCheckInterval = cfg.GetInt64(configScanCheckIntervalStr)
 	if scanCheckInterval <= 0 {
 		scanCheckInterval = defaultScanCheckInterval
 	}
-	log.LogInfof("loadConfig: setup config: %v(%v)", configScanCheckIntervalStr, scanCheckInterval)
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configScanCheckIntervalStr, scanCheckInterval)
 
 	// parse lcScanRoutineNumPerTask
-	var routineNum int64
-	lcScanRoutineNum := cfg.GetString(configLcScanRoutineNumPerTaskStr)
-	if lcScanRoutineNum != "" {
-		if routineNum, err = strconv.ParseInt(lcScanRoutineNum, 10, 64); err != nil {
-			return fmt.Errorf("%v,err:%v", proto.ErrInvalidCfg, err.Error())
-		}
-	}
-	lcScanRoutineNumPerTask = int(routineNum)
+	lcScanRoutineNumPerTask = cfg.GetInt(configLcScanRoutineNumPerTaskStr)
 	if lcScanRoutineNumPerTask <= 0 || lcScanRoutineNumPerTask > maxLcScanRoutineNumPerTask {
 		lcScanRoutineNumPerTask = defaultLcScanRoutineNumPerTask
 	}
-	log.LogInfof("loadConfig: setup config: %v(%v)", configLcScanRoutineNumPerTaskStr, lcScanRoutineNumPerTask)
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configLcScanRoutineNumPerTaskStr, lcScanRoutineNumPerTask)
+
+	// parse simpleQueueInitCapacity
+	simpleQueueInitCapacity = cfg.GetInt(configSimpleQueueInitCapacityStr)
+	if simpleQueueInitCapacity <= lcScanRoutineNumPerTask*1000 {
+		simpleQueueInitCapacity = defaultSimpleQueueInitCapacity
+	}
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configSimpleQueueInitCapacityStr, simpleQueueInitCapacity)
 
 	// parse snapshotRoutineNumPerTask
-	routineNum = 0
-	snapRoutineNum := cfg.GetString(configSnapshotRoutineNumPerTaskStr)
-	if snapRoutineNum != "" {
-		if routineNum, err = strconv.ParseInt(snapRoutineNum, 10, 64); err != nil {
-			return fmt.Errorf("%v,err:%v", proto.ErrInvalidCfg, err.Error())
-		}
-	}
-
-	snapshotRoutineNumPerTask = int(routineNum)
+	snapshotRoutineNumPerTask = cfg.GetInt(configSnapshotRoutineNumPerTaskStr)
 	if snapshotRoutineNumPerTask <= 0 || snapshotRoutineNumPerTask > maxLcScanRoutineNumPerTask {
 		snapshotRoutineNumPerTask = defaultLcScanRoutineNumPerTask
 	}
-	log.LogInfof("loadConfig: setup config: %v(%v)", configSnapshotRoutineNumPerTaskStr, snapshotRoutineNumPerTask)
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configSnapshotRoutineNumPerTaskStr, snapshotRoutineNumPerTask)
 
 	// parse lcScanLimitPerSecond
-	var limitNum int64
-	lcScanLimit := cfg.GetString(configLcScanLimitPerSecondStr)
-	if lcScanLimit != "" {
-		if limitNum, err = strconv.ParseInt(lcScanLimit, 10, 64); err != nil {
-			return fmt.Errorf("%v,err:%v", proto.ErrInvalidCfg, err.Error())
-		}
-	}
+	limitNum := cfg.GetInt64(configLcScanLimitPerSecondStr)
 	if limitNum <= 0 {
 		lcScanLimitPerSecond = defaultLcScanLimitPerSecond
 	} else {
 		lcScanLimitPerSecond = rate.Limit(limitNum)
 	}
-	log.LogInfof("loadConfig: setup config: %v(%v)", configLcScanLimitPerSecondStr, lcScanLimitPerSecond)
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configLcScanLimitPerSecondStr, lcScanLimitPerSecond)
 
 	// parse lcNodeTaskCount
-	var count int64
-	countStr := cfg.GetString(configLcNodeTaskCountLimit)
-	if countStr != "" {
-		if count, err = strconv.ParseInt(countStr, 10, 64); err != nil {
-			return fmt.Errorf("%v,err:%v", proto.ErrInvalidCfg, err.Error())
-		}
-	}
+	count := cfg.GetInt(configLcNodeTaskCountLimit)
 	if count <= 0 || count > maxLcNodeTaskCountLimit {
 		lcNodeTaskCountLimit = defaultLcNodeTaskCountLimit
 	} else {
-		lcNodeTaskCountLimit = int(count)
+		lcNodeTaskCountLimit = count
 	}
-	log.LogInfof("loadConfig: setup config: %v(%v)", configLcNodeTaskCountLimit, lcNodeTaskCountLimit)
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configLcNodeTaskCountLimit, lcNodeTaskCountLimit)
+
+	// parse delayDelMinute
+	delay := cfg.GetInt64(configDelayDelMinute)
+	if delay <= 0 {
+		delayDelMinute = defaultDelayDelMinute
+	} else {
+		delayDelMinute = uint64(delay)
+	}
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configDelayDelMinute, delayDelMinute)
+
+	// parse useCreateTime
+	useCreateTime = cfg.GetBool(configUseCreateTime)
+	log.LogWarnf("loadConfig: setup config: %v(%v)", configUseCreateTime, useCreateTime)
+
+	stream.SetExentRetryArgs(defaultAllocRetryInterval, defaultWriteRetryInterval, defaultExtenthandlerMaxRetryMin, true)
 
 	return
 }
@@ -248,6 +243,8 @@ func (l *LcNode) register() {
 			}
 			l.nodeID = nodeID
 			log.LogInfof("register: register LcNode: nodeID(%v)", l.nodeID)
+			l.ebsAddr = ci.EbsAddr
+			log.LogInfof("register: register success: %v", l)
 			return
 		case <-l.stopC:
 			timer.Stop()
@@ -273,23 +270,23 @@ func (l *LcNode) startServer() (err error) {
 	log.LogInfo("Start: startServer")
 	addr := fmt.Sprintf(":%v", l.listen)
 	listener, err := net.Listen("tcp", addr)
-	log.LogDebugf("action[startServer] listen tcp address(%v).", addr)
+	log.LogInfof("action[startServer] listen tcp address(%v).", addr)
 	if err != nil {
-		log.LogError("failed to listen, err:", err)
+		log.LogErrorf("action[startServer] failed to listen, err: %v", err)
 		return
 	}
 	go func(stopC chan bool) {
 		defer listener.Close()
 		for {
 			conn, err := listener.Accept()
-			log.LogDebugf("action[startServer] accept connection from %s.", conn.RemoteAddr().String())
+			log.LogDebugf("action[startServer] accept connection from %s", conn.RemoteAddr().String())
 			select {
 			case <-stopC:
 				return
 			default:
 			}
 			if err != nil {
-				log.LogErrorf("action[startServer] failed to accept, err:%s", err.Error())
+				log.LogErrorf("action[startServer] failed to accept, err: %s", err.Error())
 				continue
 			}
 			go l.serveConn(conn, stopC)
@@ -313,18 +310,18 @@ func (l *LcNode) serveConn(conn net.Conn, stopC chan bool) {
 		p := &proto.Packet{}
 		if err := p.ReadFromConn(conn, proto.NoReadDeadlineTime); err != nil {
 			if err != io.EOF {
-				log.LogErrorf("serveConn ReadFromConn err: %v", err)
+				log.LogErrorf("serveConn ReadFromConn remoteAddr: %v, err: %v", remoteAddr, err)
 			}
 			return
 		}
 		if err := l.handlePacket(conn, p, remoteAddr); err != nil {
-			log.LogErrorf("serveConn handlePacket err: %v", err)
+			log.LogErrorf("serveConn handlePacket remoteAddr: %v, err: %v", remoteAddr, err)
 		}
 	}
 }
 
 func (l *LcNode) handlePacket(conn net.Conn, p *proto.Packet, remoteAddr string) (err error) {
-	log.LogInfof("HandleMetadataOperation input info op (%s), remote %s", p.String(), remoteAddr)
+	log.LogInfof("handlePacket input info op (%s), remote %s", p.String(), remoteAddr)
 	switch p.Opcode {
 	case proto.OpLcNodeHeartbeat:
 		err = l.opMasterHeartbeat(conn, p, remoteAddr)
@@ -366,4 +363,162 @@ func (l *LcNode) stopScanners() {
 		s.Stop()
 		delete(l.snapshotScanners, s.ID)
 	}
+}
+
+func (l *LcNode) httpServiceStart() {
+	router := mux.NewRouter().SkipClean(true)
+	router.NewRoute().Methods(http.MethodGet).
+		Path("/stopScanner").
+		HandlerFunc(l.httpServiceStopScanner)
+	router.NewRoute().Methods(http.MethodGet).
+		Path("/getFile").
+		HandlerFunc(l.httpServiceGetFile)
+
+	addr := fmt.Sprintf(":%v", l.httpListen)
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      router,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 5 * time.Minute,
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.LogFatalf("httpServiceStart addr(%v) err: %v", addr, err)
+			return
+		}
+	}()
+	log.LogInfof("httpServiceStart addr(%v) success", addr)
+}
+
+func (l *LcNode) httpServiceStopScanner(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		msg := fmt.Sprintf("httpServiceStopScanner ParseForm failed: %v", err)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	id := r.FormValue("id")
+	if id == "" {
+		http.Error(w, "invalid task id", http.StatusBadRequest)
+		return
+	}
+	log.LogInfof("receive httpServiceStopScanner id: %v", id)
+
+	l.scannerMutex.RLock()
+	scanner, ok := l.lcScanners[id]
+	if !ok {
+		msg := fmt.Sprintf("task id(%v) not exist", id)
+		http.Error(w, msg, http.StatusNotFound)
+		l.scannerMutex.RUnlock()
+		return
+	}
+	l.scannerMutex.RUnlock()
+	if !scanner.receiveStop {
+		log.LogInfof("receive httpServiceStopScanner: %v, close receiveStop", scanner.ID)
+		close(scanner.receiveStopC)
+	} else {
+		log.LogInfof("receive httpServiceStopScanner: %v, already receiveStop", scanner.ID)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (l *LcNode) httpServiceGetFile(w http.ResponseWriter, r *http.Request) {
+	var err error
+	if err = r.ParseForm(); err != nil {
+		http.Error(w, fmt.Sprintf("ParseForm err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	vol := r.FormValue("vol")
+	var isMigrationExtent bool
+	mek := r.FormValue("mek")
+	if mek == "true" {
+		isMigrationExtent = true
+	}
+
+	var ino uint64
+	if ino, err = strconv.ParseUint(r.FormValue("ino"), 10, 64); err != nil {
+		http.Error(w, fmt.Sprintf("ParseUint ino err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	var size uint64
+	if size, err = strconv.ParseUint(r.FormValue("size"), 10, 64); err != nil {
+		http.Error(w, fmt.Sprintf("ParseUint size err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	var sc uint64
+	if sc, err = strconv.ParseUint(r.FormValue("sc"), 10, 32); err != nil {
+		http.Error(w, fmt.Sprintf("ParseUint sc err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	var vsc uint64
+	if vsc, err = strconv.ParseUint(r.FormValue("vsc"), 10, 32); err != nil {
+		http.Error(w, fmt.Sprintf("ParseUint vsc err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	var asc []uint32
+	ascStr := strings.Split(r.FormValue("asc"), ",")
+	for _, scStr := range ascStr {
+		var scUint64 uint64
+		if scUint64, err = strconv.ParseUint(scStr, 10, 32); err != nil {
+			http.Error(w, fmt.Sprintf("ParseUint asc err: %v", err.Error()), http.StatusBadRequest)
+			return
+		}
+		asc = append(asc, uint32(scUint64))
+	}
+
+	metaConfig := &meta.MetaConfig{
+		Volume:               vol,
+		Masters:              l.masters,
+		Authenticate:         false,
+		ValidateOwner:        false,
+		InnerReq:             true,
+		MetaSendTimeout:      600,
+		DisableTrashByClient: true,
+	}
+	var metaWrapper *meta.MetaWrapper
+	if metaWrapper, err = meta.NewMetaWrapper(metaConfig); err != nil {
+		http.Error(w, fmt.Sprintf("NewMetaWrapper err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	defer metaWrapper.Close()
+	extentConfig := &stream.ExtentConfig{
+		Volume:                      vol,
+		Masters:                     l.masters,
+		OnAppendExtentKey:           metaWrapper.AppendExtentKey,
+		OnSplitExtentKey:            metaWrapper.SplitExtentKey,
+		OnGetExtents:                metaWrapper.GetExtents,
+		OnTruncate:                  metaWrapper.Truncate,
+		OnRenewalForbiddenMigration: metaWrapper.RenewalForbiddenMigration,
+		VolStorageClass:             uint32(vsc),
+		VolAllowedStorageClass:      asc,
+		OnForbiddenMigration:        metaWrapper.ForbiddenMigration,
+		InnerReq:                    true,
+	}
+	var extentClient *stream.ExtentClient
+	if extentClient, err = stream.NewExtentClient(extentConfig); err != nil {
+		http.Error(w, fmt.Sprintf("NewExtentClient err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	defer extentClient.Close()
+
+	if err = extentClient.OpenStream(ino, false, false); err != nil {
+		http.Error(w, fmt.Sprintf("OpenStream err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	defer extentClient.CloseStream(ino)
+
+	t := &TransitionMgr{
+		ec:     extentClient,
+		ecForW: extentClient,
+	}
+	e := &proto.ScanDentry{
+		Size:         size,
+		Inode:        ino,
+		StorageClass: uint32(sc),
+	}
+	if err = t.readFromExtentClient(e, w, isMigrationExtent, 0, 0); err != nil {
+		http.Error(w, fmt.Sprintf("readFromExtentClient err: %v", err.Error()), http.StatusBadRequest)
+		return
+	}
+	log.LogInfof("httpServiceGetFile success, vol(%v), ino(%v), size(%v)", vol, ino, size)
 }

@@ -75,33 +75,35 @@ func (cache *ExtentCache) LogOutPut() {
 	})
 }
 
-func (cache *ExtentCache) RefreshForce(inode uint64, getExtents GetExtentsFunc) error {
-	gen, size, extents, err := getExtents(inode)
+func (cache *ExtentCache) RefreshForce(inode uint64, force bool, getExtents GetExtentsFunc, isCache bool, openForWrite, isMigration bool) error {
+	gen, size, extents, err := getExtents(inode, isCache, openForWrite, isMigration)
 	if err != nil {
 		return err
 	}
 	// log.LogDebugf("Local ExtentCache before update: ino(%v) gen(%v) size(%v) extents(%v)", inode, cache.gen, cache.size, cache.List())
-	cache.update(gen, size, true, extents)
+	cache.update(gen, size, force, extents)
 	if log.EnableDebug() {
-		log.LogDebugf("Local ExtentCache after update: ino(%v) gen(%v) size(%v) extents(%v)", inode, cache.gen, cache.size, cache.List())
+		log.LogDebugf("[RefreshForce] Local ExtentCache after update: ino(%v) gen(%v) size(%v) extents(%v) openForWrite(%v) isMigration(%v)",
+			inode, cache.gen, cache.size, cache.List(), openForWrite, isMigration)
 	}
 	return nil
 }
 
 // Refresh refreshes the extent cache.
-func (cache *ExtentCache) Refresh(inode uint64, getExtents GetExtentsFunc) error {
+func (cache *ExtentCache) Refresh(inode uint64, getExtents GetExtentsFunc, isCache, openForWrite, isMigration bool) error {
 	if cache.root.Len() > 0 {
 		return nil
 	}
 
-	gen, size, extents, err := getExtents(inode)
+	gen, size, extents, err := getExtents(inode, isCache, openForWrite, isMigration)
 	if err != nil {
 		return err
 	}
-	// log.LogDebugf("Local ExtentCache before update: ino(%v) gen(%v) size(%v) extents(%v)", inode, cache.gen, cache.size, cache.List())
+
 	cache.update(gen, size, false, extents)
 	if log.EnableDebug() {
-		log.LogDebugf("Local ExtentCache after update: ino(%v) gen(%v) size(%v) extents(%v)", inode, cache.gen, cache.size, cache.List())
+		log.LogDebugf("[Refresh] Local ExtentCache after update: ino(%v) gen(%v) size(%v) extents(%v) openForWrite(%v) isMigration(%v)",
+			inode, cache.gen, cache.size, cache.List(), openForWrite, isMigration)
 	}
 	return nil
 }
@@ -121,7 +123,9 @@ func (cache *ExtentCache) update(gen, size uint64, force bool, eks []proto.Exten
 	cache.root.Clear(false)
 	for _, ek := range eks {
 		extent := ek
-		log.LogDebugf("action[update] update cache replace or insert ek [%v]", ek.String())
+		if log.EnableDebug() {
+			log.LogDebugf("action[update] update cache ino(%v) replace or insert ek [%v]", cache.inode, ek.String())
+		}
 		cache.root.ReplaceOrInsert(&extent)
 	}
 }

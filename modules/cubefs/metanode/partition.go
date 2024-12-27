@@ -82,24 +82,25 @@ type MetaMultiSnapshotInfo struct {
 // MetaPartitionConfig is used to create a meta partition.
 type MetaPartitionConfig struct {
 	// Identity for raftStore group. RaftStore nodes in the same raftStore group must have the same groupID.
-	PartitionId   uint64              `json:"partition_id"`
-	VolName       string              `json:"vol_name"`
-	Start         uint64              `json:"start"` // Minimal Inode ID of this range. (Required during initialization)
-	End           uint64              `json:"end"`   // Maximal Inode ID of this range. (Required during initialization)
-	PartitionType int                 `json:"partition_type"`
-	Peers         []proto.Peer        `json:"peers"` // Peers information of the raftStore
-	Cursor        uint64              `json:"-"`     // Cursor ID of the inode that have been assigned
-	UniqId        uint64              `json:"-"`
-	NodeId        uint64              `json:"-"`
-	RootDir       string              `json:"-"`
-	VerSeq        uint64              `json:"ver_seq"`
-	BeforeStart   func()              `json:"-"`
-	AfterStart    func()              `json:"-"`
-	BeforeStop    func()              `json:"-"`
-	AfterStop     func()              `json:"-"`
-	RaftStore     raftstore.RaftStore `json:"-"`
-	ConnPool      *util.ConnectPool   `json:"-"`
-	Forbidden     bool                `json:"-"`
+	PartitionId              uint64              `json:"partition_id"`
+	VolName                  string              `json:"vol_name"`
+	Start                    uint64              `json:"start"` // Minimal Inode ID of this range. (Required during initialization)
+	End                      uint64              `json:"end"`   // Maximal Inode ID of this range. (Required during initialization)
+	PartitionType            int                 `json:"partition_type"`
+	Peers                    []proto.Peer        `json:"peers"` // Peers information of the raftStore
+	Cursor                   uint64              `json:"-"`     // Cursor ID of the inode that have been assigned
+	UniqId                   uint64              `json:"-"`
+	NodeId                   uint64              `json:"-"`
+	RootDir                  string              `json:"-"`
+	VerSeq                   uint64              `json:"ver_seq"`
+	BeforeStart              func()              `json:"-"`
+	AfterStart               func()              `json:"-"`
+	BeforeStop               func()              `json:"-"`
+	AfterStop                func()              `json:"-"`
+	RaftStore                raftstore.RaftStore `json:"-"`
+	ConnPool                 *util.ConnectPool   `json:"-"`
+	Forbidden                bool                `json:"-"`
+	ForbidWriteOpOfProtoVer0 bool                `json:"ForbidWriteOpOfProtoVer0"`
 }
 
 func (c *MetaPartitionConfig) checkMeta() (err error) {
@@ -146,6 +147,12 @@ type OpInode interface {
 	TxUnlinkInode(req *proto.TxUnlinkInodeRequest, p *Packet, remoteAddr string) (err error)
 	TxCreateInodeLink(req *proto.TxLinkInodeRequest, p *Packet, remoteAddr string) (err error)
 	QuotaCreateInode(req *proto.QuotaCreateInodeRequest, p *Packet, remoteAddr string) (err error)
+	InodeGetAccessTime(req *InodeGetReq, p *Packet) (err error)
+	RenewalForbiddenMigration(req *proto.RenewalForbiddenMigrationRequest, p *Packet, remoteAddr string) (err error)
+	UpdateExtentKeyAfterMigration(req *proto.UpdateExtentKeyAfterMigrationRequest, p *Packet, remoteAddr string) (err error)
+	InodeGetWithEk(req *InodeGetReq, p *Packet) (err error)
+	SetCreateTime(req *SetCreateTimeRequest, reqData []byte, p *Packet) (err error) // for debugging
+	DeleteMigrationExtentKey(req *proto.DeleteMigrationExtentKeyRequest, p *Packet, remoteAddr string) (err error)
 }
 
 type OpExtend interface {
@@ -245,10 +252,11 @@ type OpPartition interface {
 	GetVolName() (volName string)
 	IsLeader() (leaderAddr string, isLeader bool)
 	LeaderTerm() (leaderID, term uint64)
+	GetCursor() uint64
+	GetAppliedID() uint64
+	GetUniqId() uint64
 	IsFollowerRead() bool
 	SetFollowerRead(bool)
-	GetCursor() uint64
-	GetUniqId() uint64
 	GetBaseConfig() MetaPartitionConfig
 	ResponseLoadMetaPartition(p *Packet) (err error)
 	PersistMetadata() (err error)
@@ -276,9 +284,13 @@ type MetaPartition interface {
 	ForceSetMetaPartitionToFininshLoad()
 	IsForbidden() bool
 	SetForbidden(status bool)
+	IsForbidWriteOpOfProtoVer0() bool
+	SetForbidWriteOpOfProtoVer0(status bool)
 	IsEnableAuditLog() bool
 	SetEnableAuditLog(status bool)
 	UpdateVolumeView(dataView *proto.DataPartitionsView, volumeView *proto.SimpleVolView)
+	GetStatByStorageClass() []*proto.StatOfStorageClass
+	GetMigrateStatByStorageClass() []*proto.StatOfStorageClass
 }
 
 type UidManager struct {
@@ -429,7 +441,7 @@ func (uMgr *UidManager) getAllUidSpace() (rsp []*proto.UidReportSpaceInfo) {
 func (uMgr *UidManager) accumRebuildStart() bool {
 	uMgr.acLock.Lock()
 	defer uMgr.acLock.Unlock()
-	log.LogDebugf("accumRebuildStart vol [%v] mp[%v] rbuilding [%v]", uMgr.volName, uMgr.mpID, uMgr.rbuilding)
+	log.LogDebugf("accumRebuildStart vol [%v] mp[%v] rbuildbySnapshot [%v]", uMgr.volName, uMgr.mpID, uMgr.rbuilding)
 	if uMgr.rbuilding {
 		return false
 	}
@@ -472,6 +484,66 @@ type OpQuota interface {
 	getInodeQuota(inode uint64, p *Packet) (err error)
 }
 
+type BlobStoreClientWrapper struct {
+	blobClientLock    sync.Mutex
+	blobClient        *blobstore.BlobStoreClient
+	cfg               *access.Config
+	lastTryCreateTime int64
+}
+
+func NewBlobStoreClientWrapper(cfg access.Config) (blobWrapper *BlobStoreClientWrapper, err error) {
+	blobWrapper = &BlobStoreClientWrapper{
+		blobClient:        nil,
+		cfg:               &cfg,
+		lastTryCreateTime: 0,
+	}
+
+	if _, _, err = blobWrapper.getBlobStoreClient(); err != nil {
+		return blobWrapper, err
+	}
+
+	return blobWrapper, nil
+}
+
+// will create blobstore client if not created or creation failed earlier
+func (ew *BlobStoreClientWrapper) getBlobStoreClient() (blobClient *blobstore.BlobStoreClient, create bool, err error) {
+	ew.blobClientLock.Lock()
+	defer ew.blobClientLock.Unlock()
+
+	create = false
+	if ew.blobClient != nil {
+		return ew.blobClient, create, nil
+	}
+
+	if ew.cfg.Consul.Address == "" {
+		// TODO:tangjingyu get blobstore addr from master
+		err = errors.New("addr is empty, can not create blobstore client")
+		return nil, create, err
+	}
+
+	if time.Now().Unix()-ew.lastTryCreateTime < DefaultCreateBlobClientIntervalSec {
+		err = fmt.Errorf("addr(%v) create blobstore client failed, wait a while to try create again", ew.cfg.Consul.Address)
+		return nil, create, err
+	}
+
+	blobClient, err = blobstore.NewEbsClient(*(ew.cfg))
+	if err != nil {
+		err = fmt.Errorf("addr(%v) create blobstore client err: %v", ew.cfg.Consul.Address, err.Error())
+		ew.lastTryCreateTime = time.Now().Unix()
+		return nil, create, err
+	} else if blobClient == nil {
+		err = fmt.Errorf("addr(%v) create blobstore client is nil", ew.cfg.Consul.Address)
+		ew.lastTryCreateTime = time.Now().Unix()
+		return nil, create, err
+	}
+
+	log.LogDebugf("[getBlobStoreClient] addr(%v) create blobstore client success", gClusterInfo.EbsAddr)
+	ew.blobClient = blobClient
+	ew.lastTryCreateTime = 0
+	create = true
+	return ew.blobClient, create, nil
+}
+
 // metaPartition manages the range of the inode IDs.
 // When a new inode is requested, it allocates a new inode id for this inode if possible.
 // States:
@@ -480,40 +552,71 @@ type OpQuota interface {
 //	| New | → Restore → | Ready |
 //	+-----+             +-------+
 type metaPartition struct {
-	config                  *MetaPartitionConfig
-	size                    uint64                // For partition all file size
-	applyID                 uint64                // Inode/Dentry max applyID, this index will be update after restoring from the dumped data.
-	storedApplyId           uint64                // update after store snapshot to disk
-	dentryTree              *BTree                // btree for dentries
-	inodeTree               *BTree                // btree for inodes
-	extendTree              *BTree                // btree for inode extend (XAttr) management
-	multipartTree           *BTree                // collection for multipart management
-	txProcessor             *TransactionProcessor // transction processor
-	raftPartition           raftstore.Partition
-	stopC                   chan bool
-	storeChan               chan *storeMsg
-	state                   uint32
-	delInodeFp              *os.File
-	freeList                *freeList // free inode list
-	extDelCh                chan []proto.ExtentKey
-	extReset                chan struct{}
-	vol                     *Vol
-	manager                 *metadataManager
-	isLoadingMetaPartition  bool
-	ebsClient               *blobstore.BlobStoreClient
-	volType                 int
-	isFollowerRead          bool
-	uidManager              *UidManager
-	xattrLock               sync.Mutex
-	fileRange               []int64
-	mqMgr                   *MetaQuotaManager
-	nonIdempotent           sync.Mutex
-	uniqChecker             *uniqChecker
-	verSeq                  uint64
-	multiVersionList        *proto.VolVersionInfoList
-	verUpdateChan           chan []byte
-	enableAuditLog          bool
-	recycleInodeDelFileFlag atomicutil.Flag
+	config                    *MetaPartitionConfig
+	size                      uint64                // For partition all file size
+	applyID                   uint64                // Inode/Dentry max applyID, this index will be update after restoring from the dumped data.
+	storedApplyId             uint64                // update after store snapshot to disk
+	dentryTree                *BTree                // btree for dentries
+	inodeTree                 *BTree                // btree for inodes
+	extendTree                *BTree                // btree for inode extend (XAttr) management
+	multipartTree             *BTree                // collection for multipart management
+	txProcessor               *TransactionProcessor // transction processor
+	raftPartition             raftstore.Partition
+	stopC                     chan bool
+	storeChan                 chan *storeMsg
+	state                     uint32
+	delInodeFp                *os.File
+	freeList                  *freeList // free inode list
+	freeHybridList            *freeList // to store inode delay to delete migration keys
+	extDelCh                  chan []proto.ExtentKey
+	extReset                  chan struct{}
+	vol                       *Vol
+	manager                   *metadataManager
+	isLoadingMetaPartition    bool
+	blobClientWrapper         *BlobStoreClientWrapper
+	volType                   int // kept in hybrid cloud for compatibility
+	isFollowerRead            bool
+	uidManager                *UidManager
+	xattrLock                 sync.Mutex
+	fileRange                 []int64
+	mqMgr                     *MetaQuotaManager
+	nonIdempotent             sync.Mutex
+	uniqChecker               *uniqChecker
+	verSeq                    uint64
+	multiVersionList          *proto.VolVersionInfoList
+	verUpdateChan             chan []byte
+	enableAuditLog            bool
+	recycleInodeDelFileFlag   atomicutil.Flag
+	enablePersistAccessTime   bool
+	accessTimeValidInterval   uint64
+	statByStorageClass        []*proto.StatOfStorageClass
+	statByMigrateStorageClass []*proto.StatOfStorageClass
+	syncAtimeCh               chan uint64
+}
+
+// IsLeader returns the raft leader address and if the current meta partition is the leader.
+func (mp *metaPartition) SetFollowerRead(fRead bool) {
+	if mp.raftPartition == nil {
+		return
+	}
+	mp.isFollowerRead = fRead
+}
+
+// IsLeader returns the raft leader address and if the current meta partition is the leader.
+func (mp *metaPartition) IsFollowerRead() (ok bool) {
+	if mp.raftPartition == nil {
+		return false
+	}
+
+	if !mp.isFollowerRead {
+		return false
+	}
+
+	if mp.raftPartition.IsRestoring() {
+		return false
+	}
+
+	return true
 }
 
 func (mp *metaPartition) IsForbidden() bool {
@@ -522,6 +625,18 @@ func (mp *metaPartition) IsForbidden() bool {
 
 func (mp *metaPartition) SetForbidden(status bool) {
 	mp.config.Forbidden = status
+}
+
+func (mp *metaPartition) GetVolStorageClass() uint32 {
+	return mp.vol.GetVolView().VolStorageClass
+}
+
+func (mp *metaPartition) IsForbidWriteOpOfProtoVer0() bool {
+	return mp.config.ForbidWriteOpOfProtoVer0
+}
+
+func (mp *metaPartition) SetForbidWriteOpOfProtoVer0(status bool) {
+	mp.config.ForbidWriteOpOfProtoVer0 = status
 }
 
 func (mp *metaPartition) IsEnableAuditLog() bool {
@@ -582,17 +697,66 @@ func (mp *metaPartition) updateSize() {
 			select {
 			case <-timer.C:
 				size := uint64(0)
+				migrateSize := uint64(0)
+				migrateInodeCnt := uint32(0)
+
+				statStorageClassMap := make(map[uint32]*proto.StatOfStorageClass)
+				var statStorageClass *proto.StatOfStorageClass
+				statByMigStorageClassMap := make(map[uint32]*proto.StatOfStorageClass)
+				var statMigStorageClass *proto.StatOfStorageClass
+				var ok bool
 
 				mp.inodeTree.GetTree().Ascend(func(item BtreeItem) bool {
 					inode := item.(*Inode)
 					size += inode.Size
+
+					// stat normal Extents
+					if statStorageClass, ok = statStorageClassMap[inode.StorageClass]; !ok {
+						statStorageClass = proto.NewStatOfStorageClass(inode.StorageClass)
+						statStorageClassMap[inode.StorageClass] = statStorageClass
+					}
+					statStorageClass.InodeCount++
+					statStorageClass.UsedSizeBytes += inode.Size
+
+					// stat migration Extents
+					if inode.HybridCloudExtentsMigration == nil ||
+						inode.HybridCloudExtentsMigration.sortedEks == nil ||
+						!proto.IsValidStorageClass(inode.HybridCloudExtentsMigration.storageClass) {
+						return true
+					}
+					migrateStorageClass := inode.HybridCloudExtentsMigration.storageClass
+					if statMigStorageClass, ok = statByMigStorageClassMap[migrateStorageClass]; !ok {
+						statMigStorageClass = proto.NewStatOfStorageClass(migrateStorageClass)
+						statByMigStorageClassMap[migrateStorageClass] = statMigStorageClass
+					}
+					migrateInodeCnt += 1
+					migrateSize += inode.Size
+					statMigStorageClass.InodeCount++
+					statMigStorageClass.UsedSizeBytes += inode.Size
+
 					return true
 				})
-
 				mp.size = size
-				log.LogDebugf("[updateSize] update mp[%v] size(%d) success,inodeCount(%d),dentryCount(%d)", mp.config.PartitionId, size, mp.inodeTree.Len(), mp.dentryTree.Len())
+
+				normalToSlice := make([]*proto.StatOfStorageClass, 0)
+				for _, stat := range statStorageClassMap {
+					normalToSlice = append(normalToSlice, stat)
+				}
+				mp.statByStorageClass = normalToSlice
+
+				migrateToSlice := make([]*proto.StatOfStorageClass, 0)
+				for _, migStat := range statByMigStorageClassMap {
+					migrateToSlice = append(migrateToSlice, migStat)
+				}
+				mp.statByMigrateStorageClass = migrateToSlice
+
+				log.LogDebugf("[updateSize] update mp(%d) size(%d) success, inodeCount(%d), dentryCount(%d), "+
+					"migrateInodeCount(%v) migrateSize(%v)",
+					mp.config.PartitionId, size, mp.inodeTree.Len(), mp.dentryTree.Len(),
+					migrateInodeCnt, migrateSize)
 			case <-mp.stopC:
-				log.LogDebugf("[updateSize] stop update mp[%v] size,inodeCount(%d),dentryCount(%d)", mp.config.PartitionId, mp.inodeTree.Len(), mp.dentryTree.Len())
+				log.LogDebugf("[updateSize] stop update mp[%v] size, inodeCount(%d), dentryCount(%d)",
+					mp.config.PartitionId, mp.inodeTree.Len(), mp.dentryTree.Len())
 				return
 			}
 		}
@@ -693,8 +857,11 @@ func (mp *metaPartition) onStart(isCreate bool) (err error) {
 		}
 		mp.onStop()
 	}()
-	if err = mp.versionInit(isCreate); err != nil {
-		return
+
+	if mp.manager.metaNode.clusterEnableSnapshot {
+		if err = mp.versionInit(isCreate); err != nil {
+			return
+		}
 	}
 	if err = mp.load(isCreate); err != nil {
 		err = errors.NewErrorf("[onStart] load partition id=%d: %s",
@@ -708,45 +875,56 @@ func (mp *metaPartition) onStart(isCreate bool) (err error) {
 		return
 	}
 
-	// set EBS Client
-	if clusterInfo, err = masterClient.AdminAPI().GetClusterInfo(); err != nil {
-		log.LogErrorf("action[onStart] GetClusterInfo err[%v]", err)
+	retryCnt := 0
+	for ; retryCnt < 200; retryCnt++ {
+		if err = mp.manager.forceUpdateVolumeView(mp); err != nil {
+			log.LogWarnf("[onStart] vol(%v) mpId(%d) retryCnt(%v), GetVolumeSimpleInfo err[%v]",
+				mp.config.VolName, mp.config.PartitionId, retryCnt, err)
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		break
+	}
+	if err != nil {
+		log.LogErrorf("[onStart] vol(%v) mpId(%d), after retryCnt(%v) failed to GetVolumeSimpleInfo: %v",
+			mp.config.VolName, mp.config.PartitionId, retryCnt, err)
 		return
 	}
 
-	var volumeInfo *proto.SimpleVolView
-	if volumeInfo, err = masterClient.AdminAPI().GetVolumeSimpleInfo(mp.config.VolName); err != nil {
-		log.LogErrorf("action[onStart] GetVolumeSimpleInfo err[%v]", err)
+	volInfo := mp.vol.GetVolView()
+	mp.vol.volDeleteLockTime = volInfo.DeleteLockTime
+	if mp.manager.metaNode.clusterEnableSnapshot {
+		go mp.runVersionOp()
+	}
+
+	mp.volType = volInfo.VolType
+	if !proto.IsValidStorageClass(volInfo.VolStorageClass) {
+		err = errors.NewErrorf("[onStart] vol(%v) mpId(%d), get from master invalid volStorageClass(%v)",
+			mp.config.VolName, mp.config.PartitionId, volInfo.VolStorageClass)
 		return
 	}
 
-	mp.vol.volDeleteLockTime = volumeInfo.DeleteLockTime
+	log.LogInfof("[onStart] vol(%v) mpId(%v), from master VolStorageClass(%v)",
+		mp.config.VolName, mp.config.PartitionId, proto.StorageClassString(mp.GetVolStorageClass()))
 
-	go mp.runVersionOp()
-
-	mp.volType = volumeInfo.VolType
-	var ebsClient *blobstore.BlobStoreClient
-	if clusterInfo.EbsAddr != "" && proto.IsCold(mp.volType) {
-		ebsClient, err = blobstore.NewEbsClient(
-			access.Config{
-				ConnMode: access.NoLimitConnMode,
-				Consul: access.ConsulConfig{
-					Address: clusterInfo.EbsAddr,
-				},
-				MaxSizePutOnce: int64(volumeInfo.ObjBlockSize),
-				Logger:         &access.Logger{Filename: path.Join(log.LogDir, "ebs.log")},
+	if proto.IsCold(mp.volType) || proto.IsVolSupportStorageClass(volInfo.AllowedStorageClass, proto.StorageClass_BlobStore) {
+		mp.blobClientWrapper, err = NewBlobStoreClientWrapper(access.Config{
+			ConnMode: access.NoLimitConnMode,
+			Consul: access.ConsulConfig{
+				Address: gClusterInfo.EbsAddr, // gClusterInfo is fetched from master in register procedure
 			},
-		)
+			MaxSizePutOnce: int64(volInfo.ObjBlockSize),
+			Logger:         &access.Logger{Filename: path.Join(log.LogDir, "ebs.log")},
+		})
 
 		if err != nil {
-			log.LogErrorf("action[onStart] err[%v]", err)
-			return
+			log.LogWarnf("action[onStart] mp(%v) blobStoreAddr(%v), create blobstore client err[%v], but still start mp and will try create blobstore later",
+				mp.config.PartitionId, gClusterInfo.EbsAddr, err)
+			// not return err here, blobstore client may be created latter
+		} else {
+			log.LogInfof("action[onStart] mp(%v) blobStoreAddr(%v), create blobstore client success",
+				mp.config.PartitionId, gClusterInfo.EbsAddr)
 		}
-		if ebsClient == nil {
-			err = errors.NewErrorf("[onStart] ebsClient is nil")
-			return
-		}
-		mp.ebsClient = ebsClient
 	}
 
 	go mp.startCheckerEvict()
@@ -762,7 +940,7 @@ func (mp *metaPartition) onStart(isCreate bool) (err error) {
 
 	mp.updateSize()
 
-	if proto.IsHot(mp.volType) {
+	if proto.IsHot(mp.volType) && mp.manager.metaNode.clusterEnableSnapshot {
 		log.LogInfof("hot vol not need cacheTTL")
 		go mp.multiVersionTTLWork(time.Minute)
 		return
@@ -861,60 +1039,38 @@ func (mp *metaPartition) getRaftPort() (heartbeat, replica int, err error) {
 // NewMetaPartition creates a new meta partition with the specified configuration.
 func NewMetaPartition(conf *MetaPartitionConfig, manager *metadataManager) MetaPartition {
 	mp := &metaPartition{
-		config:        conf,
-		dentryTree:    NewBtree(),
-		inodeTree:     NewBtree(),
-		extendTree:    NewBtree(),
-		multipartTree: NewBtree(),
-		stopC:         make(chan bool),
-		storeChan:     make(chan *storeMsg, 100),
-		freeList:      newFreeList(),
-		extDelCh:      make(chan []proto.ExtentKey, defaultDelExtentsCnt),
-		extReset:      make(chan struct{}),
-		vol:           NewVol(),
-		manager:       manager,
-		uniqChecker:   newUniqChecker(),
-		verSeq:        conf.VerSeq,
+		config:         conf,
+		dentryTree:     NewBtree(),
+		inodeTree:      NewBtree(),
+		extendTree:     NewBtree(),
+		multipartTree:  NewBtree(),
+		stopC:          make(chan bool),
+		storeChan:      make(chan *storeMsg, 100),
+		freeList:       newFreeList(),
+		freeHybridList: newFreeList(),
+		extDelCh:       make(chan []proto.ExtentKey, defaultDelExtentsCnt),
+		syncAtimeCh:    make(chan uint64, defaultSyncInodeAtimeCnt),
+		extReset:       make(chan struct{}),
+		vol:            NewVol(),
+		manager:        manager,
+		uniqChecker:    newUniqChecker(),
+		verSeq:         conf.VerSeq,
 		multiVersionList: &proto.VolVersionInfoList{
 			TemporaryVerMap: make(map[uint64]*proto.VolVersionInfo),
 		},
+
 		enableAuditLog: true,
 	}
+	if manager != nil {
+		mp.config.ForbidWriteOpOfProtoVer0 = manager.isVolForbidWriteOpOfProtoVer0(mp.config.VolName)
+	}
 	mp.txProcessor = NewTransactionProcessor(mp)
+	go mp.batchSyncInodeAtime()
 	return mp
-}
-
-func (mp *metaPartition) GetVolName() (volName string) {
-	return mp.config.VolName
 }
 
 func (mp *metaPartition) GetVerSeq() uint64 {
 	return atomic.LoadUint64(&mp.verSeq)
-}
-
-// IsLeader returns the raft leader address and if the current meta partition is the leader.
-func (mp *metaPartition) SetFollowerRead(fRead bool) {
-	if mp.raftPartition == nil {
-		return
-	}
-	mp.isFollowerRead = fRead
-}
-
-// IsLeader returns the raft leader address and if the current meta partition is the leader.
-func (mp *metaPartition) IsFollowerRead() (ok bool) {
-	if mp.raftPartition == nil {
-		return false
-	}
-
-	if !mp.isFollowerRead {
-		return false
-	}
-
-	if mp.raftPartition.IsRestoring() {
-		return false
-	}
-
-	return true
 }
 
 // IsLeader returns the raft leader address and if the current meta partition is the leader.
@@ -957,6 +1113,11 @@ func (mp *metaPartition) GetPeers() (peers []string) {
 // GetCursor returns the cursor stored in the config.
 func (mp *metaPartition) GetCursor() uint64 {
 	return atomic.LoadUint64(&mp.config.Cursor)
+}
+
+// GetAppliedID returns applied ID of raft
+func (mp *metaPartition) GetAppliedID() uint64 {
+	return atomic.LoadUint64(&mp.applyID)
 }
 
 // GetUniqId returns the uniqid stored in the config.
@@ -1124,7 +1285,12 @@ func (mp *metaPartition) load(isCreate bool) (err error) {
 
 	}
 
-	return mp.LoadSnapshot(snapshotPath)
+	err = mp.LoadSnapshot(snapshotPath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (mp *metaPartition) store(sm *storeMsg) (err error) {
@@ -1562,12 +1728,7 @@ func (mp *metaPartition) delPartitionInodesVersion(verSeq uint64, wg *sync.WaitG
 // cacheTTLWork only happen in datalake situation
 func (mp *metaPartition) cacheTTLWork() (err error) {
 	// check volume type, only Cold volume will do the cache ttl.
-	volView, mcErr := masterClient.ClientAPI().GetVolumeWithoutAuthKey(mp.config.VolName)
-	if mcErr != nil {
-		err = fmt.Errorf("cacheTTLWork: can't get volume info: partitoinID(%v) volume(%v)",
-			mp.config.PartitionId, mp.config.VolName)
-		return
-	}
+	volView := mp.vol.GetVolView()
 	if volView.VolType != proto.VolumeTypeCold {
 		return
 	}
@@ -1578,7 +1739,7 @@ func (mp *metaPartition) cacheTTLWork() (err error) {
 	}
 
 	// do cache ttl work
-	go mp.doCacheTTL(volView.CacheTTL)
+	go mp.doCacheTTL(volView.CacheTtl)
 	return
 }
 
@@ -1723,4 +1884,24 @@ func (mp *metaPartition) startCheckerEvict() {
 			return
 		}
 	}
+}
+
+func (mp *metaPartition) GetVolName() (volName string) {
+	return mp.config.VolName
+}
+
+func (mp *metaPartition) GetAccessTimeValidInterval() time.Duration {
+	interval := atomic.LoadUint64(&mp.accessTimeValidInterval)
+	if interval == 0 {
+		return proto.DefaultAccessTimeValidInterval
+	}
+	return time.Duration(interval)
+}
+
+func (mp *metaPartition) GetStatByStorageClass() []*proto.StatOfStorageClass {
+	return mp.statByStorageClass
+}
+
+func (mp *metaPartition) GetMigrateStatByStorageClass() []*proto.StatOfStorageClass {
+	return mp.statByMigrateStorageClass
 }

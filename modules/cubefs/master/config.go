@@ -47,11 +47,18 @@ const (
 	cfgmetaPartitionInodeIdStep         = "metaPartitionInodeIdStep"
 	cfgMaxQuotaNumPerVol                = "maxQuotaNumPerVol"
 	disableAutoCreate                   = "disableAutoCreate"
-	cfgMonitorPushAddr                  = "monitorPushAddr"
-	intervalToScanS3Expiration          = "intervalToScanS3Expiration"
+
+	enableFollowerCache = "enableFollowerCache"
+	enableSnapshot      = "enableSnapshot"
+	cfgMonitorPushAddr  = "monitorPushAddr"
+	cfgStartLcScanTime  = "startLcScanTime"
 
 	cfgVolForceDeletion           = "volForceDeletion"
 	cfgVolDeletionDentryThreshold = "volDeletionDentryThreshold"
+
+	cfgHttpReversePoolSize = "httpReversePoolSize"
+
+	cfgLegacyDataMediaType = "legacyDataMediaType" // for hybrid cloud upgrade
 )
 
 // default value
@@ -91,11 +98,11 @@ const (
 	defaultMasterMinQosAccept                          = 20000
 	defaultMaxDpCntLimit                               = 3000
 	defaultMaxMpCntLimit                               = 300
-	defaultIntervalToScanS3Expiration                  = 12 * 3600
+	defaultStartLcScanTime                             = 1
 	defaultMaxConcurrentLcNodes                        = 3
 	metaPartitionInodeUsageThreshold           float64 = 0.75 // inode usage threshold on a meta partition
 	lowerLimitRWMetaPartition                          = 3    // lower limit of RW meta partition, equal defaultReplicaNum
-	// defaultIntervalToCheckDelVerTaskExpiration         = 3
+	defaultHttpReversePoolSize                         = 1024
 )
 
 // AddrDatabase is a map that stores the address of a given host (e.g., the leader)
@@ -111,6 +118,8 @@ type clusterConfig struct {
 	IntervalToAlarmMissingDataPartition int64
 	PeriodToLoadALLDataPartitions       int64
 	metaNodeReservedMem                 uint64
+	httpProxyPoolSize                   uint64
+	httpPoolSize                        uint64
 	IntervalToCheckDataPartition        int // seconds
 	IntervalToCheckQos                  int // seconds
 	numberOfDataPartitionsToFree        int
@@ -126,6 +135,7 @@ type clusterConfig struct {
 	DataNodeAutoRepairLimitRate         uint64 // datanode autorepair limit rate
 	DpMaxRepairErrCnt                   uint64
 	DpRepairTimeOut                     uint64
+	DpBackupTimeOut                     uint64
 	peers                               []raftstore.PeerAddress
 	peerAddrs                           []string
 	heartbeatPort                       int64
@@ -141,13 +151,22 @@ type clusterConfig struct {
 	MetaPartitionInodeIdStep            uint64
 	MaxQuotaNumPerVol                   int
 	DisableAutoCreate                   bool
+	EnableFollowerCache                 bool
+	EnableSnapshot                      bool
 	MonitorPushAddr                     string
-	IntervalToScanS3Expiration          int64
+	StartLcScanTime                     int
 	MaxConcurrentLcNodes                uint64
 
 	volForceDeletion           bool   // when delete a volume, ignore it's dentry count or not
 	volDeletionDentryThreshold uint64 // in case of volForceDeletion is set to false, define the dentry count threshold to allow volume deletion
 	volDelayDeleteTimeHour     int64
+
+	cfgDataMediaType uint32 // used to control update mediaType, pay attention to use.
+
+	// configuring datanode and metanode to forbidden write operate codes of packet protocol version-0
+	// PacketProtoVersion-0: before hybrid cloud version
+	// PacketProtoVersion-1: from hybrid cloud version
+	forbidWriteOpOfProtoVer0 bool
 }
 
 func newClusterConfig() (cfg *clusterConfig) {
@@ -175,7 +194,7 @@ func newClusterConfig() (cfg *clusterConfig) {
 	cfg.DirChildrenNumLimit = pt.DefaultDirChildrenNumLimit
 	cfg.MetaPartitionInodeIdStep = defaultMetaPartitionInodeIDStep
 	cfg.MaxQuotaNumPerVol = defaultMaxQuotaNumPerVol
-	cfg.IntervalToScanS3Expiration = defaultIntervalToScanS3Expiration
+	cfg.StartLcScanTime = defaultStartLcScanTime
 	cfg.MaxConcurrentLcNodes = defaultMaxConcurrentLcNodes
 	cfg.volDelayDeleteTimeHour = defaultVolDelayDeleteTimeHour
 	return

@@ -69,8 +69,15 @@ func (m *Server) isClientPartitionsReq(r *http.Request) bool {
 }
 
 func (m *Server) isFollowerRead(r *http.Request) (followerRead bool) {
-	followerRead = false
+	if r.URL.Path == proto.AdminChangeMasterLeader || r.URL.Path == "/metrics" {
+		return true
+	}
 
+	if !m.cluster.cfg.EnableFollowerCache {
+		return false
+	}
+
+	followerRead = false
 	if r.URL.Path == proto.ClientDataPartitions && !m.partition.IsRaftLeader() {
 		if volName, err := parseAndExtractName(r); err == nil {
 			log.LogInfof("action[interceptor] followerRead vol[%v]", volName)
@@ -80,10 +87,8 @@ func (m *Server) isFollowerRead(r *http.Request) (followerRead bool) {
 				return
 			}
 		}
-	} else if r.URL.Path == proto.AdminChangeMasterLeader ||
-		r.URL.Path == proto.AdminOpFollowerPartitionsRead ||
-		r.URL.Path == proto.AdminPutDataPartitions ||
-		r.URL.Path == "/metrics" {
+	} else if r.URL.Path == proto.AdminOpFollowerPartitionsRead ||
+		r.URL.Path == proto.AdminPutDataPartitions {
 		followerRead = true
 	}
 	return
@@ -131,11 +136,19 @@ func (m *Server) registerAPIMiddleware(route *mux.Router) {
 					http.Error(w, m.leaderInfo.addr, http.StatusBadRequest)
 					return
 				} else if m.leaderInfo.addr != "" {
-					if m.isClientPartitionsReq(r) {
+					if m.isClientPartitionsReq(r) && m.cluster.cfg.EnableFollowerCache {
 						log.LogErrorf("action[interceptor] request, method[%v] path[%v] query[%v] status [%v]", r.Method, r.URL.Path, r.URL.Query(), isFollowerRead)
 						http.Error(w, m.leaderInfo.addr, http.StatusBadRequest)
 						return
 					}
+
+					if m.leaderInfo.addr == m.getCurrAddr() {
+						log.LogErrorf("action[interceptor] request, self is leader addr, no leader now, method[%v] path[%v] query[%v] status [%v]",
+							r.Method, r.URL.Path, r.URL.Query(), m.leaderInfo.addr)
+						http.Error(w, "no leader", http.StatusBadRequest)
+						return
+					}
+
 					m.proxy(w, r)
 				} else {
 					log.LogErrorf("action[interceptor] no leader,request[%v]", r.URL)
@@ -157,11 +170,12 @@ var AuthenticationUri2MsgTypeMap = map[string]proto.MsgType{
 	proto.AdminSetNodeRdOnly: proto.MsgMasterSetNodeRdOnlyReq,
 
 	// Master API volume management
-	proto.AdminCreateVol: proto.MsgMasterCreateVolReq,
-	proto.AdminDeleteVol: proto.MsgMasterDeleteVolReq,
-	proto.AdminUpdateVol: proto.MsgMasterUpdateVolReq,
-	proto.AdminVolShrink: proto.MsgMasterVolShrinkReq,
-	proto.AdminVolExpand: proto.MsgMasterVolExpandReq,
+	proto.AdminCreateVol:                 proto.MsgMasterCreateVolReq,
+	proto.AdminDeleteVol:                 proto.MsgMasterDeleteVolReq,
+	proto.AdminUpdateVol:                 proto.MsgMasterUpdateVolReq,
+	proto.AdminVolShrink:                 proto.MsgMasterVolShrinkReq,
+	proto.AdminVolExpand:                 proto.MsgMasterVolExpandReq,
+	proto.AdminVolAddAllowedStorageClass: proto.MsgMasterVolAddAllowedStorageClass,
 
 	// Master API meta partition management
 	proto.AdminLoadMetaPartition:         proto.MsgMasterLoadMetaPartitionReq,
@@ -270,6 +284,9 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 	router.NewRoute().Methods(http.MethodGet).
 		Path(proto.AdminGetCluster).
 		HandlerFunc(m.getCluster)
+	router.NewRoute().Methods(http.MethodGet).
+		Path(proto.AdminGetOpLog).
+		HandlerFunc(m.getOpLog)
 	router.NewRoute().Name(proto.AdminACL).
 		Methods(http.MethodGet).
 		Path(proto.AdminACL).
@@ -364,6 +381,9 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 	router.NewRoute().Methods(http.MethodGet).
 		Path(proto.AdminGetClusterMetaNodes).
 		HandlerFunc(m.getAllMetaNodes)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.AdminGetUpgradeCompatibleSettings).
+		HandlerFunc(m.getUpgradeCompatibleSettings)
 
 	// volume management APIs
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
@@ -391,6 +411,9 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 		Path(proto.ClientVolStat).
 		HandlerFunc(m.getVolStatInfo)
 	router.NewRoute().Methods(http.MethodGet).
+		Path(proto.GetAllClients).
+		HandlerFunc(m.getAllClients)
+	router.NewRoute().Methods(http.MethodGet).
 		Path(proto.GetTopologyView).
 		HandlerFunc(m.getTopology)
 	router.NewRoute().Methods(http.MethodGet).
@@ -417,11 +440,15 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminAbortDecommissionDisk).
 		HandlerFunc(m.abortDecommissionDisk)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.AdminVolAddAllowedStorageClass).
+		HandlerFunc(m.volAddAllowedStorageClass)
 
 	// multi version snapshot APIs
-	router.NewRoute().Methods(http.MethodGet).
-		Path(proto.AdminCreateVersion).
-		HandlerFunc(m.CreateVersion)
+	// TODO: hybrid cloud not support snapshot version yet, forbidden AdminCreateVersion until snapshot version is supported
+	// router.NewRoute().Methods(http.MethodGet).
+	//	Path(proto.AdminCreateVersion).
+	//	HandlerFunc(m.CreateVersion)
 	router.NewRoute().Methods(http.MethodGet).
 		Path(proto.AdminDelVersion).
 		HandlerFunc(m.DelVersion)
@@ -453,7 +480,7 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 		HandlerFunc(m.addLcNode)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminLcNode).
-		HandlerFunc(m.lcnodeInfo)
+		HandlerFunc(m.adminLcNode)
 
 	// node task response APIs
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
@@ -566,8 +593,8 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 		Path(proto.AdminRecoverReplicaMeta).
 		HandlerFunc(m.recoverReplicaMeta)
 	router.NewRoute().Methods(http.MethodGet).
-		Path(proto.AdminRecoverDiskErrorReplica).
-		HandlerFunc(m.recoverDiskErrorReplica)
+		Path(proto.AdminRecoverBackupDataReplica).
+		HandlerFunc(m.recoverBackupDataReplica)
 
 	// meta node management APIs
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
@@ -630,6 +657,9 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.QueryDataNodeDecoFailedDps).
 		HandlerFunc(m.queryDataNodeDecoFailedDps)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.ResetDecommissionDataNodeStatus).
+		HandlerFunc(m.resetDecommissionDataNodeStatus)
 
 	router.NewRoute().Methods(http.MethodGet).
 		Path(proto.GetDataNode).
@@ -647,8 +677,8 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 		Path(proto.QueryDiskDecoProgress).
 		HandlerFunc(m.queryDiskDecoProgress)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
-		Path(proto.MarkDecoDiskFixed).
-		HandlerFunc(m.markDecoDiskFixed)
+		Path(proto.DeleteDecommissionDiskRecord).
+		HandlerFunc(m.deleteDecommissionDiskRecord)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.PauseDecommissionDisk).
 		HandlerFunc(m.pauseDecommissionDisk)
@@ -672,10 +702,25 @@ func (m *Server) registerAPIRoutes(router *mux.Router) {
 		HandlerFunc(m.queryDisableDisk)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.CancelDecommissionDisk).
-		HandlerFunc(m.cancelDisableDisk)
+		HandlerFunc(m.cancelDecommissionDisk)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.ResetDecommissionDiskStatus).
+		HandlerFunc(m.resetDecommissionDiskStatus)
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminResetDataPartitionRestoreStatus).
 		HandlerFunc(m.resetDataPartitionRestoreStatus)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.RecoverBadDisk).
+		HandlerFunc(m.recoverBadDisk)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.QueryBadDiskRecoverProgress).
+		HandlerFunc(m.queryBadDiskRecoverProgress)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.DeleteBackupDirectories).
+		HandlerFunc(m.deleteBackupDirectories)
+	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
+		Path(proto.QueryBackupDirectories).
+		HandlerFunc(m.queryBackupDirectories)
 
 	router.NewRoute().Methods(http.MethodGet, http.MethodPost).
 		Path(proto.AdminSetNodeInfo).
@@ -850,10 +895,20 @@ func ErrResponse(w http.ResponseWriter, err error) {
 }
 
 func (m *Server) newReverseProxy() *httputil.ReverseProxy {
-	return &httputil.ReverseProxy{Director: func(request *http.Request) {
-		request.URL.Scheme = "http"
-		request.URL.Host = m.leaderInfo.addr
-	}}
+	tr := &http.Transport{}
+	if m.config != nil {
+		tr = proto.GetHttpTransporter(&proto.HttpCfg{
+			PoolSize: int(m.config.httpProxyPoolSize),
+		})
+	}
+
+	return &httputil.ReverseProxy{
+		Director: func(request *http.Request) {
+			request.URL.Scheme = "http"
+			request.URL.Host = m.leaderInfo.addr
+		},
+		Transport: tr,
+	}
 }
 
 func (m *Server) proxy(w http.ResponseWriter, r *http.Request) {

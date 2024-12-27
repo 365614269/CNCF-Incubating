@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cubefs/cubefs/cmd/common"
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/raftstore"
 	"github.com/cubefs/cubefs/util"
@@ -36,6 +37,7 @@ import (
 	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/loadutil"
 	"github.com/cubefs/cubefs/util/log"
+	"github.com/cubefs/cubefs/util/strutil"
 )
 
 const (
@@ -46,6 +48,11 @@ const (
 const sampleDuration = 1 * time.Second
 
 const UpdateVolTicket = 2 * time.Minute
+
+const (
+	gcTimerDuration  = 10 * time.Second
+	gcRecyclePercent = 0.90
+)
 
 // MetadataManager manages all the meta partitions.
 type MetadataManager interface {
@@ -61,10 +68,11 @@ type MetadataManager interface {
 
 // MetadataManagerConfig defines the configures in the metadata manager.
 type MetadataManagerConfig struct {
-	NodeID    uint64
-	RootDir   string
-	ZoneName  string
-	RaftStore raftstore.RaftStore
+	NodeID        uint64
+	RootDir       string
+	ZoneName      string
+	EnableGcTimer bool
+	RaftStore     raftstore.RaftStore
 }
 
 type verOp2Phase struct {
@@ -93,6 +101,8 @@ type metadataManager struct {
 	stopC                chan struct{}
 	volUpdating          *sync.Map // map[string]*verOp2Phase
 	verUpdateChan        chan string
+	enableGcTimer        bool
+	gcTimer              *util.RecycleTimer
 }
 
 func (m *metadataManager) GetAllVolumes() (volumes *util.Set) {
@@ -106,9 +116,9 @@ func (m *metadataManager) GetAllVolumes() (volumes *util.Set) {
 }
 
 func (m *metadataManager) getDataPartitions(volName string) (view *proto.DataPartitionsView, err error) {
-	view, err = masterClient.ClientAPI().GetDataPartitions(volName)
+	view, err = masterClient.ClientAPI().EncodingGzip().GetDataPartitions(volName)
 	if err != nil {
-		log.LogErrorf("action[getDataPartitions]: failed to get data partitions for volume %v", volName)
+		log.LogErrorf("action[getDataPartitions]: failed to get data partitions for volume %v, err %s", volName, err.Error())
 	}
 	return
 }
@@ -146,7 +156,7 @@ func (m *metadataManager) updateVolumes() {
 		return true
 	})
 	// push to every partitions
-	m.Range(false, func(_ uint64, mp MetaPartition) bool {
+	m.Range(true, func(_ uint64, mp MetaPartition) bool {
 		dataView := dataViews[mp.GetBaseConfig().VolName]
 		volView := volViews[mp.GetBaseConfig().VolName]
 		if dataView != nil && volView != nil {
@@ -178,6 +188,24 @@ func (m *metadataManager) getPacketLabels(p *Packet) (labels map[string]string) 
 	labels[exporter.Vol] = mp.GetBaseConfig().VolName
 
 	return
+}
+
+func (m *metadataManager) checkForbidWriteOpOfProtoVer0(pktProtoVersion uint32, mpForbidWriteOpOfProtoVer0 bool) (err error) {
+	if pktProtoVersion != proto.PacketProtoVersion0 {
+		return nil
+	}
+
+	if m.metaNode.nodeForbidWriteOpOfProtoVer0 {
+		err = fmt.Errorf("%v %v", storage.ClusterForbidWriteOpOfProtoVer, pktProtoVersion)
+		return
+	}
+
+	if mpForbidWriteOpOfProtoVer0 {
+		err = fmt.Errorf("%v %v", storage.VolForbidWriteOpOfProtoVer, pktProtoVersion)
+		return
+	}
+
+	return nil
 }
 
 // HandleMetadataOperation handles the metadata operations.
@@ -348,11 +376,21 @@ func (m *metadataManager) HandleMetadataOperation(conn net.Conn, p *Packet, remo
 		err = m.opQuotaCreateDentry(conn, p, remoteAddr)
 	case proto.OpMetaGetUniqID:
 		err = m.opMetaGetUniqID(conn, p, remoteAddr)
+	case proto.OpMetaGetAppliedID:
+		err = m.opMetaGetAppliedID(conn, p, remoteAddr)
+	case proto.OpMetaInodeAccessTimeGet:
+		err = m.opMetaInodeAccessTimeGet(conn, p, remoteAddr)
 	// multi version
 	case proto.OpVersionOperation:
 		err = m.opMultiVersionOp(conn, p, remoteAddr)
 	case proto.OpGetExpiredMultipart:
 		err = m.opGetExpiredMultipart(conn, p, remoteAddr)
+	case proto.OpMetaRenewalForbiddenMigration:
+		err = m.opMetaRenewalForbiddenMigration(conn, p, remoteAddr)
+	case proto.OpMetaUpdateExtentKeyAfterMigration:
+		err = m.opMetaUpdateExtentKeyAfterMigration(conn, p, remoteAddr)
+	case proto.OpDeleteMigrationExtentKey:
+		err = m.opDeleteMigrationExtentKey(conn, p, remoteAddr)
 	default:
 		err = fmt.Errorf("%s unknown Opcode: %d, reqId: %d", remoteAddr,
 			p.Opcode, p.GetReqID())
@@ -421,8 +459,44 @@ func (m *metadataManager) startCpuSample() {
 	}()
 }
 
+func (m *metadataManager) startGcTimer() {
+	if !m.enableGcTimer {
+		log.LogDebugf("[startGcTimer] gc timer disable")
+		return
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			log.LogErrorf("[startGcTimer] panic(%v)", r)
+		}
+	}()
+
+	enable, err := loadutil.IsEnableSwapMemory()
+	if err != nil {
+		log.LogErrorf("[startGcTimer] failed to get swap memory info, err(%v)", err)
+		return
+	}
+	if enable {
+		log.LogWarnf("[startGcTimer] swap memory is enable")
+		return
+	}
+	if m.gcTimer, err = util.NewRecycleTimer(gcTimerDuration, gcRecyclePercent, 1*util.GB); err != nil {
+		log.LogErrorf("[startGcTimer] failed to start gc timer, err(%v)", err)
+		return
+	}
+	m.gcTimer.SetPanicHook(func(r interface{}) {
+		log.LogErrorf("[startGcTimer] gc timer panic, err(%v)", r)
+	})
+	m.gcTimer.SetStatHook(func(totalPercent float64, currentProcess, currentGoHeap uint64) {
+		log.LogWarnf("[startGcTimer] host use too many memory, percent(%v), current process(%v), current process go heap(%v)", strutil.FormatPercent(totalPercent), strutil.FormatSize(currentProcess), strutil.FormatSize(currentGoHeap))
+	})
+}
+
 func (m *metadataManager) startSnapshotVersionPromote() {
 	m.verUpdateChan = make(chan string, 1000)
+	if !m.metaNode.clusterEnableSnapshot {
+		return
+	}
 	go func() {
 		for {
 			select {
@@ -447,6 +521,7 @@ func (m *metadataManager) onStart() (err error) {
 	m.startCpuSample()
 	m.startSnapshotVersionPromote()
 	m.startUpdateVolumes()
+	m.startGcTimer()
 	return
 }
 
@@ -456,6 +531,10 @@ func (m *metadataManager) onStop() {
 		for _, partition := range m.partitions {
 			partition.Stop()
 		}
+	}
+
+	if m.gcTimer != nil {
+		m.gcTimer.Stop()
 	}
 }
 
@@ -572,10 +651,6 @@ func (m *metadataManager) loadPartitions() (err error) {
 					errload = nil
 				}
 				partition := NewMetaPartition(partitionConfig, m)
-				if partition == nil {
-					log.LogErrorf("action[loadPartitions]: NewMetaPartition is nil")
-					return
-				}
 				errload = m.attachPartition(id, partition)
 				if errload != nil {
 					log.LogErrorf("action[loadPartitions] load partition id=%d failed: %s.",
@@ -589,28 +664,27 @@ func (m *metadataManager) loadPartitions() (err error) {
 	return
 }
 
-func (m *metadataManager) forceUpdatePartitionVolume(partition MetaPartition) {
+func (m *metadataManager) forceUpdateVolumeView(partition MetaPartition) error {
 	volName := partition.GetBaseConfig().VolName
 	// NOTE: maybe add a cache will be better?
-	dataView, volView, err := m.getVolumeUpdateInfo(volName)
+	volView, err := m.getVolumeView(volName)
 	if err != nil {
-		log.LogErrorf("action[registerPartition]: failed to get info of volume %v", volName)
-		return
+		log.LogErrorf("action[forceUpdateVolumeView]: failed to get info of volume %v, err %s", volName, err.Error())
+		return err
 	}
-	partition.UpdateVolumeView(dataView, volView)
-}
 
-func (m *metadataManager) registerPartition(id uint64, partition MetaPartition) {
-	func() {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		m.partitions[id] = partition
-	}()
-	m.forceUpdatePartitionVolume(partition)
+	paritionView, err1 := m.getDataPartitions(volName)
+	if err1 != nil {
+		log.LogWarnf("action[forceUpdateVolumeView]: failed to get partitions, vol %v, err %s", volName, err1.Error())
+		paritionView = proto.NewDataPartitionsView()
+	}
+
+	partition.UpdateVolumeView(paritionView, volView)
+	return nil
 }
 
 func (m *metadataManager) attachPartition(id uint64, partition MetaPartition) (err error) {
-	syslog.Printf("start load metaPartition %v\n", id)
+	syslog.Printf("start load metaPartition %v", id)
 	partition.ForceSetMetaPartitionToLoadding()
 	if err = partition.Start(false); err != nil {
 		msg := fmt.Sprintf("load meta partition %v fail: %v", id, err)
@@ -618,7 +692,11 @@ func (m *metadataManager) attachPartition(id uint64, partition MetaPartition) (e
 		syslog.Println(msg)
 		return
 	}
-	m.registerPartition(id, partition)
+
+	m.mu.Lock()
+	m.partitions[id] = partition
+	m.mu.Unlock()
+
 	msg := fmt.Sprintf("load meta partition %v success", id)
 	log.LogInfof(msg)
 	syslog.Println(msg)
@@ -659,13 +737,9 @@ func (m *metadataManager) createPartition(request *proto.CreateMetaPartitionRequ
 	}
 
 	partition := NewMetaPartition(mpc, m)
-	if partition == nil {
-		err = errors.NewErrorf("[createPartition] partition is nil")
-		return
-	}
 
 	if err = partition.RenameStaleMetadata(); err != nil {
-		err = errors.NewErrorf("[createPartition]->%s", err.Error())
+		log.LogErrorf("[createPartition]->%s", err.Error())
 	}
 
 	if err = partition.PersistMetadata(); err != nil {
@@ -692,7 +766,6 @@ func (m *metadataManager) createPartition(request *proto.CreateMetaPartitionRequ
 		}
 		m.partitions[request.PartitionID] = partition
 	}()
-	m.forceUpdatePartitionVolume(partition)
 
 	log.LogInfof("load meta partition %v success", request.PartitionID)
 
@@ -771,6 +844,7 @@ func NewMetadataManager(conf MetadataManagerConfig, metaNode *MetaNode) Metadata
 		metaNode:             metaNode,
 		maxQuotaGoroutineNum: defaultMaxQuotaGoroutine,
 		volUpdating:          new(sync.Map),
+		enableGcTimer:        conf.EnableGcTimer,
 	}
 }
 

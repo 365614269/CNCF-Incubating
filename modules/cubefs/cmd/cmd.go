@@ -25,9 +25,11 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cubefs/cubefs/authnode"
 	"github.com/cubefs/cubefs/cmd/common"
@@ -50,6 +52,8 @@ import (
 
 const (
 	ConfigKeyRole                   = "role"
+	ConfigKeyLocalIp                = "localIP"
+	ConfigKeyBindIp                 = "bindIp"
 	ConfigKeyLogDir                 = "logDir"
 	ConfigKeyLogLevel               = "logLevel"
 	ConfigKeyLogRotateSize          = "logRotateSize"
@@ -126,6 +130,18 @@ func modifyOpenFiles() (err error) {
 	return
 }
 
+func releaseMemory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/plain")
+	begin := time.Now()
+	syslog.Println("releaseMemory begen")
+	debug.FreeOSMemory()
+	interval := time.Since(begin)
+	msg := fmt.Sprintf("Success to release memory using %v", interval)
+	syslog.Printf("releaseMemory success, using time: %v", interval)
+	w.Write([]byte(msg))
+}
+
 func main() {
 	flag.Parse()
 
@@ -159,6 +175,8 @@ func main() {
 	 */
 
 	role := cfg.GetString(ConfigKeyRole)
+	bindIp := cfg.GetBool(ConfigKeyBindIp)
+	localIp := cfg.GetString(ConfigKeyLocalIp)
 	logDir := cfg.GetString(ConfigKeyLogDir)
 	logLevel := cfg.GetString(ConfigKeyLogLevel)
 	logRotateSize := cfg.GetInt64(ConfigKeyLogRotateSize)
@@ -170,7 +188,7 @@ func main() {
 	logLeftSpaceLimitRatio, err := strconv.ParseFloat(logLeftSpaceLimitRatioStr, 64)
 	enableLogPanicHook := cfg.GetBool(ConfigKeyEnableLogPanicHook)
 	if err != nil || logLeftSpaceLimitRatio <= 0 || logLeftSpaceLimitRatio > 1.0 {
-		log.LogErrorf("logLeftSpaceLimitRatio is not a legal float value: %v", err.Error())
+		log.LogWarnf("logLeftSpaceLimitRatio is not a legal float value: %v", err.Error())
 		logLeftSpaceLimitRatio = log.DefaultLogLeftSpaceLimitRatio
 	}
 	// Init server instance with specified role configuration.
@@ -251,7 +269,7 @@ func main() {
 		}
 	}
 
-	_, err = auditlog.InitAudit(logDir, module, auditlog.DefaultAuditLogSize)
+	_, err = auditlog.InitAuditWithHeadRoom(logDir, module, auditlog.DefaultAuditLogSize, logLeftSpaceLimitRatio, auditlog.DefaultHeadRoom)
 	if err != nil {
 		err = errors.NewErrorf("Fatal: failed to init audit log - %v", err)
 		fmt.Println(err)
@@ -320,6 +338,7 @@ func main() {
 			mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
 			mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
 			mux.Handle("/debug/", http.HandlerFunc(pprof.Index))
+			mux.Handle("/debug/releaseMemory", http.HandlerFunc(releaseMemory))
 			mainHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 				if strings.HasPrefix(req.URL.Path, "/debug/") {
 					mux.ServeHTTP(w, req)
@@ -328,7 +347,12 @@ func main() {
 				}
 			})
 			mainMux.Handle("/", mainHandler)
-			e := http.ListenAndServe(fmt.Sprintf(":%v", profPort), mainMux)
+			addr := fmt.Sprintf(":%v", profPort)
+			if bindIp {
+				addr = fmt.Sprintf("%v:%v", localIp, profPort)
+			}
+			e := http.ListenAndServe(fmt.Sprintf("%v", addr), mainMux)
+
 			if e != nil {
 				log.LogFlush()
 				err = errors.NewErrorf("cannot listen pprof %v err %v", profPort, e)
@@ -340,8 +364,12 @@ func main() {
 	}
 
 	interceptSignal(server)
-	exporter.Init(role, cfg)
-	versionMetric := exporter.NewVersionMetrics(role)
+	metricRole := role
+	if role == RoleData {
+		metricRole = "dataNode"
+	}
+	exporter.Init(metricRole, cfg)
+	versionMetric := exporter.NewVersionMetrics(metricRole)
 	go versionMetric.Start()
 	defer versionMetric.Stop()
 	err = server.Start(cfg)

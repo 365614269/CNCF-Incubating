@@ -42,70 +42,109 @@ import (
 	"github.com/cubefs/cubefs/util/log"
 )
 
+// nolint: structcheck
+type ClusterVolSubItem struct {
+	vols                map[string]*Vol
+	delayDeleteVolsInfo []*delayDeleteVolInfo
+	volMutex            sync.RWMutex // volume mutex
+	createVolMutex      sync.RWMutex // create volume mutex
+	deleteVolMutex      sync.RWMutex // delete volume mutex
+}
+
+// nolint: structcheck
+type ClusterTopoSubItem struct {
+	dataNodes sync.Map
+	metaNodes sync.Map
+	lcNodes   sync.Map
+
+	idAlloc            *IDAllocator
+	t                  *topology
+	dataNodeStatInfo   *nodeStatInfo
+	metaNodeStatInfo   *nodeStatInfo
+	zoneStatInfos      map[string]*proto.ZoneStat
+	volStatInfo        sync.Map
+	zoneIdxMux         sync.Mutex //
+	lastZoneIdxForNode int
+
+	checkAutoCreateDataPartition bool
+	FaultDomain                  bool
+	needFaultDomain              bool // FaultDomain is true and normal zone already used up
+	domainManager                *DomainManager
+
+	inodeCountNotEqualMP  *sync.Map
+	maxInodeNotEqualMP    *sync.Map
+	dentryCountNotEqualMP *sync.Map
+
+	mnMutex sync.RWMutex // meta node mutex
+	dnMutex sync.RWMutex // data node mutex
+	nsMutex sync.RWMutex // nodeset mutex
+}
+
+// nolint: structcheck
+type ClusterDecommission struct {
+	BadDataPartitionIds     *sync.Map
+	BadMetaPartitionIds     *sync.Map
+	DecommissionDisks       sync.Map
+	DecommissionLimit       uint64
+	AutoDecommissionDiskMux sync.Mutex
+	DecommissionDiskLimit   uint32
+	MarkDiskBrokenThreshold atomicutil.Float64
+	badPartitionMutex       sync.RWMutex // BadDataPartitionIds and BadMetaPartitionIds operate mutex
+
+	ForbidMpDecommission        bool
+	EnableAutoDpMetaRepair      atomicutil.Bool
+	EnableAutoDecommissionDisk  atomicutil.Bool
+	AutoDecommissionInterval    atomicutil.Int64
+	AutoDpMetaRepairParallelCnt atomicutil.Uint32
+	server                      *Server
+}
+
 // Cluster stores all the cluster-level information.
 type Cluster struct {
-	Name                         string
-	CreateTime                   int64
-	vols                         map[string]*Vol
-	delayDeleteVolsInfo          []*delayDeleteVolInfo
-	stopc                        chan bool
-	dataNodes                    sync.Map
-	metaNodes                    sync.Map
-	volMutex                     sync.RWMutex // volume mutex
-	createVolMutex               sync.RWMutex // create volume mutex
-	deleteVolMutex               sync.RWMutex // delete volume mutex
-	mnMutex                      sync.RWMutex // meta node mutex
-	dnMutex                      sync.RWMutex // data node mutex
-	nsMutex                      sync.RWMutex // nodeset mutex
-	badPartitionMutex            sync.RWMutex // BadDataPartitionIds and BadMetaPartitionIds operate mutex
-	leaderInfo                   *LeaderInfo
-	cfg                          *clusterConfig
-	metaReady                    bool
-	retainLogs                   uint64
-	idAlloc                      *IDAllocator
-	t                            *topology
-	dataNodeStatInfo             *nodeStatInfo
-	metaNodeStatInfo             *nodeStatInfo
-	zoneStatInfos                map[string]*proto.ZoneStat
-	volStatInfo                  sync.Map
-	domainManager                *DomainManager
-	BadDataPartitionIds          *sync.Map
-	BadMetaPartitionIds          *sync.Map
-	DisableAutoAllocate          bool
-	ForbidMpDecommission         bool
-	FaultDomain                  bool
-	needFaultDomain              bool // FaultDomain is true and normal zone aleady used up
-	fsm                          *MetadataFsm
-	partition                    raftstore.Partition
-	MasterSecretKey              []byte
-	lastZoneIdxForNode           int
-	zoneIdxMux                   sync.Mutex //
-	followerReadManager          *followerReadManager
-	diskQosEnable                bool
-	QosAcceptLimit               *rate.Limiter
-	apiLimiter                   *ApiLimiter
-	DecommissionDisks            sync.Map
-	DecommissionLimit            uint64
-	EnableAutoDecommissionDisk   bool
-	AutoDecommissionDiskMux      sync.Mutex
-	checkAutoCreateDataPartition bool
-	masterClient                 *masterSDK.MasterClient
-	checkDataReplicasEnable      bool
-	fileStatsEnable              bool
-	clusterUuid                  string
-	clusterUuidEnable            bool
-	inodeCountNotEqualMP         *sync.Map
-	maxInodeNotEqualMP           *sync.Map
-	dentryCountNotEqualMP        *sync.Map
-	ac                           *authSDK.AuthClient
-	authenticate                 bool
-	lcNodes                      sync.Map
-	lcMgr                        *lifecycleManager
-	snapshotMgr                  *snapshotDelManager
-	DecommissionDiskLimit        uint32
-	S3ApiQosQuota                *sync.Map // (api,uid,limtType) -> limitQuota
-	MarkDiskBrokenThreshold      atomicutil.Float64
-	EnableAutoDpMetaRepair       atomicutil.Bool
+	Name            string
+	CreateTime      int64
+	clusterUuid     string
+	leaderInfo      *LeaderInfo
+	cfg             *clusterConfig
+	fsm             *MetadataFsm
+	partition       raftstore.Partition
+	MasterSecretKey []byte
+	retainLogs      uint64
+	stopc           chan bool
+	stopFlag        int32
+	wg              sync.WaitGroup
+
+	ClusterVolSubItem
+	ClusterTopoSubItem
+	ClusterDecommission
+
+	metaReady               bool
+	DisableAutoAllocate     bool
+	diskQosEnable           bool
+	checkDataReplicasEnable bool
+	fileStatsEnable         bool
+	clusterUuidEnable       bool
+	authenticate            bool
+	legacyDataMediaType     uint32
+	dataMediaTypeVaild      bool
+
+	S3ApiQosQuota  *sync.Map // (api,uid,limtType) -> limitQuota
+	QosAcceptLimit *rate.Limiter
+	apiLimiter     *ApiLimiter
+
+	followerReadManager *followerReadManager
+	lcMgr               *lifecycleManager
+	snapshotMgr         *snapshotDelManager
+
+	ac           *authSDK.AuthClient
+	masterClient *masterSDK.MasterClient
+}
+
+type cTask struct {
+	name     string
+	tickTime time.Duration
+	function func() bool
+	noWait   bool
 }
 
 type delayDeleteVolInfo struct {
@@ -156,6 +195,10 @@ func (mgr *followerReadManager) getVolumeDpView() {
 		panic(err)
 	}
 
+	if len(volViews) == 0 {
+		return
+	}
+
 	mgr.rwMutex.Lock()
 	mgr.volViewMap = make(map[string]*volValue)
 	for _, vv := range volViews {
@@ -174,9 +217,10 @@ func (mgr *followerReadManager) getVolumeDpView() {
 		return
 	}
 
+	avgSleepTime := time.Second * 5 / time.Duration(len(volViews))
+
 	for _, vv := range volViews {
-		if (vv.Status == proto.VolStatusMarkDelete && !vv.Forbidden) ||
-			(vv.Status == proto.VolStatusMarkDelete && vv.Forbidden && time.Until(vv.DeleteExecTime) <= 0) {
+		if (vv.Status == proto.VolStatusMarkDelete && !vv.Forbidden) || (vv.Status == proto.VolStatusMarkDelete && vv.Forbidden && time.Since(vv.DeleteExecTime) <= 0) {
 			mgr.rwMutex.Lock()
 			mgr.lastUpdateTick[vv.Name] = time.Now()
 			mgr.status[vv.Name] = false
@@ -189,6 +233,7 @@ func (mgr *followerReadManager) getVolumeDpView() {
 			log.LogErrorf("followerReadManager.getVolumeDpView %v GetDataPartitions err %v leader(%v)", vv.Name, err, mgr.c.masterClient.Leader())
 			continue
 		}
+		time.Sleep(avgSleepTime)
 		mgr.updateVolViewFromLeader(vv.Name, view)
 	}
 }
@@ -196,12 +241,18 @@ func (mgr *followerReadManager) getVolumeDpView() {
 func (mgr *followerReadManager) sendFollowerVolumeDpView() {
 	var err error
 	vols := mgr.c.copyVols()
+
+	if len(vols) == 0 {
+		return
+	}
+	avgSleepTime := time.Second * 5 / time.Duration(len(vols))
 	for _, vol := range vols {
 		log.LogDebugf("followerReadManager.getVolumeDpView %v", vol.Name)
-		if (vol.Status == proto.VolStatusMarkDelete && !vol.Forbidden) ||
-			(vol.Status == proto.VolStatusMarkDelete && vol.Forbidden && time.Until(vol.DeleteExecTime) <= 0) {
+		if (vol.Status == proto.VolStatusMarkDelete && !vol.Forbidden) || (vol.Status == proto.VolStatusMarkDelete && vol.Forbidden && time.Until(vol.DeleteExecTime) <= 0) {
 			continue
 		}
+		time.Sleep(avgSleepTime)
+
 		var body []byte
 		if body, err = vol.getDataPartitionsView(); err != nil {
 			log.LogErrorf("followerReadManager.sendFollowerVolumeDpView err %v", err)
@@ -330,7 +381,9 @@ func (mgr *followerReadManager) IsVolViewReady(volName string) bool {
 	return false
 }
 
-func newCluster(name string, leaderInfo *LeaderInfo, fsm *MetadataFsm, partition raftstore.Partition, cfg *clusterConfig) (c *Cluster) {
+func newCluster(name string, leaderInfo *LeaderInfo, fsm *MetadataFsm, partition raftstore.Partition,
+	cfg *clusterConfig, server *Server,
+) (c *Cluster) {
 	c = new(Cluster)
 	c.Name = name
 	c.leaderInfo = leaderInfo
@@ -361,6 +414,9 @@ func newCluster(name string, leaderInfo *LeaderInfo, fsm *MetadataFsm, partition
 	c.DecommissionLimit = defaultDecommissionParallelLimit
 	c.checkAutoCreateDataPartition = false
 	c.masterClient = masterSDK.NewMasterClient(nil, false)
+	c.masterClient.SetTransport(proto.GetHttpTransporter(&proto.HttpCfg{
+		PoolSize: int(cfg.httpPoolSize),
+	}))
 	c.inodeCountNotEqualMP = new(sync.Map)
 	c.maxInodeNotEqualMP = new(sync.Map)
 	c.dentryCountNotEqualMP = new(sync.Map)
@@ -371,6 +427,8 @@ func newCluster(name string, leaderInfo *LeaderInfo, fsm *MetadataFsm, partition
 	c.S3ApiQosQuota = new(sync.Map)
 	c.MarkDiskBrokenThreshold.Store(defaultMarkDiskBrokenThreshold)
 	c.EnableAutoDpMetaRepair.Store(defaultEnableDpMetaRepair)
+	c.AutoDecommissionInterval.Store(int64(defaultAutoDecommissionDiskInterval))
+	c.server = server
 	return
 }
 
@@ -388,16 +446,15 @@ func (c *Cluster) scheduleTask() {
 	c.scheduleToCheckDiskRecoveryProgress()
 	c.scheduleToCheckMetaPartitionRecoveryProgress()
 	c.scheduleToLoadMetaPartitions()
-	// c.scheduleToReduceReplicaNum()
 	c.scheduleToCheckNodeSetGrpManagerStatus()
 	c.scheduleToCheckFollowerReadCache()
 	c.scheduleToCheckDecommissionDataNode()
 	c.scheduleToCheckDecommissionDisk()
-	// c.scheduleToCheckDataReplicas()
 	c.scheduleToLcScan()
 	c.scheduleToSnapshotDelVerScan()
 	c.scheduleToBadDisk()
 	c.scheduleToCheckVolUid()
+	c.scheduleToCheckDataReplicaMeta()
 }
 
 func (c *Cluster) masterAddr() (addr string) {
@@ -409,20 +466,23 @@ func (c *Cluster) tryToChangeLeaderByHost() error {
 }
 
 func (c *Cluster) scheduleToUpdateStatInfo() {
-	go func() {
-		for {
-			if c.partition != nil && c.partition.IsRaftLeader() {
-				c.updateStatInfo()
-			}
-			time.Sleep(2 * time.Minute)
-		}
-	}()
+	c.runTask(
+		&cTask{
+			tickTime: 2 * time.Minute,
+			name:     "scheduleToUpdateStatInfo",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					c.updateStatInfo()
+				}
+				return
+			},
+		})
 }
 
 func (c *Cluster) addNodeSetGrp(ns *nodeSet, load bool) (err error) {
 	log.LogWarnf("addNodeSetGrp nodeSet id[%v] zonename[%v] load[%v] grpManager init[%v]",
-
 		ns.ID, ns.zoneName, load, c.domainManager.init)
+
 	if c.domainManager.init {
 		err = c.domainManager.putNodeSet(ns, load)
 		c.putZoneDomain(false)
@@ -435,8 +495,8 @@ const (
 	TypeDataPartition uint32 = 0x02
 )
 
-func (c *Cluster) getHostFromDomainZone(domainId uint64, createType uint32, replicaNum uint8) (hosts []string, peers []proto.Peer, err error) {
-	hosts, peers, err = c.domainManager.getHostFromNodeSetGrp(domainId, replicaNum, createType)
+func (c *Cluster) getHostFromDomainZone(domainId uint64, createType uint32, replicaNum uint8, mediaType uint32) (hosts []string, peers []proto.Peer, err error) {
+	hosts, peers, err = c.domainManager.getHostFromNodeSetGrp(domainId, replicaNum, createType, mediaType)
 	return
 }
 
@@ -455,38 +515,65 @@ func (c *Cluster) scheduleToManageDp() {
 	}()
 
 	// schedule delete dataPartition
-	go func() {
-		time.Sleep(2 * time.Minute)
-
-		for {
-
-			if c.partition != nil && c.partition.IsRaftLeader() {
-
-				vols := c.copyVols()
-
-				for _, vol := range vols {
-
-					if proto.IsHot(vol.VolType) {
-						continue
+	c.runTask(
+		&cTask{
+			tickTime: 2 * time.Minute,
+			name:     "scheduleToManageDp",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					vols := c.copyVols()
+					for _, vol := range vols {
+						if proto.IsHot(vol.VolType) {
+							continue
+						}
+						vol.autoDeleteDp(c)
 					}
-
-					vol.autoDeleteDp(c)
 				}
-			}
+				return
+			},
+		})
+}
 
-			time.Sleep(2 * time.Minute)
+func (c *Cluster) runTask(task *cTask) {
+	if !task.noWait {
+		c.wg.Add(1)
+	}
+	go func() {
+		if !task.noWait {
+			defer c.wg.Done()
+		}
+		log.LogWarnf("runTask %v start!", task.name)
+		currTickTm := task.tickTime
+		ticker := time.NewTicker(currTickTm)
+		for {
+			select {
+			case <-ticker.C:
+				if task.function() {
+					log.LogWarnf("runTask %v exit!", task.name)
+					ticker.Stop()
+					return
+				}
+				if currTickTm != task.tickTime { // there's no conflict, thus no need consider consistency between tickTime and currTickTm
+					ticker.Reset(task.tickTime)
+					currTickTm = task.tickTime
+				}
+			case <-c.stopc:
+				log.LogWarnf("runTask %v exit!", task.name)
+				ticker.Stop()
+				return
+			}
 		}
 	}()
 }
 
 func (c *Cluster) scheduleToCheckDelayDeleteVols() {
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		for {
-			select {
-			case <-ticker.C:
+	c.runTask(
+		&cTask{
+			tickTime: 5 * time.Second,
+			name:     "scheduleToCheckDelayDeleteVols",
+			function: func() (fin bool) {
 				if len(c.delayDeleteVolsInfo) == 0 {
-					continue
+					return
 				}
 				c.deleteVolMutex.Lock()
 				for index := 0; index < len(c.delayDeleteVolsInfo); index++ {
@@ -517,30 +604,29 @@ func (c *Cluster) scheduleToCheckDelayDeleteVols() {
 					}
 				}
 				c.deleteVolMutex.Unlock()
-
-			case <-c.stopc:
-				ticker.Stop()
 				return
-			}
-		}
-	}()
+			},
+		})
 }
 
 func (c *Cluster) scheduleToCheckDataPartitions() {
-	go func() {
-		for {
+	c.runTask(&cTask{
+		tickTime: time.Second * time.Duration(c.cfg.IntervalToCheckDataPartition),
+		name:     "scheduleToCheckDataPartitions",
+		function: func() (fin bool) {
 			if c.partition != nil && c.partition.IsRaftLeader() {
 				c.checkDataPartitions()
 			}
-			time.Sleep(time.Second * time.Duration(c.cfg.IntervalToCheckDataPartition))
-		}
-	}()
+			return
+		},
+	})
 }
 
 func (c *Cluster) scheduleToCheckVolStatus() {
-	go func() {
-		// check vols after switching leader two minutes
-		for {
+	c.runTask(&cTask{
+		tickTime: time.Second * time.Duration(c.cfg.IntervalToCheckDataPartition),
+		name:     "scheduleToCheckVolStatus",
+		function: func() (fin bool) {
 			if c.partition.IsRaftLeader() {
 				vols := c.copyVols()
 				for _, vol := range vols {
@@ -548,87 +634,97 @@ func (c *Cluster) scheduleToCheckVolStatus() {
 					vol.CheckStrategy(c)
 				}
 			}
-			time.Sleep(time.Second * time.Duration(c.cfg.IntervalToCheckDataPartition))
-		}
-	}()
+			return
+		},
+	})
 }
 
 func (c *Cluster) scheduleToCheckFollowerReadCache() {
-	go func() {
-		for {
-			select {
-			case <-c.stopc:
-				log.LogInfof("[scheduleToCheckFollowerReadCache] master stop!")
-				return
-			default:
-				if !c.partition.IsRaftLeader() {
-					c.followerReadManager.getVolumeDpView()
-					c.followerReadManager.checkStatus()
-				} else {
-					c.followerReadManager.sendFollowerVolumeDpView()
-				}
-			}
-			time.Sleep(5 * time.Second)
+	task := &cTask{tickTime: time.Second, name: "scheduleToCheckFollowerReadCache"}
+	task.function = func() (fin bool) {
+		if !c.cfg.EnableFollowerCache {
+			return true
 		}
-	}()
+		begin := time.Now()
+		if !c.partition.IsRaftLeader() {
+			c.followerReadManager.getVolumeDpView()
+			c.followerReadManager.checkStatus()
+		} else {
+			c.followerReadManager.sendFollowerVolumeDpView()
+		}
+		end := time.Now()
+		if end.Sub(begin).Seconds() > 5 {
+			return
+		}
+		task.tickTime = time.Second*5 - end.Sub(begin)
+		return
+	}
+	c.runTask(task)
 }
 
 func (c *Cluster) scheduleToCheckVolQos() {
-	go func() {
-		// check vols after switching leader two minutes
-		for {
-			if c.partition.IsRaftLeader() {
-				vols := c.copyVols()
-				for _, vol := range vols {
-					vol.checkQos()
+	c.runTask(
+		&cTask{
+			tickTime: time.Duration(float32(time.Second) * 0.5),
+			name:     "scheduleToCheckVolQos",
+			function: func() (fin bool) {
+				if c.partition.IsRaftLeader() {
+					vols := c.copyVols()
+					for _, vol := range vols {
+						vol.checkQos()
+					}
 				}
-			}
-			// time.Sleep(time.Second * time.Duration(c.cfg.IntervalToCheckQos))
-			time.Sleep(time.Duration(float32(time.Second) * 0.5))
-		}
-	}()
+				return
+			},
+		})
 }
 
 func (c *Cluster) scheduleToCheckVolUid() {
-	go func() {
-		// check vols after switching leader two minutes
-		for {
-			if c.partition.IsRaftLeader() {
-				vols := c.copyVols()
-				for _, vol := range vols {
-					vol.uidSpaceManager.scheduleUidUpdate()
-					vol.uidSpaceManager.reCalculate()
+	c.runTask(
+		&cTask{
+			tickTime: time.Duration(float32(time.Second) * 0.5),
+			name:     "scheduleToCheckVolUid",
+			function: func() (fin bool) {
+				if c.partition.IsRaftLeader() {
+					vols := c.copyVols()
+					for _, vol := range vols {
+						vol.uidSpaceManager.scheduleUidUpdate()
+						vol.uidSpaceManager.reCalculate()
+					}
 				}
-			}
-			// time.Sleep(time.Second * time.Duration(c.cfg.IntervalToCheckQos))
-			time.Sleep(time.Duration(float32(time.Second) * 0.5))
-		}
-	}()
+				return
+			},
+		})
 }
 
 func (c *Cluster) scheduleToCheckNodeSetGrpManagerStatus() {
-	go func() {
-		for {
-			if !c.FaultDomain || !c.partition.IsRaftLeader() {
-				time.Sleep(time.Minute)
-				continue
-			}
-			c.domainManager.checkAllGrpState()
-			c.domainManager.checkExcludeZoneState()
-			time.Sleep(5 * time.Second)
+	task := &cTask{tickTime: time.Second, name: "scheduleToCheckNodeSetGrpManagerStatus"}
+	task.function = func() (fin bool) {
+		if !c.FaultDomain || !c.partition.IsRaftLeader() {
+			task.tickTime = time.Minute
+			return
 		}
-	}()
+		c.domainManager.checkAllGrpState()
+		c.domainManager.checkExcludeZoneState()
+		task.tickTime = 5 * time.Second
+		return
+	}
+	c.runTask(task)
 }
 
 func (c *Cluster) scheduleToLoadDataPartitions() {
-	go func() {
-		for {
-			if c.partition != nil && c.partition.IsRaftLeader() {
-				c.doLoadDataPartitions()
-			}
-			time.Sleep(time.Second * 5)
-		}
-	}()
+	c.runTask(
+		&cTask{
+			tickTime: 5 * time.Second,
+			name:     "scheduleToLoadDataPartitions",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					c.doLoadDataPartitions()
+				}
+				return
+			},
+			noWait: true,
+		})
 }
 
 // Check the replica status of each data partition.
@@ -643,8 +739,7 @@ func (c *Cluster) checkDataPartitions() {
 
 	vols := c.allVols()
 	for _, vol := range vols {
-		readWrites := vol.checkDataPartitions(c)
-		vol.dataPartitions.setReadWriteDataPartitions(readWrites, c.Name)
+		vol.checkDataPartitions(c)
 		if c.metaReady {
 			vol.dataPartitions.updateResponseCache(true, 0, vol)
 			vol.dataPartitions.updateCompressCache(true, 0, vol)
@@ -678,14 +773,17 @@ func (c *Cluster) doLoadDataPartitions() {
 }
 
 func (c *Cluster) scheduleToCheckReleaseDataPartitions() {
-	go func() {
-		for {
-			if c.partition != nil && c.partition.IsRaftLeader() {
-				c.releaseDataPartitionAfterLoad()
-			}
-			time.Sleep(time.Second * defaultIntervalToFreeDataPartition)
-		}
-	}()
+	c.runTask(
+		&cTask{
+			tickTime: time.Second * defaultIntervalToFreeDataPartition,
+			name:     "scheduleToCheckReleaseDataPartitions",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					c.releaseDataPartitionAfterLoad()
+				}
+				return
+			},
+		})
 }
 
 // Release the memory used for loading the data partition.
@@ -704,35 +802,44 @@ func (c *Cluster) releaseDataPartitionAfterLoad() {
 }
 
 func (c *Cluster) scheduleToCheckHeartbeat() {
-	go func() {
-		for {
-			if c.partition != nil && c.partition.IsRaftLeader() {
-				c.checkLeaderAddr()
-				c.checkDataNodeHeartbeat()
-				// update load factor
-				setOverSoldFactor(c.cfg.ClusterLoadFactor)
-			}
-			time.Sleep(time.Second * defaultIntervalToCheckHeartbeat)
-		}
-	}()
+	c.runTask(
+		&cTask{
+			tickTime: time.Second * defaultIntervalToCheckHeartbeat,
+			name:     "scheduleToCheckHeartbeat_checkDataNodeHeartbeat",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					c.checkLeaderAddr()
+					c.checkDataNodeHeartbeat()
+					// update load factor
+					setOverSoldFactor(c.cfg.ClusterLoadFactor)
+				}
+				return
+			},
+		})
 
-	go func() {
-		for {
-			if c.partition != nil && c.partition.IsRaftLeader() {
-				c.checkMetaNodeHeartbeat()
-			}
-			time.Sleep(time.Second * defaultIntervalToCheckHeartbeat)
-		}
-	}()
+	c.runTask(
+		&cTask{
+			tickTime: time.Second * defaultIntervalToCheckHeartbeat,
+			name:     "scheduleToCheckHeartbeat_checkMetaNodeHeartbeat",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					c.checkMetaNodeHeartbeat()
+				}
+				return
+			},
+		})
 
-	go func() {
-		for {
-			if c.partition != nil && c.partition.IsRaftLeader() {
-				c.checkLcNodeHeartbeat()
-			}
-			time.Sleep(time.Second * defaultIntervalToCheckHeartbeat)
-		}
-	}()
+	c.runTask(
+		&cTask{
+			tickTime: time.Second * defaultIntervalToCheckHeartbeat,
+			name:     "scheduleToCheckHeartbeat_checkLcNodeHeartbeat",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					c.checkLcNodeHeartbeat()
+				}
+				return
+			},
+		})
 }
 
 func (c *Cluster) checkLeaderAddr() {
@@ -742,10 +849,16 @@ func (c *Cluster) checkLeaderAddr() {
 
 func (c *Cluster) checkDataNodeHeartbeat() {
 	tasks := make([]*proto.AdminTask, 0)
+	id := uuid.New()
+	log.LogDebugf("checkDataNodeHeartbeat start %v", id.String())
 	c.dataNodes.Range(func(addr, dataNode interface{}) bool {
 		node := dataNode.(*DataNode)
 		node.checkLiveness()
-		task := node.createHeartbeatTask(c.masterAddr(), c.diskQosEnable)
+		log.LogDebugf("checkDataNodeHeartbeat checkLiveness for data node %v  %v", node.Addr, id.String())
+		task := node.createHeartbeatTask(c.masterAddr(), c.diskQosEnable, c.GetDecommissionDataPartitionBackupTimeOut().String(),
+			c.cfg.forbidWriteOpOfProtoVer0)
+		log.LogDebugf("checkDataNodeHeartbeat createHeartbeatTask for data node %v task %v %v", node.Addr,
+			task.RequestID, id.String())
 		hbReq := task.Request.(*proto.HeartBeatRequest)
 		c.volMutex.RLock()
 		defer c.volMutex.RUnlock()
@@ -756,23 +869,34 @@ func (c *Cluster) checkDataNodeHeartbeat() {
 			if vol.dpRepairBlockSize != proto.DefaultDpRepairBlockSize {
 				hbReq.VolDpRepairBlockSize[vol.Name] = vol.dpRepairBlockSize
 			}
+
+			if vol.DirectRead {
+				hbReq.DirectReadVols = append(hbReq.DirectReadVols, vol.Name)
+			}
+
+			if vol.ForbidWriteOpOfProtoVer0.Load() {
+				hbReq.VolsForbidWriteOpOfProtoVer0 = append(hbReq.VolsForbidWriteOpOfProtoVer0, vol.Name)
+			}
 		}
 		tasks = append(tasks, task)
 		return true
 	})
+	log.LogDebugf("checkDataNodeHeartbeat add task %v", id.String())
 	c.addDataNodeTasks(tasks)
+	log.LogDebugf("checkDataNodeHeartbeat end %v", id.String())
 }
 
 func (c *Cluster) checkMetaNodeHeartbeat() {
 	tasks := make([]*proto.AdminTask, 0)
-	c.volMutex.RLock()
-	defer c.volMutex.RUnlock()
 
 	c.metaNodes.Range(func(addr, metaNode interface{}) bool {
 		node := metaNode.(*MetaNode)
 		node.checkHeartbeat()
-		task := node.createHeartbeatTask(c.masterAddr(), c.fileStatsEnable)
+		task := node.createHeartbeatTask(c.masterAddr(), c.fileStatsEnable, c.cfg.forbidWriteOpOfProtoVer0)
 		hbReq := task.Request.(*proto.HeartBeatRequest)
+
+		c.volMutex.RLock()
+		defer c.volMutex.RUnlock()
 
 		for _, vol := range c.vols {
 			if vol.FollowerRead {
@@ -783,6 +907,9 @@ func (c *Cluster) checkMetaNodeHeartbeat() {
 			}
 			if vol.Forbidden {
 				hbReq.ForbiddenVols = append(hbReq.ForbiddenVols, vol.Name)
+			}
+			if vol.ForbidWriteOpOfProtoVer0.Load() {
+				hbReq.VolsForbidWriteOpOfProtoVer0 = append(hbReq.VolsForbidWriteOpOfProtoVer0, vol.Name)
 			}
 
 			spaceInfo := vol.uidSpaceManager.getSpaceOp()
@@ -835,14 +962,17 @@ func (c *Cluster) checkLcNodeHeartbeat() {
 }
 
 func (c *Cluster) scheduleToCheckMetaPartitions() {
-	go func() {
-		for {
-			if c.partition != nil && c.partition.IsRaftLeader() {
-				c.checkMetaPartitions()
-			}
-			time.Sleep(time.Second * time.Duration(c.cfg.IntervalToCheckDataPartition))
-		}
-	}()
+	c.runTask(
+		&cTask{
+			tickTime: time.Second * time.Duration(c.cfg.IntervalToCheckDataPartition),
+			name:     "scheduleToCheckMetaPartitions",
+			function: func() (fin bool) {
+				if c.partition != nil && c.partition.IsRaftLeader() {
+					c.checkMetaPartitions()
+				}
+				return
+			},
+		})
 }
 
 func (c *Cluster) checkMetaPartitions() {
@@ -1009,7 +1139,8 @@ func (c *Cluster) addMetaNode(nodeAddr, zoneName string, nodesetId uint64) (id u
 	metaNode.MpCntLimit = newLimitCounter(&c.cfg.MaxMpCntLimit, defaultMaxMpCntLimit)
 	zone, err := c.t.getZone(zoneName)
 	if err != nil {
-		zone = c.t.putZoneIfAbsent(newZone(zoneName))
+		log.LogInfof("[addMetaNode] create zone(%v) by metanode(%v)", zoneName, nodeAddr)
+		zone = c.t.putZoneIfAbsent(newZone(zoneName, proto.MediaType_Unspecified))
 	}
 
 	var ns *nodeSet
@@ -1057,27 +1188,131 @@ errHandler:
 	return
 }
 
-func (c *Cluster) addDataNode(nodeAddr, zoneName string, nodesetId uint64) (id uint64, err error) {
+func (c *Cluster) checkSetZoneMediaType(zone *Zone, mediaType uint32) (changed bool, err error) {
+	zoneMediaType := zone.GetDataMediaType()
+	if zoneMediaType == mediaType {
+		log.LogInfof("[checkSetZoneMediaType] zone(%v) mediaType is same with %v",
+			zone.name, proto.MediaTypeString(mediaType))
+		return false, nil
+	}
+
+	if zoneMediaType != proto.MediaType_Unspecified {
+		// there has datanode added into the zone
+		err = fmt.Errorf("zone(%v) mediaType(%v) already set, can not set as mediaType(%v)",
+			zone.name, proto.MediaTypeString(zoneMediaType), proto.MediaTypeString(mediaType))
+		log.LogErrorf("[checkSetZoneMediaType] %v", err.Error())
+		return false, err
+	}
+
+	// there has no datanode added into the zone yet
+	zone.SetDataMediaType(mediaType)
+	log.LogInfof("[checkSetZoneMediaType] zone(%v) set mediaType(%v)", zone.name, proto.MediaTypeString(mediaType))
+
+	return true, nil
+}
+
+func (c *Cluster) checkSetZoneMediaTypePersist(zone *Zone, mediaType uint32) (changed bool, err error) {
+	oldMediaType := zone.dataMediaType
+
+	var needPersistZone bool
+	needPersistZone, err = c.checkSetZoneMediaType(zone, mediaType)
+	if err != nil {
+		log.LogErrorf("[checkSetZoneMediaTypePersist] zone(%v) exists, but checkSetZoneMediaType err: %v",
+			zone.name, err.Error())
+		return needPersistZone, err
+	}
+
+	if !needPersistZone {
+		return false, nil
+	}
+
+	log.LogInfof("[checkSetZoneMediaTypePersist] zone(%v) old mediaType(%v), new mediaType(%v), persist",
+		zone.name, proto.MediaTypeString(oldMediaType), proto.MediaTypeString(mediaType))
+	persistErr := c.sycnPutZoneInfo(zone)
+	if persistErr != nil {
+		err = fmt.Errorf("persist zone(%v) failed: %v", zone.name, persistErr.Error())
+		log.LogErrorf("[checkSetZoneMediaTypePersist] %v", err.Error())
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (c *Cluster) addDataNode(nodeAddr, zoneName string, nodesetId uint64, mediaType uint32) (id uint64, err error) {
 	c.dnMutex.Lock()
 	defer c.dnMutex.Unlock()
 	var dataNode *DataNode
+	var zone *Zone
+
+	if zoneName == "" {
+		zoneName = DefaultZoneName
+	}
+
+	log.LogInfof("[addDataNode] to add: datanode(%v) zone(%v) nodesetId(%v) mediaType(%v)",
+		nodeAddr, zoneName, nodesetId, mediaType)
+
+	if !proto.IsValidMediaType(mediaType) {
+		if !proto.IsValidMediaType(c.legacyDataMediaType) {
+			err = fmt.Errorf("invalid mediaType(%v) in req when adding datanode(%v), and cluster LegacyDataMediaType not set",
+				mediaType, nodeAddr)
+			return
+		}
+
+		mediaType = c.legacyDataMediaType
+		log.LogWarnf("[addDataNode] adding datanode(%v), set mediaType as cluster LegacyDataMediaType(%v)",
+			nodeAddr, proto.MediaTypeString(c.legacyDataMediaType))
+	}
+
+	// datanode existed
 	if node, ok := c.dataNodes.Load(nodeAddr); ok {
+		log.LogInfof("[addDataNode] addr(%v) exists, will check if its info is consistent with the exist one", nodeAddr)
 		dataNode = node.(*DataNode)
 		if nodesetId > 0 && nodesetId != dataNode.NodeSetID {
 			return dataNode.ID, fmt.Errorf("addr already in nodeset [%v]", nodeAddr)
 		}
+		if zoneName != dataNode.ZoneName {
+			return dataNode.ID, fmt.Errorf("zoneName not equalt old, new %s, old %s", zoneName, dataNode.ZoneName)
+		}
+		if mediaType != dataNode.MediaType {
+			return dataNode.ID, fmt.Errorf("mediaType not equalt old, new %v, old %v", mediaType, dataNode.MediaType)
+		}
 		return dataNode.ID, nil
 	}
 
-	dataNode = newDataNode(nodeAddr, zoneName, c.Name)
+	needPersistZone := false
+	dataNode = newDataNode(nodeAddr, zoneName, c.Name, mediaType)
 	dataNode.DpCntLimit = newLimitCounter(&c.cfg.MaxDpCntLimit, defaultMaxDpCntLimit)
-	zone, err := c.t.getZone(zoneName)
-	if err != nil {
-		zone = c.t.putZoneIfAbsent(newZone(zoneName))
+	if zone, _ = c.t.getZone(zoneName); zone == nil {
+		log.LogInfof("[addDataNode] create zone(%v) by datanode(%v), mediaType(%v)",
+			zoneName, nodeAddr, proto.MediaTypeString(mediaType))
+		zone = newZone(zoneName, mediaType)
+		needPersistZone = true
 	}
+
+	if !proto.IsValidMediaType(zone.dataMediaType) {
+		zone.SetDataMediaType(mediaType)
+		needPersistZone = true
+	}
+
+	if mediaType != zone.dataMediaType {
+		return dataNode.ID, fmt.Errorf("zone mediaType not equalt old, new %v, old %v", mediaType, zone.dataMediaType)
+	}
+
+	if needPersistZone {
+		persistErr := c.sycnPutZoneInfo(zone)
+		if persistErr != nil {
+			err = fmt.Errorf("persist zone(%v) failed when adding datanode(%v)", zoneName, nodeAddr)
+			log.LogErrorf("[addDataNode] %v", err.Error())
+			return
+		}
+	}
+
+	c.t.putZoneIfAbsent(zone) // put if the above code creates zone
+
 	var ns *nodeSet
 	if nodesetId > 0 {
 		if ns, err = zone.getNodeSet(nodesetId); err != nil {
+			log.LogErrorf("[addDataNode] %v", err.Error())
 			return nodesetId, err
 		}
 	} else {
@@ -1097,7 +1332,8 @@ func (c *Cluster) addDataNode(nodeAddr, zoneName string, nodesetId uint64) (id u
 	}
 	dataNode.ID = id
 	dataNode.NodeSetID = ns.ID
-	log.LogInfof("action[addDataNode] datanode id[%v] zonename [%v] add node to nodesetid[%v]", id, zoneName, ns.ID)
+	log.LogInfof("action[addDataNode] datanode id[%v] zonename[%v] MediaType[%v] add node to nodesetid[%v]",
+		id, zoneName, dataNode.MediaType, ns.ID)
 	if err = c.syncAddDataNode(dataNode); err != nil {
 		goto errHandler
 	}
@@ -1105,16 +1341,16 @@ func (c *Cluster) addDataNode(nodeAddr, zoneName string, nodesetId uint64) (id u
 		goto errHandler
 	}
 	c.t.putDataNode(dataNode)
-	// nodeset be avaliable first time can be put into nodesetGrp
 
+	// nodeset be available first time can be put into nodesetGrp
 	c.addNodeSetGrp(ns, false)
 
 	c.dataNodes.Store(nodeAddr, dataNode)
-	log.LogInfof("action[addDataNode],clusterID[%v] dataNodeAddr:%v,nodeSetId[%v],capacity[%v]",
+	log.LogInfof("action[addDataNode] clusterID[%v] dataNodeAddr:%v, nodeSetId[%v], capacity[%v]",
 		c.Name, nodeAddr, ns.ID, ns.Capacity)
 	return
 errHandler:
-	err = fmt.Errorf("action[addDataNode],clusterID[%v] dataNodeAddr:%v err:%v ", c.Name, nodeAddr, err.Error())
+	err = fmt.Errorf("action[addDataNode] clusterID[%v] dataNodeAddr:%v err:%v", c.Name, nodeAddr, err.Error())
 	log.LogError(errors.Stack(err))
 	Warn(c.Name, err.Error())
 	return
@@ -1135,20 +1371,24 @@ func (c *Cluster) checkInactiveDataNodes() (inactiveDataNodes []string, err erro
 	return
 }
 
-func (c *Cluster) checkLackReplicaDataPartitions() (lackReplicaDataPartitions []*DataPartition, err error) {
-	lackReplicaDataPartitions = make([]*DataPartition, 0)
-	vols := c.copyVols()
-	for _, vol := range vols {
-		dps := vol.dataPartitions
-		for _, dp := range dps.partitions {
-			if dp.ReplicaNum > uint8(len(dp.Hosts)) {
-				lackReplicaDataPartitions = append(lackReplicaDataPartitions, dp)
-			}
-		}
-	}
-	log.LogInfof("clusterID[%v] lackReplicaDataPartitions count:[%v]", c.Name, len(lackReplicaDataPartitions))
-	return
-}
+// func (c *Cluster) checkLackReplicaAndHostDataPartitions() (lackReplicaDataPartitions []*DataPartition, err error) {
+// 	lackReplicaDataPartitions = make([]*DataPartition, 0)
+// 	vols := c.copyVols()
+// 	var ids []uint64
+// 	for _, vol := range vols {
+// 		var dps *DataPartitionMap
+// 		dps = vol.dataPartitions
+// 		for _, dp := range dps.partitions {
+// 			if dp.ReplicaNum > uint8(len(dp.Hosts)) && len(dp.Hosts) == len(dp.Replicas) && (dp.IsDecommissionInitial() || dp.IsRollbackFailed()) {
+// 				lackReplicaDataPartitions = append(lackReplicaDataPartitions, dp)
+// 				ids = append(ids, dp.PartitionID)
+// 			}
+// 		}
+// 	}
+// 	log.LogInfof("clusterID[%v] checkLackReplicaAndHostDataPartitions count:[%v] ids[%v]", c.Name,
+// 		len(lackReplicaDataPartitions), ids)
+// 	return
+// }
 
 func (c *Cluster) checkReplicaOfDataPartitions(ignoreDiscardDp bool) (
 	lackReplicaDPs []*DataPartition, unavailableReplicaDPs []*DataPartition, repFileCountDifferDps []*DataPartition,
@@ -1178,7 +1418,7 @@ func (c *Cluster) checkReplicaOfDataPartitions(ignoreDiscardDp bool) (
 				}
 			}
 
-			if dp.ReplicaNum > uint8(len(dp.Hosts)) || dp.ReplicaNum > uint8(len(dp.Replicas)) {
+			if vol.dpReplicaNum > uint8(len(dp.Hosts)) || int(vol.dpReplicaNum) > len(dp.liveReplicas(defaultDataPartitionTimeOutSec)) {
 				lackReplicaDPs = append(lackReplicaDPs, dp)
 			}
 
@@ -1248,7 +1488,6 @@ func (c *Cluster) getDataPartitionByID(partitionID uint64) (dp *DataPartition, e
 			return
 		}
 	}
-
 	err = dataPartitionNotFound(partitionID)
 	return
 }
@@ -1264,12 +1503,30 @@ func (c *Cluster) getMetaPartitionByID(id uint64) (mp *MetaPartition, err error)
 	return
 }
 
-func (c *Cluster) putVol(vol *Vol) {
+func (c *Cluster) checkVol(vol *Vol) (err error) {
 	c.volMutex.Lock()
 	defer c.volMutex.Unlock()
-	if _, ok := c.vols[vol.Name]; !ok {
-		c.vols[vol.Name] = vol
+	if v, ok := c.vols[vol.Name]; ok && v.ID > vol.ID {
+		err = fmt.Errorf("volume [%v] already exist [%v], cann't set new vol [%v]", vol.Name, v, vol)
+		log.LogErrorf("action[checkVol] %v", err)
+		return
 	}
+	return
+}
+
+func (c *Cluster) putVol(vol *Vol) (err error) {
+	c.volMutex.Lock()
+	defer c.volMutex.Unlock()
+	if v, ok := c.vols[vol.Name]; ok {
+		if v.ID > vol.ID {
+			err = fmt.Errorf("volume [%v] already exist [%v], cann't set new vol [%v]", vol.Name, v, vol)
+			log.LogErrorf("action[putVol] %v", err)
+			return
+		}
+		log.LogWarnf("volume [%v] already exist [%v] not deleted well. new vol [%v]", vol.Name, v, vol)
+	}
+	c.vols[vol.Name] = vol
+	return
 }
 
 func (c *Cluster) SetVerStrategy(volName string, strategy proto.VolumeVerStrategy, isForce bool) (err error) {
@@ -1330,7 +1587,21 @@ func (c *Cluster) getVol(volName string) (vol *Vol, err error) {
 	if !ok {
 		err = proto.ErrVolNotExists
 	}
+
 	return
+}
+
+func (c *Cluster) volDelete(volName string) bool {
+	c.volMutex.RLock()
+	defer c.volMutex.RUnlock()
+	vol, ok := c.vols[volName]
+	if !ok {
+		return true
+	}
+	if vol.Status == proto.VolStatusMarkDelete {
+		return true
+	}
+	return false
 }
 
 func (c *Cluster) deleteVol(name string) {
@@ -1407,14 +1678,19 @@ func (c *Cluster) batchCreatePreLoadDataPartition(vol *Vol, preload *DataPartiti
 		return fmt.Errorf("vol type is not warm"), nil
 	}
 
+	if vol.cacheDpStorageClass == proto.StorageClass_Unspecified {
+		err = fmt.Errorf(" has no resource to create preload data partition")
+		log.LogErrorf("[batchCreatePreLoadDataPartition] vol(%v) err: %v", vol.Name, err.Error())
+		return err, nil
+	}
+
 	total := overSoldCap(uint64(preload.preloadCacheCapacity))
 	reqCreateCount := (total-1)/(util.DefaultDataPartitionSize/util.GB) + 1
 
 	for i := 0; i < int(reqCreateCount); i++ {
 		log.LogInfof("create preload data partition (%v) total (%v)", i, reqCreateCount)
-
 		var dp *DataPartition
-		if dp, err = c.createDataPartition(vol.Name, preload); err != nil {
+		if dp, err = c.createDataPartition(vol.Name, preload, vol.cacheDpStorageClass); err != nil {
 			log.LogErrorf("create preload data partition fail: volume(%v) err(%v)", vol.Name, err)
 			return err, nil
 		}
@@ -1425,15 +1701,20 @@ func (c *Cluster) batchCreatePreLoadDataPartition(vol *Vol, preload *DataPartiti
 	return
 }
 
-func (c *Cluster) batchCreateDataPartition(vol *Vol, reqCount int, init bool) (err error) {
+func (c *Cluster) batchCreateDataPartition(vol *Vol, reqCount int, init bool, mediaType uint32) (err error) {
+	log.LogInfof("[batchCreateDataPartition] vol(%v) mediaType(%v) reqCount(%v) init(%v)",
+		vol.Name, proto.MediaTypeString(mediaType), reqCount, init)
+
 	if !init {
 		if _, err = vol.needCreateDataPartition(); err != nil {
 			log.LogWarnf("action[batchCreateDataPartition] create data partition failed, err[%v]", err)
 			return
 		}
 	}
+
+	var createdCnt int
 	for i := 0; i < reqCount; i++ {
-		if c.DisableAutoAllocate {
+		if c.DisableAutoAllocate && !init {
 			log.LogWarn("disable auto allocate dataPartition")
 			return fmt.Errorf("cluster is disable auto allocate dataPartition")
 		}
@@ -1443,11 +1724,16 @@ func (c *Cluster) batchCreateDataPartition(vol *Vol, reqCount int, init bool) (e
 			return fmt.Errorf("volume is forbidden")
 		}
 
-		if _, err = c.createDataPartition(vol.Name, nil); err != nil {
-			log.LogErrorf("action[batchCreateDataPartition] after create [%v] data partition,occurred error,err[%v]", i, err)
+		if _, err = c.createDataPartition(vol.Name, nil, mediaType); err != nil {
+			log.LogErrorf("action[batchCreateDataPartition] after create [%v] data partition, occurred error,err[%v]", i, err)
 			break
 		}
+		createdCnt++
 	}
+
+	log.LogInfof("action[batchCreateDataPartition] vol(%v) mediaType(%v) created data partition count: %v",
+		vol.Name, proto.MediaTypeString(mediaType), createdCnt)
+	vol.dataPartitions.IncReadWriteDataPartitionCntByMediaType(createdCnt, mediaType)
 	return
 }
 
@@ -1483,9 +1769,7 @@ func (c *Cluster) isFaultDomain(vol *Vol) bool {
 // 3. Communicate with the data node to synchronously create a data partition.
 // - If succeeded, replicate the data through raft and persist it to RocksDB.
 // - Otherwise, throw errors
-
-func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreLoad) (dp *DataPartition, err error) {
-	log.LogInfof("action[createDataPartition] preload [%v]", preload)
+func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreLoad, mediaType uint32) (dp *DataPartition, err error) {
 	var (
 		vol          *Vol
 		partitionID  uint64
@@ -1496,6 +1780,9 @@ func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreL
 		partitionTTL int64
 		ok           bool
 	)
+
+	log.LogInfof("action[createDataPartition] vol(%v) preload(%v) mediType(%v)",
+		volName, preload, proto.MediaTypeString(mediaType))
 
 	c.volMutex.RLock()
 	if vol, ok = c.vols[volName]; !ok {
@@ -1526,13 +1813,13 @@ func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreL
 	errChannel := make(chan error, dpReplicaNum)
 
 	if c.isFaultDomain(vol) {
-		if targetHosts, targetPeers, err = c.getHostFromDomainZone(vol.domainId, TypeDataPartition, dpReplicaNum); err != nil {
+		if targetHosts, targetPeers, err = c.getHostFromDomainZone(vol.domainId, TypeDataPartition, dpReplicaNum, mediaType); err != nil {
 			goto errHandler
 		}
 	} else {
-		zoneNum := c.decideZoneNum(vol) // zoneNum scope [1,3]
+		zoneNum := c.decideZoneNum(vol, mediaType) // zoneNum scope [1,3]
 		if targetHosts, targetPeers, err = c.getHostFromNormalZone(TypeDataPartition, nil, nil, nil,
-			int(dpReplicaNum), zoneNum, zoneName); err != nil {
+			int(dpReplicaNum), zoneNum, zoneName, mediaType); err != nil {
 			goto errHandler
 		}
 	}
@@ -1540,7 +1827,8 @@ func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreL
 	if partitionID, err = c.idAlloc.allocateDataPartitionID(); err != nil {
 		goto errHandler
 	}
-	dp = newDataPartition(partitionID, dpReplicaNum, volName, vol.ID, proto.GetDpType(vol.VolType, isPreload), partitionTTL)
+
+	dp = newDataPartition(partitionID, dpReplicaNum, volName, vol.ID, proto.GetDpType(vol.VolType, isPreload), partitionTTL, mediaType)
 	dp.Hosts = targetHosts
 	dp.Peers = targetPeers
 
@@ -1557,6 +1845,7 @@ func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreL
 
 			if diskPath, err = c.syncCreateDataPartitionToDataNode(host, vol.dataPartitionSize,
 				dp, dp.Peers, dp.Hosts, proto.NormalCreateDataPartition, dp.PartitionType, false, false); err != nil {
+				log.LogErrorf("[createDataPartition] %v", err)
 				errChannel <- err
 				return
 			}
@@ -1605,7 +1894,8 @@ func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreL
 	return
 
 errHandler:
-	err = fmt.Errorf("action[createDataPartition],clusterID[%v] vol[%v] Err:%v ", c.Name, volName, err.Error())
+	err = fmt.Errorf("action[createDataPartition],clusterID[%v] vol[%v] mediaType(%v) Err:%v ",
+		c.Name, volName, proto.MediaTypeString(mediaType), err.Error())
 	log.LogError(errors.Stack(err))
 	Warn(c.Name, err.Error())
 	return
@@ -1626,6 +1916,12 @@ func (c *Cluster) syncCreateDataPartitionToDataNode(host string, size uint64, dp
 	} else {
 		task = dp.createTaskToCreateDataPartition(host, size, peers, hosts, createType, partitionType, dataNode.getDecommissionedDisks())
 	}
+	if task == nil {
+		err = errors.NewErrorf("action[syncCreateDataPartitionToDataNode] dp[%v] meditType(%v) create task for creating data partition failed",
+			dp.decommissionInfo(), proto.MediaTypeString(dp.MediaType))
+		return
+	}
+
 	var resp *proto.Packet
 	if resp, err = dataNode.TaskManager.syncSendAdminTask(task); err != nil {
 		// data node is not alive or other process error
@@ -1652,34 +1948,77 @@ func (c *Cluster) syncCreateMetaPartitionToMetaNode(host string, mp *MetaPartiti
 	return
 }
 
+func (c *Cluster) getZoneListFromVolZoneName(vol *Vol, mediaType uint32) (zoneListOfMediaType []*Zone) {
+	zoneListOfMediaType = make([]*Zone, 0)
+
+	specificZoneList := strings.Split(vol.zoneName, ",")
+	for _, zoneName := range specificZoneList {
+		zone, err := c.t.getZone(zoneName)
+		if err != nil {
+			continue
+		}
+
+		if mediaType == proto.MediaType_Unspecified {
+			log.LogDebugf("[getZoneListFromVolZoneName] vol(%v) pick up zone(%v), mediaType(%v)",
+				vol.Name, zoneName, proto.MediaTypeString(mediaType))
+			zoneListOfMediaType = append(zoneListOfMediaType, zone)
+			continue
+		}
+
+		if zone.dataMediaType != mediaType {
+			log.LogDebugf("[getZoneListFromVolZoneName] vol(%v) skip zone(%v), zone mediaType(%v), require mediaType(%v)",
+				vol.Name, zoneName, proto.MediaTypeString(zone.dataMediaType), proto.MediaTypeString(mediaType))
+			continue
+		}
+
+		zoneListOfMediaType = append(zoneListOfMediaType, zone)
+		log.LogDebugf("[getZoneListFromVolZoneName] vol(%v) pick up zone(%v) of mediaType(%v)",
+			vol.Name, zoneName, proto.MediaTypeString(mediaType))
+	}
+
+	return
+}
+
 // decideZoneNum
 // if vol is not cross zone, return 1
 // if vol enable cross zone and the zone number of cluster less than defaultReplicaNum return 2
 // otherwise, return defaultReplicaNum
-func (c *Cluster) decideZoneNum(vol *Vol) (zoneNum int) {
+func (c *Cluster) decideZoneNum(vol *Vol, mediaType uint32) (zoneNum int) {
 	if !vol.crossZone {
-		return 1
+		zoneNum = 1
+		log.LogInfof("[decideZoneNum] to create vol(%v), zoneName(%v) mediaType(%v), crossZone is not set, decide zoneNum: %v",
+			vol.Name, vol.zoneName, proto.MediaTypeString(mediaType), zoneNum)
+		return
 	}
-	specificZoneList := strings.Split(vol.zoneName, ",")
+
+	specificZoneListOfMediaType := c.getZoneListFromVolZoneName(vol, mediaType)
+	log.LogInfof("[decideZoneNum] to create vol(%v), zoneName(%v) crossZone(%v), zoneCount of mediaType(%v): %v",
+		vol.Name, vol.zoneName, vol.crossZone, proto.MediaTypeString(mediaType), len(specificZoneListOfMediaType))
+
 	var zoneLen int
 	if c.FaultDomain {
 		zoneLen = len(c.t.domainExcludeZones)
 	} else {
-		zoneLen = 1
-		if len(specificZoneList) > 1 {
-			zoneLen = len(specificZoneList)
-		} else if vol.crossZone {
+		if len(specificZoneListOfMediaType) >= 1 {
+			zoneLen = len(specificZoneListOfMediaType)
+		} else {
 			zoneLen = 2
 		}
 	}
 
 	if zoneLen < defaultReplicaNum {
-		zoneNum = 2
+		zoneNum = zoneLen
+		if zoneNum == 1 {
+			log.LogWarnf("[decideZoneNum] to create vol(%v), zoneName(%v) mediaType(%v), crossZone is true, but only one zone qualified",
+				vol.Name, vol.zoneName, proto.MediaTypeString(mediaType))
+		}
 	}
 	if zoneLen > defaultReplicaNum {
 		zoneNum = defaultReplicaNum
 	}
 
+	log.LogInfof("[decideZoneNum] to create vol(%v), zoneName(%v) mediaType(%v), crossZone(%v), decide zoneNum: %v",
+		vol.Name, vol.zoneName, proto.MediaTypeString(mediaType), vol.crossZone, zoneNum)
 	return zoneNum
 }
 
@@ -1708,7 +2047,7 @@ func (c *Cluster) chooseZone2Plus1(rsMgr *rsManager, zones []*Zone, excludeNodeS
 	for _, zone := range zoneList {
 		selectedHosts, selectedPeers, e := zone.getAvailNodeHosts(nodeType, excludeNodeSets, excludeHosts, num)
 		if e != nil {
-			log.LogErrorf("action[getHostFromNormalZone] error [%v]", e)
+			log.LogErrorf("action[chooseZone2Plus1] getAvailNodeHosts error: [%v]", e)
 			return nil, nil, e
 		}
 
@@ -1769,9 +2108,12 @@ func (c *Cluster) getSpecificZoneList(specifiedZone string) (zones []*Zone, err 
 }
 
 func (c *Cluster) getHostFromNormalZone(nodeType uint32, excludeZones []string, excludeNodeSets []uint64,
-	excludeHosts []string, replicaNum int,
-	zoneNumNeed int, specifiedZoneName string) (hosts []string, peers []proto.Peer, err error,
+	excludeHosts []string, replicaNum int, zoneNumNeed int,
+	specifiedZoneName string, dataMediaType uint32) (hosts []string, peers []proto.Peer, err error,
 ) {
+	log.LogInfof("[getHostFromNormalZone] dataMediaType(%v) nodeType(%v) replicaNum(%v) zoneNumNeed(%v) specifiedZoneName(%v)",
+		proto.MediaTypeString(nodeType), nodeType, replicaNum, zoneNumNeed, specifiedZoneName)
+
 	var zonesQualified []*Zone
 	if replicaNum <= zoneNumNeed {
 		zoneNumNeed = replicaNum
@@ -1791,14 +2133,14 @@ func (c *Cluster) getHostFromNormalZone(nodeType uint32, excludeZones []string, 
 	}
 
 	// get all zones that qualified
-	if zonesQualified, err = c.t.allocZonesForNode(rsMgr, zoneNumNeed, replicaNum, excludeZones, specifiedZones); err != nil {
+	if zonesQualified, err = c.t.allocZonesForNode(rsMgr, zoneNumNeed, replicaNum, excludeZones, specifiedZones, dataMediaType); err != nil {
 		return
 	}
 
 	if len(zonesQualified) == 1 {
 		log.LogInfof("action[getHostFromNormalZone] zones [%v]", zonesQualified[0].name)
 		if hosts, peers, err = zonesQualified[0].getAvailNodeHosts(nodeType, excludeNodeSets, excludeHosts, replicaNum); err != nil {
-			log.LogErrorf("action[getHostFromNormalZone],err[%v]", err)
+			log.LogErrorf("action[getHostFromNormalZone] err[%v]", err)
 			return
 		}
 		goto result
@@ -1808,7 +2150,7 @@ func (c *Cluster) getHostFromNormalZone(nodeType uint32, excludeZones []string, 
 		excludeHosts = make([]string, 0)
 	}
 	// The upper process tries to go and get the dedicated zones, and the latter tries to choose the right zones as possible.
-	if c.cfg.DefaultNormalZoneCnt == defaultNormalCrossZoneCnt && len(zonesQualified) >= defaultNormalCrossZoneCnt {
+	if c.cfg.DefaultNormalZoneCnt == defaultNormalCrossZoneCnt && len(zonesQualified) >= defaultNormalCrossZoneCnt || replicaNum == 1 {
 		if hosts, peers, err = c.chooseZoneNormal(zonesQualified, excludeNodeSets, excludeHosts, nodeType, replicaNum); err != nil {
 			return
 		}
@@ -1873,6 +2215,9 @@ func (c *Cluster) getAllDataPartitionByDataNode(addr string) (partitions []*Data
 	safeVols := c.allVols()
 	for _, vol := range safeVols {
 		for _, dp := range vol.dataPartitions.partitions {
+			if dp.IsDiscard {
+				continue
+			}
 			for _, host := range dp.Hosts {
 				if host == addr {
 					partitions = append(partitions, dp)
@@ -1925,38 +2270,38 @@ func (c *Cluster) getAllMetaPartitionIDByMetaNode(addr string) (partitionIDs []u
 	partitionIDs = make([]uint64, 0)
 	safeVols := c.allVols()
 	for _, vol := range safeVols {
+		vol.mpsLock.RLock()
 		for _, mp := range vol.MetaPartitions {
-			vol.mpsLock.RLock()
 			for _, host := range mp.Hosts {
 				if host == addr {
 					partitionIDs = append(partitionIDs, mp.PartitionID)
 					break
 				}
 			}
-			vol.mpsLock.RUnlock()
 		}
+		vol.mpsLock.RUnlock()
 	}
 
 	return
 }
 
-func (c *Cluster) getAllMetaPartitionsByMetaNode(addr string) (partitions []*MetaPartition) {
-	partitions = make([]*MetaPartition, 0)
-	safeVols := c.allVols()
-	for _, vol := range safeVols {
-		for _, mp := range vol.MetaPartitions {
-			vol.mpsLock.RLock()
-			for _, host := range mp.Hosts {
-				if host == addr {
-					partitions = append(partitions, mp)
-					break
-				}
-			}
-			vol.mpsLock.RUnlock()
-		}
-	}
-	return
-}
+// func (c *Cluster) getAllMetaPartitionsByMetaNode(addr string) (partitions []*MetaPartition) {
+// 	partitions = make([]*MetaPartition, 0)
+// 	safeVols := c.allVols()
+// 	for _, vol := range safeVols {
+// 		for _, mp := range vol.MetaPartitions {
+// 			vol.mpsLock.RLock()
+// 			for _, host := range mp.Hosts {
+// 				if host == addr {
+// 					partitions = append(partitions, mp)
+// 					break
+// 				}
+// 			}
+// 			vol.mpsLock.RUnlock()
+// 		}
+// 	}
+// 	return
+// }
 
 func (c *Cluster) decommissionDataNodePause(dataNode *DataNode) (err error, failed []uint64) {
 	if !dataNode.CanBePaused() {
@@ -2024,7 +2369,24 @@ func (c *Cluster) migrateDataNode(srcAddr, targetAddr string, raftForce bool, li
 		return
 	}
 
-	if !srcNode.canMarkDecommission() {
+	if targetAddr != "" {
+		var targetNode *DataNode
+		targetNode, err = c.dataNode(targetAddr)
+		if err != nil {
+			return
+		}
+
+		if targetNode.MediaType != srcNode.MediaType {
+			err = fmt.Errorf("targetNode mediaType(%v) not match srcNode mediaType(%v)",
+				proto.MediaTypeString(targetNode.MediaType), proto.MediaTypeString(srcNode.MediaType))
+			log.LogErrorf("[migrateDataNode] %v", err.Error())
+			return
+		}
+	}
+
+	status := srcNode.GetDecommissionStatus()
+
+	if status == markDecommission || status == DecommissionRunning {
 		err = fmt.Errorf("migrate src(%v) is still on working, please wait,check or cancel if abnormal:%v",
 			srcAddr, srcNode.GetDecommissionStatus())
 		log.LogWarnf("action[migrateDataNode] %v", err)
@@ -2131,8 +2493,8 @@ func (c *Cluster) decommissionSingleDp(dp *DataPartition, newAddr, offlineAddr s
 						goto ERR
 					}
 					if time.Since(dp.RecoverStartTime) > c.GetDecommissionDataPartitionRecoverTimeOut() {
-						err = fmt.Errorf("action[decommissionSingleDp] dp %v new replica %v repair time out",
-							dp.PartitionID, newAddr)
+						err = fmt.Errorf("action[decommissionSingleDp] dp %v new replica %v repair time out:%v",
+							dp.PartitionID, newAddr, time.Since(dp.RecoverStartTime))
 						dp.DecommissionNeedRollback = true
 						newReplica.Status = proto.Unavailable // remove from data partition check
 						log.LogWarnf("action[decommissionSingleDp] dp %v err:%v", dp.PartitionID, err)
@@ -2216,6 +2578,8 @@ func (c *Cluster) decommissionSingleDp(dp *DataPartition, newAddr, offlineAddr s
 		}
 		dp.SetSpecialReplicaDecommissionStep(SpecialDecommissionInitial)
 		dp.SetDecommissionStatus(DecommissionSuccess)
+		// dp may not add into decommission list when master restart or leader change
+		dp.setRestoreReplicaStop()
 		c.syncUpdateDataPartition(dp)
 		log.LogInfof("action[decommissionSingleDp] dp %v success", dp.PartitionID)
 		return
@@ -2226,6 +2590,94 @@ ERR:
 	log.LogWarnf("action[decommissionSingleDp] dp %v err:%v", dp.PartitionID, err)
 	return err
 }
+
+// func (c *Cluster) autoAddDataReplica(dp *DataPartition) (success bool, err error) {
+// 	var (
+// 		targetHosts []string
+// 		newAddr     string
+// 		vol         *Vol
+// 		zone        *Zone
+// 		ns          *nodeSet
+// 	)
+// 	success = false
+
+// 	dp.RLock()
+
+// 	// not support
+// 	if dp.isSpecialReplicaCnt() {
+// 		dp.RUnlock()
+// 		return
+// 	}
+
+// 	dp.RUnlock()
+
+// 	// not support
+// 	if !proto.IsNormalDp(dp.PartitionType) {
+// 		return
+// 	}
+
+// 	var ok bool
+// 	if vol, ok = c.vols[dp.VolName]; !ok {
+// 		log.LogWarnf("action[autoAddDataReplica] clusterID[%v] vol[%v] partitionID[%v] vol not exist, PersistenceHosts:[%v]",
+// 			c.Name, dp.VolName, dp.PartitionID, dp.Hosts)
+// 		return
+// 	}
+
+// 	// not support
+// 	if c.isFaultDomain(vol) {
+// 		return
+// 	}
+
+// 	if vol.crossZone {
+// 		zones := dp.getZones()
+// 		if targetHosts, _, err = c.getHostFromNormalZone(TypeDataPartition, zones, nil, dp.Hosts, 1, 1, "", dp.MediaType); err != nil {
+// 			goto errHandler
+// 		}
+// 	} else {
+// 		if zone, err = c.t.getZone(vol.zoneName); err != nil {
+// 			log.LogWarnf("action[autoAddDataReplica] clusterID[%v] vol[%v] partitionID[%v] zone not exist, PersistenceHosts:[%v]",
+// 				c.Name, dp.VolName, dp.PartitionID, dp.Hosts)
+// 			return
+// 		}
+// 		nodeSets := dp.getNodeSets()
+// 		if len(nodeSets) != 1 {
+// 			log.LogWarnf("action[autoAddDataReplica] clusterID[%v] vol[%v] partitionID[%v] the number of nodeSets is not one, PersistenceHosts:[%v]",
+// 				c.Name, dp.VolName, dp.PartitionID, dp.Hosts)
+// 			return
+// 		}
+// 		if ns, err = zone.getNodeSet(nodeSets[0]); err != nil {
+// 			goto errHandler
+// 		}
+// 		if targetHosts, _, err = ns.getAvailDataNodeHosts(dp.Hosts, 1); err != nil {
+// 			goto errHandler
+// 		}
+// 	}
+
+// 	newAddr = targetHosts[0]
+// 	if err = c.addDataReplica(dp, newAddr, false); err != nil {
+// 		goto errHandler
+// 	}
+
+// 	dp.Status = proto.ReadOnly
+// 	dp.isRecover = true
+// 	c.putBadDataPartitionIDs(nil, newAddr, dp.PartitionID)
+
+// 	dp.RLock()
+// 	c.syncUpdateDataPartition(dp)
+// 	dp.RUnlock()
+
+// 	log.LogInfof("action[autoAddDataReplica] clusterID[%v] vol[%v] partitionID[%v] auto add data replica success, newReplicaHost[%v], PersistenceHosts:[%v]",
+// 		c.Name, dp.VolName, dp.PartitionID, newAddr, dp.Hosts)
+// 	success = true
+// 	return
+
+// errHandler:
+// 	if err != nil {
+// 		err = fmt.Errorf("clusterID[%v] vol[%v] partitionID[%v], err[%v]", c.Name, dp.VolName, dp.PartitionID, err)
+// 		log.LogErrorf("action[autoAddDataReplica] err %v", err)
+// 	}
+// 	return
+// }
 
 // Decommission a data partition.
 // 1. Check if we can decommission a data partition. In the following cases, we are not allowed to do so:
@@ -2297,6 +2749,10 @@ func (c *Cluster) migrateDataPartition(srcAddr, targetAddr string, dp *DataParti
 
 	if targetAddr != "" {
 		targetHosts = []string{targetAddr}
+		if err = c.checkDataNodesMediaTypeForMigrate(dataNode, targetAddr); err != nil {
+			log.LogErrorf("[migrateDataPartition] check mediaType err: %v", err.Error())
+			goto errHandler
+		}
 	} else if targetHosts, _, err = ns.getAvailDataNodeHosts(dp.Hosts, 1); err != nil {
 		if _, ok := c.vols[dp.VolName]; !ok {
 			log.LogWarnf("clusterID[%v] partitionID:%v  on node:%v offline failed,PersistenceHosts:[%v]",
@@ -2313,13 +2769,7 @@ func (c *Cluster) migrateDataPartition(srcAddr, targetAddr string, dp *DataParti
 		if targetHosts, _, err = zone.getAvailNodeHosts(TypeDataPartition, excludeNodeSets, dp.Hosts, 1); err != nil {
 			// select data nodes from the other zone
 			zones = dp.getLiveZones(srcAddr)
-			var excludeZone []string
-			if len(zones) == 0 {
-				excludeZone = append(excludeZone, zone.name)
-			} else {
-				excludeZone = append(excludeZone, zones[0])
-			}
-			if targetHosts, _, err = c.getHostFromNormalZone(TypeDataPartition, excludeZone, excludeNodeSets, dp.Hosts, 1, 1, ""); err != nil {
+			if targetHosts, _, err = c.getHostFromNormalZone(TypeDataPartition, zones, excludeNodeSets, dp.Hosts, 1, 1, "", dp.MediaType); err != nil {
 				goto errHandler
 			}
 		}
@@ -2452,18 +2902,25 @@ func (c *Cluster) addDataReplica(dp *DataPartition, addr string, ignoreDecommiss
 	dp.addReplicaMutex.Lock()
 	defer dp.addReplicaMutex.Unlock()
 
-	dataNode, err := c.dataNode(addr)
+	targetDataNode, err := c.dataNode(addr)
 	if err != nil {
 		return
 	}
 
-	addPeer := proto.Peer{ID: dataNode.ID, Addr: addr}
+	if targetDataNode.MediaType != dp.MediaType {
+		err = fmt.Errorf("target datanode mediaType(%v) not match datapartition mediaType(%v)",
+			proto.MediaTypeString(targetDataNode.MediaType), proto.MediaTypeString(dp.MediaType))
+		log.LogErrorf("[addDataReplica] dpId(%v), err: %v", dp.PartitionID, err.Error())
+		return
+	}
+
+	addPeer := proto.Peer{ID: targetDataNode.ID, Addr: addr}
 
 	if !proto.IsNormalDp(dp.PartitionType) {
 		return fmt.Errorf("action[addDataReplica] [%d] is not normal dp, not support add or delete replica", dp.PartitionID)
 	}
 
-	log.LogInfof("action[addDataReplica] dp %v dst addr %v try add raft member, node id %v", dp.PartitionID, addr, dataNode.ID)
+	log.LogInfof("action[addDataReplica] dp %v dst addr %v try add raft member, node id %v", dp.PartitionID, addr, targetDataNode.ID)
 	if err = c.addDataPartitionRaftMember(dp, addPeer); err != nil {
 		log.LogWarnf("action[addDataReplica] dp %v addr %v try add raft member err [%v]", dp.PartitionID, addr, err)
 		return
@@ -2509,7 +2966,6 @@ func (c *Cluster) updateDataNodeSize(addr string, dp *DataPartition) error {
 }
 
 func (c *Cluster) returnDataSize(addr string, dp *DataPartition) {
-	// TODO:chihe debug
 	if len(dp.Replicas) == 0 {
 		log.LogErrorf("returnDataSize dp(%v) has no replicas", dp.PartitionID)
 		return
@@ -2639,6 +3095,7 @@ func (c *Cluster) createDataReplica(dp *DataPartition, addPeer proto.Peer, ignor
 	diskPath, err := c.syncCreateDataPartitionToDataNode(addPeer.Addr, vol.dataPartitionSize,
 		dp, peers, hosts, proto.DecommissionedCreateDataPartition, dp.PartitionType, true, ignoreDecommissionDisk)
 	if err != nil {
+		log.LogErrorf("[createDataReplica] %v", err)
 		return
 	}
 
@@ -2710,33 +3167,6 @@ func (c *Cluster) removeDataReplica(dp *DataPartition, addr string, validate boo
 		return
 	}
 
-	return
-}
-
-func (c *Cluster) isRecovering(dp *DataPartition, addr string) (isRecover bool) {
-	var key string
-	dp.RLock()
-	defer dp.RUnlock()
-	replica, _ := dp.getReplica(addr)
-	if replica != nil {
-		key = fmt.Sprintf("%s:%s", addr, replica.DiskPath)
-	} else {
-		key = fmt.Sprintf("%s:%s", addr, "")
-	}
-
-	c.badPartitionMutex.RLock()
-	defer c.badPartitionMutex.RUnlock()
-
-	var badPartitionIDs []uint64
-	badPartitions, ok := c.BadDataPartitionIds.Load(key)
-	if ok {
-		badPartitionIDs = badPartitions.([]uint64)
-	}
-	for _, id := range badPartitionIDs {
-		if id == dp.PartitionID {
-			isRecover = true
-		}
-	}
 	return
 }
 
@@ -2857,6 +3287,19 @@ func (c *Cluster) putBadDataPartitionIDs(replica *DataReplica, addr string, part
 	}
 	newBadPartitionIDs = append(newBadPartitionIDs, partitionID)
 	c.BadDataPartitionIds.Store(key, newBadPartitionIDs)
+}
+
+func (c *Cluster) clearBadDataPartitionIDS() {
+	c.badPartitionMutex.Lock()
+	defer c.badPartitionMutex.Unlock()
+	keysToDelete := make([]string, 0)
+	c.BadDataPartitionIds.Range(func(key, value interface{}) bool {
+		keysToDelete = append(keysToDelete, key.(string))
+		return true
+	})
+	for _, key := range keysToDelete {
+		c.BadDataPartitionIds.Delete(key)
+	}
 }
 
 func (c *Cluster) putBadDataPartitionIDsByDiskPath(disk, addr string, partitionID uint64) {
@@ -3168,9 +3611,9 @@ func (c *Cluster) checkZoneName(name string,
 				if _, err = c.t.getZone(DefaultZoneName); err != nil {
 					return newZoneName, fmt.Errorf("action[checkZoneName] the vol is not cross zone and didn't set zone name,but there's no default zone")
 				}
-				log.LogInfof("action[checkZoneName] vol [%v] use default zone", name)
-				newZoneName = DefaultZoneName
 			}
+			log.LogInfof("action[checkZoneName] vol [%v] use default zone", name)
+			newZoneName = DefaultZoneName
 		} else {
 			if len(zoneList) > 1 {
 				return newZoneName, fmt.Errorf("action[checkZoneName] vol specified zoneName need cross zone")
@@ -3184,8 +3627,105 @@ func (c *Cluster) checkZoneName(name string,
 	return
 }
 
+func (c *Cluster) HasResourceOfStorageBlobStore() (has bool) {
+	has = true
+	if c.server.bStoreAddr == "" || c.server.servicePath == "" {
+		has = false
+	}
+
+	return has
+}
+
+// StorageClassResourceChecker : check if the cluster has resource to support the specified storage class
+type StorageClassResourceChecker struct {
+	StorageClassResourceSet map[uint32]struct{}
+}
+
+func (checker *StorageClassResourceChecker) HasResourceOfStorageClass(storageClass uint32) (has bool) {
+	_, has = checker.StorageClassResourceSet[storageClass]
+	return
+}
+
+func NewStorageClassResourceChecker(c *Cluster, zoneNameList string) (checker *StorageClassResourceChecker) {
+	checker = &StorageClassResourceChecker{
+		StorageClassResourceSet: make(map[uint32]struct{}),
+	}
+
+	dataNodeMediaTypeMap := c.t.getDataMediaTypeCanUse(zoneNameList)
+	for storageClass := range dataNodeMediaTypeMap {
+		checker.StorageClassResourceSet[storageClass] = struct{}{}
+	}
+
+	if c.HasResourceOfStorageBlobStore() {
+		checker.StorageClassResourceSet[proto.StorageClass_BlobStore] = struct{}{}
+	}
+
+	return
+}
+
+func (c *Cluster) GetFastestReplicaStorageClassInCluster(resourceChecker *StorageClassResourceChecker,
+	zoneNameList string,
+) (chosenStorageClass uint32) {
+	chosenStorageClass = proto.StorageClass_Unspecified
+
+	if resourceChecker == nil {
+		resourceChecker = NewStorageClassResourceChecker(c, zoneNameList)
+	}
+
+	if resourceChecker.HasResourceOfStorageClass(proto.StorageClass_Replica_SSD) {
+		chosenStorageClass = proto.StorageClass_Replica_SSD
+	} else if resourceChecker.HasResourceOfStorageClass(proto.StorageClass_Replica_HDD) {
+		chosenStorageClass = proto.StorageClass_Replica_HDD
+	}
+
+	return
+}
+
+func (c *Cluster) initDataPartitionsForCreateVol(vol *Vol, targetDpCount int, mediaType uint32) (dpCountOfMediaType int, err error) {
+	if targetDpCount > maxInitDataPartitionCnt {
+		err = fmt.Errorf("[initDataPartitionsForCreateVol] initDataPartitions failed, vol[%v], targetDpCount[%d] exceeds maximum limit[%d]",
+			vol.Name, targetDpCount, maxInitDataPartitionCnt)
+		return 0, err
+	}
+
+	for retryCount := 0; dpCountOfMediaType < defaultInitDataPartitionCnt && retryCount < 3; retryCount++ {
+		oldDpCountOfMediaType := dpCountOfMediaType
+
+		toCreateCount := targetDpCount - dpCountOfMediaType
+		err = vol.initDataPartitions(c, toCreateCount, mediaType)
+		if err != nil {
+			log.LogErrorf("action[initDataPartitionsForCreateVol] vol(%v) mediaType(%v) retryCount(%v), init dataPartition error: %v",
+				vol.Name, proto.MediaTypeString(mediaType), retryCount, err.Error())
+		}
+
+		dpCountOfMediaType = vol.dataPartitions.getDataPartitionsCountOfMediaType(mediaType)
+		log.LogInfof("[initDataPartitionsForCreateVol] vol(%v) mediaType(%v) retryCount(%v), this round created dp count: %v, total: %v",
+			vol.Name, proto.MediaTypeString(mediaType), retryCount, dpCountOfMediaType-oldDpCountOfMediaType, dpCountOfMediaType)
+	}
+
+	if dpCountOfMediaType < defaultInitDataPartitionCnt {
+		err = fmt.Errorf("action[initDataPartitionsForCreateVol] vol[%v] mediaType[%v] initDataPartitions failed, createdCount(%v), less than minLimit(%d)",
+			vol.Name, proto.MediaTypeString(mediaType), dpCountOfMediaType, defaultInitDataPartitionCnt)
+
+		oldVolStatus := vol.Status
+		vol.Status = proto.VolStatusMarkDelete
+		if errSync := c.syncUpdateVol(vol); errSync != nil {
+			log.LogErrorf("action[initDataPartitionsForCreateVol] vol[%v] mediaType[%v] after init dataPartition error, mark vol delete persist failed",
+				vol.Name, proto.MediaTypeString(mediaType))
+			vol.Status = oldVolStatus
+		} else {
+			log.LogErrorf("action[initDataPartitionsForCreateVol] vol[%v] mediaType[%v] mark vol delete after init dataPartition error",
+				vol.Name, proto.MediaTypeString(mediaType))
+		}
+
+		return dpCountOfMediaType, err
+	}
+
+	return dpCountOfMediaType, nil
+}
+
 // Create a new volume.
-// By default we create 3 meta partitions and 10 data partitions during initialization.
+// By default, we create 3 meta partitions and 10 data partitions during initialization.
 func (c *Cluster) createVol(req *createVolReq) (vol *Vol, err error) {
 	if c.DisableAutoAllocate {
 		log.LogWarn("the cluster is frozen")
@@ -3210,8 +3750,8 @@ func (c *Cluster) createVol(req *createVolReq) (vol *Vol, err error) {
 	}
 
 	if err = vol.initMetaPartitions(c, req.mpCount); err != nil {
-
 		vol.Status = proto.VolStatusMarkDelete
+
 		if e := vol.deleteVolFromStore(c); e != nil {
 			log.LogErrorf("action[createVol] deleteVolFromStore failed, vol[%v] err[%v]", vol.Name, e)
 		}
@@ -3223,46 +3763,38 @@ func (c *Cluster) createVol(req *createVolReq) (vol *Vol, err error) {
 	}
 
 	// NOTE: init data partitions
-	if vol.CacheCapacity > 0 || (proto.IsHot(vol.VolType) && vol.Capacity > 0) {
-		if req.dpCount > maxInitDataPartitionCnt {
-			err = fmt.Errorf("action[createVol] initDataPartitions failed, vol[%v], dpCount[%d] exceeds maximum limit[%d]",
-				req.name, req.dpCount, maxInitDataPartitionCnt)
-			goto errHandler
-		}
-		for retryCount := 0; readWriteDataPartitions < defaultInitDataPartitionCnt && retryCount < 3; retryCount++ {
-			err = vol.initDataPartitions(c, req.dpCount)
-			if err != nil {
-				log.LogError("action[createVol] init dataPartition error ",
-					err.Error(), retryCount, len(vol.dataPartitions.partitionMap))
+	if proto.IsStorageClassReplica(vol.volStorageClass) && vol.Capacity > 0 {
+		for _, acs := range req.allowedStorageClass {
+			if !proto.IsStorageClassReplica(acs) {
+				continue
 			}
 
-			readWriteDataPartitions = len(vol.dataPartitions.partitionMap)
-		}
-
-		if len(vol.dataPartitions.partitionMap) < defaultInitDataPartitionCnt {
-			err = fmt.Errorf("action[createVol] vol[%v] initDataPartitions failed, less than %d",
-				vol.Name, defaultInitDataPartitionCnt)
-
-			oldVolStatus := vol.Status
-			vol.Status = proto.VolStatusMarkDelete
-			if errSync := c.syncUpdateVol(vol); errSync != nil {
-				log.LogErrorf("action[createVol] vol[%v] after init dataPartition error, mark vol delete persist failed", vol.Name)
-				vol.Status = oldVolStatus
-			} else {
-				log.LogErrorf("action[createVol] vol[%v] mark vol delete after init dataPartition error", vol.Name)
+			chosenMediaType := proto.GetMediaTypeByStorageClass(acs)
+			if readWriteDataPartitions, err = c.initDataPartitionsForCreateVol(vol, req.dpCount, chosenMediaType); err != nil {
+				goto errHandler
 			}
+			log.LogInfof("action[createVol] vol[%v] created dp cnt[%v] mediaType(%v) for replica",
+				req.name, readWriteDataPartitions, proto.MediaTypeString(chosenMediaType))
+		}
+	} else if proto.IsStorageClassBlobStore(vol.volStorageClass) && vol.CacheCapacity > 0 {
+		chosenMediaType := proto.GetMediaTypeByStorageClass(vol.cacheDpStorageClass)
+		log.LogInfof("action[createVol] vol[%v] to create cache dp with storageClass(%v) for blobStore",
+			req.name, proto.StorageClassString(vol.cacheDpStorageClass))
 
+		if readWriteDataPartitions, err = c.initDataPartitionsForCreateVol(vol, req.dpCount, chosenMediaType); err != nil {
 			goto errHandler
 		}
+		log.LogInfof("action[createVol] vol[%v] created dp cnt[%v] mediaType(%v) for blobStore",
+			req.name, readWriteDataPartitions, proto.MediaTypeString(chosenMediaType))
 	}
 
-	vol.dataPartitions.readableAndWritableCnt = readWriteDataPartitions
 	vol.updateViewCache(c)
 	// NOTE: update dp view cache
 	vol.dataPartitions.updateResponseCache(true, 0, vol)
 	vol.dataPartitions.updateCompressCache(true, 0, vol)
 
-	log.LogInfof("action[createVol] vol[%v], readableAndWritableCnt[%v]", req.name, readWriteDataPartitions)
+	log.LogInfof("action[createVol] vol[%v], readableAndWritableCnt[%v]",
+		req.name, vol.dataPartitions.readableAndWritableCnt)
 	return
 
 errHandler:
@@ -3294,6 +3826,7 @@ func (c *Cluster) doCreateVol(req *createVolReq) (vol *Vol, err error) {
 		DpReplicaNum:            req.dpReplicaNum,
 		ReplicaNum:              defaultReplicaNum,
 		FollowerRead:            req.followerRead,
+		MetaFollowerRead:        req.metaFollowerRead,
 		Authenticate:            req.authenticate,
 		CrossZone:               req.crossZone,
 		DefaultPriority:         req.normalZonesFirst,
@@ -3325,11 +3858,23 @@ func (c *Cluster) doCreateVol(req *createVolReq) (vol *Vol, err error) {
 		FlowRlimit:   req.qosLimitArgs.flowRVal,
 		FlowWlimit:   req.qosLimitArgs.flowWVal,
 
-		DpReadOnlyWhenVolFull: req.DpReadOnlyWhenVolFull,
-		EnableAutoMetaRepair:  false,
+		DpReadOnlyWhenVolFull:   req.DpReadOnlyWhenVolFull,
+		EnableAutoMetaRepair:    false,
+		TrashInterval:           req.trashInterval,
+		AccessTimeInterval:      req.accessTimeValidInterval,
+		EnablePersistAccessTime: req.enablePersistAccessTime,
+
+		VolStorageClass:     req.volStorageClass,
+		AllowedStorageClass: req.allowedStorageClass,
+		CacheDpStorageClass: req.cacheDpStorageClass,
 	}
 
-	log.LogInfof("[doCreateVol] volView, %v", vv)
+	vv.QuotaOfClass = make([]*proto.StatOfStorageClass, 0)
+	for _, c := range vv.AllowedStorageClass {
+		vv.QuotaOfClass = append(vv.QuotaOfClass, proto.NewStatOfStorageClass(c))
+	}
+
+	log.LogInfof("[doCreateVol] volView, %v", vv.String())
 
 	if vv.EnableTransaction == 0 {
 		vv.EnableTransaction = proto.TxOpMask(proto.TxOpMaskRename)
@@ -3356,7 +3901,9 @@ func (c *Cluster) doCreateVol(req *createVolReq) (vol *Vol, err error) {
 		goto errHandler
 	}
 
-	c.putVol(vol)
+	if err = c.putVol(vol); err != nil {
+		goto errHandler
+	}
 
 	return
 
@@ -3364,43 +3911,6 @@ errHandler:
 	err = fmt.Errorf("action[doCreateVol], clusterID[%v] name:%v, err:%v ", c.Name, req.name, err.Error())
 	log.LogError(errors.Stack(err))
 	Warn(c.Name, err.Error())
-	return
-}
-
-// Update the upper bound of the inode ids in a meta partition.
-func (c *Cluster) updateInodeIDRange(volName string, start uint64) (err error) {
-	var (
-		maxPartitionID uint64
-		vol            *Vol
-		partition      *MetaPartition
-	)
-
-	if vol, err = c.getVol(volName); err != nil {
-		log.LogErrorf("action[updateInodeIDRange]  vol [%v] not found", volName)
-		return proto.ErrVolNotExists
-	}
-
-	maxPartitionID = vol.maxPartitionID()
-	if partition, err = vol.metaPartition(maxPartitionID); err != nil {
-		log.LogErrorf("action[updateInodeIDRange]  mp[%v] not found", maxPartitionID)
-		return proto.ErrMetaPartitionNotExists
-	}
-
-	adjustStart := start
-	if adjustStart < partition.Start {
-		adjustStart = partition.Start
-	}
-
-	if adjustStart < partition.MaxInodeID {
-		adjustStart = partition.MaxInodeID
-	}
-
-	metaPartitionInodeIdStep := gConfig.MetaPartitionInodeIdStep
-	adjustStart = adjustStart + metaPartitionInodeIdStep
-	log.LogWarnf("vol[%v],maxMp[%v],start[%v],adjustStart[%v]", volName, maxPartitionID, start, adjustStart)
-	if err = vol.splitMetaPartition(c, partition, adjustStart, metaPartitionInodeIdStep, false); err != nil {
-		log.LogErrorf("action[updateInodeIDRange]  mp[%v] err[%v]", partition.PartitionID, err)
-	}
 	return
 }
 
@@ -3426,7 +3936,7 @@ func (c *Cluster) allMasterNodes() (masterNodes []proto.NodeView) {
 	for _, addr := range c.cfg.peerAddrs {
 		split := strings.Split(addr, colonSplit)
 		id, _ := strconv.ParseUint(split[0], 10, 64)
-		masterNode := proto.NodeView{ID: id, Addr: split[1] + ":" + split[2], IsActive: true}
+		masterNode := proto.NodeView{ID: id, Addr: split[1] + ":" + split[2], Status: true}
 		masterNodes = append(masterNodes, masterNode)
 	}
 	return masterNodes
@@ -3446,7 +3956,8 @@ func (c *Cluster) allDataNodes() (dataNodes []proto.NodeView) {
 		dataNode := node.(*DataNode)
 		dataNodes = append(dataNodes, proto.NodeView{
 			Addr: dataNode.Addr, DomainAddr: dataNode.DomainAddr,
-			IsActive: dataNode.isActive, ID: dataNode.ID, IsWritable: dataNode.IsWriteAble(),
+			Status: dataNode.isActive, ID: dataNode.ID, IsWritable: dataNode.IsWriteAble(), MediaType: dataNode.MediaType,
+			ForbidWriteOpOfProtoVer0: dataNode.ReceivedForbidWriteOpOfProtoVer0,
 		})
 		return true
 	})
@@ -3459,7 +3970,8 @@ func (c *Cluster) allMetaNodes() (metaNodes []proto.NodeView) {
 		metaNode := node.(*MetaNode)
 		metaNodes = append(metaNodes, proto.NodeView{
 			ID: metaNode.ID, Addr: metaNode.Addr, DomainAddr: metaNode.DomainAddr,
-			IsActive: metaNode.IsActive, IsWritable: metaNode.IsWriteAble(),
+			Status: metaNode.IsActive, IsWritable: metaNode.IsWriteAble(), MediaType: proto.MediaType_Unspecified,
+			ForbidWriteOpOfProtoVer0: metaNode.ReceivedForbidWriteOpOfProtoVer0,
 		})
 		return true
 	})
@@ -3719,6 +4231,21 @@ func (c *Cluster) setDataPartitionRepairTimeOut(val uint64) (err error) {
 	return
 }
 
+func (c *Cluster) setDataPartitionBackupTimeOut(val uint64) (err error) {
+	oldVal := atomic.LoadUint64(&c.cfg.DpBackupTimeOut)
+	if val < uint64(proto.DefaultDataPartitionBackupTimeOut/time.Second) {
+		val = uint64(proto.DefaultDataPartitionBackupTimeOut / time.Second)
+	}
+	atomic.StoreUint64(&c.cfg.DpBackupTimeOut, val)
+	if err = c.syncPutCluster(); err != nil {
+		log.LogErrorf("action[setDataPartitionBackupTimeOut] err[%v]", err)
+		atomic.StoreUint64(&c.cfg.DpBackupTimeOut, oldVal)
+		err = proto.ErrPersistenceByRaft
+		return
+	}
+	return
+}
+
 func (c *Cluster) setDataNodeAutoRepairLimitRate(val uint64) (err error) {
 	oldVal := atomic.LoadUint64(&c.cfg.DataNodeAutoRepairLimitRate)
 	atomic.StoreUint64(&c.cfg.DataNodeAutoRepairLimitRate, val)
@@ -3879,15 +4406,22 @@ func (c *Cluster) setForbidMpDecommission(isForbid bool) (err error) {
 	return
 }
 
-func (c *Cluster) setMaxConcurrentLcNodes(count uint64) (err error) {
-	oldCount := c.cfg.MaxConcurrentLcNodes
-	c.cfg.MaxConcurrentLcNodes = count
+func (c *Cluster) setForbidWriteOpOfProtoVersion0(forbid bool) (err error) {
+	oldVal := c.cfg.forbidWriteOpOfProtoVer0
+
+	if forbid == oldVal {
+		log.LogInfof("[setForbidWriteOpOfProtoVersion0] value not change: %v", forbid)
+		return
+	}
+
+	c.cfg.forbidWriteOpOfProtoVer0 = forbid
 	if err = c.syncPutCluster(); err != nil {
-		log.LogErrorf("action[setMaxConcurrentLcNodes] err[%v]", err)
-		c.cfg.MaxConcurrentLcNodes = oldCount
+		log.LogErrorf("[setForbidWriteOpOfProtoVersion0] persist err: %v", err)
+		c.cfg.forbidWriteOpOfProtoVer0 = oldVal
 		err = proto.ErrPersistenceByRaft
 		return
 	}
+	log.LogInfof("[setForbidWriteOpOfProtoVersion0] changed to: %v", forbid)
 	return
 }
 
@@ -3926,33 +4460,35 @@ func (c *Cluster) clearMetaNodes() {
 }
 
 func (c *Cluster) scheduleToCheckDecommissionDataNode() {
-	go func() {
-		for {
+	c.runTask(&cTask{
+		tickTime: 10 * time.Second,
+		name:     "scheduleToCheckDecommissionDataNode",
+		function: func() (fin bool) {
 			if c.partition.IsRaftLeader() && c.metaReady {
 				c.checkDecommissionDataNode()
 			}
-			time.Sleep(10 * time.Second)
-		}
-	}()
+			return
+		},
+	})
 }
 
 func (c *Cluster) checkDecommissionDataNode() {
 	// decommission datanode mark
 	c.dataNodes.Range(func(addr, node interface{}) bool {
 		dataNode := node.(*DataNode)
-		dataNode.updateDecommissionStatus(c, false)
+		dataNode.updateDecommissionStatus(c, false, true)
 		if dataNode.GetDecommissionStatus() == markDecommission {
 			c.TryDecommissionDataNode(dataNode)
 		} else if dataNode.GetDecommissionStatus() == DecommissionSuccess {
 			partitions := c.getAllDataPartitionByDataNode(dataNode.Addr)
 			// if only decommission part of data partitions, do not remove the data node
 			if len(partitions) != 0 {
-				if time.Since(time.Unix(dataNode.DecommissionCompleteTime, 0)) > (20 * time.Minute) {
-					log.LogWarnf("action[checkDecommissionDataNode] dataNode %v decommission completed, "+
-						"but has dp left, so only reset decommission status", dataNode.Addr)
-					dataNode.resetDecommissionStatus()
-					c.syncUpdateDataNode(dataNode)
-				}
+				// if time.Now().Sub(time.Unix(dataNode.DecommissionCompleteTime, 0)) > (20 * time.Minute) {
+				//	log.LogWarnf("action[checkDecommissionDataNode] dataNode %v decommission completed, "+
+				//		"but has dp left, so only reset decommission status", dataNode.Addr)
+				//	dataNode.resetDecommissionStatus()
+				//	c.syncUpdateDataNode(dataNode)
+				// }
 				return true
 			}
 			// maybe has decommission failed dp
@@ -3965,9 +4501,11 @@ func (c *Cluster) checkDecommissionDataNode() {
 					c.Name, dataNode.Addr, err)
 				log.LogWarnf("%s", msg)
 			} else {
-				log.LogWarnf("action[checkDecommissionDataNode] del dataNode %v", dataNode.Addr)
+				msg := fmt.Sprintf("del dataNode %v", dataNode.Addr)
+				log.LogWarnf("action[checkDecommissionDataNode] %v", msg)
 				dataNode.delDecommissionDiskFromCache(c)
 				c.delDataNodeFromCache(dataNode)
+				auditlog.LogMasterOp("DataNodeDecommission", msg, nil)
 			}
 		}
 		return true
@@ -4003,7 +4541,7 @@ func (c *Cluster) TryDecommissionDataNode(dataNode *DataNode) {
 				}
 			}
 		}
-		dataNode.SetDecommissionStatus(DecommissionPrepare)
+		dataNode.SetDecommissionStatus(DecommissionRunning)
 		dataNode.ToBeOffline = true
 		log.LogDebugf("action[TryDecommissionDataNode] dataNode [%s] recover from DecommissionDiskList", dataNode.Addr)
 		return
@@ -4049,6 +4587,7 @@ func (c *Cluster) TryDecommissionDataNode(dataNode *DataNode) {
 		toBeOffLinePartitions = toBeOffLinePartitions[:dataNode.DecommissionLimit]
 	}
 	if len(toBeOffLinePartitions) == 0 {
+		log.LogWarnf("action[TryDecommissionDataNode]no dp left on dataNode %v, mark decommission success", dataNode.Addr)
 		dataNode.markDecommissionSuccess(c)
 		return
 	}
@@ -4059,6 +4598,7 @@ func (c *Cluster) TryDecommissionDataNode(dataNode *DataNode) {
 		toBeOffLinePartitionsFinal    []*DataPartition
 		toBeOffLinePartitionsFinalIds []uint64
 	)
+
 	// find respond disk
 	for _, dp := range toBeOffLinePartitions {
 		disk := dp.getReplicaDisk(dataNode.Addr)
@@ -4068,11 +4608,13 @@ func (c *Cluster) TryDecommissionDataNode(dataNode *DataNode) {
 			// master change leader or restart, operation for decommission success dp is not triggered
 			if dp.IsDecommissionSuccess() {
 				dp.ResetDecommissionStatus()
+				dp.setRestoreReplicaStop()
 				c.syncUpdateDataPartition(dp)
 				continue
 			}
 			if dp.DecommissionSrcDiskPath == "" {
 				dp.ResetDecommissionStatus()
+				dp.setRestoreReplicaStop()
 				c.syncUpdateDataPartition(dp)
 				log.LogWarnf("action[TryDecommissionDataNode] cannot find DecommissionSrcDiskPath for "+
 					"dp replica [%v] on dataNode[%v],reset decommission status",
@@ -4106,14 +4648,27 @@ func (c *Cluster) TryDecommissionDataNode(dataNode *DataNode) {
 	decommissionDiskList := make([]string, 0)
 	log.LogInfof("action[TryDecommissionDataNode] try decommission dp[%v] %v from dataNode[%s] ",
 		len(toBeOffLinePartitionsFinalIds), toBeOffLinePartitionsFinalIds, dataNode.Addr)
+	for _, persistDisk := range dataNode.AllDisks {
+		if _, ok := dpToDecommissionByDisk[persistDisk]; !ok {
+			c.addAndSyncDecommissionedDisk(dataNode, persistDisk)
+			msg := fmt.Sprintf("no dp left on %v_%v, disable it directly", dataNode.Addr, persistDisk)
+			auditlog.LogMasterOp("DiskDecommission", msg, nil)
+			log.LogInfof("action[TryDecommissionDataNode] %v ", msg)
+		}
+	}
 	for disk, dpCnt := range dpToDecommissionByDisk {
 		//
 		if left == 0 {
 			break
 		}
 		if left-dpCnt >= 0 {
-			err = c.migrateDisk(dataNode.Addr, disk, dataNode.DecommissionDstAddr, dataNode.DecommissionRaftForce, dpCnt, true, ManualDecommission)
+			err = c.migrateDisk(dataNode, disk, dataNode.DecommissionDstAddr, dataNode.DecommissionRaftForce, dpCnt, true, ManualDecommission)
 			if err != nil {
+				if strings.Contains(err.Error(), "still on working") {
+					decommissionDiskList = append(decommissionDiskList, disk)
+					log.LogWarnf("action[TryDecommissionDataNode] disk(%v_%v) is decommissioning,add it to "+
+						"decommissionDiskList", dataNode.Addr, disk)
+				}
 				msg := fmt.Sprintf("disk(%v_%v)failed to mark decommission", dataNode.Addr, disk)
 				log.LogWarnf("action[TryDecommissionDataNode] %v failed %v", msg, err)
 				auditlog.LogMasterOp("DiskDecommission", msg, err)
@@ -4122,8 +4677,13 @@ func (c *Cluster) TryDecommissionDataNode(dataNode *DataNode) {
 			decommissionDpTotal += dpCnt
 			left = left - dpCnt
 		} else {
-			err = c.migrateDisk(dataNode.Addr, disk, dataNode.DecommissionDstAddr, dataNode.DecommissionRaftForce, left, true, ManualDecommission)
+			err = c.migrateDisk(dataNode, disk, dataNode.DecommissionDstAddr, dataNode.DecommissionRaftForce, left, true, ManualDecommission)
 			if err != nil {
+				if strings.Contains(err.Error(), "still on working") {
+					decommissionDiskList = append(decommissionDiskList, disk)
+					log.LogWarnf("action[TryDecommissionDataNode] disk(%v_%v) is decommissioning,add it to "+
+						"decommissionDiskList", dataNode.Addr, disk)
+				}
 				msg := fmt.Sprintf("disk(%v_%v)failed to mark decommission", dataNode.Addr, disk)
 				log.LogWarnf("action[TryDecommissionDataNode] %v failed %v", msg, err)
 				auditlog.LogMasterOp("DiskDecommission", msg, err)
@@ -4141,23 +4701,68 @@ func (c *Cluster) TryDecommissionDataNode(dataNode *DataNode) {
 	//	c.syncUpdateDataPartition(dp)
 	//	ns.AddToDecommissionDataPartitionList(dp)
 	//	toBeOffLinePartitionIds = append(toBeOffLinePartitionIds, dp.PartitionID)
-	// }
-	// disk wait for decommission
-	dataNode.SetDecommissionStatus(DecommissionPrepare)
+	//}
+	//disk wait for decommission
+	dataNode.SetDecommissionStatus(DecommissionRunning)
 	// avoid alloc dp on this node
 	dataNode.ToBeOffline = true
 	dataNode.DecommissionDiskList = decommissionDiskList
 	dataNode.DecommissionDpTotal = decommissionDpTotal
-	log.LogInfof("action[TryDecommissionDataNode] try decommission disk[%v] from dataNode[%s] "+
-		"raftForce [%v] to dst [%v] DecommissionDpTotal[%v]",
-		decommissionDiskList, dataNode.Addr, dataNode.DecommissionRaftForce,
-		dataNode.DecommissionDstAddr, dataNode.DecommissionDpTotal)
+	msg := fmt.Sprintf(" try decommission disk[%v] from dataNode[%s] raftForce [%v] to dst [%v] DecommissionDpTotal[%v]",
+		decommissionDiskList, dataNode.Addr, dataNode.DecommissionRaftForce, dataNode.DecommissionDstAddr, dataNode.DecommissionDpTotal)
+	log.LogInfof("action[TryDecommissionDataNode] %v", msg)
+	auditlog.LogMasterOp("DataNodeDecommission", msg, nil)
 }
 
-func (c *Cluster) migrateDisk(nodeAddr, diskPath, dstPath string, raftForce bool, limit int, diskDisable bool, migrateType uint32) (err error) {
-	var disk *DecommissionDisk
-	key := fmt.Sprintf("%s_%s", nodeAddr, diskPath)
+func (c *Cluster) checkDataNodesMediaTypeForMigrate(srcNode *DataNode, dstAddr string) (err error) {
+	var dstNode *DataNode
 
+	if srcNode == nil {
+		log.LogErrorf("[checkDataNodesMediaTypeForMigrate] srcNode is nil")
+		return
+	}
+
+	if dstAddr != "" {
+		dstNode, err = c.dataNode(dstAddr)
+		if err != nil {
+			log.LogErrorf("[CheckDataNodesMediaTypeForMigrate] get dstNode(%v) failed: %v", dstAddr, err.Error())
+			return
+		}
+
+		if dstNode.MediaType != srcNode.MediaType {
+			err = fmt.Errorf("dstNode mediaType(%v) not match srcNode mediaType(%v)",
+				proto.MediaTypeString(dstNode.MediaType), proto.MediaTypeString(srcNode.MediaType))
+			log.LogErrorf("[CheckDataNodesMediaTypeForMigrate] %v", err.Error())
+			return
+		}
+	}
+
+	return nil
+}
+
+func (c *Cluster) checkDataNodeAddrMediaTypeForMigrate(srcAddr, dstAddr string) (err error) {
+	var srcNode *DataNode
+
+	srcNode, err = c.dataNode(srcAddr)
+	if err != nil {
+		log.LogErrorf("[CheckDataNodesMediaTypeForMigrate] get srcNode(%v) failed: %v", srcAddr, err.Error())
+		return
+	}
+
+	return c.checkDataNodesMediaTypeForMigrate(srcNode, dstAddr)
+}
+
+func (c *Cluster) migrateDisk(dataNode *DataNode, diskPath, dstAddr string, raftForce bool, limit int, diskDisable bool, migrateType uint32) (err error) {
+	var disk *DecommissionDisk
+	nodeAddr := dataNode.Addr
+	if dstAddr != "" {
+		if err = c.checkDataNodeAddrMediaTypeForMigrate(nodeAddr, dstAddr); err != nil {
+			log.LogErrorf("[migrateDisk] check mediaType err: %v", err.Error())
+			return
+		}
+	}
+
+	key := fmt.Sprintf("%s_%s", nodeAddr, diskPath)
 	if value, ok := c.DecommissionDisks.Load(key); ok {
 		disk = value.(*DecommissionDisk)
 		status := disk.GetDecommissionStatus()
@@ -4169,21 +4774,29 @@ func (c *Cluster) migrateDisk(nodeAddr, diskPath, dstPath string, raftForce bool
 		}
 	} else {
 		disk = &DecommissionDisk{
-			SrcAddr:     nodeAddr,
-			DiskPath:    diskPath,
-			DiskDisable: diskDisable,
+			SrcAddr:                 nodeAddr,
+			DiskPath:                diskPath,
+			DiskDisable:             diskDisable,
+			IgnoreDecommissionDps:   make([]proto.IgnoreDecommissionDP, 0),
+			ResidualDecommissionDps: make([]proto.IgnoreDecommissionDP, 0),
 		}
 		c.DecommissionDisks.Store(disk.GenerateKey(), disk)
 	}
 	disk.Type = migrateType
+	disk.DiskDisable = diskDisable
+	disk.ResidualDecommissionDps = make([]proto.IgnoreDecommissionDP, 0)
+	disk.IgnoreDecommissionDps = make([]proto.IgnoreDecommissionDP, 0)
 	// disk should be decommission all the dp
-	disk.markDecommission(dstPath, raftForce, limit)
+	disk.markDecommission(dstAddr, raftForce, limit)
 	if err = c.syncAddDecommissionDisk(disk); err != nil {
 		err = fmt.Errorf("action[addDecommissionDisk],clusterID[%v] dataNodeAddr:%v diskPath:%v err:%v ",
 			c.Name, nodeAddr, diskPath, err.Error())
 		Warn(c.Name, err.Error())
 		c.delDecommissionDiskFromCache(disk)
 		return
+	}
+	if disk.DiskDisable {
+		c.addAndSyncDecommissionedDisk(dataNode, disk.DiskPath)
 	}
 	// add to the nodeset decommission list
 	c.addDecommissionDiskToNodeset(disk)
@@ -4219,14 +4832,16 @@ func (c *Cluster) restoreStoppedAutoDecommissionDisk(nodeAddr, diskPath string) 
 }
 
 func (c *Cluster) scheduleToCheckDecommissionDisk() {
-	go func() {
-		for {
+	c.runTask(&cTask{
+		tickTime: 10 * time.Second,
+		name:     "scheduleToCheckDecommissionDisk",
+		function: func() (fin bool) {
 			if c.partition.IsRaftLeader() && c.metaReady {
 				c.checkDecommissionDisk()
 			}
-			time.Sleep(10 * time.Second)
-		}
-	}()
+			return
+		},
+	})
 }
 
 func (c *Cluster) checkDecommissionDisk() {
@@ -4237,7 +4852,7 @@ func (c *Cluster) checkDecommissionDisk() {
 		// keep failed decommission disk in list for preventing the reuse of a
 		// term in future decommissioning operations
 		if status == DecommissionSuccess {
-			if time.Since(time.Unix(disk.DecommissionCompleteTime, 0)) > (20 * time.Minute) {
+			if time.Since(time.Unix(disk.DecommissionCompleteTime, 0)) > (120 * time.Hour) {
 				if err := c.syncDeleteDecommissionDisk(disk); err != nil {
 					msg := fmt.Sprintf("action[checkDecommissionDisk],clusterID[%v] node[%v] disk[%v],"+
 						"syncDeleteDecommissionDisk failed,err[%v]",
@@ -4255,14 +4870,15 @@ func (c *Cluster) checkDecommissionDisk() {
 }
 
 func (c *Cluster) scheduleToBadDisk() {
-	go func() {
-		for {
-			if c.partition.IsRaftLeader() && c.AutoDecommissionDiskIsEnabled() && c.metaReady {
-				c.checkBadDisk()
-			}
-			time.Sleep(10 * time.Second)
+	task := &cTask{tickTime: 5 * time.Second, name: "scheduleToCheckDelayDeleteVols"}
+	task.function = func() (fin bool) {
+		if c.partition.IsRaftLeader() && c.AutoDecommissionDiskIsEnabled() && c.metaReady {
+			c.checkBadDisk()
 		}
-	}()
+		task.tickTime = c.GetAutoDecommissionDiskInterval()
+		return
+	}
+	c.runTask(task)
 }
 
 func (c *Cluster) canAutoDecommissionDisk(addr string, diskPath string) (yes bool, status uint32) {
@@ -4270,7 +4886,7 @@ func (c *Cluster) canAutoDecommissionDisk(addr string, diskPath string) (yes boo
 	if value, ok := c.DecommissionDisks.Load(key); ok {
 		d := value.(*DecommissionDisk)
 		status = d.GetDecommissionStatus()
-		yes = status != markDecommission && status != DecommissionRunning && status != DecommissionPause
+		yes = status != markDecommission && status != DecommissionRunning && status != DecommissionPause && status != DecommissionCancel
 		return
 	}
 	yes = true
@@ -4278,16 +4894,18 @@ func (c *Cluster) canAutoDecommissionDisk(addr string, diskPath string) (yes boo
 }
 
 func (c *Cluster) handleDataNodeBadDisk(dataNode *DataNode) {
+	badDisks := make([]proto.BadDiskStat, 0)
 	dataNode.RLock()
-	defer dataNode.RUnlock()
+	badDisks = append(badDisks, dataNode.BadDiskStats...)
+	dataNode.RUnlock()
 
-	for _, disk := range dataNode.BadDiskStats {
+	for _, disk := range badDisks {
 		// TODO:no dp left on bad disk, notify sre to remove this disk
 		// decommission failed, but lack replica for disk err dp is already removed
 		retry := c.RetryDecommissionDisk(dataNode.Addr, disk.DiskPath)
 		if disk.TotalPartitionCnt == 0 && !retry {
-			msg := fmt.Sprintf("disk(%v_%v) can be removed", dataNode.Addr, disk.DiskPath)
-			auditlog.LogMasterOp("DiskDecommission", msg, nil)
+			// msg := fmt.Sprintf("disk(%v_%v) can be removed", dataNode.Addr, disk.DiskPath)
+			// auditlog.LogMasterOp("DiskDecommission", msg, nil)
 			continue
 		}
 		var ratio float64
@@ -4309,7 +4927,7 @@ func (c *Cluster) handleDataNodeBadDisk(dataNode *DataNode) {
 					dataNode.Addr, disk.DiskPath, GetDecommissionStatusMessage(status))
 				continue
 			}
-			err := c.migrateDisk(dataNode.Addr, disk.DiskPath, "", false, 0, true, AutoDecommission)
+			err := c.migrateDisk(dataNode, disk.DiskPath, "", false, 0, true, AutoDecommission)
 			if err != nil {
 				msg := fmt.Sprintf("disk(%v_%v)failed to mark decommission", dataNode.Addr, disk.DiskPath)
 				auditlog.LogMasterOp("DiskDecommission", msg, err)
@@ -4363,7 +4981,7 @@ func (c *Cluster) TryDecommissionDisk(disk *DecommissionDisk) {
 	)
 	defer func() {
 		if err != nil {
-			disk.DecommissionRetry++
+			disk.DecommissionTimes++
 		}
 		auditlog.LogMasterOp("DiskDecommission", rstMsg, err)
 		c.syncUpdateDecommissionDisk(disk)
@@ -4394,6 +5012,7 @@ func (c *Cluster) TryDecommissionDisk(disk *DecommissionDisk) {
 		log.LogInfof("action[TryDecommissionDisk] receive decommissionDisk node[%v] "+
 			"no any partitions on disk[%v],offline successfully",
 			node.Addr, disk.DiskPath)
+		rstMsg = fmt.Sprintf("no any partitions on disk[%v],offline successfully", disk.decommissionInfo())
 		disk.markDecommissionSuccess()
 		disk.DecommissionDpTotal = 0
 		if disk.DiskDisable {
@@ -4434,12 +5053,14 @@ func (c *Cluster) TryDecommissionDisk(disk *DecommissionDisk) {
 		return
 	}
 	var ignoreIDs []uint64
+	IgnoreDecommissionDps := make([]proto.IgnoreDecommissionDP, 0)
 	for _, dp := range badPartitions {
 		// dp with decommission success cannot be reset during master load metadata
 		if dp.IsDecommissionSuccess() && dp.DecommissionTerm == disk.DecommissionTerm {
 			log.LogInfof("action[TryDecommissionDisk] reset dp [%v] decommission status for disk %v:%v",
 				dp.PartitionID, disk.SrcAddr, disk.DiskPath)
 			dp.ResetDecommissionStatus()
+			dp.setRestoreReplicaStop()
 			c.syncUpdateDataPartition(dp)
 			disk.DecommissionDpTotal -= 1
 			ignoreIDs = append(ignoreIDs, dp.PartitionID)
@@ -4450,27 +5071,45 @@ func (c *Cluster) TryDecommissionDisk(disk *DecommissionDisk) {
 			if strings.Contains(err.Error(), proto.ErrDecommissionDiskErrDPFirst.Error()) {
 				c.syncUpdateDataPartition(dp)
 				// still decommission dp but not involved in the calculation of the decommission progress.
-				disk.DecommissionDpTotal -= 1
+				// disk.DecommissionDpTotal -= 1
 				ns.AddToDecommissionDataPartitionList(dp, c)
 				ignoreIDs = append(ignoreIDs, dp.PartitionID)
+				IgnoreDecommissionDps = append(IgnoreDecommissionDps, proto.IgnoreDecommissionDP{
+					PartitionID: dp.PartitionID,
+					ErrMsg:      proto.ErrDecommissionDiskErrDPFirst.Error(),
+				})
 				continue
 			} else if strings.Contains(err.Error(), proto.ErrPerformingDecommission.Error()) {
-				disk.DecommissionDpTotal -= 1
+				if dp.DecommissionSrcAddr != node.Addr {
+					// disk.DecommissionDpTotal -= 1
+					ignoreIDs = append(ignoreIDs, dp.PartitionID)
+					log.LogWarnf("action[TryDecommissionDisk] disk(%v) dp(%v) is decommissioning",
+						disk.decommissionInfo(), dp.PartitionID)
+					IgnoreDecommissionDps = append(IgnoreDecommissionDps, proto.IgnoreDecommissionDP{
+						PartitionID: dp.PartitionID,
+						ErrMsg:      proto.ErrPerformingDecommission.Error(),
+					})
+					continue
+				} else {
+					log.LogDebugf("action[TryDecommissionDisk] disk(%v) dp(%v) may be mark decommission before leader change",
+						disk.decommissionInfo(), dp.PartitionID)
+					ns.AddToDecommissionDataPartitionList(dp, c)
+				}
+			} else if strings.Contains(err.Error(), proto.ErrWaitForAutoAddReplica.Error()) {
 				ignoreIDs = append(ignoreIDs, dp.PartitionID)
-				log.LogWarnf("action[TryDecommissionDisk] disk(%v) dp(%v) is decommissioning",
+				log.LogWarnf("action[TryDecommissionDisk] disk(%v) dp(%v) is auto add replica",
 					disk.decommissionInfo(), dp.PartitionID)
+				IgnoreDecommissionDps = append(IgnoreDecommissionDps, proto.IgnoreDecommissionDP{
+					PartitionID: dp.PartitionID,
+					ErrMsg:      proto.ErrPerformingDecommission.Error(),
+				})
 				continue
 			} else {
 				// mark as failed and set decommission src, make sure it can be included in the calculation of progress
 				dp.DecommissionSrcAddr = node.Addr
 				dp.DecommissionSrcDiskPath = disk.DiskPath
-				if strings.Contains(err.Error(), proto.ErrAllReplicaUnavailable.Error()) {
-					dp.DecommissionNeedRollbackTimes = defaultDecommissionRollbackLimit
-					dp.DecommissionNeedRollback = false
-				} else {
-					dp.markRollbackFailed(false)
-					dp.DecommissionErrorMessage = err.Error()
-				}
+				dp.markRollbackFailed(false)
+				dp.DecommissionErrorMessage = err.Error()
 				dp.DecommissionTerm = disk.DecommissionTerm
 				log.LogWarnf("action[TryDecommissionDisk] disk(%v) set dp(%v) DecommissionTerm %v",
 					disk.decommissionInfo(), dp.PartitionID, disk.DecommissionTerm)
@@ -4482,9 +5121,7 @@ func (c *Cluster) TryDecommissionDisk(disk *DecommissionDisk) {
 		badPartitionIds = append(badPartitionIds, dp.PartitionID)
 	}
 	disk.SetDecommissionStatus(DecommissionRunning)
-	if disk.DiskDisable {
-		c.addAndSyncDecommissionedDisk(node, disk.DiskPath)
-	}
+	disk.IgnoreDecommissionDps = IgnoreDecommissionDps
 	rstMsg = fmt.Sprintf("disk[%v] badPartitionIds %v offline successfully, ignore (%v) %v",
 		disk.decommissionInfo(), badPartitionIds, len(ignoreIDs), ignoreIDs)
 	log.LogInfof("action[TryDecommissionDisk] %s", rstMsg)
@@ -4634,13 +5271,14 @@ func (c *Cluster) addLcNode(nodeAddr string) (id uint64, err error) {
 		ln.TaskManager = newAdminTaskManager(ln.Addr, c.Name)
 		log.LogInfof("action[addLcNode] already add nodeAddr: %v, id: %v", nodeAddr, ln.ID)
 	} else {
-		ln = newLcNode(nodeAddr, c.Name)
 		// allocate LcNode id
 		if id, err = c.idAlloc.allocateCommonID(); err != nil {
 			goto errHandler
 		}
+		// allocate id first and then set report time, avoid allocate id taking a long time and check heartbeat timeout
+		ln = newLcNode(nodeAddr, c.Name)
 		ln.ID = id
-		log.LogInfof("action[addLcNode] allocateCommonID: %v", id)
+		log.LogInfof("action[addLcNode] add nodeAddr: %v, allocateCommonID: %v", nodeAddr, id)
 	}
 
 	if err = c.syncAddLcNode(ln); err != nil {
@@ -4655,11 +5293,11 @@ func (c *Cluster) addLcNode(nodeAddr string) (id uint64, err error) {
 	c.snapshotMgr.lcNodeStatus.Lock()
 	c.snapshotMgr.lcNodeStatus.WorkingCount[nodeAddr] = 0
 	c.snapshotMgr.lcNodeStatus.Unlock()
-	log.LogInfof("action[addLcNode], clusterID[%v], lcNodeAddr: %v, id: %v, add idleNodes", c.Name, nodeAddr, ln.ID)
+	log.LogInfof("action[addLcNode], clusterID[%v], lcNodeAddr: %v, id: %v, success", c.Name, nodeAddr, ln.ID)
 	return ln.ID, nil
 
 errHandler:
-	err = fmt.Errorf("action[addLcNode],clusterID[%v] lcNodeAddr:%v err:%v ", c.Name, nodeAddr, err.Error())
+	err = fmt.Errorf("action[addLcNode], clusterID[%v], lcNodeAddr: %v, err: %v ", c.Name, nodeAddr, err.Error())
 	log.LogError(errors.Stack(err))
 	Warn(c.Name, err.Error())
 	return
@@ -4678,32 +5316,96 @@ type LcNodeInfoResponse struct {
 	SnapshotNodeStatus lcNodeStatus
 }
 
-func (c *Cluster) getAllLcNodeInfo() (rsp *LcNodeInfoResponse, err error) {
-	rsp = &LcNodeInfoResponse{}
+func (c *Cluster) adminLcNodeInfo(vol, rid, done string) (rsp *LcNodeInfoResponse, err error) {
+	if vol == "" && rid != "" {
+		err = errors.New("err: ruleid must be used with vol")
+		return
+	}
+	if done != "" && done != "true" && done != "false" {
+		err = errors.New("err: invalid done")
+		return
+	}
+
+	rsp = &LcNodeInfoResponse{
+		LcRuleTaskStatus: lcRuleTaskStatus{
+			ToBeScanned: make(map[string]*proto.RuleTask),
+			Results:     make(map[string]*proto.LcNodeRuleTaskResponse),
+		},
+	}
+	var b []byte
+
+	var tid string
+	if rid != "" {
+		tid = fmt.Sprintf("%s:%s", vol, rid)
+	}
+	if vol != "" || done != "" {
+		tmpLcRuleTaskStatus := lcRuleTaskStatus{}
+		c.lcMgr.lcRuleTaskStatus.RLock()
+		if b, err = json.Marshal(c.lcMgr.lcRuleTaskStatus); err != nil {
+			c.lcMgr.lcRuleTaskStatus.RUnlock()
+			return
+		}
+		c.lcMgr.lcRuleTaskStatus.RUnlock()
+		if err = json.Unmarshal(b, &tmpLcRuleTaskStatus); err != nil {
+			return
+		}
+
+		for k, v := range tmpLcRuleTaskStatus.Results {
+			if vol == "" || (vol == v.Volume && (tid == "" || tid == k)) {
+				if done == "true" && v.Done {
+					rsp.LcRuleTaskStatus.Results[k] = v
+					continue
+				}
+				if done == "false" && !v.Done {
+					rsp.LcRuleTaskStatus.Results[k] = v
+					continue
+				}
+				if done == "" {
+					rsp.LcRuleTaskStatus.Results[k] = v
+				}
+			}
+		}
+
+		for k, v := range tmpLcRuleTaskStatus.ToBeScanned {
+			if vol == "" || (vol == v.VolName && (tid == "" || tid == k)) {
+				if done == "" || done == "false" {
+					rsp.LcRuleTaskStatus.ToBeScanned[k] = v
+				}
+			}
+		}
+
+		rsp.LcRuleTaskStatus.StartTime = tmpLcRuleTaskStatus.StartTime
+		rsp.LcRuleTaskStatus.EndTime = tmpLcRuleTaskStatus.EndTime
+		return
+	}
+
 	c.lcNodes.Range(func(addr, value interface{}) bool {
 		rsp.RegisterInfos = append(rsp.RegisterInfos, &LcNodeStatInfo{
 			Addr: addr.(string),
 		})
 		return true
 	})
-	var b []byte
 
+	log.LogDebug("start get lcConfigurations")
 	c.lcMgr.RLock()
 	if b, err = json.Marshal(c.lcMgr.lcConfigurations); err != nil {
 		c.lcMgr.RUnlock()
 		return
 	}
 	c.lcMgr.RUnlock()
+	log.LogDebug("finish get lcConfigurations")
 	if err = json.Unmarshal(b, &rsp.LcConfigurations); err != nil {
 		return
 	}
 
+	log.LogDebug("start get lcRuleTaskStatus")
 	c.lcMgr.lcRuleTaskStatus.RLock()
 	if b, err = json.Marshal(c.lcMgr.lcRuleTaskStatus); err != nil {
 		c.lcMgr.lcRuleTaskStatus.RUnlock()
 		return
 	}
 	c.lcMgr.lcRuleTaskStatus.RUnlock()
+	log.LogDebug("finish get lcRuleTaskStatus")
 	if err = json.Unmarshal(b, &rsp.LcRuleTaskStatus); err != nil {
 		return
 	}
@@ -4772,25 +5474,29 @@ func (c *Cluster) scheduleToLcScan() {
 		for {
 			now := time.Now()
 			next := now.Add(time.Hour * 24)
-			next = time.Date(next.Year(), next.Month(), next.Day(), 1, 0, 0, 0, next.Location())
+			next = time.Date(next.Year(), next.Month(), next.Day(), c.cfg.StartLcScanTime, 0, 0, 0, next.Location())
+			log.LogInfof("scheduleToLcScan: will start at %v ", next)
 			t := time.NewTimer(next.Sub(now))
 			<-t.C
 			if c.partition != nil && c.partition.IsRaftLeader() {
 				c.startLcScan()
 			}
+			t.Stop()
 		}
 	}()
 }
 
 func (c *Cluster) startLcScan() {
-	defer func() {
-		if r := recover(); r != nil {
-			log.LogWarnf("startLcScan occurred panic,err[%v]", r)
-			WarnBySpecialKey(fmt.Sprintf("%v_%v_scheduling_job_panic", c.Name, ModuleName),
-				"startLcScan occurred panic")
+	for c.partition != nil && c.partition.IsRaftLeader() {
+		success, msg := c.lcMgr.startLcScan("", "")
+		if !success {
+			log.LogErrorf("%v, retry after 1min", msg)
+			time.Sleep(time.Minute)
+			continue
 		}
-	}()
-	c.lcMgr.startLcScan()
+		log.LogInfo(msg)
+		return
+	}
 }
 
 func (c *Cluster) scheduleToSnapshotDelVerScan() {
@@ -4850,12 +5556,14 @@ func (c *Cluster) SetBucketLifecycle(req *proto.LcConfiguration) error {
 			err = fmt.Errorf("action[SetS3BucketLifecycle],clusterID[%v] vol:%v err:%v ", c.Name, lcConf.VolName, err.Error())
 			log.LogError(errors.Stack(err))
 			Warn(c.Name, err.Error())
+			return err
 		}
 	} else {
 		if err := c.syncAddLcConf(lcConf); err != nil {
 			err = fmt.Errorf("action[SetS3BucketLifecycle],clusterID[%v] vol:%v err:%v ", c.Name, lcConf.VolName, err.Error())
 			log.LogError(errors.Stack(err))
 			Warn(c.Name, err.Error())
+			return err
 		}
 	}
 	_ = c.lcMgr.SetS3BucketLifecycle(lcConf)
@@ -4869,7 +5577,7 @@ func (c *Cluster) GetBucketLifecycle(VolName string) (lcConf *proto.LcConfigurat
 	return
 }
 
-func (c *Cluster) DelBucketLifecycle(VolName string) {
+func (c *Cluster) DelBucketLifecycle(VolName string) error {
 	lcConf := &proto.LcConfiguration{
 		VolName: VolName,
 	}
@@ -4877,9 +5585,11 @@ func (c *Cluster) DelBucketLifecycle(VolName string) {
 		err = fmt.Errorf("action[DelS3BucketLifecycle],clusterID[%v] vol:%v err:%v ", c.Name, VolName, err.Error())
 		log.LogError(errors.Stack(err))
 		Warn(c.Name, err.Error())
+		return err
 	}
 	c.lcMgr.DelS3BucketLifecycle(VolName)
 	log.LogInfof("action[DelS3BucketLifecycle],clusterID[%v] vol:%v", c.Name, VolName)
+	return nil
 }
 
 func (c *Cluster) addDecommissionDiskToNodeset(dd *DecommissionDisk) (err error) {
@@ -4909,13 +5619,50 @@ func (c *Cluster) addDecommissionDiskToNodeset(dd *DecommissionDisk) (err error)
 func (c *Cluster) AutoDecommissionDiskIsEnabled() bool {
 	c.AutoDecommissionDiskMux.Lock()
 	defer c.AutoDecommissionDiskMux.Unlock()
-	return c.EnableAutoDecommissionDisk
+	return c.EnableAutoDecommissionDisk.Load()
 }
 
 func (c *Cluster) SetAutoDecommissionDisk(flag bool) {
 	c.AutoDecommissionDiskMux.Lock()
 	defer c.AutoDecommissionDiskMux.Unlock()
-	c.EnableAutoDecommissionDisk = flag
+	c.EnableAutoDecommissionDisk.Store(flag)
+}
+
+func (c *Cluster) GetAutoDecommissionDiskInterval() (interval time.Duration) {
+	tmp := c.AutoDecommissionInterval.Load()
+	if tmp == 0 {
+		tmp = int64(defaultAutoDecommissionDiskInterval)
+	}
+	interval = time.Duration(tmp)
+	return
+}
+
+func (c *Cluster) setAutoDecommissionDiskInterval(interval time.Duration) (err error) {
+	old := c.AutoDecommissionInterval.Load()
+	c.AutoDecommissionInterval.Store(int64(interval))
+	if err = c.syncPutCluster(); err != nil {
+		c.AutoDecommissionInterval.Store(old)
+		return
+	}
+	return
+}
+
+func (c *Cluster) GetAutoDpMetaRepairParallelCnt() (cnt int) {
+	cnt = int(c.AutoDpMetaRepairParallelCnt.Load())
+	if cnt == 0 {
+		cnt = defaultAutoDpMetaRepairPallarelCnt
+	}
+	return
+}
+
+func (c *Cluster) setAutoDpMetaRepairParallelCnt(cnt int) (err error) {
+	old := c.AutoDpMetaRepairParallelCnt.Load()
+	c.AutoDpMetaRepairParallelCnt.Store(uint32(cnt))
+	if err = c.syncPutCluster(); err != nil {
+		c.AutoDpMetaRepairParallelCnt.Store(old)
+		return
+	}
+	return
 }
 
 func (c *Cluster) GetDecommissionDataPartitionRecoverTimeOut() time.Duration {
@@ -4923,6 +5670,13 @@ func (c *Cluster) GetDecommissionDataPartitionRecoverTimeOut() time.Duration {
 		return time.Hour * 2
 	}
 	return time.Duration(c.cfg.DpRepairTimeOut)
+}
+
+func (c *Cluster) GetDecommissionDataPartitionBackupTimeOut() time.Duration {
+	if c.cfg.DpBackupTimeOut == 0 {
+		return proto.DefaultDataPartitionBackupTimeOut
+	}
+	return time.Duration(c.cfg.DpBackupTimeOut)
 }
 
 func (c *Cluster) GetDecommissionDiskLimit() (limit uint32) {
@@ -4933,8 +5687,114 @@ func (c *Cluster) GetDecommissionDiskLimit() (limit uint32) {
 	return
 }
 
-func (c *Cluster) setDecommissionDiskLimit(limit uint32) {
+func (c *Cluster) setDecommissionDiskLimit(limit uint32) (err error) {
+	oldVal := c.GetDecommissionDiskLimit()
 	atomic.StoreUint32(&c.DecommissionDiskLimit, limit)
+	if err = c.syncPutCluster(); err != nil {
+		log.LogErrorf("[setDataPartitionTimeout] failed to set DecommissionDiskLimit , err(%v)", err)
+		atomic.StoreUint32(&c.DecommissionDiskLimit, oldVal)
+		err = proto.ErrPersistenceByRaft
+		return
+	}
+	return
+}
+
+func (c *Cluster) setDecommissionDpLimit(limit uint64) (err error) {
+	zones := c.t.getAllZones()
+	for _, zone := range zones {
+		err = zone.updateDecommissionLimit(int32(limit), c)
+		if err != nil {
+			return
+		}
+	}
+	atomic.StoreUint64(&c.DecommissionLimit, limit)
+	if err = c.syncPutCluster(); err != nil {
+		log.LogErrorf("[setDataPartitionTimeout] failed to set DecommissionDiskLimit , err(%v)", err)
+		err = proto.ErrPersistenceByRaft
+		return
+	}
+	return
+}
+
+func (c *Cluster) setClusterMediaType(mediaType uint32) (err error) {
+	log.LogWarnf("setClusterMediaType: try to update mediaType %d", mediaType)
+
+	if !proto.IsValidMediaType(mediaType) {
+		return fmt.Errorf("setClusterMediaType: mediaType is not vailid, type %d", mediaType)
+	}
+
+	if mediaType != c.cfg.cfgDataMediaType {
+		return fmt.Errorf("setClusterMediaType: mediaType should equal to cfg media type, req %d, cfg %d",
+			mediaType, c.cfg.cfgDataMediaType)
+	}
+
+	oldType := c.legacyDataMediaType
+	if oldType == mediaType {
+		log.LogWarnf("setClusterMediaType: mediaType is already update.")
+		return nil
+	}
+
+	if oldType != proto.MediaType_Unspecified {
+		return fmt.Errorf("setClusterMediaType: cant't update mediaType old %d, new %d", oldType, mediaType)
+	}
+
+	c.legacyDataMediaType = mediaType
+	if err = c.syncPutCluster(); err != nil {
+		c.legacyDataMediaType = oldType
+		log.LogErrorf("[setClusterMediaType] failed to set cluster err(%v)", err)
+		err = proto.ErrPersistenceByRaft
+		return
+	}
+
+	// update datanodes
+	c.dataNodes.Range(func(key, value interface{}) bool {
+		node := value.(*DataNode)
+		if !proto.IsValidMediaType(node.MediaType) {
+			node.MediaType = mediaType
+		}
+		return true
+	})
+
+	// update vols
+	c.volMutex.RLock()
+	for _, v := range c.vols {
+		c.setStorageClassForLegacyVol(v)
+	}
+	c.volMutex.RUnlock()
+
+	// update zones
+	c.t.zoneLock.RLock()
+	for _, z := range c.t.zones {
+		if !proto.IsValidMediaType(z.dataMediaType) {
+			z.SetDataMediaType(mediaType)
+		}
+	}
+	c.t.zoneLock.RUnlock()
+
+	// update dps
+	c.rangeAllParitions(func(d *DataPartition) bool {
+		if !proto.IsValidMediaType(d.MediaType) {
+			d.MediaType = mediaType
+		}
+		return true
+	})
+
+	c.dataMediaTypeVaild = true
+	log.LogWarnf("setClusterMediaType: update mediaType success, old %d, new %d", oldType, mediaType)
+	return
+}
+
+func (c *Cluster) rangeAllParitions(f func(d *DataPartition) bool) {
+	safeVols := c.allVols()
+	for _, vol := range safeVols {
+		vol.dataPartitions.RLock()
+		for _, dp := range vol.dataPartitions.partitions {
+			if !f(dp) {
+				return
+			}
+		}
+		vol.dataPartitions.RUnlock()
+	}
 }
 
 func (c *Cluster) markDecommissionDataPartition(dp *DataPartition, src *DataNode, raftForce bool, migrateType uint32) (err error) {
@@ -4957,13 +5817,8 @@ func (c *Cluster) markDecommissionDataPartition(dp *DataPartition, src *DataNode
 
 	if err = dp.MarkDecommissionStatus(addr, "", replica.DiskPath, raftForce, uint64(time.Now().Unix()), migrateType, c, ns); err != nil {
 		if !strings.Contains(err.Error(), proto.ErrDecommissionDiskErrDPFirst.Error()) {
-			if strings.Contains(err.Error(), proto.ErrAllReplicaUnavailable.Error()) {
-				dp.DecommissionNeedRollbackTimes = defaultDecommissionRollbackLimit
-				dp.DecommissionNeedRollback = false
-			} else {
-				dp.markRollbackFailed(false)
-				dp.DecommissionErrorMessage = err.Error()
-			}
+			dp.markRollbackFailed(false)
+			dp.DecommissionErrorMessage = err.Error()
 			c.syncUpdateDataPartition(dp)
 			return
 		}
@@ -5041,4 +5896,242 @@ func (c *Cluster) syncRecoverBackupDataPartitionReplica(host, disk string, dp *D
 		return
 	}
 	return
+}
+
+func (c *Cluster) scheduleToCheckDataReplicaMeta() {
+	c.runTask(&cTask{
+		tickTime: time.Second * time.Duration(c.cfg.IntervalToCheckDataPartition),
+		name:     "scheduleToCheckDataReplicaMeta",
+		function: func() (fin bool) {
+			if c.partition != nil && c.partition.IsRaftLeader() {
+				c.checkDataReplicaMeta()
+			}
+			return
+		},
+	})
+}
+
+func (c *Cluster) checkDataReplicaMeta() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.LogWarnf("checkDataReplicaMeta occurred panic,err[%v]", r)
+			WarnBySpecialKey(fmt.Sprintf("%v_%v_scheduling_job_panic", c.Name, ModuleName),
+				"checkDataReplicaMeta occurred panic")
+		}
+	}()
+
+	vols := c.allVols()
+	for _, vol := range vols {
+		vol.checkDataReplicaMeta(c)
+	}
+}
+
+func (c *Cluster) getAllDataPartitionWithDiskPathByDataNode(addr string) (infos []proto.DataPartitionDiskInfo) {
+	infos = make([]proto.DataPartitionDiskInfo, 0)
+	safeVols := c.allVols()
+	for _, vol := range safeVols {
+		for _, dp := range vol.dataPartitions.partitions {
+			for _, replica := range dp.Replicas {
+				if replica.Addr == addr {
+					infos = append(infos, proto.DataPartitionDiskInfo{PartitionId: dp.PartitionID, Disk: replica.DiskPath})
+					break
+				}
+			}
+		}
+	}
+	return
+}
+
+func (c *Cluster) processDataPartitionDecommission(id uint64) bool {
+	zones := c.t.getAllZones()
+	for _, zone := range zones {
+		nodeSets := zone.getAllNodeSet()
+		for _, ns := range nodeSets {
+			if ns.processDataPartitionDecommission(id) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (c *Cluster) getDpOpLog(addr string, dpId string) proto.OpLogView {
+	var opv proto.OpLogView
+	opCounts := make(map[string]int32)
+	if addr != "" {
+		dataNode, err := c.dataNode(addr)
+		if err != nil {
+			log.LogErrorf("get dataNode failed, err(%v)", err.Error())
+			return opv
+		}
+		for _, opLog := range dataNode.DpOpLogs {
+			parts := strings.Split(opLog.Name, "_")
+			if len(parts) < 3 {
+				log.LogErrorf("Invalid opLog name format: %s", opLog.Name)
+				continue
+			}
+			opv.DpOpLogs = append(opv.DpOpLogs, proto.OpLog{
+				Name:  parts[0] + "_" + parts[1],
+				Op:    parts[2],
+				Count: opLog.Count,
+			})
+		}
+		return opv
+	}
+	if dpId != "" {
+		id, err := strconv.ParseUint(dpId, 10, 64)
+		if err != nil {
+			log.LogErrorf("failed to transform dpId, err(%v)", err)
+			return opv
+		}
+		dp, err := c.getDataPartitionByID(id)
+		if err != nil {
+			log.LogErrorf("failed to get dp(%v), err(%v)", dpId, err)
+			return opv
+		}
+		for _, host := range dp.Hosts {
+			dataNode, err := c.dataNode(host)
+			if err != nil {
+				log.LogErrorf("get dataNode failed, err(%v)", err.Error())
+				return opv
+			}
+			for _, opLog := range dataNode.DpOpLogs {
+				parts := strings.Split(opLog.Name, "_")
+				if len(parts) < 3 {
+					log.LogErrorf("Invalid opLog name format: %s", opLog.Name)
+					continue
+				}
+				if parts[1] == dpId {
+					opv.DpOpLogs = append(opv.DpOpLogs, proto.OpLog{
+						Name:  fmt.Sprintf("%s [%s]", parts[0]+"_"+parts[1], dataNode.Addr),
+						Op:    parts[2],
+						Count: opLog.Count,
+					})
+				}
+			}
+		}
+		return opv
+	}
+	c.dataNodes.Range(func(key, node interface{}) bool {
+		dataNode := node.(*DataNode)
+		for _, opLog := range dataNode.DpOpLogs {
+			if curCount, exists := opCounts[opLog.Name]; !exists || curCount < opLog.Count {
+				opCounts[opLog.Name] = opLog.Count
+			}
+		}
+		return true
+	})
+	for key, count := range opCounts {
+		parts := strings.Split(key, "_")
+		if len(parts) < 3 {
+			log.LogErrorf("Invalid opLog name format: %s", key)
+			continue
+		}
+		opv.DpOpLogs = append(opv.DpOpLogs, proto.OpLog{
+			Name:  parts[0] + "_" + parts[1],
+			Op:    parts[2],
+			Count: count,
+		})
+	}
+	return opv
+}
+
+func (c *Cluster) getDiskOpLog(addr string, diskName string) proto.OpLogView {
+	var opv proto.OpLogView
+	if addr != "" && diskName != "" {
+		dataNode, err := c.dataNode(addr)
+		if err != nil {
+			log.LogErrorf("get dataNode failed, err(%v)", err.Error())
+			return opv
+		}
+		for _, opLog := range dataNode.DpOpLogs {
+			parts := strings.Split(opLog.Name, "_")
+			if len(parts) < 3 {
+				log.LogErrorf("Invalid opLog name format: %s", opLog.Name)
+				continue
+			}
+			dpId, err := strconv.ParseUint(parts[1], 10, 64)
+			if err != nil {
+				log.LogErrorf("failed to transform dpId, err(%v)", err)
+				return opv
+			}
+			dp, err := c.getDataPartitionByID(dpId)
+			if err != nil {
+				log.LogErrorf("failed to get dp(%v), err(%v)", dpId, err)
+				return opv
+			}
+			for _, replica := range dp.Replicas {
+				if replica.Addr != addr || replica.DiskPath != diskName {
+					continue
+				}
+				opv.DiskOpLogs = append(opv.DiskOpLogs, proto.OpLog{
+					Name:  opLog.Name,
+					Op:    opLog.Op,
+					Count: opLog.Count,
+				})
+			}
+		}
+		return opv
+	}
+	if addr != "" {
+		dataNode, err := c.dataNode(addr)
+		if err != nil {
+			log.LogErrorf("get dataNode failed, err(%v)", err.Error())
+			return opv
+		}
+		opv.DiskOpLogs = append(opv.DiskOpLogs, dataNode.DiskOpLogs...)
+		return opv
+	}
+	c.dataNodes.Range(func(key, node interface{}) bool {
+		dataNode := node.(*DataNode)
+		for _, opLog := range dataNode.DiskOpLogs {
+			opv.DiskOpLogs = append(opv.DiskOpLogs, proto.OpLog{
+				Name:  fmt.Sprintf("%s [%s]", opLog.Name, dataNode.Addr),
+				Op:    opLog.Op,
+				Count: opLog.Count,
+			})
+		}
+		return true
+	})
+	return opv
+}
+
+func (c *Cluster) getClusterOpLog() proto.OpLogView {
+	var opv proto.OpLogView
+	c.dataNodes.Range(func(addr, node interface{}) bool {
+		dataNode := node.(*DataNode)
+		dataNodeOpLogs := dataNode.getDataNodeOpLog()
+		opv.ClusterOpLogs = append(opv.ClusterOpLogs, dataNodeOpLogs...)
+		return true
+	})
+	return opv
+}
+
+func (c *Cluster) getVolOpLog(volName string) proto.OpLogView {
+	var opv proto.OpLogView
+	opCounts := make(map[string]int32)
+	c.dataNodes.Range(func(addr, node interface{}) bool {
+		dataNode := node.(*DataNode)
+		volOpLogs := dataNode.getVolOpLog(c, volName)
+		for _, opLog := range volOpLogs {
+			newName := opLog.Name + "_" + opLog.Op
+			if curCount, exists := opCounts[newName]; !exists || curCount < opLog.Count {
+				opCounts[newName] = opLog.Count
+			}
+		}
+		return true
+	})
+	for key, count := range opCounts {
+		parts := strings.Split(key, "_")
+		if len(parts) < 3 {
+			log.LogErrorf("Invalid opLog name format: %s", key)
+			continue
+		}
+		opv.VolOpLogs = append(opv.VolOpLogs, proto.OpLog{
+			Name:  parts[1],
+			Op:    parts[2],
+			Count: count,
+		})
+	}
+	return opv
 }

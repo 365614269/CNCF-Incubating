@@ -11,16 +11,25 @@ import (
 )
 
 const (
-	HeaderBufferPoolSize = 8192
-	InvalidLimit         = 0
+	InvalidLimit       = 0
+	MinBufferChanSize  = 16
+	DefaultBufChanSize = 8192
 )
 
-var ReadBufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, 32*1024)
-		return b
-	},
-}
+var (
+	ClodVolWriteBufPool = sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, 32*1024)
+			return b
+		},
+	}
+	ClodVolReaderBufPool = sync.Pool{
+		New: func() interface{} {
+			b := make([]byte, 1024*1024)
+			return b
+		},
+	}
+)
 
 const (
 	BufferTypeHeader    = 0
@@ -30,50 +39,52 @@ const (
 )
 
 var (
-	tinyBuffersTotalLimit    int64 = 4096
-	NormalBuffersTotalLimit  int64
-	HeadBuffersTotalLimit    int64
-	HeadVerBuffersTotalLimit int64
-	RepairBuffersTotalLimit  int64
+	HeaderBufferPoolSize          int   = 8192
+	TinyBuffersTotalLimit         int64 = 4096
+	NormalBuffersTotalLimit       int64
+	HeadBuffersTotalLimit         int64
+	HeadVerBuffersTotalLimit      int64
+	HeadProtoVerBuffersTotalLimit int64
+	RepairBuffersTotalLimit       int64
 )
 
 var (
-	tinyBuffersCount    int64
-	normalBuffersCount  int64
-	headBuffersCount    int64
-	headVerBuffersCount int64
-	repairBuffersCount  int64
+	tinyBuffersCount         int64
+	normalBuffersCount       int64
+	headBuffersCount         int64
+	headVerBuffersCount      int64
+	headProtoVerBuffersCount int64
+	repairBuffersCount       int64
 )
 
 var (
-	normalBufAllocId  uint64
-	headBufAllocId    uint64
-	headBufVerAllocId uint64
-	repairBufAllocId  uint64
+	normalBufAllocId       uint64
+	headBufAllocId         uint64
+	headBufVerAllocId      uint64
+	headBufProtoVerAllocId uint64
+	repairBufAllocId       uint64
 )
 
 var (
-	normalBufFreecId uint64
-	headBufFreeId    uint64
-	headBufVerFreeId uint64
-	repairBufFreeId  uint64
+	normalBufFreecId      uint64
+	headBufFreeId         uint64
+	headBufVerFreeId      uint64
+	headBufProtoVerFreeId uint64
+	repairBufFreeId       uint64
 )
 
 var (
-	buffersRateLimit        = rate.NewLimiter(rate.Limit(16), 16)
-	normalBuffersRateLimit  = rate.NewLimiter(rate.Limit(16), 16)
-	headBuffersRateLimit    = rate.NewLimiter(rate.Limit(16), 16)
-	headVerBuffersRateLimit = rate.NewLimiter(rate.Limit(16), 16)
-	repairBuffersRateLimit  = rate.NewLimiter(rate.Limit(16), 16)
+	buffersRateLimit             = rate.NewLimiter(rate.Limit(16), 16)
+	normalBuffersRateLimit       = rate.NewLimiter(rate.Limit(16), 16)
+	headBuffersRateLimit         = rate.NewLimiter(rate.Limit(16), 16)
+	headVerBuffersRateLimit      = rate.NewLimiter(rate.Limit(16), 16)
+	headProtoVerBuffersRateLimit = rate.NewLimiter(rate.Limit(16), 16)
+	repairBuffersRateLimit       = rate.NewLimiter(rate.Limit(16), 16)
 )
 
 func NewTinyBufferPool() *sync.Pool {
 	return &sync.Pool{
 		New: func() interface{} {
-			if atomic.LoadInt64(&tinyBuffersCount) >= tinyBuffersTotalLimit {
-				ctx := context.Background()
-				buffersRateLimit.Wait(ctx)
-			}
 			return make([]byte, util.DefaultTinySizeLimit)
 		},
 	}
@@ -87,6 +98,19 @@ func NewHeadVerBufferPool() *sync.Pool {
 				headVerBuffersRateLimit.Wait(ctx)
 			}
 			return make([]byte, util.PacketHeaderVerSize)
+		},
+	}
+}
+
+func NewHeadProtoVerBufferPool() *sync.Pool {
+	return &sync.Pool{
+		New: func() interface{} {
+			if HeadProtoVerBuffersTotalLimit != InvalidLimit &&
+				atomic.LoadInt64(&headProtoVerBuffersCount) >= HeadProtoVerBuffersTotalLimit {
+				ctx := context.Background()
+				headProtoVerBuffersRateLimit.Wait(ctx)
+			}
+			return make([]byte, util.PacketHeaderProtoVerSize)
 		},
 	}
 }
@@ -106,10 +130,6 @@ func NewHeadBufferPool() *sync.Pool {
 func NewNormalBufferPool() *sync.Pool {
 	return &sync.Pool{
 		New: func() interface{} {
-			if NormalBuffersTotalLimit != InvalidLimit && atomic.LoadInt64(&normalBuffersCount) >= NormalBuffersTotalLimit {
-				ctx := context.Background()
-				normalBuffersRateLimit.Wait(ctx)
-			}
 			return make([]byte, util.BlockSize)
 		},
 	}
@@ -118,10 +138,6 @@ func NewNormalBufferPool() *sync.Pool {
 func NewRepiarBufferPool() *sync.Pool {
 	return &sync.Pool{
 		New: func() interface{} {
-			if RepairBuffersTotalLimit != InvalidLimit && atomic.LoadInt64(&repairBuffersCount) >= RepairBuffersTotalLimit {
-				ctx := context.Background()
-				repairBuffersRateLimit.Wait(ctx)
-			}
 			return make([]byte, util.RepairReadBlockSize)
 		},
 	}
@@ -129,18 +145,20 @@ func NewRepiarBufferPool() *sync.Pool {
 
 // BufferPool defines the struct of a buffered pool with 4 objects.
 type BufferPool struct {
-	headPools    []chan []byte
-	headVerPools []chan []byte
-	normalPools  []chan []byte
-	repairPools  []chan []byte
-	tinyPool     *sync.Pool
-	headPool     *sync.Pool
-	normalPool   *sync.Pool
-	headVerPool  *sync.Pool
-	repairPool   *sync.Pool
+	headPools         []chan []byte
+	headVerPools      []chan []byte
+	headProtoVerPools []chan []byte
+	normalPools       []chan []byte
+	repairPools       []chan []byte
+	tinyPool          *sync.Pool
+	headPool          *sync.Pool
+	normalPool        *sync.Pool
+	headVerPool       *sync.Pool
+	headProtoVerPool  *sync.Pool
+	repairPool        *sync.Pool
 }
 
-var slotCnt = uint64(16)
+const slotCnt = 16
 
 // NewBufferPool returns a new buffered pool.
 func NewBufferPool() (bufferP *BufferPool) {
@@ -148,16 +166,19 @@ func NewBufferPool() (bufferP *BufferPool) {
 	bufferP.headPools = make([]chan []byte, slotCnt)
 	bufferP.normalPools = make([]chan []byte, slotCnt)
 	bufferP.headVerPools = make([]chan []byte, slotCnt)
+	bufferP.headProtoVerPools = make([]chan []byte, slotCnt)
 	bufferP.repairPools = make([]chan []byte, slotCnt)
 	for i := 0; i < int(slotCnt); i++ {
 		bufferP.headPools[i] = make(chan []byte, HeaderBufferPoolSize/slotCnt)
 		bufferP.headVerPools[i] = make(chan []byte, HeaderBufferPoolSize/slotCnt)
+		bufferP.headProtoVerPools[i] = make(chan []byte, HeaderBufferPoolSize/slotCnt)
 		bufferP.normalPools[i] = make(chan []byte, HeaderBufferPoolSize/slotCnt)
 		bufferP.repairPools[i] = make(chan []byte, HeaderBufferPoolSize/slotCnt)
 	}
 	bufferP.tinyPool = NewTinyBufferPool()
 	bufferP.headPool = NewHeadBufferPool()
 	bufferP.headVerPool = NewHeadVerBufferPool()
+	bufferP.headProtoVerPool = NewHeadProtoVerBufferPool()
 	bufferP.normalPool = NewNormalBufferPool()
 	bufferP.repairPool = NewRepiarBufferPool()
 	return bufferP
@@ -181,7 +202,20 @@ func (bufferP *BufferPool) getHeadVer(id uint64) (data []byte) {
 	}
 }
 
+func (bufferP *BufferPool) getHeadProtoVer(id uint64) (data []byte) {
+	select {
+	case data = <-bufferP.headProtoVerPools[id%slotCnt]:
+		return
+	default:
+		return bufferP.headProtoVerPool.Get().([]byte)
+	}
+}
+
 func (bufferP *BufferPool) getNormal(id uint64) (data []byte) {
+	if NormalBuffersTotalLimit != InvalidLimit && atomic.LoadInt64(&normalBuffersCount) >= NormalBuffersTotalLimit {
+		ctx := context.Background()
+		normalBuffersRateLimit.Wait(ctx)
+	}
 	select {
 	case data = <-bufferP.normalPools[id%slotCnt]:
 		return
@@ -191,12 +225,26 @@ func (bufferP *BufferPool) getNormal(id uint64) (data []byte) {
 }
 
 func (bufferP *BufferPool) getRepair(id uint64) (data []byte) {
+	if RepairBuffersTotalLimit != InvalidLimit && atomic.LoadInt64(&repairBuffersCount) >= RepairBuffersTotalLimit {
+		ctx := context.Background()
+		repairBuffersRateLimit.Wait(ctx)
+	}
+
 	select {
 	case data = <-bufferP.repairPools[id%slotCnt]:
 		return
 	default:
 		return bufferP.repairPool.Get().([]byte)
 	}
+}
+
+func (bufferP *BufferPool) getTiny() (data []byte) {
+	if atomic.LoadInt64(&tinyBuffersCount) >= TinyBuffersTotalLimit {
+		ctx := context.Background()
+		buffersRateLimit.Wait(ctx)
+	}
+
+	return bufferP.tinyPool.Get().([]byte)
 }
 
 // Get returns the data based on the given size. Different size corresponds to different object in the pool.
@@ -209,6 +257,10 @@ func (bufferP *BufferPool) Get(size int) (data []byte, err error) {
 		atomic.AddInt64(&headVerBuffersCount, 1)
 		id := atomic.AddUint64(&headBufVerAllocId, 1)
 		return bufferP.getHeadVer(id), nil
+	} else if size == util.PacketHeaderProtoVerSize {
+		atomic.AddInt64(&headProtoVerBuffersCount, 1)
+		id := atomic.AddUint64(&headBufProtoVerAllocId, 1)
+		return bufferP.getHeadProtoVer(id), nil
 	} else if size == util.BlockSize {
 		atomic.AddInt64(&normalBuffersCount, 1)
 		id := atomic.AddUint64(&normalBufAllocId, 1)
@@ -219,7 +271,7 @@ func (bufferP *BufferPool) Get(size int) (data []byte, err error) {
 		return bufferP.getRepair(id), nil
 	} else if size == util.DefaultTinySizeLimit {
 		atomic.AddInt64(&tinyBuffersCount, 1)
-		return bufferP.tinyPool.Get().([]byte), nil
+		return bufferP.getTiny(), nil
 	}
 	return nil, fmt.Errorf("can only support 45 or 65536 bytes")
 }
@@ -239,6 +291,15 @@ func (bufferP *BufferPool) putHeadVer(index int, data []byte) {
 		return
 	default:
 		bufferP.headVerPool.Put(data) // nolint: staticcheck
+	}
+}
+
+func (bufferP *BufferPool) putHeadProtoVer(index int, data []byte) {
+	select {
+	case bufferP.headProtoVerPools[index] <- data:
+		return
+	default:
+		bufferP.headProtoVerPool.Put(data) // nolint: staticcheck
 	}
 }
 
@@ -274,6 +335,10 @@ func (bufferP *BufferPool) Put(data []byte) {
 		atomic.AddInt64(&headVerBuffersCount, -1)
 		id := atomic.AddUint64(&headBufVerFreeId, 1)
 		bufferP.putHeadVer(int(id%slotCnt), data)
+	} else if size == util.PacketHeaderProtoVerSize {
+		atomic.AddInt64(&headProtoVerBuffersCount, -1)
+		id := atomic.AddUint64(&headBufProtoVerFreeId, 1)
+		bufferP.putHeadProtoVer(int(id%slotCnt), data)
 	} else if size == util.BlockSize {
 		atomic.AddInt64(&normalBuffersCount, -1)
 		id := atomic.AddUint64(&normalBufFreecId, 1)

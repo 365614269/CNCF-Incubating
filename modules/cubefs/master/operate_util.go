@@ -269,3 +269,17 @@ func newRecoverBackupDataPartitionReplicaRequest(ID uint64, disk string) (req *p
 	}
 	return
 }
+
+func newRecoverBadDiskRequest(disk string) (req *proto.RecoverBadDiskRequest) {
+	req = &proto.RecoverBadDiskRequest{
+		DiskPath: disk,
+	}
+	return
+}
+
+func newDeleteBackupDirectoriesRequest(disk string) (req *proto.DeleteBackupDirectoriesRequest) {
+	req = &proto.DeleteBackupDirectoriesRequest{
+		DiskPath: disk,
+	}
+	return
+}

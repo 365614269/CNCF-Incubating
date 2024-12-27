@@ -15,6 +15,7 @@
 package proto
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -80,20 +81,28 @@ func IsAncestor(parent, child string) bool {
 
 // InodeInfo defines the inode struct.
 type InodeInfo struct {
-	Inode      uint64                    `json:"ino"`
-	Mode       uint32                    `json:"mode"`
-	Nlink      uint32                    `json:"nlink"`
-	Size       uint64                    `json:"sz"`
-	Uid        uint32                    `json:"uid"`
-	Gid        uint32                    `json:"gid"`
-	Generation uint64                    `json:"gen"`
-	ModifyTime time.Time                 `json:"mt"`
-	CreateTime time.Time                 `json:"ct"`
-	AccessTime time.Time                 `json:"at"`
-	Target     []byte                    `json:"tgt"`
-	QuotaInfos map[uint32]*MetaQuotaInfo `json:"qifs"`
-	VerSeq     uint64                    `json:"seq"`
-	expiration int64
+	Inode             uint64                    `json:"ino"`
+	Mode              uint32                    `json:"mode"`
+	Nlink             uint32                    `json:"nlink"`
+	Size              uint64                    `json:"sz"`
+	Uid               uint32                    `json:"uid"`
+	Gid               uint32                    `json:"gid"`
+	Generation        uint64                    `json:"gen"`
+	ModifyTime        time.Time                 `json:"mt"`
+	CreateTime        time.Time                 `json:"ct"`
+	AccessTime        time.Time                 `json:"at"`
+	Target            []byte                    `json:"tgt"`
+	QuotaInfos        map[uint32]*MetaQuotaInfo `json:"qifs"`
+	VerSeq            uint64                    `json:"seq"`
+	expiration        int64
+	PersistAccessTime time.Time `json:"pat"`
+
+	StorageClass                  uint32    `json:"storageClass"`
+	LeaseExpireTime               uint64    `json:"leaseExpireTime"`
+	ForbiddenLc                   bool      `json:"forbiddenLc"`
+	MigrationStorageClass         uint32    `json:"migrationStorageClass"`
+	HasMigrationEk                bool      `json:"hasMigrationEk"`
+	MigrationExtentKeyExpiredTime time.Time `json:"mekExpiredTime"`
 }
 
 type SimpleExtInfo struct {
@@ -139,8 +148,8 @@ func (info *InodeInfo) SetExpiration(e int64) {
 
 // String returns the string format of the inode.
 func (info *InodeInfo) String() string {
-	return fmt.Sprintf("Inode(%v) Mode(%v) OsMode(%v) Nlink(%v) Size(%v) Uid(%v) Gid(%v) Gen(%v) QuotaIds(%v)",
-		info.Inode, info.Mode, OsMode(info.Mode), info.Nlink, info.Size, info.Uid, info.Gid, info.Generation, info.QuotaInfos)
+	return fmt.Sprintf("Inode(%v) Mode(%v) OsMode(%v) Nlink(%v) Size(%v) Uid(%v) Gid(%v) Gen(%v) QuotaIds(%v) StorageClass(%v), Atime(%v), Mtime(%v), Ctime(%v)",
+		info.Inode, info.Mode, OsMode(info.Mode), info.Nlink, info.Size, info.Uid, info.Gid, info.Generation, info.QuotaInfos, info.StorageClass, info.AccessTime, info.ModifyTime, info.CreateTime)
 }
 
 type XAttrInfo struct {
@@ -206,6 +215,7 @@ type QuotaCreateInodeRequest struct {
 	Target      []byte   `json:"tgt"`
 	QuotaIds    []uint32 `json:"qids"`
 	RequestExtend
+	StorageType uint32 `json:"storageType"`
 }
 
 type CreateInodeRequest struct {
@@ -216,6 +226,7 @@ type CreateInodeRequest struct {
 	Gid         uint32 `json:"gid"`
 	Target      []byte `json:"tgt"`
 	RequestExtend
+	StorageType uint32 `json:"storageType"`
 }
 
 // CreateInodeResponse defines the response to the request of creating an inode.
@@ -249,6 +260,7 @@ type TxCreateInodeRequest struct {
 	Target      []byte           `json:"tgt"`
 	QuotaIds    []uint32         `json:"qids"`
 	TxInfo      *TransactionInfo `json:"tx"`
+	StorageType uint32           `json:"storageType"`
 	RequestExtend
 }
 
@@ -572,6 +584,7 @@ type InodeGetRequest struct {
 	Inode       uint64 `json:"ino"`
 	VerSeq      uint64 `json:"seq"`
 	VerAll      bool   `json:"verAll"`
+	InnerReq    bool   `json:"inner"`
 }
 
 type LayerInfo struct {
@@ -592,6 +605,7 @@ type BatchInodeGetRequest struct {
 	PartitionID uint64   `json:"pid"`
 	Inodes      []uint64 `json:"inos"`
 	VerSeq      uint64   `json:"seq"`
+	InnerReq    bool     `json:"inner"`
 }
 
 // BatchInodeGetResponse defines the response to the request of getting the inode in batch.
@@ -669,6 +683,9 @@ type AppendExtentKeyWithCheckRequest struct {
 	DiscardExtents []ExtentKey `json:"dek"`
 	VerSeq         uint64      `json:"seq"`
 	IsSplit        bool
+	IsCache        bool
+	StorageClass   uint32 `json:"storageClass"`
+	IsMigration    bool
 }
 
 // AppendObjExtentKeyRequest defines the request to append an obj extent key.
@@ -681,11 +698,15 @@ type AppendObjExtentKeysRequest struct {
 
 // GetExtentsRequest defines the reques to get extents.
 type GetExtentsRequest struct {
-	VolName     string `json:"vol"`
-	PartitionID uint64 `json:"pid"`
-	Inode       uint64 `json:"ino"`
-	VerSeq      uint64 `json:"seq"`
-	VerAll      bool
+	VolName      string `json:"vol"`
+	PartitionID  uint64 `json:"pid"`
+	Inode        uint64 `json:"ino"`
+	VerSeq       uint64 `json:"seq"`
+	VerAll       bool   `json:"verAll"`
+	IsCache      bool   `json:"isCache"`
+	OpenForWrite bool   `json:"forWrite"`
+	IsMigration  bool   `json:"isMigration"`
+	InnerReq     bool   `json:"inner"`
 }
 
 // GetObjExtentsResponse defines the response to the request of getting obj extents.
@@ -698,11 +719,12 @@ type GetObjExtentsResponse struct {
 
 // GetExtentsResponse defines the response to the request of getting extents.
 type GetExtentsResponse struct {
-	Generation uint64      `json:"gen"`
-	Size       uint64      `json:"sz"`
-	Extents    []ExtentKey `json:"eks"`
-	LayerInfo  []LayerInfo `json:"layer"`
-	Status     int
+	Generation      uint64      `json:"gen"`
+	Size            uint64      `json:"sz"`
+	Extents         []ExtentKey `json:"eks"`
+	LayerInfo       []LayerInfo `json:"layer"`
+	Status          int
+	LeaseExpireTime uint64 `json:"leaseExpireTime"`
 }
 
 // TruncateRequest defines the request to truncate.
@@ -774,10 +796,11 @@ type DeleteInodeBatchRequest struct {
 
 // AppendExtentKeysRequest defines the request to append an extent key.
 type AppendExtentKeysRequest struct {
-	VolName     string      `json:"vol"`
-	PartitionId uint64      `json:"pid"`
-	Inode       uint64      `json:"ino"`
-	Extents     []ExtentKey `json:"eks"`
+	VolName      string      `json:"vol"`
+	PartitionId  uint64      `json:"pid"`
+	Inode        uint64      `json:"ino"`
+	Extents      []ExtentKey `json:"eks"`
+	StorageClass uint32      `json:"storageClass"`
 }
 
 type SetXAttrRequest struct {
@@ -1027,16 +1050,74 @@ type GetUniqIDResponse struct {
 	Start uint64 `json:"start"`
 }
 
+type GetAppliedIDRequest struct {
+	VolName     string `json:"vol"`
+	PartitionId uint64 `json:"pid"`
+}
+
 type LockDirRequest struct {
 	VolName     string    `json:"vol"`
 	PartitionId uint64    `json:"pid"`
 	Inode       uint64    `json:"ino"`
 	LockId      int64     `json:"lockId"`
-	Lease       uint64    `json:"lease"`
+	Lease       uint64    `json:"lease"` // unit seconds
 	SubmitTime  time.Time `json:"submitTime"`
+}
+
+func (lr *LockDirRequest) String() string {
+	data, _ := json.Marshal(lr)
+	return string(data)
 }
 
 type LockDirResponse struct {
 	LockId int64 `json:"lockId"`
 	Status uint8 `json:"status"`
+}
+
+type InodeAccessTime struct {
+	Inode      uint64    `json:"ino"`
+	AccessTime time.Time `json:"at"`
+}
+
+type InodeGetAccessTimeResponse struct {
+	Info *InodeAccessTime `json:"inodeAT"`
+}
+
+type RenewalForbiddenMigrationRequest struct {
+	VolName      string `json:"vol"`
+	PartitionID  uint64 `json:"pid"`
+	Inode        uint64 `json:"ino"`
+	StorageClass uint32 `json:"storageClass"`
+}
+
+type UpdateExtentKeyAfterMigrationRequest struct {
+	PartitionID       uint64         `json:"pid"`
+	Inode             uint64         `json:"ino"`
+	StorageClass      uint32         `json:"storageClass"`
+	NewObjExtentKeys  []ObjExtentKey `json:"newObjExtentKeys"`
+	LeaseExpire       uint64         `json:"leaseExpireTime"`
+	DelayDeleteMinute uint64         `json:"delayDeleteMinute"`
+	RequestExtend
+}
+
+type InodeGetWithEkResponse struct {
+	Info                     *InodeInfo     `json:"info"`
+	LayAll                   []InodeInfo    `json:"layerInfo"`
+	CacheExtents             []ExtentKey    `json:"cacheEks"`
+	HybridCloudExtents       []ExtentKey    `json:"eks"`
+	HybridCloudObjExtents    []ObjExtentKey `json:"objeks"`
+	MigrationExtents         []ExtentKey    `json:"migrationEks"`
+	MigrationCloudObjExtents []ObjExtentKey `json:"migrationObjeks"`
+}
+
+type SetCreateTimeRequest struct {
+	Inode      uint64 `json:"ino"`
+	CreateTime int64  `json:"ct"`
+	VerSeq     uint64 `json:"seq"`
+}
+
+type DeleteMigrationExtentKeyRequest struct {
+	PartitionID uint64 `json:"pid"`
+	Inode       uint64 `json:"ino"`
+	RequestExtend
 }

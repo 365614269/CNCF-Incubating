@@ -18,9 +18,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/cubefs/cubefs/datanode/repl"
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/repl"
-	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
@@ -29,7 +29,7 @@ import (
 func newExtentStoreForOperatorTest(t *testing.T) (store *storage.ExtentStore) {
 	path, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
-	store, err = storage.NewExtentStore(path, 0, 1*util.GB, proto.PartitionTypeNormal, true)
+	store, err = storage.NewExtentStore(path, 0, 1*util.GB, proto.PartitionTypeNormal, 0, true)
 	require.NoError(t, err)
 	return
 }
@@ -58,7 +58,8 @@ func newDpForOperatorTest(t *testing.T, dn *DataNode) (dp *DataPartition) {
 		disk:        newDiskForOperatorTest(t, dn),
 		extentStore: newExtentStoreForOperatorTest(t),
 		config: &dataPartitionCfg{
-			Forbidden: false,
+			Forbidden:                false,
+			ForbidWriteOpOfProtoVer0: false,
 		},
 		partitionSize: 1 * util.TB,
 		dataNode:      dn,

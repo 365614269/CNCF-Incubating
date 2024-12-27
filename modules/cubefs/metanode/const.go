@@ -92,6 +92,17 @@ type (
 
 	// Client -> MetaNode
 	GetUniqIDResp = proto.GetUniqIDResponse
+
+	// Client -> MetaNode
+	RenewalForbiddenMigrationRequest = proto.RenewalForbiddenMigrationRequest
+
+	// Client -> MetaNode
+	UpdateExtentKeyAfterMigrationRequest = proto.UpdateExtentKeyAfterMigrationRequest
+
+	// Client -> MetaNode, used for debugging
+	SetCreateTimeRequest = proto.SetCreateTimeRequest
+
+	DeleteMigrationExtentKeyRequest = proto.DeleteMigrationExtentKeyRequest
 )
 
 // op code should be fixed, order change will cause raft fsm log apply fail
@@ -181,14 +192,24 @@ const (
 	// dir lock
 	opFSMLockDir = 68
 
-	opFSMVersionOp   = 74
-	opFSMExtentSplit = 69
-	opFSMDelVer      = 70
+	opFSMSyncInodeAccessTime = 69
 
-	opFSMSentToChanV1 = 71
-	opFSMStoreTickV1  = 72
+	opFSMVerListSnapShot   = 73
+	opFSMVersionOp         = 74
+	opFSMExtentSplit       = 75
+	opFSMSentToChanWithVer = 76
 
-	opFSMVerListSnapShot = 73
+	// hybrid cloud
+	opFSMRenewalForbiddenMigration                = 87
+	opFSMUpdateExtentKeyAfterMigration            = 88
+	opFSMInternalBatchFreeInodeMigrationExtentKey = 89
+	opFSMSetInodeCreateTime                       = 90 // for debug
+	opFSMSetMigrationExtentKeyDeleteImmediately   = 91
+)
+
+// new inode opCode
+const (
+	opFSMBatchSyncInodeATime = 11000
 )
 
 var (
@@ -222,6 +243,7 @@ const (
 	cfgRetainLogs                = "retainLogs"                // string, raft RetainLogs
 	cfgRaftSyncSnapFormatVersion = "raftSyncSnapFormatVersion" // int, format version of snapshot that raft leader sent to follower
 	cfgServiceIDKey              = "serviceIDKey"
+	cfgEnableGcTimer             = "enableGcTimer" // bool
 
 	metaNodeDeleteBatchCountKey = "batchCount"
 	configNameResolveInterval   = "nameResolveInterval" // int
@@ -232,11 +254,13 @@ const (
 	intervalToPersistData = time.Minute * 5
 	intervalToSyncCursor  = time.Minute * 1
 
-	defaultDelExtentsCnt         = 100000
-	defaultMaxQuotaGoroutine     = 5
-	defaultQuotaSwitch           = true
-	DefaultNameResolveInterval   = 1 // minutes
-	DefaultRaftNumOfLogsToRetain = 20000 * 2
+	defaultDelExtentsCnt               = 100000
+	defaultMaxQuotaGoroutine           = 5
+	defaultQuotaSwitch                 = true
+	DefaultNameResolveInterval         = 1 // minutes
+	DefaultRaftNumOfLogsToRetain       = 20000 * 2
+	DefaultCreateBlobClientIntervalSec = 30
+	defaultSyncInodeAtimeCnt           = 102400
 )
 
 const (
@@ -248,15 +272,10 @@ const (
 
 // TODO: to remove unused by golangci
 var (
-	_ = opFSMDelVer
 	_ = opFSMDeletePartition
-	_ = opFSMSentToChanV1
-	_ = opFSMStoreTickV1
 	_ = opFSMUpdateSummaryInfo
-	_ = (*metaPartition).doDeleteMarkedInodes
 	_ = (*Dentry).getLastestVer
 	_ = (*Inode).isEkInRefMap
-	_ = (*metaPartition).notifyRaftFollowerToFreeInodes
 	_ = (*metaPartition).decommissionPartition
 	_ = (*metaPartition).getDentryTree
 	_ = (*metaPartition).internalHasInode

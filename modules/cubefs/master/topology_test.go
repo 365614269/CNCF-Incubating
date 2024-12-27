@@ -4,12 +4,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cubefs/cubefs/proto"
+
 	"github.com/cubefs/cubefs/util"
 	"github.com/stretchr/testify/require"
 )
 
 func createDataNodeForTopo(addr, zoneName string, ns *nodeSet) (dn *DataNode) {
-	dn = newDataNode(addr, zoneName, "test")
+	dn = newDataNode(addr, zoneName, "test", proto.MediaType_HDD)
 	dn.ZoneName = zoneName
 	dn.Total = 1024 * util.GB
 	dn.Used = 10 * util.GB
@@ -24,7 +26,7 @@ func createDataNodeForTopo(addr, zoneName string, ns *nodeSet) (dn *DataNode) {
 func TestSingleZone(t *testing.T) {
 	topo := newTopology()
 	zoneName := "test"
-	zone := newZone(zoneName)
+	zone := newZone(zoneName, proto.MediaType_Unspecified)
 	topo.putZone(zone)
 	c := new(Cluster)
 	nodeSet := newNodeSet(c, 1, 6, zoneName)
@@ -43,12 +45,12 @@ func TestSingleZone(t *testing.T) {
 	// single zone exclude,if it is a single zone excludeZones don't take effect
 	excludeZones := make([]string, 0)
 	excludeZones = append(excludeZones, zoneName)
-	zones, err := topo.allocZonesForNode(&topo.metaTopology, replicaNum, replicaNum, excludeZones, []*Zone{})
-	require.NoError(t, err)
-	require.EqualValues(t, 1, len(zones))
+	zones, err := topo.allocZonesForNode(&topo.metaTopology, replicaNum, replicaNum, excludeZones, []*Zone{}, proto.MediaType_Unspecified)
+	require.Error(t, err)
+	require.EqualValues(t, 0, len(zones))
 
 	// single zone normal
-	zones, err = topo.allocZonesForNode(&topo.dataTopology, replicaNum, replicaNum, nil, []*Zone{})
+	zones, err = topo.allocZonesForNode(&topo.dataTopology, replicaNum, replicaNum, nil, []*Zone{}, proto.MediaType_Unspecified)
 	require.NoError(t, err)
 	newHosts, _, err := zones[0].getAvailNodeHosts(TypeDataPartition, nil, nil, replicaNum)
 	require.NoError(t, err)
@@ -92,7 +94,7 @@ func TestAllocZones(t *testing.T) {
 
 	// add three zones
 	zoneName1 := testZone1
-	zone1 := newZone(zoneName1)
+	zone1 := newZone(zoneName1, proto.MediaType_Unspecified)
 	nodeSet1 := newNodeSet(c, 1, 6, zoneName1)
 
 	zone1.putNodeSet(nodeSet1)
@@ -101,7 +103,7 @@ func TestAllocZones(t *testing.T) {
 	topo.putDataNode(createDataNodeForTopo(mds2Addr, zoneName1, nodeSet1))
 
 	zoneName2 := testZone2
-	zone2 := newZone(zoneName2)
+	zone2 := newZone(zoneName2, proto.MediaType_Unspecified)
 	nodeSet2 := newNodeSet(c, 2, 6, zoneName2)
 
 	zone2.putNodeSet(nodeSet2)
@@ -110,7 +112,7 @@ func TestAllocZones(t *testing.T) {
 	topo.putDataNode(createDataNodeForTopo(mds4Addr, zoneName2, nodeSet2))
 
 	zoneName3 := "zone3"
-	zone3 := newZone(zoneName3)
+	zone3 := newZone(zoneName3, proto.MediaType_Unspecified)
 	nodeSet3 := newNodeSet(c, 3, 6, zoneName3)
 
 	zone3.putNodeSet(nodeSet3)
@@ -121,26 +123,26 @@ func TestAllocZones(t *testing.T) {
 	require.EqualValues(t, zoneCount, len(zones))
 	// only pass replica num
 	replicaNum := 2
-	zones, err := topo.allocZonesForNode(&topo.dataTopology, replicaNum, replicaNum, nil, []*Zone{})
+	zones, err := topo.allocZonesForNode(&topo.dataTopology, replicaNum, replicaNum, nil, []*Zone{}, proto.MediaType_Unspecified)
 	require.NoError(t, err)
-	require.EqualValues(t, len(topo.getAllZones()), len(zones))
+	require.EqualValues(t, 2, len(zones))
 
 	cluster := new(Cluster)
 	cluster.t = topo
 	cluster.cfg = newClusterConfig()
 
 	// don't cross zone
-	hosts, _, err := cluster.getHostFromNormalZone(TypeDataPartition, nil, nil, nil, replicaNum, 1, "")
+	hosts, _, err := cluster.getHostFromNormalZone(TypeDataPartition, nil, nil, nil, replicaNum, 1, "", proto.MediaType_Unspecified)
 	require.NoError(t, err)
 
 	t.Logf("ChooseTargetDataHosts in single zone,hosts[%v]", hosts)
 
 	// cross zone
-	_, _, err = cluster.getHostFromNormalZone(TypeDataPartition, nil, nil, nil, replicaNum, 2, "")
+	_, _, err = cluster.getHostFromNormalZone(TypeDataPartition, nil, nil, nil, replicaNum, 2, "", proto.MediaType_Unspecified)
 	require.NoError(t, err)
 
 	// specific zone
-	hosts, _, err = cluster.getHostFromNormalZone(TypeDataPartition, nil, nil, nil, 3, 2, zoneName1+","+zoneName2)
+	hosts, _, err = cluster.getHostFromNormalZone(TypeDataPartition, nil, nil, nil, 3, 2, zoneName1+","+zoneName2, proto.MediaType_Unspecified)
 	require.NoError(t, err)
 	require.EqualValues(t, getZoneCntFunc(hosts), 2)
 
@@ -149,9 +151,9 @@ func TestAllocZones(t *testing.T) {
 	excludeZones := make([]string, 0)
 	excludeZones = append(excludeZones, zoneName3)
 
-	zones, err = topo.allocZonesForNode(&topo.dataTopology, 2, replicaNum, excludeZones, []*Zone{})
+	zones, err = topo.allocZonesForNode(&topo.dataTopology, 2, replicaNum, excludeZones, []*Zone{}, proto.MediaType_Unspecified)
 	if err != nil {
-		t.Logf("allocZonesForDataNode failed,err[%v]", err)
+		t.Logf("allocZonesForNode(data) failed,err[%v]", err)
 	}
 
 	for _, zone := range zones {

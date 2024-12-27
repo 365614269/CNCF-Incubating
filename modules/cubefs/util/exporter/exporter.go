@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cubefs/cubefs/proto"
@@ -42,8 +44,10 @@ const (
 	ConfigKeyConsulMeta     = "consulMeta"     // consul meta
 	ConfigKeyIpFilter       = "ipFilter"       // add ip filter
 	ConfigKeyEnablePid      = "enablePid"      // enable report partition id
+	SetEnablePidPath        = "/setEnablePid"  // set enable report partition id
 	ConfigKeyPushAddr       = "pushAddr"       // enable push data to gateway
 	ChSize                  = 1024 * 10        // collect chan size
+	ConfigKeySubDir         = "subdir"
 
 	// monitor label name
 	Vol     = "vol"
@@ -58,6 +62,7 @@ const (
 var (
 	namespace         string
 	clustername       string
+	clusterNameLk     sync.RWMutex
 	modulename        string
 	pushAddr          string
 	exporterPort      int64
@@ -70,6 +75,12 @@ var (
 
 func metricsName(name string) string {
 	return replacer.Replace(fmt.Sprintf("%s_%s", namespace, name))
+}
+
+func getClusterName() string {
+	clusterNameLk.RLock()
+	defer clusterNameLk.RUnlock()
+	return clustername
 }
 
 // Init initializes the exporter.
@@ -153,6 +164,54 @@ func InitWithRouter(role string, cfg *config.Config, router *mux.Router, exPort 
 	log.LogInfof("exporter Start: %v %v", exporterPort, m)
 }
 
+func SetEnablePid(w http.ResponseWriter, r *http.Request) {
+	var err error
+	if err = r.ParseForm(); err != nil {
+		err = fmt.Errorf("parse form error: %v", err)
+		buildFailureResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	EnablePidStr, err := strconv.ParseBool(r.FormValue("enablePid"))
+	if err != nil {
+		err = fmt.Errorf("parse param %v failL: %v", r.FormValue("enablePid"), err)
+		buildFailureResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	EnablePid = EnablePidStr
+	buildSuccessResp(w, fmt.Sprintf("set enablePid %v success", EnablePid))
+}
+
+func buildSuccessResp(w http.ResponseWriter, data interface{}) {
+	buildJSONResp(w, http.StatusOK, data, "")
+}
+
+func buildFailureResp(w http.ResponseWriter, code int, msg string) {
+	buildJSONResp(w, code, nil, msg)
+}
+
+// Create response for the API request.
+func buildJSONResp(w http.ResponseWriter, code int, data interface{}, msg string) {
+	var (
+		jsonBody []byte
+		err      error
+	)
+	w.WriteHeader(code)
+	w.Header().Set("Content-Type", "application/json")
+	body := struct {
+		Code int         `json:"code"`
+		Data interface{} `json:"data"`
+		Msg  string      `json:"msg"`
+	}{
+		Code: code,
+		Data: data,
+		Msg:  msg,
+	}
+	if jsonBody, err = json.Marshal(body); err != nil {
+		return
+	}
+	w.Write(jsonBody)
+}
+
 func RegistConsul(cluster string, role string, cfg *config.Config) {
 	ipFilter := cfg.GetString(ConfigKeyIpFilter)
 	host, err := GetLocalIpAddr(ipFilter)
@@ -161,19 +220,24 @@ func RegistConsul(cluster string, role string, cfg *config.Config) {
 		return
 	}
 
-	rawmnt := cfg.GetString("subdir")
+	InitRecoderWithCluster(cluster)
+
+	rawmnt := cfg.GetString(ConfigKeySubDir)
 	if rawmnt == "" {
 		rawmnt = "/"
 	}
 	mountPoint, _ := filepath.Abs(rawmnt)
-	log.LogInfof("RegistConsul:%v", enablePush)
+	log.LogWarnf("RegistConsul:%v, subdir %s", enablePush, mountPoint)
 	if enablePush {
 		log.LogWarnf("[RegisterConsul] use auto push data strategy, not register consul")
 		autoPush(pushAddr, role, cluster, host, mountPoint)
 		return
 	}
 
+	clusterNameLk.Lock()
 	clustername = replacer.Replace(cluster)
+	clusterNameLk.Unlock()
+
 	consulAddr := cfg.GetString(ConfigKeyConsulAddr)
 	consulMeta := cfg.GetString(ConfigKeyConsulMeta)
 
@@ -239,4 +303,47 @@ func collect() {
 	go collectGauge()
 	go collectHistogram()
 	go collectAlarm()
+}
+
+var recoder *prometheus.HistogramVec
+
+func InitRecoderWithCluster(cluster string) {
+	recoder = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:        "request_const_us",
+			Help:        "recode cost time by us",
+			ConstLabels: prometheus.Labels{"cluster": cluster},
+			Buckets:     []float64{50, 100, 200, 500, 1000, 2000, 5000, 10000, 200000, 500000},
+		},
+		[]string{"api"},
+	)
+	prometheus.Register(recoder)
+}
+
+var (
+	obMap = map[string]prometheus.Observer{}
+	obLk  = sync.RWMutex{}
+)
+
+func RecodCost(api string, costUs int64) {
+	obLk.RLock()
+	ob := obMap[api]
+	obLk.RUnlock()
+	if ob != nil {
+		ob.Observe(float64(costUs))
+		return
+	}
+
+	obLk.Lock()
+	defer obLk.Unlock()
+
+	ob = obMap[api]
+	if ob != nil {
+		ob.Observe(float64(costUs))
+		return
+	}
+
+	ob = recoder.WithLabelValues(api)
+	obMap[api] = ob
+	ob.Observe(float64(costUs))
 }

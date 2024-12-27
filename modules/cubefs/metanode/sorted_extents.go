@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util/log"
 )
 
@@ -26,6 +26,12 @@ func NewSortedExtentsFromEks(eks []proto.ExtentKey) *SortedExtents {
 	return &SortedExtents{
 		eks: eks,
 	}
+}
+
+func (se *SortedExtents) IsEmpty() bool {
+	se.RLock()
+	defer se.RUnlock()
+	return len(se.eks) == 0
 }
 
 func (se *SortedExtents) String() string {
@@ -142,6 +148,9 @@ func (se *SortedExtents) Append(ek proto.ExtentKey) (deleteExtents []proto.Exten
 }
 
 func storeEkSplit(mpId uint64, inodeID uint64, ekRef *sync.Map, ek *proto.ExtentKey) (id uint64) {
+	if !clusterEnableSnapshot {
+		return
+	}
 	if ekRef == nil {
 		log.LogErrorf("[storeEkSplit] mpId [%v] inodeID %v ekRef nil", mpId, inodeID)
 		return
@@ -480,14 +489,19 @@ func (se *SortedExtents) Truncate(offset uint64, doOnLastKey func(*proto.ExtentK
 			if doOnLastKey != nil {
 				doOnLastKey(&proto.ExtentKey{Size: uint32(lastKey.FileOffset + uint64(lastKey.Size) - offset)})
 			}
+			originSize := lastKey.Size
+			lastKey.Size = uint32(offset - lastKey.FileOffset)
+			if !clusterEnableSnapshot {
+				return
+			}
+
 			rsKey := &proto.ExtentKey{}
 			*rsKey = *lastKey
-			lastKey.Size = uint32(offset - lastKey.FileOffset)
 			if insertRefMap != nil {
 				insertRefMap(lastKey)
 			}
 
-			rsKey.Size -= lastKey.Size
+			rsKey.Size = originSize - lastKey.Size
 			rsKey.FileOffset += uint64(lastKey.Size)
 			rsKey.ExtentOffset += uint64(lastKey.Size)
 			if insertRefMap != nil {
@@ -627,4 +641,26 @@ func (se *SortedExtents) Delete(delEks []proto.ExtentKey) (curEks []proto.Extent
 	}
 	se.eks = curEks
 	return
+}
+
+func (se *SortedExtents) Equals(other *SortedExtents) bool {
+	se.RLock()
+	defer se.RUnlock()
+
+	if other == nil {
+		return false
+	}
+
+	if len(se.eks) != len(other.eks) {
+		return false
+	}
+
+	for idx, seKey := range se.eks {
+		otherKey := other.eks[idx]
+		if !seKey.Equals(&otherKey) {
+			return false
+		}
+	}
+
+	return true
 }

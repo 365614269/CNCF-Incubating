@@ -77,7 +77,7 @@ ensure_node_writable() {
     for i in $(seq 1 300) ; do
         ${cli} ${node} list &> /tmp/cli_${node}_list;
         res=`cat /tmp/cli_${node}_list | grep "Yes" | grep "Active" | wc -l`
-        if [[ ${res} -eq 4 ]]; then
+        if [[ ${res} -ge 4 ]]; then
             echo -e "\033[32mdone\033[0m"
             return
         fi
@@ -113,7 +113,7 @@ create_cold_volume() {
         return
     fi
     md5=`echo -n ${Owner} | md5sum | cut -d ' ' -f1`
-    curl -v "http://192.168.0.11:17010/admin/createVol?name=${VolName}&volType=1&cacheCap=8&cacheAction=2&capacity=10&owner=${Owner}&mpCount=3"
+    curl -v "http://192.168.0.11:17010/admin/createVol?name=${VolName}&volStorageClass=1&cacheCap=8&cacheAction=2&capacity=10&owner=${Owner}&mpCount=3"
     curl -v "http://192.168.0.11:17010/client/vol?name=${VolName}&authKey=${md5}" | python -m json.tool
 }
 

@@ -16,6 +16,8 @@ package stream
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
 	"strings"
 	"sync"
@@ -39,11 +41,71 @@ const (
 	ExtentStatusError
 )
 
+const (
+	maxRetryInterval = 60000 // 1min
+	baseFactor       = 1.5
+	maxRetryExpVal   = 26
+)
+
+var (
+	enableRetryTiny            = false
+	extentAllocRetryIntervalMs = 0 // ms
+	extentWriteRetryIntervalMs = 0 // ms
+	extentHandlerMaxRetryTime  = 0 // min
+)
+
 var gExtentHandlerID = uint64(0)
 
 // GetExtentHandlerID returns the extent handler ID.
 func GetExtentHandlerID() uint64 {
 	return atomic.AddUint64(&gExtentHandlerID, 1)
+}
+
+func SetExentRetryArgs(allocInterval, writeInterval, maxRetryMin int, retryTiny bool) {
+	extentAllocRetryIntervalMs = allocInterval
+	extentWriteRetryIntervalMs = writeInterval
+	extentHandlerMaxRetryTime = maxRetryMin
+	enableRetryTiny = true
+	log.LogWarnf("SetExentRetryArgs: alloc interval %d ms, write interval %d ms, max %d min retry Tiny %v",
+		allocInterval, writeInterval, maxRetryMin, retryTiny)
+}
+
+func getRetryInterval(intervalMs, retry int) time.Duration {
+	return getRetryIntervalTimeOut(intervalMs, retry, true)
+}
+
+func getRetryIntervalTimeOut(intervalMs, retry int, checkTimeOut bool) time.Duration {
+	d1 := intervalMs
+
+	if retry >= maxRetryExpVal { // to avoid int overflow
+		d1 = maxRetryInterval
+	} else if retry >= 5 { // quickly retry when retry less than 5
+		d1 = intervalMs * int(math.Pow(baseFactor, float64(retry)))
+	}
+
+	if d1 > maxRetryInterval {
+		d1 = maxRetryInterval
+	}
+
+	if checkTimeOut && extentHandlerMaxRetryTime > 0 && d1 >= maxRetryInterval {
+		total := 0
+		for i := 1; i <= retry; i++ {
+			t1 := getRetryIntervalTimeOut(intervalMs, i, false)
+			total += int(t1)
+		}
+		// once over max retry time, retry quickly
+		if time.Minute*time.Duration(extentHandlerMaxRetryTime) < time.Duration(total) {
+			d1 = intervalMs
+		}
+	}
+
+	if d1 <= 0 {
+		log.LogErrorf("getRetryIntervalTimeOut panic: interval %v, retry %v, timeout %v, d1 %v,", intervalMs, retry, checkTimeOut, d1)
+		return maxRetryInterval * time.Millisecond
+	}
+
+	d1 = d1 + rand.Intn(d1)/10
+	return time.Duration(d1) * time.Millisecond
 }
 
 // ExtentHandler defines the struct of the extent handler.
@@ -108,18 +170,29 @@ type ExtentHandler struct {
 	// Signaled in receiver ONLY to exit *sender*.
 	doneSender chan struct{}
 
-	appendLK sync.Mutex
-	lastKey  proto.ExtentKey
+	// ver update need alloc new extent
+	verUpdate chan uint64
+	appendLK  sync.Mutex
+	lastKey   proto.ExtentKey
 
 	meetLimitedIoError bool
 
 	stop chan struct{}
 	sync.Once
+
+	storageClass uint32
+
+	isMigration bool
 }
 
 // NewExtentHandler returns a new extent handler.
-func NewExtentHandler(stream *Streamer, offset int, storeMode int, size int) *ExtentHandler {
-	// log.LogDebugf("NewExtentHandler stack(%v)", string(debug.Stack()))
+func NewExtentHandler(stream *Streamer, offset int, storeMode int, size int,
+	storageClass uint32, isMigration bool,
+) *ExtentHandler {
+	// TODO: for debug
+	// log.LogDebugf("NewExtentHandler, inode(%v) storageClass(%v), stack:\n%v",
+	//	 stream.inode, storageClass, string(debug.Stack()))
+
 	eh := &ExtentHandler{
 		stream:             stream,
 		id:                 GetExtentHandlerID(),
@@ -134,6 +207,9 @@ func NewExtentHandler(stream *Streamer, offset int, storeMode int, size int) *Ex
 		doneReceiver:       make(chan struct{}),
 		stop:               make(chan struct{}),
 		meetLimitedIoError: false,
+		verUpdate:          make(chan uint64),
+		storageClass:       proto.GetMediaTypeByStorageClass(storageClass),
+		isMigration:        isMigration,
 	}
 
 	go eh.receiver()
@@ -144,8 +220,8 @@ func NewExtentHandler(stream *Streamer, offset int, storeMode int, size int) *Ex
 
 // String returns the string format of the extent handler.
 func (eh *ExtentHandler) String() string {
-	return fmt.Sprintf("ExtentHandler{ID(%v)Inode(%v)FileOffset(%v)Size(%v)StoreMode(%v)Status(%v)Dp(%v)Ver(%v)key(%v)lastKey(%v)flight(%d)dirty(%v)}",
-		eh.id, eh.inode, eh.fileOffset, eh.size, eh.storeMode, eh.status, eh.dp, eh.stream.verSeq, eh.key, eh.lastKey, eh.inflight, eh.dirty)
+	return fmt.Sprintf("ExtentHandler{ID(%v)Inode(%v)FileOffset(%v)Size(%v)StoreMode(%v)Status(%v)Dp(%v)Ver(%v)key(%v)lastKey(%v)flight(%d)dirty(%v)storageClass(%v)inflight(%v)dirty(%v)}",
+		eh.id, eh.inode, eh.fileOffset, eh.size, eh.storeMode, eh.status, eh.dp, eh.stream.verSeq, eh.key, eh.lastKey, eh.inflight, eh.dirty, eh.storageClass, eh.inflight, eh.dirty)
 }
 
 func (eh *ExtentHandler) write(data []byte, offset, size int, direct bool) (ek *proto.ExtentKey, err error) {
@@ -167,7 +243,7 @@ func (eh *ExtentHandler) write(data []byte, offset, size int, direct bool) (ek *
 	// If this write request is not continuous, and cannot be merged
 	// into the extent handler, just close it and return error.
 	// In this case, the caller should try to create a new extent handler.
-	if proto.IsHot(eh.stream.client.volumeType) {
+	if proto.IsHot(eh.stream.client.volumeType) || proto.IsStorageClassReplica(eh.storageClass) {
 		if eh.fileOffset+eh.size != offset || eh.size+size > util.ExtentSize ||
 			(eh.storeMode == proto.TinyExtentType && eh.size+size > blksize) {
 
@@ -179,6 +255,7 @@ func (eh *ExtentHandler) write(data []byte, offset, size int, direct bool) (ek *
 	for total < size {
 		if eh.packet == nil {
 			eh.packet = NewWritePacket(eh.inode, offset+total, eh.storeMode)
+			log.LogDebugf("ExtentHandler write packet nil and new packet: eh(%v)", eh)
 			if direct {
 				eh.packet.Opcode = proto.OpSyncWrite
 			}
@@ -250,6 +327,7 @@ func (eh *ExtentHandler) sender() {
 			// fill the packet according to the extent
 			packet.PartitionID = eh.dp.PartitionID
 			packet.ExtentType = uint8(eh.storeMode)
+			packet.ExtentType |= proto.PacketProtocolVersionFlag
 			packet.ExtentID = uint64(eh.extID)
 			packet.ExtentOffset = int64(extOffset)
 			packet.Arg = ([]byte)(eh.dp.GetAllAddrs())
@@ -260,7 +338,9 @@ func (eh *ExtentHandler) sender() {
 			}
 			packet.StartT = time.Now().UnixNano()
 
-			log.LogDebugf("ExtentHandler sender: extent allocated, eh(%v) dp(%v) extID(%v) packet(%v)", eh, eh.dp, eh.extID, packet.GetUniqueLogId())
+			if log.EnableDebug() {
+				log.LogDebugf("ExtentHandler sender: extent allocated, eh(%v) dp(%v) extID(%v) packet(%v)", eh, eh.dp, eh.extID, packet.GetUniqueLogId())
+			}
 
 			if err = packet.writeToConn(eh.conn); err != nil {
 				log.LogWarnf("sender writeTo: failed, eh(%v) err(%v) packet(%v)", eh, err, packet)
@@ -289,7 +369,9 @@ func (eh *ExtentHandler) receiver() {
 }
 
 func (eh *ExtentHandler) processReply(packet *Packet) {
+	log.LogDebugf("processReply begin: packet(%v), eh(%v)", packet, eh)
 	defer func() {
+		log.LogDebugf("processReply end: packet(%v), eh(%v)", packet, eh)
 		if atomic.AddInt32(&eh.inflight, -1) <= 0 {
 			eh.empty <- struct{}{}
 		}
@@ -346,7 +428,7 @@ func (eh *ExtentHandler) processReply(packet *Packet) {
 		}
 		// todo(leonchang) need check safety
 		log.LogWarnf("processReply: get reply, eh(%v) packet(%v) reply(%v)", eh, packet, reply)
-		eh.stream.GetExtentsForce()
+		eh.stream.GetExtentsForceRefresh()
 	}
 
 	if !packet.isValidWriteReply(reply) {
@@ -394,14 +476,23 @@ func (eh *ExtentHandler) processReply(packet *Packet) {
 	proto.Buffers.Put(packet.Data)
 	packet.Data = nil
 	eh.dirty = true
+
+	// tiny extent can only write once.
+	if eh.storeMode == proto.TinyExtentType {
+		eh.setClosed()
+		eh.setRecovery()
+	}
 }
 
 func (eh *ExtentHandler) processReplyError(packet *Packet, errmsg string) {
+	log.LogDebugf("processReplyError begin: eh(%v) packet(%v) errmsg(%v)", eh, packet, errmsg)
 	eh.setClosed()
 	eh.setRecovery()
 	if err := eh.recoverPacket(packet); err != nil {
 		eh.discardPacket(packet)
 		log.LogErrorf("processReplyError discard packet: eh(%v) packet(%v) err(%v) errmsg(%v)", eh, packet, err, errmsg)
+	} else {
+		log.LogWarnf("processReplyError end: eh(%v) packet(%v) errmsg(%v)", eh, packet, errmsg)
 	}
 }
 
@@ -440,7 +531,7 @@ func (eh *ExtentHandler) cleanup() (err error) {
 			eh.conn = nil
 			// TODO unhandled error
 			status := eh.getStatus()
-			StreamConnPool.PutConnect(conn, status >= ExtentStatusRecovery)
+			StreamWriteConnPool.PutConnect(conn, status >= ExtentStatusRecovery)
 		}
 		close(eh.stop)
 	})
@@ -455,16 +546,17 @@ func (eh *ExtentHandler) appendExtentKey() (err error) {
 
 	if eh.key != nil {
 		if eh.dirty {
-			if proto.IsCold(eh.stream.client.volumeType) && eh.status == ExtentStatusError {
+			if proto.IsCold(eh.stream.client.volumeType) || proto.IsStorageClassBlobStore(eh.storageClass) &&
+				eh.status == ExtentStatusError {
 				return
 			}
 			var status int
 			ekey := *eh.key
 			doAppend := func() (err error) {
 				discard := eh.stream.extents.Append(&ekey, true)
-				status, err = eh.stream.client.appendExtentKey(eh.stream.parentInode, eh.inode, ekey, discard)
+				status, err = eh.stream.client.appendExtentKey(eh.stream.parentInode, eh.inode, ekey, discard, eh.stream.isCache, eh.storageClass, eh.isMigration)
 				if atomic.LoadInt32(&eh.stream.needUpdateVer) > 0 {
-					if errUpdateExtents := eh.stream.GetExtentsForce(); errUpdateExtents != nil {
+					if errUpdateExtents := eh.stream.GetExtentsForceRefresh(); errUpdateExtents != nil {
 						log.LogErrorf("action[appendExtentKey] inode %v GetExtents err %v errUpdateExtents %v", eh.stream.inode, err, errUpdateExtents)
 						return
 					}
@@ -539,9 +631,6 @@ func (eh *ExtentHandler) waitForFlush() (err error) {
 		return
 	}
 
-	//	t := time.NewTicker(10 * time.Second)
-	//	defer t.Stop()
-
 	for {
 		select {
 		case <-eh.empty:
@@ -558,12 +647,9 @@ func (eh *ExtentHandler) waitForFlush() (err error) {
 }
 
 func (eh *ExtentHandler) recoverPacket(packet *Packet) error {
-	// NOTE: if last result code is limited io error
-	// allow client to retry indefinitely
-	if !eh.meetLimitedIoError {
-		packet.errCount++
-	}
-	if packet.errCount >= MaxPacketErrorCount || proto.IsCold(eh.stream.client.volumeType) {
+	log.LogDebugf("ExtentHandler recoverPacket: eh(%v), packet(%v)", eh, packet)
+	packet.errCount++
+	if packet.errCount >= MaxPacketErrorCount || proto.IsCold(eh.stream.client.volumeType) || proto.IsStorageClassBlobStore(eh.storageClass) {
 		return errors.New(fmt.Sprintf("recoverPacket failed: reach max error limit, eh(%v) packet(%v)", eh, packet))
 	}
 
@@ -573,12 +659,20 @@ func (eh *ExtentHandler) recoverPacket(packet *Packet) error {
 		// Because tiny extent files are limited, tiny store
 		// failures might due to lack of tiny extent file.
 		extentType := proto.NormalExtentType
-		// NOTE: but, if we meet a limited io error
+		// NOTE: but, if we meet a limited io error or enable retry for tiny extent
 		// use correct type to recover
-		if eh.meetLimitedIoError {
+		if eh.meetLimitedIoError || enableRetryTiny {
 			extentType = eh.storeMode
 		}
-		handler = NewExtentHandler(eh.stream, int(packet.KernelOffset), extentType, 0)
+
+		if extentWriteRetryIntervalMs > 0 {
+			retryInterval := getRetryInterval(extentWriteRetryIntervalMs, packet.errCount)
+			log.LogWarnf("ExtentHandler slow recoverPacket: sleep(%dms) before retry. eh(%s), pkt(%v)",
+				retryInterval.Milliseconds(), eh.String(), packet)
+			time.Sleep(retryInterval)
+		}
+
+		handler = NewExtentHandler(eh.stream, int(packet.KernelOffset), extentType, 0, eh.storageClass, eh.isMigration)
 		handler.setClosed()
 	}
 	handler.pushToRequest(packet)
@@ -610,7 +704,7 @@ func (eh *ExtentHandler) allocateExtent() (err error) {
 
 	for i := 0; i < MaxSelectDataPartitionForWrite; i++ {
 		if eh.key == nil {
-			if dp, err = eh.stream.client.dataWrapper.GetDataPartitionForWrite(exclude); err != nil {
+			if dp, err = eh.stream.client.dataWrapper.GetDataPartitionForWrite(exclude, eh.storageClass, eh.id); err != nil {
 				log.LogWarnf("allocateExtent: failed to get write data partition, eh(%v) exclude(%v), clear exclude and try again!", eh, exclude)
 				exclude = make(map[string]struct{})
 				continue
@@ -621,14 +715,21 @@ func (eh *ExtentHandler) allocateExtent() (err error) {
 				extID, err = eh.createExtent(dp)
 			}
 			if err != nil {
+				// reduce cluster messusre by slow retry
+				if extentAllocRetryIntervalMs > 0 {
+					retryInterval := getRetryInterval(extentAllocRetryIntervalMs, i)
+					log.LogWarnf("allocateExtent: slow retry alloc extent, sleep interval %dms, retry(%d), eh(%v)",
+						retryInterval.Milliseconds(), i, eh)
+					time.Sleep(retryInterval)
+				}
+
 				// NOTE: try again
-				if strings.Contains(err.Error(), "Again") || strings.Contains(err.Error(), "DiskNoSpaceErr") || strings.Contains(err.Error(), "LimitedIoErr") {
-					log.LogWarnf("[allocateExtent] eh(%v) try agagin", eh)
-					i -= 1
+				if strings.Contains(err.Error(), "Again") || strings.Contains(err.Error(), "LimitedIoErr") {
+					log.LogWarnf("[allocateExtent] eh(%v) try again, err:%v", eh, err)
 					continue
 				}
-				log.LogWarnf("allocateExtent: exclude dp[%v] for write caused by create extent failed, eh(%v) err(%v) exclude(%v)",
-					dp, eh, err, exclude)
+				log.LogWarnf("allocateExtent: exclude dp(%v) mediaType(%v) for write caused by create extent failed, eh(%v) err(%v) exclude(%v)",
+					dp.PartitionID, proto.MediaTypeString(dp.MediaType), eh, err, exclude)
 				eh.stream.client.dataWrapper.RemoveDataPartitionForWrite(dp.PartitionID)
 				dp.CheckAllHostsIsAvail(exclude)
 				continue
@@ -641,7 +742,7 @@ func (eh *ExtentHandler) allocateExtent() (err error) {
 			extID = int(eh.key.ExtentId)
 		}
 
-		if conn, err = StreamConnPool.GetConnect(dp.Hosts[0]); err != nil {
+		if conn, err = StreamWriteConnPool.GetConnect(dp.Hosts[0]); err != nil {
 			log.LogWarnf("allocateExtent: failed to create connection, eh(%v) err(%v) dp(%v) exclude(%v)",
 				eh, err, dp, exclude)
 			// If storeMode is tinyExtentType and can't create connection, we also check host status.
@@ -676,13 +777,13 @@ func (eh *ExtentHandler) createExtent(dp *wrapper.DataPartition) (extID int, err
 		stat.EndStat("createExtent", err, bgTime, 1)
 	}()
 
-	conn, err := StreamConnPool.GetConnect(dp.Hosts[0])
+	conn, err := StreamWriteConnPool.GetConnect(dp.Hosts[0])
 	if err != nil {
 		return extID, errors.Trace(err, "createExtent: failed to create connection, eh(%v) datapartionHosts(%v)", eh, dp.Hosts[0])
 	}
 
 	defer func() {
-		StreamConnPool.PutConnectEx(conn, err)
+		StreamWriteConnPool.PutConnectEx(conn, err)
 	}()
 
 	p := NewCreateExtentPacket(dp, eh.inode)
@@ -712,11 +813,13 @@ func (eh *ExtentHandler) createExtent(dp *wrapper.DataPartition) (extID int, err
 // Handler lock is held by the caller.
 func (eh *ExtentHandler) flushPacket() {
 	if eh.packet == nil {
+		log.LogDebugf("ExtentHandler flushPacket nil, return: eh(%v)", eh)
 		return
 	}
 
 	eh.pushToRequest(eh.packet)
 	eh.packet = nil
+	log.LogDebugf("ExtentHandler flushPacket end: eh(%v)", eh)
 }
 
 func (eh *ExtentHandler) pushToRequest(packet *Packet) {
@@ -741,9 +844,9 @@ func (eh *ExtentHandler) setRecovery() bool {
 }
 
 func (eh *ExtentHandler) setError() bool {
-	// log.LogDebugf("action[ExtentHandler.setError] stack (%v)", string(debug.Stack()))
-	if proto.IsHot(eh.stream.client.volumeType) {
-		atomic.StoreInt32(&eh.stream.status, StreamerError)
+	//	log.LogDebugf("action[ExtentHandler.setError] stack (%v)", string(debug.Stack()))
+	if proto.IsHot(eh.stream.client.volumeType) || proto.IsStorageClassReplica(eh.storageClass) {
+		eh.stream.setError()
 	}
 	return atomic.CompareAndSwapInt32(&eh.status, ExtentStatusRecovery, ExtentStatusError)
 }

@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -43,7 +44,7 @@ import (
 
 	"github.com/cubefs/cubefs/sdk/meta"
 
-	"github.com/cubefs/cubefs/blockcache/bcache"
+	"github.com/cubefs/cubefs/client/blockcache/bcache"
 	cfs "github.com/cubefs/cubefs/client/fs"
 	"github.com/cubefs/cubefs/depends/bazil.org/fuse"
 	"github.com/cubefs/cubefs/depends/bazil.org/fuse/fs"
@@ -87,7 +88,6 @@ const (
 	LoggerPrefix = "client"
 	LoggerOutput = "output.log"
 	ModuleName   = "fuseclient"
-	// ConfigKeyExporterPort = "exporterKey"
 
 	ControlCommandSetRate      = "/rate/set"
 	ControlCommandGetRate      = "/rate/get"
@@ -374,7 +374,8 @@ func main() {
 	// load  conf from master
 	for retry := 0; retry < MasterRetrys; retry++ {
 		err = loadConfFromMaster(opt)
-		if err != nil {
+		// if vol not exists or vol name not match regexp, not retry
+		if err != nil && err.Error() != proto.ErrVolNotExists.Error() && err.Error() != proto.ErrVolNameRegExpNotMatch.Error() {
 			time.Sleep(5 * time.Second * time.Duration(retry+1))
 		} else {
 			break
@@ -431,8 +432,9 @@ func main() {
 		}
 	}
 
-	proto.InitBufferPool(opt.BuffersTotalLimit)
-	if proto.IsCold(opt.VolType) {
+	proto.InitBufferPoolEx(opt.BuffersTotalLimit, int(opt.BufferChanSize))
+	log.LogInfof("InitBufferPoolEx: total limit %d, chan size %d", opt.BuffersTotalLimit, opt.BufferChanSize)
+	if proto.IsCold(opt.VolType) || proto.IsStorageClassBlobStore(opt.VolStorageClass) {
 		buf.InitCachePool(opt.EbsBlockSize)
 	}
 	if opt.EnableBcache {
@@ -529,6 +531,7 @@ func main() {
 	defer super.Close()
 
 	syslog.Printf("enable bcache %v", opt.EnableBcache)
+	syslog.Printf("bcache only for not ssd %v", opt.BcacheOnlyForNotSSD)
 
 	if cfg.GetString(exporter.ConfigKeyPushAddr) == "" {
 		pushAddr, err := getPushAddrFromMaster(opt.Master)
@@ -536,6 +539,11 @@ func main() {
 			syslog.Printf("use remote push addr %v", pushAddr)
 			cfg.SetString(exporter.ConfigKeyPushAddr, pushAddr)
 		}
+	}
+
+	if cfg.GetString(exporter.ConfigKeySubDir) == "" {
+		cfg.SetString(exporter.ConfigKeySubDir, opt.SubDir)
+		syslog.Printf("config subdir empty, use cfg from mnt, subdir %s", opt.SubDir)
 	}
 
 	exporter.Init(ModuleName, cfg)
@@ -696,7 +704,44 @@ func waitListenAndServe(statusCh chan error, addr string, handler http.Handler) 
 	// unreachable
 }
 
+func getMountPoints() ([]string, error) {
+	cmd := exec.Command("mount")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, errors.New("failed to execute mount")
+	}
+
+	var mountPoints []string
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) >= 3 {
+			mountPoints = append(mountPoints, fields[2])
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, errors.New("error reading mount output")
+	}
+
+	return mountPoints, nil
+}
+
 func mount(opt *proto.MountOptions) (fsConn *fuse.Conn, super *cfs.Super, err error) {
+	mountPoints, err := getMountPoints()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, mountPoint := range mountPoints {
+		if mountPoint == opt.MountPoint {
+			return nil, nil, errors.NewErrorf("mountpoint:%v has been mounted", opt.MountPoint)
+		}
+	}
+
+	master.BcacheOnlyForNotSSD = opt.EnableBcache && opt.BcacheOnlyForNotSSD
 	super, err = cfs.NewSuper(opt)
 	if err != nil {
 		log.LogError(errors.Stack(err))
@@ -755,7 +800,8 @@ func mount(opt *proto.MountOptions) (fsConn *fuse.Conn, super *cfs.Super, err er
 			volumeInfo, err = mc.AdminAPI().GetVolumeSimpleInfo(opt.Volname)
 			if err != nil {
 				log.LogErrorf("UpdateVolConf: get vol info from master failed, err %s", err.Error())
-				if err == proto.ErrVolNotExists {
+				if err.Error() == proto.ErrVolNotExists.Error() {
+					log.LogErrorf("volume %v not exist, stop client\n", opt.Volname)
 					log.LogFlush()
 					daemonize.SignalOutcome(err)
 					os.Exit(1)
@@ -770,9 +816,11 @@ func mount(opt *proto.MountOptions) (fsConn *fuse.Conn, super *cfs.Super, err er
 				os.Exit(1)
 			}
 			super.SetTransaction(volumeInfo.EnableTransactionV1, volumeInfo.TxTimeout, volumeInfo.TxConflictRetryNum, volumeInfo.TxConflictRetryInterval)
-			if proto.IsCold(opt.VolType) {
+			if proto.IsCold(opt.VolType) || proto.IsStorageClassBlobStore(opt.VolStorageClass) {
 				super.CacheAction = volumeInfo.CacheAction
 				super.CacheThreshold = volumeInfo.CacheThreshold
+				super.EbsBlockSize = volumeInfo.ObjBlockSize
+			} else if proto.IsVolSupportStorageClass(opt.VolAllowedStorageClass, proto.StorageClass_BlobStore) {
 				super.EbsBlockSize = volumeInfo.ObjBlockSize
 			}
 		}
@@ -898,7 +946,8 @@ func parseMountOption(cfg *config.Config) (*proto.MountOptions, error) {
 		opt.EnableBcache = true
 	}
 
-	opt.EnableBcache = GlobalMountOptions[proto.EnableBcache].GetBool()
+	opt.BcacheOnlyForNotSSD = GlobalMountOptions[proto.BcacheOnlyForNotSSD].GetBool()
+
 	if opt.Rdonly {
 		verReadSeq := GlobalMountOptions[proto.SnapshotReadVerSeq].GetInt64()
 		if verReadSeq == -1 {
@@ -911,6 +960,7 @@ func parseMountOption(cfg *config.Config) (*proto.MountOptions, error) {
 	opt.MetaSendTimeout = GlobalMountOptions[proto.MetaSendTimeout].GetInt64()
 
 	opt.BuffersTotalLimit = GlobalMountOptions[proto.BuffersTotalLimit].GetInt64()
+	opt.BufferChanSize = GlobalMountOptions[proto.BufferChanSize].GetInt64()
 	opt.MetaSendTimeout = GlobalMountOptions[proto.MetaSendTimeout].GetInt64()
 	opt.MaxStreamerLimit = GlobalMountOptions[proto.MaxStreamerLimit].GetInt64()
 	opt.EnableAudit = GlobalMountOptions[proto.EnableAudit].GetBool()
@@ -918,6 +968,7 @@ func parseMountOption(cfg *config.Config) (*proto.MountOptions, error) {
 	opt.MinWriteAbleDataPartitionCnt = int(GlobalMountOptions[proto.MinWriteAbleDataPartitionCnt].GetInt64())
 	opt.FileSystemName = GlobalMountOptions[proto.FileSystemName].GetString()
 	opt.DisableMountSubtype = GlobalMountOptions[proto.DisableMountSubtype].GetBool()
+	opt.StreamRetryTimeout = int(GlobalMountOptions[proto.StreamRetryTimeOut].GetInt64())
 
 	if opt.MountPoint == "" || opt.Volname == "" || opt.Owner == "" || opt.Master == "" {
 		return nil, errors.New(fmt.Sprintf("invalid config file: lack of mandatory fields, mountPoint(%v), volName(%v), owner(%v), masterAddr(%v)", opt.MountPoint, opt.Volname, opt.Owner, opt.Master))
@@ -1017,6 +1068,9 @@ func loadConfFromMaster(opt *proto.MountOptions) (err error) {
 	opt.TxTimeout = volumeInfo.TxTimeout
 	opt.TxConflictRetryNum = volumeInfo.TxConflictRetryNum
 	opt.TxConflictRetryInterval = volumeInfo.TxConflictRetryInterval
+	opt.VolStorageClass = volumeInfo.VolStorageClass
+	opt.VolAllowedStorageClass = volumeInfo.AllowedStorageClass
+	opt.VolCacheDpStorageClass = volumeInfo.CacheDpStorageClass
 
 	var clusterInfo *proto.ClusterInfo
 	clusterInfo, err = mc.AdminAPI().GetClusterInfo()

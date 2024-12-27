@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cubefs/cubefs/proto"
@@ -124,6 +125,7 @@ type Server struct {
 	reverseProxy    *httputil.ReverseProxy
 	metaReady       bool
 	apiServer       *http.Server
+	cliMgr          *ClientMgr
 }
 
 // NewServer creates a new server
@@ -136,11 +138,13 @@ func (m *Server) Start(cfg *config.Config) (err error) {
 	m.config = newClusterConfig()
 	gConfig = m.config
 	m.leaderInfo = &LeaderInfo{}
-	m.reverseProxy = m.newReverseProxy()
+
 	if err = m.checkConfig(cfg); err != nil {
 		log.LogError(errors.Stack(err))
 		return
 	}
+	m.reverseProxy = m.newReverseProxy()
+	m.cliMgr = newClientMgr()
 
 	if m.rocksDBStore, err = raftstore_db.NewRocksDBStoreAndRecovery(m.storeDir, LRUCacheSize, WriteBufferSize); err != nil {
 		return
@@ -150,6 +154,7 @@ func (m *Server) Start(cfg *config.Config) (err error) {
 		log.LogError(errors.Stack(err))
 		return
 	}
+
 	m.initCluster()
 	m.initUser()
 	m.cluster.partition = m.partition
@@ -165,13 +170,16 @@ func (m *Server) Start(cfg *config.Config) (err error) {
 	}
 	WarnMetrics = newWarningMetrics(m.cluster)
 	m.cluster.scheduleTask()
-	m.startHTTPService(ModuleName, cfg)
 	exporter.RegistConsul(m.clusterName, ModuleName, cfg)
+	m.startHTTPService(ModuleName, cfg)
 	metricsService := newMonitorMetrics(m.cluster)
 	metricsService.start()
 
 	_, err = stat.NewStatistic(m.logDir, Stat, int64(stat.DefaultStatLogSize),
 		stat.DefaultTimeOutUs, true)
+
+	// only set buckets 1ms from master module.
+	exporter.SetBuckets([]float64{1000})
 
 	m.wg.Add(1)
 	return err
@@ -180,9 +188,16 @@ func (m *Server) Start(cfg *config.Config) (err error) {
 // Shutdown closes the server
 func (m *Server) Shutdown() {
 	var err error
+	if !atomic.CompareAndSwapInt32(&m.cluster.stopFlag, 0, 1) {
+		log.LogWarnf("action[Shutdown] cluster already stopped!")
+		return
+	}
 	if m.cluster.stopc != nil {
 		close(m.cluster.stopc)
+		m.cluster.wg.Wait()
+		log.LogWarnf("action[Shutdown] cluster stopped!")
 	}
+
 	if m.apiServer != nil {
 		if err = m.apiServer.Shutdown(context.Background()); err != nil {
 			log.LogErrorf("action[Shutdown] failed, err: %v", err)
@@ -197,7 +212,6 @@ func (m *Server) Shutdown() {
 
 	// NOTE: wait 10 second for background goroutines to exit
 	time.Sleep(10 * time.Second)
-
 	// NOTE: close rocksdb
 	if m.rocksDBStore != nil {
 		m.rocksDBStore.Close()
@@ -240,6 +254,12 @@ func (m *Server) checkConfig(cfg *config.Config) (err error) {
 	m.config.DisableAutoCreate = cfg.GetBoolWithDefault(disableAutoCreate, false)
 	syslog.Printf("get disableAutoCreate cfg %v", m.config.DisableAutoCreate)
 
+	m.config.EnableFollowerCache = cfg.GetBoolWithDefault(enableFollowerCache, true)
+	syslog.Printf("get enableFollowerCache cfg %v", m.config.EnableFollowerCache)
+
+	m.config.EnableSnapshot = cfg.GetBoolWithDefault(enableSnapshot, false)
+	syslog.Printf("get enableSnapshot cfg %v", m.config.EnableSnapshot)
+
 	m.config.faultDomain = cfg.GetBoolWithDefault(faultDomain, false)
 	m.config.heartbeatPort = cfg.GetInt64(heartbeatPortKey)
 	m.config.replicaPort = cfg.GetInt64(replicaPortKey)
@@ -262,6 +282,14 @@ func (m *Server) checkConfig(cfg *config.Config) (err error) {
 	if m.config.nodeSetCapacity < 3 {
 		m.config.nodeSetCapacity = defaultNodeSetCapacity
 	}
+
+	m.config.httpProxyPoolSize = uint64(cfg.GetInt64(cfgHttpReversePoolSize))
+	if m.config.httpProxyPoolSize < defaultHttpReversePoolSize {
+		m.config.httpProxyPoolSize = defaultHttpReversePoolSize
+	}
+	m.config.httpPoolSize = uint64(cfg.GetInt64(proto.CfgHttpPoolSize))
+
+	syslog.Printf("http reverse pool size %d, http pool size %d\n", m.config.httpProxyPoolSize, m.config.httpPoolSize)
 
 	m.config.DefaultNormalZoneCnt = defaultNodeSetGrpBatchCnt
 	m.config.DomainBuildAsPossible = cfg.GetBoolWithDefault(cfgDomainBuildAsPossible, false)
@@ -336,11 +364,8 @@ func (m *Server) checkConfig(cfg *config.Config) (err error) {
 		}
 	}
 
-	intervalToScanS3ExpirationVal := cfg.GetString(intervalToScanS3Expiration)
-	if intervalToScanS3ExpirationVal != "" {
-		if m.config.IntervalToScanS3Expiration, err = strconv.ParseInt(intervalToScanS3ExpirationVal, 10, 0); err != nil {
-			return fmt.Errorf("%v,err:%v", proto.ErrInvalidCfg, err.Error())
-		}
+	if cfg.GetInt(cfgStartLcScanTime) >= 1 && cfg.GetInt(cfgStartLcScanTime) <= 14 {
+		m.config.StartLcScanTime = cfg.GetInt(cfgStartLcScanTime)
 	}
 
 	m.tickInterval = int(cfg.GetFloat(cfgTickInterval))
@@ -372,6 +397,11 @@ func (m *Server) checkConfig(cfg *config.Config) (err error) {
 
 	enableDirectDeleteVol = cfg.GetBoolWithDefault(cfgEnableDirectDeleteVol, true)
 
+	m.config.cfgDataMediaType = uint32(cfg.GetInt64(cfgLegacyDataMediaType))
+	if m.config.cfgDataMediaType != 0 && !proto.IsValidMediaType(m.config.cfgDataMediaType) {
+		return fmt.Errorf("legacy media type is not vaild, type %d", m.config.cfgDataMediaType)
+	}
+	syslog.Printf("config mediaType %v", m.config.cfgDataMediaType)
 	return
 }
 
@@ -417,11 +447,11 @@ func (m *Server) initFsm() {
 
 func (m *Server) initCluster() {
 	log.LogInfo("action[initCluster] begin")
-	m.cluster = newCluster(m.clusterName, m.leaderInfo, m.fsm, m.partition, m.config)
+	m.cluster = newCluster(m.clusterName, m.leaderInfo, m.fsm, m.partition, m.config, m)
 	m.cluster.retainLogs = m.retainLogs
 	log.LogInfo("action[initCluster] end")
 
-	// incase any limiter on follower
+	// in case any limiter on follower
 	log.LogInfo("action[loadApiLimiterInfo] begin")
 	m.cluster.loadApiLimiterInfo()
 	log.LogInfo("action[loadApiLimiterInfo] end")

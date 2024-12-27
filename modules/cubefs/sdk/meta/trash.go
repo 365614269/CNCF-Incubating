@@ -33,6 +33,7 @@ const (
 	DefaultReaddirLimit = 4096
 	TrashPathIgnore     = "trashPathIgnore"
 	OneDayMinutes       = 24 * 60
+	LockExpireSeconds   = 3600 // 1 hour
 )
 
 const (
@@ -56,6 +57,10 @@ type Trash struct {
 	traverseDirGoroutineLimit chan bool
 	rebuildGoroutineLimit     int
 	rebuildStatus             int32
+
+	getLock    bool
+	lockId     int64
+	getLockMux sync.Mutex
 }
 
 const (
@@ -83,9 +88,14 @@ func NewTrash(mw *MetaWrapper, interval int64, subDir string, traverseLimit int,
 	if err := trash.InitTrashRoot(); err != nil {
 		return nil, err
 	}
+
+	return trash, nil
+}
+
+func (trash *Trash) StartScheduleTask() {
 	go trash.deleteWorker()
 	go trash.buildDeletedFileParentDirsBackground()
-	return trash, nil
+	go trash.refreshTrashLock()
 }
 
 func (trash *Trash) InitTrashRoot() (err error) {
@@ -176,12 +186,18 @@ func (trash *Trash) MoveToTrash(parentPathAbsolute string, parentIno uint64, fil
 		log.LogDebugf("action[MoveToTrash] : parentPathAbsolute(%v) fileName(%v) consume %v", parentPathAbsolute, fileName, time.Since(start).Seconds())
 	}()
 	log.LogDebugf("action[MoveToTrash] : parentPathAbsolute(%v) fileName(%v) parentIno（%v）", parentPathAbsolute, fileName, parentIno)
+retry:
 	if err = trash.createCurrent(true); err != nil {
 		return err
 	}
 	// save current ino to prevent renaming current to expired
 	trashCurrent := path.Join(trash.trashRoot, CurrentName)
-	trashCurrentIno := trash.subDirCache.Get(trashCurrent).Inode
+	trashCurrentInoInfo := trash.subDirCache.Get(trashCurrent)
+	if trashCurrentInoInfo == nil {
+		time.Sleep(10 * time.Millisecond)
+		goto retry
+	}
+	trashCurrentIno := trashCurrentInoInfo.Inode
 	srcPath := path.Join(trash.mountPath, parentPathAbsolute, fileName)
 	// generate tmp file name
 	tmpFileName := fmt.Sprintf("%v%v", trash.generateTmpFileName(parentPathAbsolute), fileName)
@@ -291,6 +307,56 @@ func (trash *Trash) stopDeleteWorker() {
 	<-trash.deleteWorkerStop
 }
 
+func (trash *Trash) tryGetLock() {
+	trash.getLockMux.Lock()
+	defer trash.getLockMux.Unlock()
+
+	log.LogDebugf("tryGetLock: try get root dir lock for trash, path %s, vol %s, ino %d",
+		trash.mountPath, trash.mw.volname, trash.trashRootIno)
+
+	retId, err := trash.mw.LockDir(trash.trashRootIno, LockExpireSeconds, trash.lockId)
+	if err != nil {
+		log.LogWarnf("tryGetLock: get dir lock failed for trash, ino %d, id %d, err %v", trash.trashRootIno, trash.lockId, err)
+		trash.getLock = false
+		trash.lockId = 0
+		return
+	}
+
+	trash.getLock = true
+	trash.lockId = retId
+	log.LogWarnf("tryGetLock: try get root dir lock for trash success, path %s, vol %s, ino %d",
+		trash.mountPath, trash.mw.volname, trash.trashRootIno)
+}
+
+func (trash *Trash) refreshTrashLock() {
+	leaseTicker := time.NewTicker(LockExpireSeconds / 2 * time.Second)
+	defer leaseTicker.Stop()
+
+	trash.tryGetLock()
+
+	for {
+		select {
+		case <-trash.mw.closeCh:
+			if !trash.getLock {
+				log.LogWarnf("releaseTrashLock: no need to relase lock, ino %d", trash.trashRootIno)
+				return
+			}
+			trash.getLock = false
+
+			_, err := trash.mw.LockDir(trash.trashRootIno, 0, trash.lockId)
+			if err != nil {
+				log.LogErrorf("releaseTrashLock: relase failed, ino %d, id %d, err %s", trash.trashRootIno, trash.lockId, err)
+				return
+			}
+
+			log.LogWarnf("releaseTrashLock: trash is closed now, try release lock success, ino %d", trash.trashRootIno)
+			return
+		case <-leaseTicker.C:
+			trash.tryGetLock()
+		}
+	}
+}
+
 func (trash *Trash) deleteWorker() {
 	checkPointInterval := trash.getDeleteInterval()
 	t := time.NewTicker(time.Duration(checkPointInterval) * time.Minute)
@@ -303,6 +369,12 @@ func (trash *Trash) deleteWorker() {
 			trash.deleteWorkerStop <- struct{}{}
 			return
 		case <-t.C:
+
+			if !trash.getLock {
+				log.LogDebugf("deleteWorker: trash get lock failed, not execute")
+				continue
+			}
+
 			// delete expired directory
 			trash.deleteExpiredData()
 			// rename current directory(expired_timestamp)
@@ -335,7 +407,7 @@ func (trash *Trash) renameCurrent() {
 		return
 	}
 	checkPointInterval := trash.deleteInterval / 4
-	if time.Since(inoInfo.CreateTime) < (time.Duration(checkPointInterval) * time.Minute) {
+	if time.Since(inoInfo.CreateTime) < time.Duration(checkPointInterval)*time.Minute {
 		log.LogDebugf("action[renameCurrent]trashCurrent keep for 1/4 interval %v", time.Since(inoInfo.CreateTime).String())
 		return
 	}
@@ -349,7 +421,7 @@ func (trash *Trash) renameCurrent() {
 			//	expiredTrash, false); err != nil
 			log.LogDebugf("action[renameCurrent]rename current  failed: %v", err.Error())
 			time.Sleep(time.Millisecond * 100)
-			trashModifyTime.Add(100 * time.Millisecond)
+			trashModifyTime = trashModifyTime.Add(100 * time.Millisecond)
 		} else {
 			log.LogDebugf("action[renameCurrent]rename current  completed")
 			// clear cache
@@ -438,6 +510,80 @@ func (trash *Trash) removeAll(dirName string, dirIno uint64) {
 		wg.Wait()
 		from = batches[len(batches)-1].Name
 	}
+	noMore = false
+	from = ""
+	for !noMore {
+		batches, err := trash.mw.ReadDirLimit_ll(dirIno, from, DefaultReaddirLimit)
+		if err != nil {
+			log.LogErrorf("action[removeAll] ReadDirLimit_ll: ino(%v) err(%v) from(%v)", dirIno, err, from)
+			return
+		}
+		batchNr := uint64(len(batches))
+		if batchNr == 0 || (from != "" && batchNr == 1) {
+			break
+		} else if batchNr < DefaultReaddirLimit {
+			noMore = true
+		}
+		if from != "" {
+			batches = batches[1:]
+		}
+		for _, entry := range batches {
+			select {
+			case trash.traverseDirGoroutineLimit <- true:
+				wg.Add(1)
+				go func(parentIno uint64, entry string, isDir bool, fullPath string) {
+					defer wg.Done()
+					trash.deleteTask(parentIno, entry, isDir, fullPath)
+					trash.releaseTraverseToken()
+				}(dirIno, entry.Name, proto.IsDir(entry.Type), path.Join(dirName, entry.Name))
+			default:
+				trash.deleteTask(dirIno, entry.Name, proto.IsDir(entry.Type), path.Join(dirName, entry.Name))
+			}
+		}
+		wg.Wait()
+		from = batches[len(batches)-1].Name
+	}
+	//entries, err := trash.mw.ReadDir_ll(dirIno)
+	//if err != nil {
+	//	log.LogWarnf("action[deleteDir]delete %v failed: %v", dirName, err)
+	//	return
+	//}
+	//delete sub files
+	//for _, entry := range entries {
+	//	log.LogDebugf("action[deleteDir]traverse  %v", entry.Name)
+	//	if !proto.IsDir(entry.Type) {
+	//		continue
+	//	}
+	//	trash.mw.AddInoInfoCache(entry.Inode, dirIno, entry.Name)
+	//	select {
+	//	case trash.traverseDirGoroutineLimit <- true:
+	//		log.LogDebugf("action[deleteDir]launch goroutine  %v", entry.Name)
+	//		wg.Add(1)
+	//		go func(dirName string, dirIno uint64) {
+	//			defer wg.Done()
+	//			trash.removeAll(dirName, dirIno)
+	//			trash.releaseTraverseToken()
+	//		}(entry.Name, entry.Inode)
+	//	default:
+	//		log.LogDebugf("action[deleteDir]execute local  %v", entry.Name)
+	//		trash.removeAll(entry.Name, entry.Inode)
+	//	}
+	//}
+	//wg.Wait()
+	////all sub files is deleted
+	//for _, entry := range entries {
+	//	select {
+	//	case trash.traverseDirGoroutineLimit <- true:
+	//		wg.Add(1)
+	//		go func(parentIno uint64, entry string, isDir bool) {
+	//			defer wg.Done()
+	//			trash.deleteTask(parentIno, entry, isDir)
+	//		}(dirIno, entry.Name, proto.IsDir(entry.Type))
+	//	default:
+	//		trash.deleteTask(dirIno, entry.Name, proto.IsDir(entry.Type))
+	//	}
+	//}
+	//wg.Wait()
 	log.LogDebugf("action[deleteDir] delete complete %v", dirName)
 }
 
@@ -553,7 +699,7 @@ func (trash *Trash) createParentPathInTrash(parentPath, rootDir string) (err err
 		trashCurrent = rootDir
 	}
 
-	log.LogDebugf("action[createParentPathInTrash] ready  to create %v in trash %v", parentPath, trashCurrent)
+	log.LogDebugf("action[createParentPathInTrash] ready to create %v in trash %v", parentPath, trashCurrent)
 	subDirs := strings.Split(parentPath, "/")
 	cur := trashCurrent
 	trashCurrentIno := trash.subDirCache.Get(trashCurrent)
@@ -571,7 +717,7 @@ func (trash *Trash) createParentPathInTrash(parentPath, rootDir string) (err err
 	for _, sub := range subDirs {
 		parentPath := cur
 		cur = path.Join(cur, sub)
-		log.LogDebugf("action[createParentPathInTrash] try  to create %v ", cur)
+		log.LogDebugf("action[createParentPathInTrash] try to create %v ", cur)
 		if trash.pathIsExist(cur) {
 			info := trash.subDirCache.Get(cur)
 			if info == nil {
@@ -603,11 +749,27 @@ func (trash *Trash) createParentPathInTrash(parentPath, rootDir string) (err err
 		parentInfo, err = trash.CreateDirectory(parentIno, sub, info.Mode, info.Uid, info.Gid, path.Join(parentPath, sub), true)
 		if err != nil {
 			if err == syscall.EEXIST {
-				log.LogDebugf("action[createParentPathInTrash] CreateDirectory  %v in trash failed: %v", cur, err.Error())
+				log.LogDebugf("action[createParentPathInTrash] CreateDirectory  %v may be created by other routine", cur)
+				// may be created by other routine
+				info := trash.subDirCache.Get(path.Join(parentPath, sub))
+				if info == nil {
+					ino, _ := trash.mw.LookupPath(path.Join(parentPath, sub))
+					inoInfo, err := trash.mw.InodeGet_ll(ino)
+					if err != nil {
+						log.LogWarnf("action[createParentPathInTrash] get %v inode info failed:%v", path.Join(parentPath, sub), err.Error())
+						return err
+					}
+					trash.subDirCache.Put(path.Join(parentPath, sub), inoInfo)
+					parentIno = inoInfo.Inode
+				} else {
+					log.LogDebugf("action[createParentPathInTrash] pathIsExist  %v ", path.Join(parentPath, sub))
+					parentIno = info.Inode
+				}
+				continue
 			} else {
 				log.LogWarnf("action[createParentPathInTrash] CreateDirectory  %v in trash failed: %v", cur, err.Error())
+				return
 			}
-			return
 		}
 		if parentInfo == nil {
 			panic(fmt.Sprintf("parentInfo should not be nil for parentPath %v", parentPath))
@@ -659,7 +821,7 @@ func (trash *Trash) rename(oldPath, newPath string) error {
 
 func (trash *Trash) IsTrashRoot(parentIno uint64, name string) bool {
 	info, _ := trash.LookupPath(trash.mountPath, true)
-	if info.Inode == parentIno && name == TrashPrefix {
+	if info != nil && info.Inode == parentIno && name == TrashPrefix {
 		return true
 	}
 	return false
@@ -700,18 +862,16 @@ func (trash *Trash) releaseTraverseToken() {
 }
 
 func (trash *Trash) buildDeletedFileParentDirsBackground() {
-	rebuildTimer := time.NewTimer(5 * time.Second)
-	defer rebuildTimer.Stop()
-	for {
-		select {
-		case <-rebuildTimer.C:
-			trash.buildDeletedFileParentDirs()
-			trash.buildDeletedFileParentDirsForExpired()
-			rebuildTimer.Reset(5 * time.Second)
-		case <-trash.done:
-			log.LogWarnf("buildDeletedFileParentDirs stopped!")
-			return
+	rebuildTicker := time.NewTicker(5 * time.Second)
+	defer rebuildTicker.Stop()
+	for range rebuildTicker.C {
+		if !trash.getLock {
+			log.LogDebugf("buildDeletedFileParentDirsBackground: trash get lock failed, not execute")
+			continue
 		}
+
+		trash.buildDeletedFileParentDirs()
+		trash.buildDeletedFileParentDirsForExpired()
 	}
 }
 
@@ -909,13 +1069,19 @@ func (trash *Trash) rebuildDir(dirName, trashCurrent string, ino uint64, fileIno
 	log.LogDebugf("action[rebuildDir]: rebuild dir %v in %v", dirName, trashCurrent)
 	originName := dirName
 	dirName = trash.recoverPosixPathName(dirName, fileIno)
+	var err error
 	if forExpired {
-		trash.createParentPathInTrash(dirName, trashCurrent)
+		err = trash.createParentPathInTrash(dirName, trashCurrent)
 	} else {
-		trash.createParentPathInTrash(dirName, CurrentName)
+		err = trash.createParentPathInTrash(dirName, CurrentName)
+	}
+	if err != nil {
+		log.LogDebugf("action[rebuildDir]: createParentPathInTrash %v forExpired %v failed:err %v",
+			dirName, forExpired, err)
+		return
 	}
 	log.LogDebugf("action[rebuildDir]: delete dir %v in %v[%v]", dirName, trashCurrent, ino)
-	_, err := trash.mw.Delete_ll(ino, path.Base(originName), true, path.Join(trashCurrent, dirName))
+	_, err = trash.mw.Delete_ll(ino, path.Base(originName), true, path.Join(trashCurrent, dirName))
 	if err != nil {
 		log.LogDebugf("action[rebuildDir]: delete dir %v in %v[%v] failed:err %v", dirName, trashCurrent, ino, err)
 	}

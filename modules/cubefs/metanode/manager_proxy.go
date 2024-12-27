@@ -15,9 +15,10 @@
 package metanode
 
 import (
+	"fmt"
 	"net"
 
-	"github.com/cubefs/cubefs/storage"
+	"github.com/cubefs/cubefs/datanode/storage"
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util/log"
@@ -106,11 +107,29 @@ func (m *metadataManager) serveProxy(conn net.Conn, mp MetaPartition,
 		return false
 	}
 
+	followerRead := func() bool {
+		if !p.IsReadMetaPkt() {
+			return false
+		}
+
+		if p.ProtoVersion == proto.PacketProtoVersion0 && mp.IsFollowerRead() {
+			return true
+		}
+
+		return p.IsFollowerReadMetaPkt()
+	}
+
 	if leaderAddr, ok = mp.IsLeader(); ok {
 		return
 	}
+
 	if leaderAddr == "" {
-		err = ErrNoLeader
+		if followerRead() {
+			log.LogDebugf("read from follower: p(%v), arg(%v)", p, mp.GetBaseConfig().PartitionId)
+			return true
+		}
+
+		err = fmt.Errorf("mpId(%v) %v", mp.GetBaseConfig().PartitionId, ErrNoLeader)
 		p.PacketErrorWithBody(proto.OpAgain, []byte(err.Error()))
 		goto end
 	}
@@ -140,7 +159,13 @@ func (m *metadataManager) serveProxy(conn net.Conn, mp MetaPartition,
 			reqID, reqOp, p.ReqID, p.Opcode)
 	}
 	m.connPool.PutConnect(mConn, NoClosedConnect)
+
 end:
+	if p.Opcode != proto.OpOk && followerRead() {
+		log.LogWarnf("read from follower after try leader failed: p(%v)", p)
+		return true
+	}
+
 	m.respondToClient(conn, p)
 	if err != nil {
 		log.LogErrorf("[serveProxy]: req: %d - %v, %v, packet(%v)", p.GetReqID(),

@@ -29,21 +29,25 @@ import (
 // DataPartitionMap stores all the data partitionMap
 type DataPartitionMap struct {
 	sync.RWMutex
-	partitionMap           map[uint64]*DataPartition
-	readableAndWritableCnt int    // number of readable and writable partitionMap
-	lastLoadedIndex        uint64 // last loaded partition index
-	lastReleasedIndex      uint64 // last released partition index
-	partitions             []*DataPartition
-	responseCache          []byte
-	responseCompressCache  []byte
-	lastAutoCreateTime     time.Time
-	volName                string
-	readMutex              sync.RWMutex
+	partitionMap            map[uint64]*DataPartition
+	readableAndWritableCnt  int    // number of readable and writable partitionMap
+	lastLoadedIndex         uint64 // last loaded partition index
+	lastReleasedIndex       uint64 // last released partition index
+	partitions              []*DataPartition
+	responseCache           []byte
+	responseCompressCache   []byte
+	lastAutoCreateTime      time.Time
+	volName                 string
+	readMutex               sync.RWMutex
+	partitionMapByMediaType map[uint32]map[uint64]struct{} // level-1 key: mediaType, level-2 key: dpId
+	rwCntByMediaType        map[uint32]int                 // readable and writable dp count by mediaType
 }
 
 func newDataPartitionMap(volName string) (dpMap *DataPartitionMap) {
 	dpMap = new(DataPartitionMap)
 	dpMap.partitionMap = make(map[uint64]*DataPartition)
+	dpMap.partitionMapByMediaType = make(map[uint32]map[uint64]struct{})
+	dpMap.rwCntByMediaType = make(map[uint32]int)
 	dpMap.partitions = make([]*DataPartition, 0)
 	dpMap.responseCache = make([]byte, 0)
 	dpMap.responseCompressCache = make([]byte, 0)
@@ -87,8 +91,21 @@ func (dpMap *DataPartitionMap) del(dp *DataPartition) {
 			break
 		}
 	}
-
 	delete(dpMap.partitionMap, dp.PartitionID)
+
+	dpMap.delByMediaType(dp)
+}
+
+func (dpMap *DataPartitionMap) delByMediaType(dp *DataPartition) {
+	dpIdSet, ok := dpMap.partitionMapByMediaType[dp.MediaType]
+	if !ok {
+		log.LogCriticalf("[DataPartitionMap] delByMediaType: not record of mediaType(%v) when trying to del dpId(%v)",
+			dp.MediaType, dp.PartitionID)
+		return
+	}
+
+	delete(dpIdSet, dp.PartitionID)
+	log.LogDebugf("[DataPartitionMap] delByMediaType: mediaType(%v), dpId(%v)", dp.MediaType, dp.PartitionID)
 }
 
 func (dpMap *DataPartitionMap) put(dp *DataPartition) {
@@ -99,6 +116,7 @@ func (dpMap *DataPartitionMap) put(dp *DataPartition) {
 	if !ok {
 		dpMap.partitions = append(dpMap.partitions, dp)
 		dpMap.partitionMap[dp.PartitionID] = dp
+		dpMap.putByMediaType(dp)
 		return
 	}
 
@@ -116,10 +134,71 @@ func (dpMap *DataPartitionMap) put(dp *DataPartition) {
 	}
 }
 
-func (dpMap *DataPartitionMap) setReadWriteDataPartitions(readWrites int, clusterName string) {
+func (dpMap *DataPartitionMap) putByMediaType(dp *DataPartition) {
+	dpIdSet, ok := dpMap.partitionMapByMediaType[dp.MediaType]
+	if !ok {
+		dpIdSet = make(map[uint64]struct{})
+		dpMap.partitionMapByMediaType[dp.MediaType] = dpIdSet
+		log.LogDebugf("[DataPartitionMap] putByMediaType: add set for mediaType(%v), dpId(%v)", dp.MediaType, dp.PartitionID)
+	}
+
+	dpIdSet[dp.PartitionID] = struct{}{}
+	log.LogDebugf("[DataPartitionMap] putByMediaType: put by mediaType(%v), dpId(%v)", dp.MediaType, dp.PartitionID)
+}
+
+func (dpMap *DataPartitionMap) getDataPartitionsCountOfMediaType(mediaType uint32) int {
 	dpMap.Lock()
 	defer dpMap.Unlock()
-	dpMap.readableAndWritableCnt = readWrites
+
+	dpIdSet, ok := dpMap.partitionMapByMediaType[mediaType]
+	if !ok {
+		return 0
+	}
+
+	return len(dpIdSet)
+}
+
+func (dpMap *DataPartitionMap) refreshReadWriteDataPartitionCnt() {
+	var cntAllMediaType int
+	for _, cntOfMediaType := range dpMap.rwCntByMediaType {
+		cntAllMediaType = cntAllMediaType + cntOfMediaType
+	}
+	dpMap.readableAndWritableCnt = cntAllMediaType
+}
+
+func (dpMap *DataPartitionMap) setReadWriteDataPartitionCntByMediaType(rwDpCnt int, mediaType uint32) {
+	dpMap.Lock()
+	defer dpMap.Unlock()
+
+	dpMap.rwCntByMediaType[mediaType] = rwDpCnt
+
+	dpMap.refreshReadWriteDataPartitionCnt()
+}
+
+func (dpMap *DataPartitionMap) IncReadWriteDataPartitionCntByMediaType(incCnt int, mediaType uint32) {
+	dpMap.Lock()
+	defer dpMap.Unlock()
+
+	var oldCnt int
+	if cnt, ok := dpMap.rwCntByMediaType[mediaType]; ok {
+		oldCnt = cnt
+	}
+
+	newCnt := oldCnt + incCnt
+	dpMap.rwCntByMediaType[mediaType] = newCnt
+
+	dpMap.refreshReadWriteDataPartitionCnt()
+}
+
+func (dpMap *DataPartitionMap) getReadWriteDataPartitionCntByMediaType(mediaType uint32) (rwDpCnt int) {
+	dpMap.Lock()
+	defer dpMap.Unlock()
+
+	if cnt, ok := dpMap.rwCntByMediaType[mediaType]; ok {
+		rwDpCnt = cnt
+	}
+
+	return rwDpCnt
 }
 
 func (dpMap *DataPartitionMap) getDataPartitionResponseCache() []byte {
@@ -151,7 +230,7 @@ func (dpMap *DataPartitionMap) setDataPartitionCompressCache(responseCompress []
 }
 
 func (dpMap *DataPartitionMap) updateResponseCache(needsUpdate bool, minPartitionID uint64, vol *Vol) (body []byte, err error) {
-	log.LogInfof("[updateResponseCache] get vol(%v) dp cache", vol.Name)
+	log.LogDebugf("[updateResponseCache] get vol(%v) dp cache", vol.Name)
 
 	responseCache := dpMap.getDataPartitionResponseCache()
 	if responseCache == nil || needsUpdate || len(responseCache) == 0 {
@@ -163,6 +242,8 @@ func (dpMap *DataPartitionMap) updateResponseCache(needsUpdate bool, minPartitio
 			return
 		}
 		dpResps := dpMap.getDataPartitionsView(minPartitionID)
+		log.LogDebugf("[updateResponseCache] vol(%v) needsUpdate(%v) minPartitionID(%v) volType(%v)  dpNum(%v)",
+			dpMap.volName, needsUpdate, minPartitionID, vol.VolType, len(dpResps))
 		if len(dpResps) == 0 && proto.IsHot(vol.VolType) {
 			log.LogError(fmt.Sprintf("action[updateDpResponseCache],volName[%v] minPartitionID:%v,err:%v",
 				dpMap.volName, minPartitionID, proto.ErrNoAvailDataPartition))
@@ -172,6 +253,9 @@ func (dpMap *DataPartitionMap) updateResponseCache(needsUpdate bool, minPartitio
 		cv.DataPartitions = dpResps
 		if vol.IsReadOnlyForVolFull() || vol.Forbidden {
 			cv.VolReadOnly = true
+		}
+		if vol.DpReadOnlyWhenVolFull {
+			cv.StatByClass = vol.StatByStorageClass
 		}
 		reply := newSuccessHTTPReply(cv)
 		if body, err = json.Marshal(reply); err != nil {
@@ -209,11 +293,10 @@ func (dpMap *DataPartitionMap) updateCompressCache(needsUpdate bool, minPartitio
 
 func (dpMap *DataPartitionMap) getDataPartitionsView(minPartitionID uint64) (dpResps []*proto.DataPartitionResponse) {
 	dpResps = make([]*proto.DataPartitionResponse, 0)
+	dpCache := make([]*DataPartition, 0)
 	log.LogDebugf("volName[%v] DataPartitionMapLen[%v],DataPartitionsLen[%v],minPartitionID[%v]",
 		dpMap.volName, len(dpMap.partitionMap), len(dpMap.partitions), minPartitionID)
-
 	dpMap.RLock()
-	defer dpMap.RUnlock()
 	for _, dp := range dpMap.partitionMap {
 		if len(dp.Hosts) == 0 {
 			log.LogErrorf("getDataPartitionsView. dp %v host nil", dp.PartitionID)
@@ -222,10 +305,13 @@ func (dpMap *DataPartitionMap) getDataPartitionsView(minPartitionID uint64) (dpR
 		if dp.PartitionID <= minPartitionID {
 			continue
 		}
+		dpCache = append(dpCache, dp)
+	}
+	dpMap.RUnlock()
+	for _, dp := range dpCache {
 		dpResp := dp.convertToDataPartitionResponse()
 		dpResps = append(dpResps, dpResp)
 	}
-
 	return
 }
 
@@ -330,10 +416,15 @@ func (dpMap *DataPartitionMap) setAllDataPartitionsToReadOnly() {
 }
 
 func (dpMap *DataPartitionMap) checkBadDiskDataPartitions(diskPath, nodeAddr string) (partitions []*DataPartition) {
+	dpMapCache := make([]*DataPartition, 0)
 	dpMap.RLock()
-	defer dpMap.RUnlock()
-	partitions = make([]*DataPartition, 0)
 	for _, dp := range dpMap.partitionMap {
+		dpMapCache = append(dpMapCache, dp)
+	}
+	dpMap.RUnlock()
+
+	partitions = make([]*DataPartition, 0)
+	for _, dp := range dpMapCache {
 		if dp.containsBadDisk(diskPath, nodeAddr) {
 			partitions = append(partitions, dp)
 		}

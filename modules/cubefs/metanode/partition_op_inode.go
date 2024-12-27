@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util/auditlog"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
+	"github.com/cubefs/cubefs/util/timeutil"
 )
 
 func replyInfoNoCheck(info *proto.InodeInfo, ino *Inode) bool {
@@ -45,6 +47,10 @@ func replyInfoNoCheck(info *proto.InodeInfo, ino *Inode) bool {
 	info.CreateTime = time.Unix(ino.CreateTime, 0)
 	info.AccessTime = time.Unix(ino.AccessTime, 0)
 	info.ModifyTime = time.Unix(ino.ModifyTime, 0)
+	info.StorageClass = ino.StorageClass
+	info.MigrationStorageClass = ino.HybridCloudExtentsMigration.storageClass
+	info.LeaseExpireTime = ino.LeaseExpireTime
+	info.ForbiddenLc = ino.LeaseNotExpire()
 	return true
 }
 
@@ -70,24 +76,43 @@ func replyInfo(info *proto.InodeInfo, ino *Inode, quotaInfos map[uint32]*proto.M
 	info.AccessTime = time.Unix(ino.AccessTime, 0)
 	info.ModifyTime = time.Unix(ino.ModifyTime, 0)
 	info.QuotaInfos = quotaInfos
+	info.StorageClass = ino.StorageClass
+	info.LeaseExpireTime = ino.LeaseExpireTime
+	info.ForbiddenLc = ino.LeaseNotExpire()
+
+	info.MigrationStorageClass = ino.HybridCloudExtentsMigration.storageClass
+	if ino.HybridCloudExtentsMigration.sortedEks != nil {
+		info.HasMigrationEk = true
+	}
+	info.MigrationExtentKeyExpiredTime = time.Unix(ino.HybridCloudExtentsMigration.expiredTime, 0)
 	return true
 }
 
 func txReplyInfo(inode *Inode, txInfo *proto.TransactionInfo, quotaInfos map[uint32]*proto.MetaQuotaInfo) (resp *proto.TxCreateInodeResponse) {
 	inoInfo := &proto.InodeInfo{
-		Inode:      inode.Inode,
-		Mode:       inode.Type,
-		Nlink:      inode.NLink,
-		Size:       inode.Size,
-		Uid:        inode.Uid,
-		Gid:        inode.Gid,
-		Generation: inode.Generation,
-		ModifyTime: time.Unix(inode.ModifyTime, 0),
-		CreateTime: time.Unix(inode.CreateTime, 0),
-		AccessTime: time.Unix(inode.AccessTime, 0),
-		QuotaInfos: quotaInfos,
-		Target:     nil,
+		Inode:                 inode.Inode,
+		Mode:                  inode.Type,
+		Nlink:                 inode.NLink,
+		Size:                  inode.Size,
+		Uid:                   inode.Uid,
+		Gid:                   inode.Gid,
+		Generation:            inode.Generation,
+		ModifyTime:            time.Unix(inode.ModifyTime, 0),
+		CreateTime:            time.Unix(inode.CreateTime, 0),
+		AccessTime:            time.Unix(inode.AccessTime, 0),
+		QuotaInfos:            quotaInfos,
+		Target:                nil,
+		StorageClass:          inode.StorageClass,
+		LeaseExpireTime:       inode.LeaseExpireTime,
+		MigrationStorageClass: inode.HybridCloudExtentsMigration.storageClass,
 	}
+
+	inoInfo.ForbiddenLc = inode.LeaseNotExpire()
+
+	if inode.HybridCloudExtentsMigration.sortedEks != nil {
+		inoInfo.HasMigrationEk = true
+	}
+
 	if length := len(inode.LinkTarget); length > 0 {
 		inoInfo.Target = make([]byte, length)
 		copy(inoInfo.Target, inode.LinkTarget)
@@ -100,20 +125,56 @@ func txReplyInfo(inode *Inode, txInfo *proto.TransactionInfo, quotaInfos map[uin
 	return
 }
 
+// for compatibility: handle req from old version client without filed StorageType
+func (mp *metaPartition) checkCreateInoStorageClassForCompatibility(reqStorageClass uint32, inodeId uint64) (resultStorageClass uint32, err error) {
+	if proto.IsValidStorageClass(reqStorageClass) {
+		resultStorageClass = reqStorageClass
+		return
+	}
+
+	if reqStorageClass != proto.StorageClass_Unspecified {
+		err = fmt.Errorf("unknown req storageClass(%v)", reqStorageClass)
+		return
+	}
+
+	if proto.IsHot(mp.volType) {
+		if !proto.IsValidStorageClass(mp.GetVolStorageClass()) {
+			err = fmt.Errorf("CreateInode req without StorageClass but metanode config legacyReplicaStorageClass not set")
+			return
+		}
+
+		resultStorageClass = mp.GetVolStorageClass()
+		log.LogDebugf("legacy CreateInode req, hot vol(%v), mpId(%v), ino(%v), set ino storageClass as config legacyReplicaStorageClass(%v)",
+			mp.config.VolName, mp.config.PartitionId, inodeId, proto.StorageClassString(resultStorageClass))
+	} else {
+		resultStorageClass = proto.StorageClass_BlobStore
+		log.LogDebugf("legacy CreateInode req, cold vol(%v), mpId(%v), ino(%v), set ino storageClass as blobstore",
+			mp.config.VolName, mp.config.PartitionId, inodeId)
+	}
+
+	return
+}
+
 // CreateInode returns a new inode.
 func (mp *metaPartition) CreateInode(req *CreateInoReq, p *Packet, remoteAddr string) (err error) {
 	var (
-		status = proto.OpNotExistErr
-		reply  []byte
-		resp   interface{}
-		qinode *MetaQuotaInode
-		inoID  uint64
+		status               = proto.OpNotExistErr
+		reply                []byte
+		resp                 interface{}
+		qinode               *MetaQuotaInode
+		inoID                uint64
+		requiredStorageClass uint32
 	)
 	start := time.Now()
 	if mp.IsEnableAuditLog() {
 		defer func() {
 			auditlog.LogInodeOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.GetFullPath(), err, time.Since(start).Milliseconds(), inoID, 0)
 		}()
+	}
+	if requiredStorageClass, err = mp.checkCreateInoStorageClassForCompatibility(req.StorageType, inoID); err != nil {
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		log.LogErrorf("[CreateInode] %v, req(%+v)", err.Error(), req)
+		return
 	}
 	inoID, err = mp.nextInodeID()
 	if err != nil {
@@ -125,6 +186,16 @@ func (mp *metaPartition) CreateInode(req *CreateInoReq, p *Packet, remoteAddr st
 	ino.Gid = req.Gid
 	ino.setVer(mp.verSeq)
 	ino.LinkTarget = req.Target
+	ino.StorageClass = requiredStorageClass
+
+	if proto.IsStorageClassReplica(ino.StorageClass) {
+		ino.HybridCloudExtents.sortedEks = NewSortedExtents()
+	} else if ino.StorageClass == proto.StorageClass_BlobStore {
+		ino.HybridCloudExtents.sortedEks = NewSortedObjExtents()
+	} else {
+		p.PacketErrorWithBody(proto.OpErr, []byte(fmt.Sprintf("storage type %v not support", ino.StorageClass)))
+		return
+	}
 
 	val, err := ino.Marshal()
 	if err != nil {
@@ -157,11 +228,12 @@ func (mp *metaPartition) CreateInode(req *CreateInoReq, p *Packet, remoteAddr st
 
 func (mp *metaPartition) QuotaCreateInode(req *proto.QuotaCreateInodeRequest, p *Packet, remoteAddr string) (err error) {
 	var (
-		status = proto.OpNotExistErr
-		reply  []byte
-		resp   interface{}
-		qinode *MetaQuotaInode
-		inoID  uint64
+		status               = proto.OpNotExistErr
+		reply                []byte
+		resp                 interface{}
+		qinode               *MetaQuotaInode
+		inoID                uint64
+		requiredStorageClass uint32
 	)
 	start := time.Now()
 	if mp.IsEnableAuditLog() {
@@ -169,6 +241,12 @@ func (mp *metaPartition) QuotaCreateInode(req *proto.QuotaCreateInodeRequest, p 
 			auditlog.LogInodeOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.GetFullPath(), err, time.Since(start).Milliseconds(), inoID, 0)
 		}()
 	}
+	if requiredStorageClass, err = mp.checkCreateInoStorageClassForCompatibility(req.StorageType, inoID); err != nil {
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		log.LogErrorf("[QuotaCreateInode] %v, req(%+v)", err.Error(), req)
+		return
+	}
+
 	inoID, err = mp.nextInodeID()
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpInodeFullErr, []byte(err.Error()))
@@ -178,6 +256,7 @@ func (mp *metaPartition) QuotaCreateInode(req *proto.QuotaCreateInodeRequest, p 
 	ino.Uid = req.Uid
 	ino.Gid = req.Gid
 	ino.LinkTarget = req.Target
+	ino.StorageClass = requiredStorageClass
 
 	for _, quotaId := range req.QuotaIds {
 		status = mp.mqMgr.IsOverQuota(false, true, quotaId)
@@ -343,13 +422,15 @@ func (mp *metaPartition) UnlinkInode(req *UnlinkInoReq, p *Packet, remoteAddr st
 	ino := NewInode(req.Inode, 0)
 	if item := mp.inodeTree.Get(ino); item == nil {
 		err = fmt.Errorf("mp[%v] inode[%v] reqeust cann't found", mp.config.PartitionId, ino)
-		log.LogErrorf("action[UnlinkInode] %v", err)
+		log.LogWarnf("action[UnlinkInode] %v", err)
 		p.PacketErrorWithBody(proto.OpNotExistErr, []byte(err.Error()))
 		return
+	} else {
+		ino.UpdateHybridCloudParams(item.(*Inode))
 	}
-
+	enableSnapshot := mp.manager != nil && mp.manager.metaNode != nil && mp.manager.metaNode.clusterEnableSnapshot
 	if req.UniqID > 0 {
-		val = InodeOnceUnlinkMarshal(req)
+		val = InodeOnceUnlinkMarshal(req, enableSnapshot)
 		r, err = mp.submit(opFSMUnlinkInodeOnce, val)
 	} else {
 		ino.setVer(req.VerSeq)
@@ -493,7 +574,12 @@ func (mp *metaPartition) InodeGet(req *InodeGetReq, p *Packet) (err error) {
 	ino := NewInode(req.Inode, 0)
 	ino.setVer(req.VerSeq)
 	getAllVerInfo := req.VerAll
-	retMsg := mp.getInode(ino, getAllVerInfo)
+	inoReq := &GetInodeReq{
+		Ino:      ino,
+		ListAll:  getAllVerInfo,
+		InnerReq: req.InnerReq,
+	}
+	retMsg := mp.getInodeExt(inoReq)
 
 	log.LogDebugf("action[Inode] %v seq [%v] retMsg.status [%v], getAllVerInfo %v",
 		ino.Inode, req.VerSeq, retMsg.Status, getAllVerInfo)
@@ -519,9 +605,9 @@ func (mp *metaPartition) InodeGet(req *InodeGetReq, p *Packet) (err error) {
 			Info: &proto.InodeInfo{},
 		}
 		if getAllVerInfo {
-			replyInfoNoCheck(resp.Info, retMsg.Msg)
+			replyInfoNoCheck(resp.Info, ino)
 		} else {
-			if !replyInfo(resp.Info, retMsg.Msg, quotaInfos) {
+			if !replyInfo(resp.Info, ino, quotaInfos) {
 				p.PacketErrorWithBody(status, reply)
 				return
 
@@ -531,7 +617,7 @@ func (mp *metaPartition) InodeGet(req *InodeGetReq, p *Packet) (err error) {
 		status = proto.OpOk
 		if getAllVerInfo {
 			inode := mp.getInodeTopLayer(ino)
-			log.LogDebugf("req ino[%v], toplayer ino[%v]", retMsg.Msg, inode)
+			log.LogDebugf("req ino[%v], toplayer ino[%v]", ino, inode)
 			resp.LayAll = inode.Msg.getAllInodesInfo()
 		}
 		reply, err = json.Marshal(resp)
@@ -553,7 +639,11 @@ func (mp *metaPartition) InodeGetBatch(req *InodeGetReqBatch, p *Packet) (err er
 		var quotaInfos map[uint32]*proto.MetaQuotaInfo
 		ino.Inode = inoId
 		ino.setVer(req.VerSeq)
-		retMsg := mp.getInode(ino, false)
+		ext := &GetInodeReq{
+			Ino:      ino,
+			InnerReq: req.InnerReq,
+		}
+		retMsg := mp.getInodeExt(ext)
 		if mp.mqMgr.EnableQuota() {
 			quotaInfos, err = mp.getInodeQuotaInfos(inoId)
 			if err != nil {
@@ -689,6 +779,14 @@ func (mp *metaPartition) EvictInode(req *EvictInodeReq, p *Packet, remoteAddr st
 		}()
 	}
 	ino := NewInode(req.Inode, 0)
+	if item := mp.inodeTree.Get(ino); item == nil {
+		err = fmt.Errorf("mp %v inode %v reqeust cann't found", mp.config.PartitionId, ino)
+		log.LogErrorf("action[RenewalForbiddenMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpNotExistErr, []byte(err.Error()))
+		return
+	} else {
+		ino.UpdateHybridCloudParams(item.(*Inode))
+	}
 	val, err := ino.Marshal()
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
@@ -861,10 +959,11 @@ func (mp *metaPartition) ClearInodeCache(req *proto.ClearInodeCacheRequest, p *P
 // TxCreateInode returns a new inode.
 func (mp *metaPartition) TxCreateInode(req *proto.TxCreateInodeRequest, p *Packet, remoteAddr string) (err error) {
 	var (
-		status = proto.OpNotExistErr
-		reply  []byte
-		resp   interface{}
-		inoID  uint64
+		status               = proto.OpNotExistErr
+		reply                []byte
+		resp                 interface{}
+		inoID                uint64
+		requiredStorageClass uint32
 	)
 	start := time.Now()
 	if mp.IsEnableAuditLog() {
@@ -872,6 +971,12 @@ func (mp *metaPartition) TxCreateInode(req *proto.TxCreateInodeRequest, p *Packe
 			auditlog.LogInodeOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.GetFullPath(), err, time.Since(start).Milliseconds(), inoID, 0)
 		}()
 	}
+	if requiredStorageClass, err = mp.checkCreateInoStorageClassForCompatibility(req.StorageType, inoID); err != nil {
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		log.LogErrorf("[QuotaCreateInode] %v, req(%+v)", err.Error(), req)
+		return
+	}
+
 	inoID, err = mp.nextInodeID()
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpInodeFullErr, []byte(err.Error()))
@@ -902,6 +1007,7 @@ func (mp *metaPartition) TxCreateInode(req *proto.TxCreateInodeRequest, p *Packe
 	txIno.Inode.Uid = req.Uid
 	txIno.Inode.Gid = req.Gid
 	txIno.Inode.LinkTarget = req.Target
+	txIno.Inode.StorageClass = requiredStorageClass
 
 	if log.EnableDebug() {
 		log.LogDebugf("NewTxInode: TxInode: %v", txIno)
@@ -961,5 +1067,358 @@ func (mp *metaPartition) TxCreateInode(req *proto.TxCreateInodeRequest, p *Packe
 		}
 	}
 	p.PacketErrorWithBody(status, reply)
+	return
+}
+
+func (mp *metaPartition) InodeGetAccessTime(req *InodeGetReq, p *Packet) (err error) {
+	var (
+		reply  []byte
+		status = proto.OpOk
+	)
+
+	ino := NewInode(req.Inode, 0)
+	item := mp.inodeTree.Get(ino)
+	if item == nil {
+		return errors.NewErrorf("inode %v is not found", req.Inode)
+	}
+	i := item.(*Inode)
+	if i.ShouldDelete() {
+		return errors.NewErrorf("inode %v is deleted", req.Inode)
+	}
+
+	resp := &proto.InodeGetAccessTimeResponse{
+		Info: &proto.InodeAccessTime{},
+	}
+	i.RLock()
+	defer i.RUnlock()
+	log.LogDebugf("InodeGetAccessTime: %v", time.Unix(ino.AccessTime, 0))
+	resp.Info.Inode = i.Inode
+	resp.Info.AccessTime = time.Unix(i.AccessTime, 0)
+	reply, err = json.Marshal(resp)
+	if err != nil {
+		status = proto.OpErr
+		reply = []byte(err.Error())
+	}
+	p.PacketErrorWithBody(status, reply)
+	return
+}
+
+func (mp *metaPartition) RenewalForbiddenMigration(req *proto.RenewalForbiddenMigrationRequest,
+	p *Packet, remoteAddr string,
+) (err error) {
+	ino := NewInode(req.Inode, 0)
+	if item := mp.inodeTree.Get(ino); item == nil {
+		err = fmt.Errorf("mp %v inode %v reqeust cann't found", mp.config.PartitionId, ino)
+		log.LogErrorf("action[RenewalForbiddenMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpNotExistErr, []byte(err.Error()))
+		return
+	} else {
+		ino.UpdateHybridCloudParams(item.(*Inode))
+	}
+
+	newExpireTime := timeutil.GetCurrentTimeUnix() + proto.ForbiddenMigrationRenewalSeonds
+	if newExpireTime > int64(ino.LeaseExpireTime) {
+		ino.LeaseExpireTime = uint64(newExpireTime)
+	}
+
+	val, err := ino.Marshal()
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
+	resp, err := mp.submit(opFSMRenewalForbiddenMigration, val)
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpAgain, []byte(err.Error()))
+		return
+	}
+	msg := resp.(*InodeResponse)
+	p.PacketErrorWithBody(msg.Status, nil)
+	return
+}
+
+func (mp *metaPartition) UpdateExtentKeyAfterMigration(req *proto.UpdateExtentKeyAfterMigrationRequest, p *Packet,
+	remoteAddr string,
+) (err error) {
+	inoParm := NewInode(req.Inode, 0)
+	var item BtreeItem
+	if item = mp.inodeTree.Get(inoParm); item == nil {
+		err = fmt.Errorf("mp(%v) can not find inode(%v)", mp.config.PartitionId, inoParm.Inode)
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpNotExistErr, []byte(err.Error()))
+		return
+	}
+
+	oldIno := item.(*Inode)
+	inoParm.UpdateHybridCloudParams(oldIno)
+
+	start := time.Now()
+	if mp.IsEnableAuditLog() {
+		defer func() {
+			auditlog.LogMigrationOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.GetFullPath(), err, time.Since(start).Milliseconds(), req.Inode, inoParm.StorageClass, req.StorageClass)
+		}()
+	}
+
+	if proto.IsDir(inoParm.Type) && req.NewObjExtentKeys != nil {
+		err = fmt.Errorf("mp(%v) inode(%v) is dir, but request NewObjExtentKeys is not nil", mp.config.PartitionId, inoParm.Inode)
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpArgMismatchErr, []byte(err.Error()))
+		return
+	}
+
+	if inoParm.LeaseNotExpire() {
+		err = fmt.Errorf("mp(%v) inode(%v) is forbidden to migration for lease is occupied by others",
+			mp.config.PartitionId, inoParm.Inode)
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpLeaseOccupiedByOthers, []byte(err.Error()))
+		return
+	}
+	leaseExpire := inoParm.LeaseExpireTime
+	if leaseExpire != req.LeaseExpire {
+		err = fmt.Errorf("mp(%v) inode(%v) write generation not match, curent(%v) request(%v)",
+			mp.config.PartitionId, inoParm.Inode, leaseExpire, req.LeaseExpire)
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpLeaseGenerationNotMatch, []byte(err.Error()))
+		return
+	}
+	// wal logs for UpdateExtentKeyAfterMigration is persisted, but return no leader later,
+	// and request is send to meta node by retry
+	if inoParm.StorageClass == req.StorageClass {
+		msg := fmt.Sprintf("mp(%v) inode(%v) storageClass(%v) is same with req, may be migrated before",
+			mp.config.PartitionId, inoParm.Inode, inoParm.StorageClass)
+		log.LogWarnf("action[UpdateExtentKeyAfterMigration] %v", msg)
+		p.PacketErrorWithBody(proto.OpNotPerm, []byte(msg))
+		return
+	}
+	// store ek after migration in HybridCloudExtentsMigration
+	inoParm.HybridCloudExtentsMigration.storageClass = req.StorageClass
+	inoParm.HybridCloudExtentsMigration.expiredTime = time.Now().Add(time.Duration(req.DelayDeleteMinute) * time.Minute).Unix()
+
+	if req.StorageClass == proto.StorageClass_BlobStore {
+		inoParm.HybridCloudExtentsMigration.sortedEks = NewSortedObjExtentsFromObjEks(req.NewObjExtentKeys)
+	} else if req.StorageClass == proto.StorageClass_Replica_HDD {
+		if oldIno.HybridCloudExtentsMigration.sortedEks == nil &&
+			oldIno.HybridCloudExtentsMigration.storageClass == proto.StorageClass_Unspecified {
+			log.LogDebugf("action[UpdateExtentKeyAfterMigration] inoParm %v has no migration data", inoParm.Inode)
+			inoParm.HybridCloudExtentsMigration.sortedEks = NewSortedExtents()
+		} else {
+			if oldIno.HybridCloudExtentsMigration.storageClass != proto.StorageClass_Replica_HDD {
+				err = fmt.Errorf("mp(%v) inode(%v) storageClass(%v) migrateStorageClass(%v): inode is migrating or migrated from (%v), can not migrate to %v",
+					mp.config.PartitionId, inoParm.Inode, proto.StorageClassString(inoParm.StorageClass),
+					proto.StorageClassString(oldIno.HybridCloudExtentsMigration.storageClass),
+					proto.StorageClassString(oldIno.HybridCloudExtentsMigration.storageClass),
+					proto.StorageClassString(proto.StorageClass_Replica_HDD))
+				log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err)
+				p.PacketErrorWithBody(proto.OpArgMismatchErr, []byte(err.Error()))
+				return
+			}
+			inoParm.HybridCloudExtentsMigration.sortedEks = oldIno.HybridCloudExtentsMigration.sortedEks
+		}
+	} else {
+		err = fmt.Errorf("mp(%v) inode(%v) unknown migration storageClass(%v)",
+			mp.config.PartitionId, inoParm.Inode, req.StorageClass)
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpArgMismatchErr, []byte(err.Error()))
+		return
+	}
+
+	val, err := inoParm.Marshal()
+	if err != nil {
+		err = fmt.Errorf("mp(%v) inode(%v) Marshal inner err: %v",
+			mp.config.PartitionId, inoParm.Inode, err.Error())
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err.Error())
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
+
+	fsmResp, submitErr := mp.submit(opFSMUpdateExtentKeyAfterMigration, val)
+	if submitErr != nil {
+		if submitErr == raft.ErrNotLeader {
+			err = fmt.Errorf("mp(%v) inode(%v), not leader when submit raft", mp.config.PartitionId, inoParm.Inode)
+			log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err.Error())
+			p.PacketErrorWithBody(proto.OpAgain, []byte(err.Error()))
+			return
+		}
+
+		err = fmt.Errorf("mp(%v) inode(%v) submit raft inner err: %v",
+			mp.config.PartitionId, inoParm.Inode, submitErr)
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err.Error())
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
+
+	fsmRespStatus := fsmResp.(*InodeResponse).Status
+	if fsmRespStatus != proto.OpOk {
+		err = fmt.Errorf("mp(%v) inode(%v) storageClass(%v), raft resp inner err status(%v)",
+			mp.config.PartitionId, inoParm.Inode, inoParm.StorageClass, proto.GetMsgByCode(fsmRespStatus))
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] req(%v), err: %v", req, err.Error())
+		p.PacketErrorWithBody(fsmRespStatus, []byte(err.Error()))
+		return
+	}
+
+	msg := fsmResp.(*InodeResponse)
+	p.PacketErrorWithBody(msg.Status, nil)
+	return
+}
+
+func (mp *metaPartition) InodeGetWithEk(req *InodeGetReq, p *Packet) (err error) {
+	ino := NewInode(req.Inode, 0)
+	ino.setVer(req.VerSeq)
+	getAllVerInfo := req.VerAll
+	retMsg := mp.getInode(ino, getAllVerInfo)
+
+	log.LogDebugf("action[InodeGetWithEk] inode %v seq %v retMsg.Status %v, getAllVerInfo %v",
+		ino.Inode, req.VerSeq, retMsg.Status, getAllVerInfo)
+
+	var (
+		reply      []byte
+		status     = proto.OpNotExistErr
+		quotaInfos map[uint32]*proto.MetaQuotaInfo
+	)
+	if mp.mqMgr.EnableQuota() {
+		quotaInfos, err = mp.getInodeQuotaInfos(req.Inode)
+		if err != nil {
+			status = proto.OpErr
+			reply = []byte(err.Error())
+			p.PacketErrorWithBody(status, reply)
+			return
+		}
+	}
+
+	ino = retMsg.Msg
+	if retMsg.Status != proto.OpOk {
+		p.PacketErrorWithBody(status, reply)
+		return
+	}
+
+	resp := &proto.InodeGetWithEkResponse{
+		Info: &proto.InodeInfo{},
+	}
+	if getAllVerInfo {
+		replyInfoNoCheck(resp.Info, retMsg.Msg)
+	} else {
+		if !replyInfo(resp.Info, retMsg.Msg, quotaInfos) {
+			p.PacketErrorWithBody(status, reply)
+			return
+		}
+	}
+
+	status = proto.OpOk
+	if getAllVerInfo {
+		inode := mp.getInodeTopLayer(ino)
+		log.LogDebugf("[InodeGetWithEk] req ino %v, topLayer ino %v", retMsg.Msg, inode)
+		resp.LayAll = inode.Msg.getAllInodesInfo()
+	}
+	// get cache ek
+	ino.Extents.Range(func(_ int, ek proto.ExtentKey) bool {
+		resp.CacheExtents = append(resp.CacheExtents, ek)
+		log.LogInfof("action[InodeGetWithEk] Cache Extents append ek %v", ek)
+		return true
+	})
+	// get EK
+	if ino.HybridCloudExtents.sortedEks != nil {
+		if proto.IsStorageClassReplica(ino.StorageClass) {
+			extents := ino.HybridCloudExtents.sortedEks.(*SortedExtents)
+			extents.Range(func(_ int, ek proto.ExtentKey) bool {
+				resp.HybridCloudExtents = append(resp.HybridCloudExtents, ek)
+				log.LogInfof("action[InodeGetWithEk] Extents append ek %v", ek)
+				return true
+			})
+		} else if proto.IsStorageClassBlobStore(ino.StorageClass) {
+			objEks := ino.HybridCloudExtents.sortedEks.(*SortedObjExtents)
+			objEks.Range(func(ek proto.ObjExtentKey) bool {
+				resp.HybridCloudObjExtents = append(resp.HybridCloudObjExtents, ek)
+				log.LogInfof("action[InodeGetWithEk] ObjExtents append ek %v", ek)
+				return true
+			})
+		}
+	}
+	if ino.HybridCloudExtentsMigration.sortedEks != nil {
+		if proto.IsStorageClassReplica(ino.HybridCloudExtentsMigration.storageClass) {
+			extents := ino.HybridCloudExtentsMigration.sortedEks.(*SortedExtents)
+			extents.Range(func(_ int, ek proto.ExtentKey) bool {
+				resp.MigrationExtents = append(resp.MigrationExtents, ek)
+				log.LogInfof("action[ExtentsList] migrationExtents append ek %v", ek)
+				return true
+			})
+		} else if proto.IsStorageClassBlobStore(ino.HybridCloudExtentsMigration.storageClass) {
+			objEks := ino.HybridCloudExtentsMigration.sortedEks.(*SortedObjExtents)
+			objEks.Range(func(ek proto.ObjExtentKey) bool {
+				resp.MigrationCloudObjExtents = append(resp.MigrationCloudObjExtents, ek)
+				log.LogInfof("action[InodeGetWithEk] migrationObjExtents append ek %v", ek)
+				return true
+			})
+		}
+	}
+	reply, err = json.Marshal(resp)
+	if err != nil {
+		status = proto.OpErr
+		reply = []byte(err.Error())
+	}
+
+	p.PacketErrorWithBody(status, reply)
+	return
+}
+
+func (mp *metaPartition) SetCreateTime(req *SetCreateTimeRequest, reqData []byte, p *Packet) (err error) {
+	log.LogInfof("[SetCreateTime] mpId(%v), ino(%v), to set createTime(%v)",
+		mp.config.PartitionId, req.Inode, req.CreateTime)
+	if mp.verSeq != 0 {
+		req.VerSeq = mp.GetVerSeq()
+		reqData, err = json.Marshal(req)
+		if err != nil {
+			log.LogErrorf("[SetCreateTime] mpId(%v) ino(%v) createTime(%v), marshal err(%v) ",
+				mp.config.PartitionId, req.Inode, req.CreateTime, err)
+			return
+		}
+	}
+
+	_, err = mp.submit(opFSMSetInodeCreateTime, reqData)
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpAgain, []byte(err.Error()))
+		return
+	}
+
+	p.PacketOkReply()
+	return
+}
+
+func (mp *metaPartition) DeleteMigrationExtentKey(req *proto.DeleteMigrationExtentKeyRequest, p *Packet,
+	remoteAddr string,
+) (err error) {
+	ino := NewInode(req.Inode, 0)
+	var item BtreeItem
+	if item = mp.inodeTree.Get(ino); item == nil {
+		err = fmt.Errorf("mp %v inode %v reqeust cann't found", mp.config.PartitionId, ino.Inode)
+		log.LogErrorf("action[UpdateExtentKeyAfterMigration] %v", err)
+		p.PacketErrorWithBody(proto.OpNotExistErr, []byte(err.Error()))
+		return
+	} else {
+		ino.UpdateHybridCloudParams(item.(*Inode))
+	}
+
+	start := time.Now()
+	if mp.IsEnableAuditLog() {
+		defer func() {
+			auditlog.LogMigrationOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.GetFullPath(),
+				err, time.Since(start).Milliseconds(), req.Inode, ino.StorageClass, ino.StorageClass)
+		}()
+	}
+	// no migration extent key to delete
+	if ino.HybridCloudExtentsMigration.storageClass == proto.StorageClass_Unspecified {
+		p.PacketOkReply()
+		return
+	}
+	val, err := ino.Marshal()
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
+	resp, err := mp.submit(opFSMSetMigrationExtentKeyDeleteImmediately, val)
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpAgain, []byte(err.Error()))
+		return
+	}
+	msg := resp.(*InodeResponse)
+	p.PacketErrorWithBody(msg.Status, nil)
 	return
 }

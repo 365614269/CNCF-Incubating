@@ -22,7 +22,6 @@ import (
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/master"
-	"github.com/cubefs/cubefs/util/strutil"
 	"github.com/spf13/cobra"
 )
 
@@ -45,12 +44,12 @@ func newClusterCmd(client *master.MasterClient) *cobra.Command {
 		newClusterDisableMpDecommissionCmd(client),
 		newClusterSetVolDeletionDelayTimeCmd(client),
 		newClusterQueryDecommissionStatusCmd(client),
-		newClusterSetDecommissionLimitCmd(client),
-		newClusterEnableAutoDecommissionDisk(client),
-		newClusterQueryDecommissionFailedDisk(client),
-		newClusterEnableAutoDecommissionDiskCmd(client),
+		// newClusterSetDecommissionLimitCmd(client),
 		newClusterQueryDecommissionFailedDiskCmd(client),
-		newClusterSetDecommissionDiskLimitCmd(client),
+		// newClusterSetDecommissionDiskLimitCmd(client),
+		newClusterQueryDataNodeOpCmd(client),
+		newClusterQueryDpOpCmd(client),
+		newClusterQueryDiskOpCmd(client),
 	)
 	return clusterCmd
 }
@@ -69,14 +68,18 @@ const (
 	nodeMaxDpCntLimit                      = "maxDpCntLimit"
 	nodeMaxMpCntLimit                      = "maxMpCntLimit"
 	cmdForbidMpDecommission                = "forbid meta partition decommission"
-	cmdSetDecommissionLimitShort           = "set cluster decommission limit"
-	cmdQueryDecommissionStatus             = "query decommission status"
-	cmdEnableAutoDecommissionDiskShort     = "enable auto decommission disk"
-	cmdQueryDecommissionFailedDiskShort    = "query auto or manual decommission failed disk"
-	cmdSetDecommissionDiskLimit            = "set decommission disk limit"
+	// cmdSetDecommissionLimitShort           = "set cluster decommission limit"
+	cmdQueryDecommissionStatus = "query decommission status"
+	// cmdEnableAutoDecommissionDiskShort  = "enable auto decommission disk"
+	cmdQueryDecommissionFailedDiskShort = "query auto or manual decommission failed disk"
+	// cmdSetDecommissionDiskLimit            = "set decommission disk limit"
+	cmdQueryDataNodeOpShort = "query DataNode_op information of a cluster"
+	cmdQueryDpOpShort       = "query Dp_op information of a cluster"
+	cmdQueryDiskOpShort     = "query Disk_op information of a cluster"
 )
 
 func newClusterInfoCmd(client *master.MasterClient) *cobra.Command {
+	var volStorageClass bool
 	cmd := &cobra.Command{
 		Use:   CliOpInfo,
 		Short: cmdClusterInfoShort,
@@ -86,7 +89,7 @@ func newClusterInfoCmd(client *master.MasterClient) *cobra.Command {
 			var cn *proto.ClusterNodeInfo
 			var cp *proto.ClusterIP
 			var clusterPara map[string]string
-			if cv, err = client.AdminAPI().GetCluster(); err != nil {
+			if cv, err = client.AdminAPI().GetCluster(volStorageClass); err != nil {
 				errout(err)
 			}
 			if cn, err = client.AdminAPI().GetClusterNodeInfo(); err != nil {
@@ -108,8 +111,23 @@ func newClusterInfoCmd(client *master.MasterClient) *cobra.Command {
 			stdout(fmt.Sprintf("  MaxDpCntLimit      : %v\n", clusterPara[nodeMaxDpCntLimit]))
 			stdout(fmt.Sprintf("  MaxMpCntLimit      : %v\n", clusterPara[nodeMaxMpCntLimit]))
 			stdout("\n")
+
+			if volStorageClass {
+				stdout("Usage by storage class:\n")
+				stdout("%v\n", hybridCloudStorageTableHeader)
+				for _, view := range cv.StatOfStorageClass {
+					stdout("%v\n", formatHybridCloudStorageTableRow(view))
+				}
+
+				stdout("\nMigration Usage by storage class:\n")
+				stdout("%v\n", hybridCloudStorageTableHeader)
+				for _, view := range cv.StatMigrateStorageClass {
+					stdout("%v\n", formatHybridCloudStorageTableRow(view))
+				}
+			}
 		},
 	}
+	cmd.Flags().BoolVarP(&volStorageClass, "storage-class", "s", false, "Display hybrid cloud storage info")
 	return cmd
 }
 
@@ -147,11 +165,11 @@ func newClusterFreezeCmd(client *master.MasterClient) *cobra.Command {
 		Short:     cmdClusterFreezeShort,
 		Args:      cobra.MinimumNArgs(1),
 		Long: `Turn on or off the automatic allocation of the data partitions.
-If 'freeze=false', CubeFS WILL automatically allocate new data partitions for the volume when:
+If 'cluster freeze false', CubeFS WILL automatically allocate new data partitions for the volume when:
   1. the used space is below the max capacity,
   2. and the number of r&w data partition is less than 20.
 
-If 'freeze=true', CubeFS WILL NOT automatically allocate new data partitions `,
+If 'cluster freeze true', CubeFS WILL NOT automatically allocate new data partitions `,
 		Run: func(cmd *cobra.Command, args []string) {
 			var (
 				err    error
@@ -248,15 +266,23 @@ func newClusterSetVolDeletionDelayTimeCmd(client *master.MasterClient) *cobra.Co
 func newClusterSetParasCmd(client *master.MasterClient) *cobra.Command {
 	var clientIDKey string
 	var optAutoRepairRate, optMarkDeleteRate, optDelBatchCount, optDelWorkerSleepMs, optLoadFactor, opMaxDpCntLimit string
-	dataNodesetSelector := ""
-	metaNodesetSelector := ""
-	dataNodeSelector := ""
-	metaNodeSelector := ""
-	markBrokenDiskThreshold := ""
+	// dataNodesetSelector := ""
+	// metaNodesetSelector := ""
+	// dataNodeSelector := ""
+	// metaNodeSelector := ""
+	// markBrokenDiskThreshold := ""
+	autoDecommissionDisk := ""
+	autoDecommissionDiskInterval := ""
 	autoDpMetaRepair := ""
+	autoDpMetaRepairParallelCnt := ""
 	opMaxMpCntLimit := ""
 	dpRepairTimeout := ""
 	dpTimeout := ""
+	dpBackupTimeout := ""
+	decommissionDpLimit := ""
+	decommissionDiskLimit := ""
+	forbidWriteOpOfProtoVersion0 := ""
+	dataMediaType := ""
 	cmd := &cobra.Command{
 		Use:   CliOpSetCluster,
 		Short: cmdClusterSetClusterInfoShort,
@@ -266,15 +292,40 @@ func newClusterSetParasCmd(client *master.MasterClient) *cobra.Command {
 				errout(err)
 			}()
 
-			if markBrokenDiskThreshold != "" {
-				val, err := strutil.ParsePercent(markBrokenDiskThreshold)
+			// if markBrokenDiskThreshold != "" {
+			//	val, err := strutil.ParsePercent(markBrokenDiskThreshold)
+			//	if err != nil {
+			//		return
+			//	}
+			//	markBrokenDiskThreshold = fmt.Sprintf("%v", val)
+			// }
+
+			if autoDecommissionDisk != "" {
+				if _, err = strconv.ParseBool(autoDecommissionDisk); err != nil {
+					return
+				}
+			}
+			if autoDecommissionDiskInterval != "" {
+				var interval time.Duration
+				interval, err = time.ParseDuration(autoDecommissionDiskInterval)
 				if err != nil {
 					return
 				}
-				markBrokenDiskThreshold = fmt.Sprintf("%v", val)
+				if interval < time.Second {
+					err = fmt.Errorf("auto decommission disk interval %v smaller than 1s", interval)
+					return
+				}
+
+				autoDecommissionDiskInterval = strconv.FormatInt(int64(interval), 10)
 			}
+
 			if autoDpMetaRepair != "" {
 				if _, err = strconv.ParseBool(autoDpMetaRepair); err != nil {
+					return
+				}
+			}
+			if autoDpMetaRepairParallelCnt != "" {
+				if _, err = strconv.ParseInt(autoDpMetaRepairParallelCnt, 10, 64); err != nil {
 					return
 				}
 			}
@@ -305,10 +356,40 @@ func newClusterSetParasCmd(client *master.MasterClient) *cobra.Command {
 
 				dpTimeout = strconv.FormatInt(int64(heartbeatTimeout.Seconds()), 10)
 			}
+			if dpBackupTimeout != "" {
+				var backupTimeout time.Duration
+				backupTimeout, err = time.ParseDuration(dpBackupTimeout)
+				if err != nil {
+					return
+				}
+				if backupTimeout < proto.DefaultDataPartitionBackupTimeOut {
+					err = fmt.Errorf("dp backup timeout %v smaller than %v", backupTimeout, proto.DefaultDataPartitionBackupTimeOut)
+					return
+				}
+
+				dpBackupTimeout = strconv.FormatInt(int64(backupTimeout), 10)
+			}
+
+			if forbidWriteOpOfProtoVersion0 != "" {
+				if _, err = strconv.ParseBool(forbidWriteOpOfProtoVersion0); err != nil {
+					err = fmt.Errorf("param forbidWriteOpOfProtoVersion0(%v) should be true or false", forbidWriteOpOfProtoVersion0)
+					return
+				}
+			}
+
+			if dataMediaType != "" {
+				if _, err = strconv.ParseInt(dataMediaType, 10, 64); err != nil {
+					err = fmt.Errorf("param (%v) failed, should be int", dataMediaType)
+					return
+				}
+			}
+
 			if err = client.AdminAPI().SetClusterParas(optDelBatchCount, optMarkDeleteRate, optDelWorkerSleepMs,
 				optAutoRepairRate, optLoadFactor, opMaxDpCntLimit, opMaxMpCntLimit, clientIDKey,
-				dataNodesetSelector, metaNodesetSelector,
-				dataNodeSelector, metaNodeSelector, markBrokenDiskThreshold, autoDpMetaRepair, dpRepairTimeout, dpTimeout); err != nil {
+				autoDecommissionDisk, autoDecommissionDiskInterval,
+				autoDpMetaRepair, autoDpMetaRepairParallelCnt,
+				dpRepairTimeout, dpTimeout, dpBackupTimeout, decommissionDpLimit, decommissionDiskLimit,
+				forbidWriteOpOfProtoVersion0, dataMediaType); err != nil {
 				return
 			}
 			stdout("Cluster parameters has been set successfully. \n")
@@ -322,14 +403,23 @@ func newClusterSetParasCmd(client *master.MasterClient) *cobra.Command {
 	cmd.Flags().StringVar(&opMaxDpCntLimit, CliFlagMaxDpCntLimit, "", "Maximum number of dp on each datanode, default 3000, 0 represents setting to default")
 	cmd.Flags().StringVar(&opMaxMpCntLimit, CliFlagMaxMpCntLimit, "", "Maximum number of mp on each metanode, default 300, 0 represents setting to default")
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
-	cmd.Flags().StringVar(&dataNodesetSelector, CliFlagDataNodesetSelector, "", "Set the nodeset select policy(datanode) for cluster")
-	cmd.Flags().StringVar(&metaNodesetSelector, CliFlagMetaNodesetSelector, "", "Set the nodeset select policy(metanode) for cluster")
-	cmd.Flags().StringVar(&dataNodeSelector, CliFlagDataNodeSelector, "", "Set the node select policy(datanode) for cluster")
-	cmd.Flags().StringVar(&metaNodeSelector, CliFlagMetaNodeSelector, "", "Set the node select policy(metanode) for cluster")
-	cmd.Flags().StringVar(&markBrokenDiskThreshold, CliFlagMarkDiskBrokenThreshold, "", "Threshold to mark disk as broken")
+	// cmd.Flags().StringVar(&dataNodesetSelector, CliFlagDataNodesetSelector, "", "Set the nodeset select policy(datanode) for cluster")
+	// cmd.Flags().StringVar(&metaNodesetSelector, CliFlagMetaNodesetSelector, "", "Set the nodeset select policy(metanode) for cluster")
+	// cmd.Flags().StringVar(&dataNodeSelector, CliFlagDataNodeSelector, "", "Set the node select policy(datanode) for cluster")
+	// cmd.Flags().StringVar(&metaNodeSelector, CliFlagMetaNodeSelector, "", "Set the node select policy(metanode) for cluster")
+	// cmd.Flags().StringVar(&markBrokenDiskThreshold, CliFlagMarkDiskBrokenThreshold, "", "Threshold to mark disk as broken")
 	cmd.Flags().StringVar(&autoDpMetaRepair, CliFlagAutoDpMetaRepair, "", "Enable or disable auto data partition meta repair")
+	cmd.Flags().StringVar(&autoDpMetaRepairParallelCnt, CliFlagAutoDpMetaRepairParallelCnt, "", "Parallel count of auto data partition meta repair")
 	cmd.Flags().StringVar(&dpRepairTimeout, CliFlagDpRepairTimeout, "", "Data partition repair timeout(example: 1h)")
 	cmd.Flags().StringVar(&dpTimeout, CliFlagDpTimeout, "", "Data partition heartbeat timeout(example: 10s)")
+	cmd.Flags().StringVar(&autoDecommissionDisk, CliFlagAutoDecommissionDisk, "", "Enable or disable auto decommission disk")
+	cmd.Flags().StringVar(&autoDecommissionDiskInterval, CliFlagAutoDecommissionDiskInterval, "", "Interval of auto decommission disk(example: 10s)")
+	cmd.Flags().StringVar(&dpBackupTimeout, CliFlagDpBackupTimeout, "", "Data partition backup directory timeout(example: 1h)")
+	cmd.Flags().StringVar(&decommissionDpLimit, CliFlagDecommissionDpLimit, "", "Limit for parallel  decommission dp")
+	cmd.Flags().StringVar(&decommissionDiskLimit, CliFlagDecommissionDiskLimit, "", "Limit for parallel decommission disk")
+	cmd.Flags().StringVar(&forbidWriteOpOfProtoVersion0, CliForbidWriteOpOfProtoVersion0, "",
+		"set datanode and metanode whether forbid write operate of packet whose protocol version is version-0: [true | false]")
+	cmd.Flags().StringVar(&dataMediaType, "clusterDataMediaType", "", "set cluster media type, 1(ssd), 2(hdd)")
 	return cmd
 }
 
@@ -368,28 +458,28 @@ If 'forbid=true', MetaPartition decommission/migrate and MetaNode decommission i
 	return cmd
 }
 
-func newClusterSetDecommissionLimitCmd(client *master.MasterClient) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   CliOpSetDecommissionLimit + " [LIMIT]",
-		Short: cmdSetDecommissionLimitShort,
-		Args:  cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			var err error
-			defer func() {
-				if err != nil {
-					errout(err)
-				}
-			}()
-			limit, err := strconv.ParseInt(args[0], 10, 32)
-			if err = client.AdminAPI().SetClusterDecommissionLimit(int32(limit)); err != nil {
-				return
-			}
-
-			stdout("Set decommission limit to %v successfully\n", limit)
-		},
-	}
-	return cmd
-}
+// func newClusterSetDecommissionLimitCmd(client *master.MasterClient) *cobra.Command {
+//	cmd := &cobra.Command{
+//		Use:   CliOpSetDecommissionLimit + " [LIMIT]",
+//		Short: cmdSetDecommissionLimitShort,
+//		Args:  cobra.MinimumNArgs(1),
+//		Run: func(cmd *cobra.Command, args []string) {
+//			var err error
+//			defer func() {
+//				if err != nil {
+//					errout(err)
+//				}
+//			}()
+//			limit, err := strconv.ParseInt(args[0], 10, 32)
+//			if err = client.AdminAPI().SetClusterDecommissionLimit(int32(limit)); err != nil {
+//				return
+//			}
+//
+//			stdout("Set decommission limit to %v successfully\n", limit)
+//		},
+//	}
+//	return cmd
+// }
 
 func newClusterQueryDecommissionStatusCmd(client *master.MasterClient) *cobra.Command {
 	cmd := &cobra.Command{
@@ -415,36 +505,6 @@ func newClusterQueryDecommissionStatusCmd(client *master.MasterClient) *cobra.Co
 	return cmd
 }
 
-func newClusterEnableAutoDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:       CliOpEnableAutoDecommission + " [STATUS]",
-		ValidArgs: []string{"true", "false"},
-		Short:     cmdEnableAutoDecommissionDiskShort,
-		Args:      cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			var (
-				err    error
-				enable bool
-			)
-			defer func() {
-				errout(err)
-			}()
-			if enable, err = strconv.ParseBool(args[0]); err != nil {
-				return
-			}
-			if err = client.AdminAPI().SetAutoDecommissionDisk(enable); err != nil {
-				return
-			}
-			if enable {
-				stdout("Enable auto decommission successful!\n")
-			} else {
-				stdout("Disable auto decommission successful!\n")
-			}
-		},
-	}
-	return cmd
-}
-
 func newClusterQueryDecommissionFailedDiskCmd(client *master.MasterClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   CliOpQueryDecommissionFailedDisk + " [TYPE]",
@@ -461,11 +521,6 @@ func newClusterQueryDecommissionFailedDiskCmd(client *master.MasterClient) *cobr
 			}()
 
 			args[0] = strings.ToLower(args[0])
-			if args[0] != "auto" && args[0] != "manual" && args[0] != "all" {
-				err = fmt.Errorf("unknown decommission type %v, not \"auto\", \"manual\" and \"and\"", args[0])
-				return
-			}
-
 			switch args[0] {
 			case "manual":
 				decommType = 0
@@ -473,6 +528,9 @@ func newClusterQueryDecommissionFailedDiskCmd(client *master.MasterClient) *cobr
 				decommType = 1
 			case "all":
 				decommType = 2
+			default:
+				err = fmt.Errorf("unknown decommission type %v, not \"auto\", \"manual\" and \"and\"", args[0])
+				return
 			}
 
 			diskInfo, err := client.AdminAPI().QueryDecommissionFailedDisk(decommType)
@@ -489,107 +547,131 @@ func newClusterQueryDecommissionFailedDiskCmd(client *master.MasterClient) *cobr
 	return cmd
 }
 
-func newClusterSetDecommissionDiskLimitCmd(client *master.MasterClient) *cobra.Command {
+func newClusterQueryDataNodeOpCmd(client *master.MasterClient) *cobra.Command {
+	var (
+		filterOp     string
+		dataNodeName string
+		logNum       int
+		dimension    string
+		volName      string
+		addr         string
+		dpId         string
+		diskName     string
+	)
 	cmd := &cobra.Command{
-		Use:   CliOpSetDecommissionDiskLimit + " [LIMIT]",
-		Short: cmdSetDecommissionDiskLimit,
-		Args:  cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			var (
-				err   error
-				limit uint32
-			)
-
-			defer func() {
-				errout(err)
-			}()
-
-			tmp, err := strconv.ParseUint(args[0], 10, 32)
+		Use:   CliOpDataNodeOp,
+		Short: cmdQueryDataNodeOpShort,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dimension = proto.Node
+			opv, err := client.AdminAPI().GetOpLog(dimension, volName, addr, dpId, diskName)
 			if err != nil {
-				return
+				return err
 			}
-			limit = uint32(tmp)
-
-			err = client.AdminAPI().SetDecommissionDiskLimit(limit)
-			if err != nil {
-				return
-			}
-			stdout("Set decommission disk limit to %v successfully\n", limit)
+			stdoutln(fmt.Sprintf("%-30v %-20v %v", "Ip", "OpType", "Count"))
+			stdoutln(formatDataNodeOp(opv, logNum, dataNodeName, filterOp))
+			return nil
 		},
 	}
+	cmd.Flags().IntVar(&logNum, "num", 50, "Number of logs to display")
+	cmd.Flags().StringVar(&dataNodeName, "dataNode", "", "Filter logs by dataNode name")
+	cmd.Flags().StringVar(&filterOp, "filter-op", "", "Filter logs by op type")
+	cmd.Flags().StringVar(&addr, "addr", "", "Filter logs by data node address")
 	return cmd
 }
 
-func newClusterEnableAutoDecommissionDisk(client *master.MasterClient) *cobra.Command {
+func newClusterQueryDpOpCmd(client *master.MasterClient) *cobra.Command {
+	var (
+		filterOp  string
+		dpId      string
+		logNum    int
+		dimension string
+		volName   string
+		addr      string
+		diskName  string
+	)
 	cmd := &cobra.Command{
-		Use:       CliOpEnableAutoDecommission + " [STATUS]",
-		ValidArgs: []string{"true", "false"},
-		Short:     cmdEnableAutoDecommissionDiskShort,
-		Args:      cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			var (
-				err    error
-				enable bool
-			)
-			defer func() {
-				errout(err)
-			}()
-			if enable, err = strconv.ParseBool(args[0]); err != nil {
-				return
+		Use:   CliOpDpOp,
+		Short: cmdQueryDpOpShort,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dimension = proto.Dp
+			opv, err := client.AdminAPI().GetOpLog(dimension, volName, addr, dpId, diskName)
+			if err != nil {
+				return err
 			}
-			if err = client.AdminAPI().SetAutoDecommissionDisk(enable); err != nil {
-				return
+			stdoutln(fmt.Sprintf("%-30v %-20v %v", "DpId", "OpType", "Count"))
+			stdoutln(formatClusterDpOp(opv, logNum, filterOp))
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&logNum, "num", 50, "Number of logs to display")
+	cmd.Flags().StringVar(&dpId, "dp", "", "Filter logs by dp id")
+	cmd.Flags().StringVar(&filterOp, "filter-op", "", "Filter logs by op type")
+	cmd.Flags().StringVar(&addr, "addr", "", "Filter logs by data node address")
+	return cmd
+}
+
+func newClusterQueryDiskOpCmd(client *master.MasterClient) *cobra.Command {
+	var (
+		filterOp  string
+		diskName  string
+		logNum    int
+		dimension string
+		volName   string
+		addr      string
+		dpId      string
+	)
+	cmd := &cobra.Command{
+		Use:   CliOpDiskOp,
+		Short: cmdQueryDiskOpShort,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dimension = proto.Disk
+			opv, err := client.AdminAPI().GetOpLog(dimension, volName, addr, dpId, diskName)
+			if err != nil {
+				return err
 			}
-			if enable {
-				stdout("Enable auto decommission successful!\n")
+			if diskName == "" {
+				stdoutln(fmt.Sprintf("%-45v %-20v %v", "DiskName", "OpType", "Count"))
 			} else {
-				stdout("Disable auto decommission successful!\n")
+				stdoutln(fmt.Sprintf("%-45v %-20v %v", "DpId", "OpType", "Count"))
 			}
+			stdoutln(formatClusterDiskOp(opv, logNum, filterOp))
+			return nil
 		},
 	}
+	cmd.Flags().IntVar(&logNum, "num", 50, "Number of logs to display")
+	cmd.Flags().StringVar(&diskName, "disk", "", "Filter logs by disk name")
+	cmd.Flags().StringVar(&filterOp, "filter-op", "", "Filter logs by op type")
+	cmd.Flags().StringVar(&addr, "addr", "", "Filter logs by data node address")
 	return cmd
 }
 
-func newClusterQueryDecommissionFailedDisk(client *master.MasterClient) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   CliOpQueryDecommissionFailedDisk + " [TYPE]",
-		Short: cmdQueryDecommissionFailedDiskShort,
-		Args:  cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			var (
-				err        error
-				decommType int
-			)
-
-			defer func() {
-				errout(err)
-			}()
-
-			args[0] = strings.ToLower(args[0])
-			if args[0] != "auto" && args[0] != "manual" && args[0] != "all" {
-				err = fmt.Errorf("unknown decommission type %v, not \"auto\", \"manual\" and \"and\"", args[0])
-				return
-			}
-
-			switch args[0] {
-			case "manual":
-				decommType = 0
-			case "auto":
-				decommType = 1
-			case "all":
-				decommType = 2
-			}
-
-			diskInfo, err := client.AdminAPI().QueryDecommissionFailedDisk(decommType)
-			if err != nil {
-				return
-			}
-
-			stdout("FailedDisks:\n")
-			for i, d := range diskInfo {
-				stdout("[%v/%v]\n%v", i+1, len(diskInfo), formatDecommissionFailedDiskInfo(d))
-			}
-		},
-	}
-	return cmd
-}
+// func newClusterSetDecommissionDiskLimitCmd(client *master.MasterClient) *cobra.Command {
+//	cmd := &cobra.Command{
+//		Use:   CliOpSetDecommissionDiskLimit + " [LIMIT]",
+//		Short: cmdSetDecommissionDiskLimit,
+//		Args:  cobra.MinimumNArgs(1),
+//		Run: func(cmd *cobra.Command, args []string) {
+//			var (
+//				err   error
+//				limit uint32
+//			)
+//
+//			defer func() {
+//				errout(err)
+//			}()
+//
+//			tmp, err := strconv.ParseUint(args[0], 10, 32)
+//			if err != nil {
+//				return
+//			}
+//			limit = uint32(tmp)
+//
+//			err = client.AdminAPI().SetDecommissionDiskLimit(limit)
+//			if err != nil {
+//				return
+//			}
+//			stdout("Set decommission disk limit to %v successfully\n", limit)
+//		},
+//	}
+//	return cmd
+// }

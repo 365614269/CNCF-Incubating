@@ -27,7 +27,7 @@ import (
 	"github.com/brahma-adshonor/gohook"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/cubefs/cubefs/blockcache/bcache"
+	"github.com/cubefs/cubefs/client/blockcache/bcache"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/data/manager"
 	"github.com/cubefs/cubefs/sdk/data/stream"
@@ -217,7 +217,7 @@ func TestRead(t *testing.T) {
 		getObjFunc       func(*meta.MetaWrapper, uint64) (uint64, uint64, []proto.ExtentKey, []proto.ObjExtentKey, error)
 		bcacheGetFunc    func(*bcache.BcacheClient, string, []byte, uint64, uint32) (int, error)
 		checkDpExistFunc func(*stream.ExtentClient, uint64) error
-		readExtentFunc   func(*stream.ExtentClient, uint64, *proto.ExtentKey, []byte, int, int) (int, error, bool)
+		readExtentFunc   func(*stream.ExtentClient, uint64, *proto.ExtentKey, []byte, int, int, uint32) (int, error, bool)
 		ebsReadFunc      func(*BlobStoreClient, context.Context, string, []byte, uint64, uint64, proto.ObjExtentKey) (int, error)
 		expectError      error
 	}{
@@ -387,7 +387,7 @@ func TestReadSliceRange(t *testing.T) {
 		extentKey        proto.ExtentKey
 		bcacheGetFunc    func(*bcache.BcacheClient, string, []byte, uint64, uint32) (int, error)
 		checkDpExistFunc func(*stream.ExtentClient, uint64) error
-		readExtentFunc   func(*stream.ExtentClient, uint64, *proto.ExtentKey, []byte, int, int) (int, error, bool)
+		readExtentFunc   func(*stream.ExtentClient, uint64, *proto.ExtentKey, []byte, int, int, uint32) (int, error, bool)
 		ebsReadFunc      func(*BlobStoreClient, context.Context, string, []byte, uint64, uint64, proto.ObjExtentKey) (int, error)
 		expectError      error
 	}{
@@ -470,8 +470,9 @@ func TestReadSliceRange(t *testing.T) {
 	}
 }
 
-func MockGetObjExtentsTrue(m *meta.MetaWrapper, inode uint64,
-) (gen uint64, size uint64, extents []proto.ExtentKey, objExtents []proto.ObjExtentKey, err error) {
+func MockGetObjExtentsTrue(m *meta.MetaWrapper, inode uint64) (gen uint64, size uint64,
+	extents []proto.ExtentKey, objExtents []proto.ObjExtentKey, err error,
+) {
 	objEks := make([]proto.ObjExtentKey, 0)
 	objEkLen := 5
 	expectedFileSize := 0
@@ -483,13 +484,15 @@ func MockGetObjExtentsTrue(m *meta.MetaWrapper, inode uint64,
 	return 1, 1, nil, objEks, nil
 }
 
-func MockGetObjExtentsFalse(m *meta.MetaWrapper, inode uint64,
-) (gen uint64, size uint64, extents []proto.ExtentKey, objExtents []proto.ObjExtentKey, err error) {
+func MockGetObjExtentsFalse(m *meta.MetaWrapper, inode uint64) (gen uint64, size uint64,
+	extents []proto.ExtentKey, objExtents []proto.ObjExtentKey, err error,
+) {
 	return 1, 1, nil, nil, errors.New("Get objEks failed")
 }
 
 func MockEbscReadTrue(ebsc *BlobStoreClient, ctx context.Context, volName string,
-	buf []byte, offset uint64, size uint64, oek proto.ObjExtentKey,
+	buf []byte, offset uint64, size uint64,
+	oek proto.ObjExtentKey,
 ) (readN int, err error) {
 	reader := strings.NewReader("Hello world.")
 	readN, _ = io.ReadFull(reader, buf)
@@ -497,19 +500,20 @@ func MockEbscReadTrue(ebsc *BlobStoreClient, ctx context.Context, volName string
 }
 
 func MockEbscReadFalse(ebsc *BlobStoreClient, ctx context.Context, volName string,
-	buf []byte, offset uint64, size uint64, oek proto.ObjExtentKey,
+	buf []byte, offset uint64, size uint64,
+	oek proto.ObjExtentKey,
 ) (readN int, err error) {
 	return 0, syscall.EIO
 }
 
 func MockReadExtentTrue(client *stream.ExtentClient, inode uint64, ek *proto.ExtentKey,
-	data []byte, offset int, size int,
+	data []byte, offset int, size int, storageClass uint32,
 ) (read int, err error, b bool) {
 	return len("Hello world"), nil, true
 }
 
 func MockReadExtentFalse(client *stream.ExtentClient, inode uint64, ek *proto.ExtentKey,
-	data []byte, offset int, size int,
+	data []byte, offset int, size int, storageClass uint32,
 ) (read int, err error) {
 	return 0, errors.New("Read extent failed")
 }
@@ -523,12 +527,13 @@ func MockCheckDataPartitionExistFalse(client *stream.ExtentClient, partitionID u
 }
 
 func MockWriteTrue(client *stream.ExtentClient, inode uint64, offset int, data []byte,
-	flags int, checkFunc func() error,
+	flags int, checkFunc func() error, storageClass uint32, isMigration bool,
 ) (write int, err error) {
 	return len(data), nil
 }
 
-func MockWriteFalse(client *stream.ExtentClient, inode uint64, offset int, data []byte, flags int,
+func MockWriteFalse(client *stream.ExtentClient, inode uint64, offset int, data []byte,
+	flags int,
 ) (write int, err error) {
 	return 0, errors.New("Write failed")
 }

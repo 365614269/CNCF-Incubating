@@ -29,7 +29,7 @@ import (
 	"github.com/cubefs/cubefs/blobstore/common/rpc"
 	"github.com/cubefs/cubefs/blobstore/common/rpc/auditlog"
 	"github.com/cubefs/cubefs/blobstore/common/trace"
-	"github.com/cubefs/cubefs/blockcache/bcache"
+	"github.com/cubefs/cubefs/client/blockcache/bcache"
 	"github.com/cubefs/cubefs/cmd/common"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/data/blobstore"
@@ -292,6 +292,10 @@ func (o *ObjectNode) loadConfig(cfg *config.Config) (err error) {
 	o.disableCreateBucketByS3 = cfg.GetBool(disableCreateBucketByS3)
 
 	o.mc = master.NewMasterClient(masters, false)
+	poolSize := cfg.GetInt64(proto.CfgHttpPoolSize)
+	log.LogWarnf("loadConfig: http pool size %d", poolSize)
+	o.mc.SetTransport(proto.GetHttpTransporter(&proto.HttpCfg{PoolSize: int(poolSize)}))
+
 	o.vm = NewVolumeManager(masters, strict)
 	o.userStore = NewUserInfoStore(masters, strict)
 
@@ -416,13 +420,13 @@ func handleStart(s common.Server, cfg *config.Config) (err error) {
 		o.limitMutex.Unlock()
 	}
 
+	exporter.RegistConsul(ci.Cluster, cfg.GetString("role"), cfg)
+
 	// start rest api
 	if err = o.startMuxRestAPI(); err != nil {
 		log.LogInfof("handleStart: start rest api fail: err(%v)", err)
 		return
 	}
-
-	exporter.RegistConsul(ci.Cluster, cfg.GetString("role"), cfg)
 
 	log.LogInfo("object subsystem start success")
 	return

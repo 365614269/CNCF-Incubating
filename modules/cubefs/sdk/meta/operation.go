@@ -50,6 +50,7 @@ func (mw *MetaWrapper) txIcreate(tx *Transaction, mp *MetaPartition, mode, uid, 
 		Target:      target,
 		QuotaIds:    quotaIds,
 		TxInfo:      tx.txInfo,
+		StorageType: mw.DefaultStorageClass,
 	}
 	req.FullPaths = []string{fullPath}
 
@@ -120,6 +121,7 @@ func (mw *MetaWrapper) quotaIcreate(mp *MetaPartition, mode, uid, gid uint32, ta
 		Gid:         gid,
 		Target:      target,
 		QuotaIds:    quotaIds,
+		StorageType: mw.DefaultStorageClass,
 	}
 	req.FullPaths = []string{fullPath}
 
@@ -180,7 +182,9 @@ func (mw *MetaWrapper) icreate(mp *MetaPartition, mode, uid, gid uint32, target 
 		Uid:         uid,
 		Gid:         gid,
 		Target:      target,
+		StorageType: mw.DefaultStorageClass,
 	}
+
 	req.FullPaths = []string{fullPath}
 
 	packet := proto.NewPacketReqID()
@@ -1033,6 +1037,7 @@ func (mw *MetaWrapper) iget(mp *MetaPartition, inode uint64, verSeq uint64) (sta
 		PartitionID: mp.PartitionID,
 		Inode:       inode,
 		VerSeq:      verSeq,
+		InnerReq:    mw.InnerReq,
 	}
 
 	packet := proto.NewPacketReqID()
@@ -1087,6 +1092,7 @@ func (mw *MetaWrapper) batchIget(wg *sync.WaitGroup, mp *MetaPartition, inodes [
 		PartitionID: mp.PartitionID,
 		Inodes:      inodes,
 		VerSeq:      mw.VerReadSeq,
+		InnerReq:    mw.InnerReq,
 	}
 	log.LogDebugf("action[batchIget] req %v", req)
 	packet := proto.NewPacketReqID()
@@ -1232,7 +1238,9 @@ func (mw *MetaWrapper) readDirLimit(mp *MetaPartition, parentID uint64, from str
 	return statusOK, resp.Children, nil
 }
 
-func (mw *MetaWrapper) appendExtentKey(mp *MetaPartition, inode uint64, extent proto.ExtentKey, discard []proto.ExtentKey, isSplit bool) (status int, err error) {
+func (mw *MetaWrapper) appendExtentKey(mp *MetaPartition, inode uint64, extent proto.ExtentKey,
+	discard []proto.ExtentKey, isSplit bool, isCache bool, storageClass uint32, isMigration bool,
+) (status int, err error) {
 	bgTime := stat.BeginStat()
 	defer func() {
 		stat.EndStat("appendExtentKey", err, bgTime, 1)
@@ -1245,6 +1253,9 @@ func (mw *MetaWrapper) appendExtentKey(mp *MetaPartition, inode uint64, extent p
 		Extent:         extent,
 		DiscardExtents: discard,
 		IsSplit:        isSplit,
+		IsCache:        isCache,
+		StorageClass:   storageClass,
+		IsMigration:    isMigration,
 	}
 
 	packet := proto.NewPacketReqID()
@@ -1277,17 +1288,21 @@ func (mw *MetaWrapper) appendExtentKey(mp *MetaPartition, inode uint64, extent p
 	return status, err
 }
 
-func (mw *MetaWrapper) getExtents(mp *MetaPartition, inode uint64) (resp *proto.GetExtentsResponse, err error) {
+func (mw *MetaWrapper) getExtents(mp *MetaPartition, inode uint64, isCache bool, openForWrite, isMigration bool) (resp *proto.GetExtentsResponse, err error) {
 	bgTime := stat.BeginStat()
 	defer func() {
 		stat.EndStat("getExtents", err, bgTime, 1)
 	}()
 
 	req := &proto.GetExtentsRequest{
-		VolName:     mw.volname,
-		PartitionID: mp.PartitionID,
-		Inode:       inode,
-		VerSeq:      mw.VerReadSeq,
+		VolName:      mw.volname,
+		PartitionID:  mp.PartitionID,
+		Inode:        inode,
+		VerSeq:       mw.VerReadSeq,
+		IsCache:      isCache,
+		OpenForWrite: openForWrite,
+		IsMigration:  isMigration,
+		InnerReq:     mw.InnerReq,
 	}
 
 	packet := proto.NewPacketReqID()
@@ -1304,6 +1319,9 @@ func (mw *MetaWrapper) getExtents(mp *MetaPartition, inode uint64) (resp *proto.
 		metric.SetWithLabels(err, map[string]string{exporter.Vol: mw.volname})
 	}()
 
+	// for debug
+	// log.LogDebugf("getExtents req: id(%v) data(%v) stack[%v]", packet.GetReqID(), req, string(debug.Stack()))
+
 	packet, err = mw.sendToMetaPartition(mp, packet)
 	if err != nil {
 		log.LogErrorf("getExtents: packet(%v) mp(%v) req(%v) err(%v)", packet, mp, *req, err)
@@ -1313,7 +1331,12 @@ func (mw *MetaWrapper) getExtents(mp *MetaPartition, inode uint64) (resp *proto.
 	resp.Status = parseStatus(packet.ResultCode)
 	if resp.Status != statusOK {
 		err = errors.New(packet.GetResultMsg())
-		log.LogErrorf("getExtents: packet(%v) mp(%v) result(%v)", packet, mp, packet.GetResultMsg())
+		msg := fmt.Sprintf("getExtents: packet(%v) mp(%v) result(%v)", packet, mp, packet.GetResultMsg())
+		if packet.ResultCode == proto.OpMismatchStorageClass {
+			log.LogWarnf(msg)
+		} else {
+			log.LogError(msg)
+		}
 		return
 	}
 
@@ -1907,17 +1930,18 @@ func (mw *MetaWrapper) removeMultipart(mp *MetaPartition, path, multipartId stri
 	return statusOK, nil
 }
 
-func (mw *MetaWrapper) appendExtentKeys(mp *MetaPartition, inode uint64, extents []proto.ExtentKey) (status int, err error) {
+func (mw *MetaWrapper) appendExtentKeys(mp *MetaPartition, inode uint64, extents []proto.ExtentKey, storageClass uint32) (status int, err error) {
 	bgTime := stat.BeginStat()
 	defer func() {
 		stat.EndStat("appendExtentKeys", err, bgTime, 1)
 	}()
 
 	req := &proto.AppendExtentKeysRequest{
-		VolName:     mw.volname,
-		PartitionId: mp.PartitionID,
-		Inode:       inode,
-		Extents:     extents,
+		VolName:      mw.volname,
+		PartitionId:  mp.PartitionID,
+		Inode:        inode,
+		Extents:      extents,
+		StorageClass: storageClass,
 	}
 
 	packet := proto.NewPacketReqID()
@@ -2448,7 +2472,9 @@ func (mw *MetaWrapper) readdironly(mp *MetaPartition, parentID uint64) (status i
 	return statusOK, resp.Children, nil
 }
 
-func (mw *MetaWrapper) updateXAttrs(mp *MetaPartition, inode uint64, filesInc int64, dirsInc int64, bytesInc int64) error {
+func (mw *MetaWrapper) updateXAttrs(mp *MetaPartition, inode uint64, filesHddInc int64, filesSsdInc int64, filesBlobStoreInc int64,
+	bytesHddInc int64, bytesSsdInc int64, bytesBlobStoreInc int64, dirsInc int64,
+) error {
 	var err error
 
 	bgTime := stat.BeginStat()
@@ -2456,7 +2482,14 @@ func (mw *MetaWrapper) updateXAttrs(mp *MetaPartition, inode uint64, filesInc in
 		stat.EndStat("updateXAttrs", err, bgTime, 1)
 	}()
 
-	value := strconv.FormatInt(int64(filesInc), 10) + "," + strconv.FormatInt(int64(dirsInc), 10) + "," + strconv.FormatInt(int64(bytesInc), 10)
+	value := strconv.FormatInt(int64(filesHddInc), 10) + "," +
+		strconv.FormatInt(int64(filesSsdInc), 10) + "," +
+		strconv.FormatInt(int64(filesBlobStoreInc), 10) + "," +
+		strconv.FormatInt(int64(bytesHddInc), 10) + "," +
+		strconv.FormatInt(int64(bytesSsdInc), 10) + "," +
+		strconv.FormatInt(int64(bytesBlobStoreInc), 10) + "," +
+		strconv.FormatInt(int64(dirsInc), 10)
+
 	req := &proto.UpdateXAttrRequest{
 		VolName:     mw.volname,
 		PartitionId: mp.PartitionID,
@@ -2864,6 +2897,17 @@ func (mw *MetaWrapper) lockDir(mp *MetaPartition, inode uint64, lease uint64, lo
 		stat.EndStat("lockDir", err, bgTime, 1)
 	}()
 
+	if lockId == 0 && lease != 0 {
+		status, uniqId, err1 := mw.consumeUniqID(mp)
+		if err1 != nil || status != statusOK {
+			log.LogErrorf("lockDir: get uniq lockId failed, ino %d, status %d, err %v", inode, status, err1)
+			err = statusErrToErrno(status, err1)
+			return
+		}
+		lockId = int64(uniqId)
+		log.LogDebugf("lockDir: get lockId success, id %d, ino %d", lockId, inode)
+	}
+
 	req := &proto.LockDirRequest{
 		VolName:     mw.volname,
 		PartitionId: mp.PartitionID,
@@ -2896,18 +2940,207 @@ func (mw *MetaWrapper) lockDir(mp *MetaPartition, inode uint64, lease uint64, lo
 	status := parseStatus(packet.ResultCode)
 	if status != statusOK {
 		err = statusToErrno(status)
-		log.LogErrorf("lockDir: received fail status, packet(%v) mp(%v) req(%v) result(%v) err(%v)", packet, mp, *req, packet.GetResultMsg(), err)
+		log.LogWarnf("lockDir: received fail status, packet(%v) mp(%v) req(%v) result(%v) err(%v)", packet, mp, *req, packet.GetResultMsg(), err)
 		return
 	}
 
-	resp := new(proto.LockDirResponse)
-	err = packet.UnmarshalData(resp)
-	if err != nil {
-		log.LogErrorf("lockDir: packet(%v) mp(%v) err(%v) PacketData(%v)", packet, mp, err, string(packet.Data))
-		return
-	}
-	retLockId = resp.LockId
-
-	log.LogDebugf("lockDir: packet(%v) mp(%v) req(%v) result(%v)", packet, mp, *req, packet.GetResultMsg())
+	retLockId = lockId
+	log.LogDebugf("lockDir: packet(%v) mp(%v) req(%v) lockId(%v)", packet, mp, *req, lockId)
 	return
+}
+
+func (mw *MetaWrapper) inodeAccessTimeGet(mp *MetaPartition, inode uint64) (status int, info *proto.InodeAccessTime, err error) {
+	bgTime := stat.BeginStat()
+	defer func() {
+		stat.EndStat("inodeAccessTimeGet", err, bgTime, 1)
+	}()
+
+	req := &proto.InodeGetRequest{
+		VolName:     mw.volname,
+		PartitionID: mp.PartitionID,
+		Inode:       inode,
+	}
+
+	packet := proto.NewPacketReqID()
+	packet.Opcode = proto.OpMetaInodeAccessTimeGet
+	packet.PartitionID = mp.PartitionID
+	err = packet.MarshalData(req)
+	if err != nil {
+		log.LogErrorf("inodeAccessTimeGet: req(%v) err(%v)", *req, err)
+		return
+	}
+
+	metric := exporter.NewTPCnt(packet.GetOpMsg())
+	defer func() {
+		metric.SetWithLabels(err, map[string]string{exporter.Vol: mw.volname})
+	}()
+
+	packet, err = mw.sendToMetaPartition(mp, packet)
+	if err != nil {
+		log.LogErrorf("inodeAccessTimeGet: packet(%v) mp(%v) req(%v) err(%v)", packet, mp, *req, err)
+		return
+	}
+
+	status = parseStatus(packet.ResultCode)
+	if status != statusOK {
+		err = errors.New(packet.GetResultMsg())
+		log.LogErrorf("inodeAccessTimeGet: packet(%v) mp(%v) req(%v) result(%v)", packet, mp, *req, packet.GetResultMsg())
+		return
+	}
+	resp := new(proto.InodeGetAccessTimeResponse)
+	err = packet.UnmarshalData(resp)
+	if err != nil || resp.Info == nil {
+		log.LogErrorf("inodeAccessTimeGet: packet(%v) mp(%v) req(%v) err(%v) PacketData(%v)", packet, mp, *req, err, string(packet.Data))
+		return
+	}
+	return statusOK, resp.Info, nil
+}
+
+func (mw *MetaWrapper) renewalForbiddenMigration(mp *MetaPartition, inode uint64) (status int, err error) {
+	bgTime := stat.BeginStat()
+	defer func() {
+		stat.EndStat("renewalForbiddenMigration", err, bgTime, 1)
+	}()
+
+	req := &proto.RenewalForbiddenMigrationRequest{
+		VolName:     mw.volname,
+		PartitionID: mp.PartitionID,
+		Inode:       inode,
+	}
+
+	packet := proto.NewPacketReqID()
+	packet.Opcode = proto.OpMetaRenewalForbiddenMigration
+	packet.PartitionID = mp.PartitionID
+	err = packet.MarshalData(req)
+	if err != nil {
+		log.LogErrorf("renewalForbiddenMigration: ino(%v) err(%v)", inode, err)
+		return
+	}
+
+	metric := exporter.NewTPCnt(packet.GetOpMsg())
+	defer func() {
+		metric.SetWithLabels(err, map[string]string{exporter.Vol: mw.volname})
+	}()
+
+	packet, err = mw.sendToMetaPartition(mp, packet)
+	if err != nil {
+		log.LogErrorf("renewalForbiddenMigration: packet(%v) mp(%v) req(%v) err(%v)", packet, mp, *req, err)
+		return
+	}
+
+	status = parseStatus(packet.ResultCode)
+	if status != statusOK {
+		err = errors.New(packet.GetResultMsg())
+		log.LogErrorf("renewalForbiddenMigration: packet(%v) mp(%v) req(%v) result(%v)", packet, mp, *req, packet.GetResultMsg())
+		return
+	}
+
+	log.LogDebugf("renewalForbiddenMigration exit: packet(%v) mp(%v) req(%v)", packet, mp, *req)
+	return statusOK, nil
+}
+
+func (mw *MetaWrapper) updateExtentKeyAfterMigration(mp *MetaPartition, inode uint64, storageType uint32,
+	extentKeys []proto.ObjExtentKey, leaseExpire uint64, delayDelMinute uint64, fullPath string,
+) (status int, err error) {
+	bgTime := stat.BeginStat()
+	defer func() {
+		stat.EndStat("updateExtentKeyAfterMigration", err, bgTime, 1)
+	}()
+	req := &proto.UpdateExtentKeyAfterMigrationRequest{
+		PartitionID:      mp.PartitionID,
+		Inode:            inode,
+		StorageClass:     storageType,
+		NewObjExtentKeys: extentKeys,
+		LeaseExpire:      leaseExpire,
+	}
+	req.DelayDeleteMinute = delayDelMinute
+	req.FullPaths = []string{fullPath}
+	packet := proto.NewPacketReqID()
+	packet.Opcode = proto.OpMetaUpdateExtentKeyAfterMigration
+	packet.PartitionID = mp.PartitionID
+	err = packet.MarshalData(req)
+	if err != nil {
+		err = fmt.Errorf("lcNode marshal request err(%v)", err)
+		log.LogErrorf("updateExtentKeyAfterMigration: ino(%v) %v", inode, err)
+		return
+	}
+
+	log.LogDebugf("updateExtentKeyAfterMigration enter: packet(%v) mp(%v) req(%v)",
+		packet, mp, string(packet.Data))
+
+	metric := exporter.NewTPCnt(packet.GetOpMsg())
+	defer func() {
+		metric.SetWithLabels(err, map[string]string{exporter.Vol: mw.volname})
+	}()
+
+	packet, err = mw.sendToMetaPartition(mp, packet)
+	if err != nil {
+		err = fmt.Errorf("sendToMetaPartition err(%v)", err)
+		log.LogErrorf("updateExtentKeyAfterMigration: packet(%v) mp(%v) req(%v) err(%v)", packet, mp, *req, err)
+		return
+	}
+
+	status = parseStatus(packet.ResultCode)
+	if status != statusOK {
+		err = fmt.Errorf("%v", string(packet.Data))
+		errMsg := fmt.Sprintf("updateExtentKeyAfterMigration: packet(%v) mp(%v) req(%v): %v",
+			packet, mp, *req, err.Error())
+		if status == statusLeaseOccupiedByOthers || status == statusLeaseGenerationNotMatch {
+			log.LogWarnf(errMsg)
+		} else {
+			log.LogError(errMsg)
+		}
+		return
+	}
+
+	log.LogDebugf("updateExtentKeyAfterMigration exit: packet(%v) mp(%v) req(%v)", packet, mp, *req)
+	return statusOK, nil
+}
+
+func (mw *MetaWrapper) deleteMigrationExtentKey(mp *MetaPartition, inode uint64, fullPath string) (status int, err error) {
+	bgTime := stat.BeginStat()
+	defer func() {
+		stat.EndStat("deleteMigrationExtentKey", err, bgTime, 1)
+	}()
+	req := &proto.DeleteMigrationExtentKeyRequest{
+		PartitionID: mp.PartitionID,
+		Inode:       inode,
+	}
+	req.FullPaths = []string{fullPath}
+	packet := proto.NewPacketReqID()
+	packet.Opcode = proto.OpDeleteMigrationExtentKey
+	packet.PartitionID = mp.PartitionID
+	err = packet.MarshalData(req)
+	if err != nil {
+		log.LogErrorf("deleteMigrationExtentKey: ino(%v) err(%v)", inode, err)
+		return
+	}
+
+	log.LogDebugf("deleteMigrationExtentKey enter: packet(%v) mp(%v) req(%v)",
+		packet, mp, string(packet.Data))
+
+	metric := exporter.NewTPCnt(packet.GetOpMsg())
+	defer func() {
+		metric.SetWithLabels(err, map[string]string{exporter.Vol: mw.volname})
+	}()
+
+	packet, err = mw.sendToMetaPartition(mp, packet)
+	if err != nil {
+		log.LogErrorf("deleteMigrationExtentKey: packet(%v) mp(%v) req(%v) err(%v)", packet, mp, *req, err)
+		return
+	}
+
+	status = parseStatus(packet.ResultCode)
+	if status != statusOK {
+		err = errors.New(packet.GetResultMsg())
+		log.LogErrorf("deleteMigrationExtentKey: packet(%v) mp(%v) req(%v) result(%v)", packet, mp, *req, packet.GetResultMsg())
+		return
+	}
+
+	log.LogDebugf("deleteMigrationExtentKey exit: packet(%v) mp(%v) req(%v)", packet, mp, *req)
+	return statusOK, nil
+}
+
+func (mw *MetaWrapper) forbiddenMigration(mp *MetaPartition, inode uint64) (status int, err error) {
+	return mw.renewalForbiddenMigration(mp, inode)
 }

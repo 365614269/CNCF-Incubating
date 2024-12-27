@@ -28,7 +28,7 @@ func newDiskCmd(client *master.MasterClient) *cobra.Command {
 		newDecommissionDiskCmd(client),
 		newRecommissionDiskCmd(client),
 		newQueryDecommissionDiskCmd(client),
-		newAbortDecommissionDiskCmd(client),
+		newCancelDecommissionDiskCmd(client),
 	)
 	return cmd
 }
@@ -121,7 +121,7 @@ func newListBadDiskCmd(client *master.MasterClient) *cobra.Command {
 		Short: cmdCheckBadDisksShort,
 		Run: func(cmd *cobra.Command, args []string) {
 			var (
-				infos *proto.DiskInfos
+				infos *proto.BadDiskInfos
 				err   error
 			)
 			defer func() {
@@ -131,12 +131,17 @@ func newListBadDiskCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("(partitionID=0 means detected by datanode disk checking, not associated with any partition)\n\n[Unavaliable disks]:\n")
-			sort.SliceStable(infos.Disks, func(i, j int) bool {
-				return infos.Disks[i].Address < infos.Disks[j].Address
+			stdout("%v\n", formatBadDiskTableHeader())
+
+			sort.SliceStable(infos.BadDisks, func(i, j int) bool {
+				return infos.BadDisks[i].Address < infos.BadDisks[j].Address
 			})
-			stdoutln(formatBadDisks(infos.Disks))
+			for _, disk := range infos.BadDisks {
+				stdout("%v\n", formatBadDiskInfoRow(disk))
+			}
 		},
 	}
+
 	return cmd
 }
 
@@ -211,13 +216,13 @@ func newQueryDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 }
 
 const (
-	cmdAbortDecommissionDiskShort = "Abort disk decommission"
+	cmdCancelDecommissionDiskShort = "cancel disk decommission"
 )
 
-func newAbortDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
+func newCancelDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   CliOpAbortDecommission + " [DATA NODE ADDR] [DISK]",
-		Short: cmdAbortDecommissionDiskShort,
+		Use:   CliOpCancelDecommission + " [DATA NODE ADDR] [DISK]",
+		Short: cmdCancelDecommissionDiskShort,
 		Args:  cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
@@ -229,7 +234,7 @@ func newAbortDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 			if err != nil {
 				return
 			}
-			stdout("%v\n", "Abort decommission successfully")
+			stdout("%v\n", "cancel decommission successfully")
 		},
 	}
 	return cmd

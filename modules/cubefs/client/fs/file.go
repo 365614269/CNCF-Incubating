@@ -44,6 +44,7 @@ type File struct {
 	sync.RWMutex
 	fReader *blobstore.Reader
 	fWriter *blobstore.Writer
+	flag    uint32
 }
 
 // Functions that File needs to implement
@@ -67,7 +68,7 @@ var (
 
 // NewFile returns a new file.
 func NewFile(s *Super, i *proto.InodeInfo, flag uint32, pino uint64, filename string) fs.Node {
-	if proto.IsCold(s.volType) {
+	if proto.IsCold(s.volType) || proto.IsStorageClassBlobStore(i.StorageClass) {
 		var (
 			fReader    *blobstore.Reader
 			fWriter    *blobstore.Writer
@@ -90,6 +91,7 @@ func NewFile(s *Super, i *proto.InodeInfo, flag uint32, pino uint64, filename st
 			FileCache:       false,
 			FileSize:        i.Size,
 			CacheThreshold:  s.CacheThreshold,
+			StorageClass:    i.StorageClass,
 		}
 		log.LogDebugf("Trace NewFile:flag(%v). clientConf(%v)", flag, clientConf)
 
@@ -105,9 +107,10 @@ func NewFile(s *Super, i *proto.InodeInfo, flag uint32, pino uint64, filename st
 			// no thing
 		}
 		log.LogDebugf("Trace NewFile:fReader(%v) fWriter(%v) ", fReader, fWriter)
-		return &File{super: s, info: i, fWriter: fWriter, fReader: fReader, parentIno: pino, name: filename}
+		return &File{super: s, info: i, fWriter: fWriter, fReader: fReader, parentIno: pino, name: filename, flag: flag}
 	}
-	return &File{super: s, info: i, parentIno: pino, name: filename}
+	log.LogDebugf("Trace NewFile:ino(%v) flag(%v) ", i, flag)
+	return &File{super: s, info: i, parentIno: pino, name: filename, flag: flag}
 }
 
 // get file parentPath
@@ -224,10 +227,18 @@ func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenR
 			needBCache = true
 		}
 	}
+	openForWrite := false
+	if req.Flags&0x0f != syscall.O_RDONLY {
+		openForWrite = true
+	}
+	isCache := false
+	if proto.IsCold(f.super.volType) || proto.IsStorageClassBlobStore(f.info.StorageClass) {
+		isCache = true
+	}
 	if needBCache {
-		f.super.ec.OpenStreamWithCache(ino, needBCache)
+		f.super.ec.OpenStreamWithCache(ino, needBCache, openForWrite, isCache)
 	} else {
-		f.super.ec.OpenStream(ino)
+		f.super.ec.OpenStream(ino, openForWrite, isCache)
 	}
 	log.LogDebugf("TRACE open ino(%v) f.super.bcacheDir(%v) needBCache(%v)", ino, f.super.bcacheDir, needBCache)
 
@@ -236,7 +247,7 @@ func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenR
 	if f.super.keepCache && resp != nil {
 		resp.Flags |= fuse.OpenKeepCache
 	}
-	if proto.IsCold(f.super.volType) {
+	if proto.IsCold(f.super.volType) || proto.IsStorageClassBlobStore(f.info.StorageClass) {
 		log.LogDebugf("TRANCE open ino(%v) info(%v)", ino, f.info)
 		fileSize, _ := f.fileSizeVersion2(ino)
 		clientConf := blobstore.ClientConfig{
@@ -255,6 +266,7 @@ func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenR
 			FileCache:       false,
 			FileSize:        uint64(fileSize),
 			CacheThreshold:  f.super.CacheThreshold,
+			StorageClass:    f.info.StorageClass,
 		}
 		f.fWriter.FreeCache()
 		switch req.Flags & 0x0f {
@@ -275,7 +287,8 @@ func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenR
 	}
 
 	elapsed := time.Since(start)
-	log.LogDebugf("TRACE Open: ino(%v) req(%v) resp(%v) (%v)ns", ino, req, resp, elapsed.Nanoseconds())
+	f.flag = uint32(req.Flags)
+	log.LogDebugf("TRACE Open: ino(%v) req(%v) resp(%v) flags(%v) (%v)ns", ino, req, resp, f.flag, elapsed.Nanoseconds())
 
 	return f, nil
 }
@@ -289,6 +302,10 @@ func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) (err error
 		stat.EndStat("Release", err, bgTime, 1)
 		log.LogInfof("action[Release] %v", f.fWriter)
 		f.fWriter.FreeCache()
+		// keep nodeCache hold the latest inode info
+		f.super.fslock.Lock()
+		delete(f.super.nodeCache, ino)
+		f.super.fslock.Unlock()
 		if DisableMetaCache {
 			f.super.ic.Delete(ino)
 		}
@@ -314,6 +331,21 @@ func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) (err error
 	return nil
 }
 
+func (f *File) shouldAccessReplicaStorageClass() (accessReplicaStorageClass bool) {
+	accessReplicaStorageClass = false
+	if proto.IsValidStorageClass(f.info.StorageClass) {
+		if proto.IsStorageClassReplica(f.info.StorageClass) {
+			accessReplicaStorageClass = true
+		}
+	} else {
+		// for compatability: old version server modules has no field StorageClass
+		if proto.IsHot(f.super.volType) {
+			accessReplicaStorageClass = true
+		}
+	}
+	return
+}
+
 // Read handles the read request.
 func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) (err error) {
 	bgTime := stat.BeginStat()
@@ -322,7 +354,8 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 		stat.StatBandWidth("Read", uint32(req.Size))
 	}()
 
-	log.LogDebugf("TRACE Read enter: ino(%v) offset(%v) filesize(%v) reqsize(%v) req(%v)", f.info.Inode, req.Offset, f.info.Size, req.Size, req)
+	log.LogDebugf("TRACE Read enter: ino(%v) storageClass(%v) offset(%v) filesize(%v) reqsize(%v) req(%v)",
+		f.info.Inode, f.info.StorageClass, req.Offset, f.info.Size, req.Size, req)
 
 	start := time.Now()
 
@@ -330,9 +363,11 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 	defer func() {
 		metric.SetWithLabels(err, map[string]string{exporter.Vol: f.super.volname})
 	}()
+
 	var size int
-	if proto.IsHot(f.super.volType) {
-		size, err = f.super.ec.Read(f.info.Inode, resp.Data[fuse.OutHeaderSize:], int(req.Offset), req.Size)
+	if f.shouldAccessReplicaStorageClass() {
+		size, err = f.super.ec.Read(f.info.Inode, resp.Data[fuse.OutHeaderSize:], int(req.Offset),
+			req.Size, f.info.StorageClass, false)
 	} else {
 		size, err = f.fReader.Read(ctx, resp.Data[fuse.OutHeaderSize:], int(req.Offset), req.Size)
 	}
@@ -385,9 +420,9 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 
 	ino := f.info.Inode
 	reqlen := len(req.Data)
-	log.LogDebugf("TRACE Write enter: ino(%v) offset(%v) len(%v)  flags(%v) fileflags(%v) quotaIds(%v) req(%v)",
-		ino, req.Offset, reqlen, req.Flags, req.FileFlags, f.info.QuotaInfos, req)
-	if proto.IsHot(f.super.volType) {
+	log.LogDebugf("TRACE Write enter: ino(%v) storageClass(%v) offset(%v) len(%v) flags(%v) fileflags(%v) quotaIds(%v) req(%v)",
+		ino, f.info.StorageClass, req.Offset, reqlen, req.Flags, req.FileFlags, f.info.QuotaInfos, req)
+	if proto.IsHot(f.super.volType) || proto.IsStorageClassReplica(f.info.StorageClass) {
 		filesize, _ := f.fileSize(ino)
 		if req.Offset > int64(filesize) && reqlen == 1 && req.Data[0] == 0 {
 
@@ -414,13 +449,13 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 		if f.super.enSyncWrite {
 			flags |= proto.FlagsSyncWrite
 		}
-		if proto.IsCold(f.super.volType) {
+		if proto.IsCold(f.super.volType) || proto.IsStorageClassBlobStore(f.info.StorageClass) {
 			waitForFlush = false
 			flags |= proto.FlagsSyncWrite
 		}
 	}
 
-	if req.FileFlags&fuse.OpenAppend != 0 || proto.IsCold(f.super.volType) {
+	if req.FileFlags&fuse.OpenAppend != 0 || proto.IsCold(f.super.volType) || proto.IsStorageClassBlobStore(f.info.StorageClass) {
 		flags |= proto.FlagsAppend
 	}
 
@@ -447,9 +482,9 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 		return nil
 	}
 	var size int
-	if proto.IsHot(f.super.volType) {
+	if f.shouldAccessReplicaStorageClass() {
 		f.super.ec.GetStreamer(ino).SetParentInode(f.parentIno)
-		if size, err = f.super.ec.Write(ino, int(req.Offset), req.Data, flags, checkFunc); err == ParseError(syscall.ENOSPC) {
+		if size, err = f.super.ec.Write(ino, int(req.Offset), req.Data, flags, checkFunc, f.info.StorageClass, false); err == ParseError(syscall.ENOSPC) {
 			return
 		}
 	} else {
@@ -506,7 +541,7 @@ func (f *File) Flush(ctx context.Context, req *fuse.FlushRequest) (err error) {
 	defer func() {
 		metric.SetWithLabels(err, map[string]string{exporter.Vol: f.super.volname})
 	}()
-	if proto.IsHot(f.super.volType) {
+	if proto.IsHot(f.super.volType) || proto.IsStorageClassReplica(f.info.StorageClass) {
 		err = f.super.ec.Flush(f.info.Inode)
 	} else {
 		f.Lock()
@@ -540,7 +575,7 @@ func (f *File) Fsync(ctx context.Context, req *fuse.FsyncRequest) (err error) {
 
 	log.LogDebugf("TRACE Fsync enter: ino(%v)", f.info.Inode)
 	start := time.Now()
-	if proto.IsHot(f.super.volType) {
+	if proto.IsHot(f.super.volType) || proto.IsStorageClassReplica(f.info.StorageClass) {
 		err = f.super.ec.Flush(f.info.Inode)
 	} else {
 		err = f.fWriter.Flush(f.info.Inode, context.Background())
@@ -566,10 +601,18 @@ func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse
 
 	ino := f.info.Inode
 	start := time.Now()
-	if req.Valid.Size() && proto.IsHot(f.super.volType) {
+	openForWrite := false
+	if req.Flags&0x0f != syscall.O_RDONLY {
+		openForWrite = true
+	}
+	isCache := false
+	if proto.IsCold(f.super.volType) || proto.IsStorageClassBlobStore(f.info.StorageClass) {
+		isCache = true
+	}
+	if req.Valid.Size() && (proto.IsHot(f.super.volType) || proto.IsStorageClassReplica(f.info.StorageClass)) {
 		// when use trunc param in open request through nfs client and mount on cfs mountPoint, cfs client may not recv open message but only setAttr,
 		// the streamer may not open and cause io error finally,so do a open no matter the stream be opened or not
-		if err := f.super.ec.OpenStream(ino); err != nil {
+		if err := f.super.ec.OpenStream(ino, openForWrite, isCache); err != nil {
 			log.LogErrorf("Setattr: OpenStream ino(%v) size(%v) err(%v)", ino, req.Size, err)
 			return ParseError(err)
 		}
@@ -594,7 +637,7 @@ func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse
 		return ParseError(err)
 	}
 
-	if req.Valid.Size() && proto.IsHot(f.super.volType) {
+	if req.Valid.Size() && (proto.IsHot(f.super.volType) || proto.IsStorageClassReplica(f.info.StorageClass)) {
 		if req.Size != info.Size {
 			log.LogWarnf("Setattr: truncate ino(%v) reqSize(%v) inodeSize(%v)", ino, req.Size, info.Size)
 		}
@@ -752,7 +795,7 @@ func (f *File) fileSize(ino uint64) (size int, gen uint64) {
 
 func (f *File) fileSizeVersion2(ino uint64) (size int, gen uint64) {
 	size, gen, valid := f.super.ec.FileSize(ino)
-	if proto.IsCold(f.super.volType) {
+	if proto.IsCold(f.super.volType) || proto.IsStorageClassBlobStore(f.info.StorageClass) {
 		valid = false
 	}
 	if !valid {

@@ -26,4 +26,7 @@ func TestAtomicFloat64(t *testing.T) {
 	testVal := float64(1.0)
 	f.Store(testVal)
 	require.Equal(t, testVal, f.Load())
+	require.True(t, f.CompareAndSwap(testVal, 0))
+	require.EqualValues(t, 0, f.Swap(testVal))
+	require.EqualValues(t, testVal, f.Load())
 }

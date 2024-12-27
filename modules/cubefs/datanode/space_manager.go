@@ -30,10 +30,15 @@ import (
 	"github.com/cubefs/cubefs/raftstore"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/atomicutil"
+	"github.com/cubefs/cubefs/util/auditlog"
+	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/loadutil"
 	"github.com/cubefs/cubefs/util/log"
 	"github.com/cubefs/cubefs/util/strutil"
+	"github.com/google/uuid"
 	"github.com/shirou/gopsutil/disk"
+
+	opstat "github.com/cubefs/cubefs/util/stat"
 )
 
 const DefaultStopDpLimit = 4
@@ -100,6 +105,7 @@ func (manager *SpaceManager) Stop() {
 		msg := fmt.Sprintf("[Stop] stop space manager using time(%v)", time.Since(begin))
 		log.LogInfo(msg)
 		syslog.Print(msg)
+		auditlog.LogDataNodeOp("SpaceManager", msg, nil)
 	}()
 	defer func() {
 		recover()
@@ -108,15 +114,17 @@ func (manager *SpaceManager) Stop() {
 	close(manager.samplerDone)
 
 	// Close raft store.
-	for _, partition := range manager.partitions {
+	partitions := manager.getPartitions()
+	for _, partition := range partitions {
 		partition.stopRaft()
 	}
 
+	disks := manager.GetDisks()
 	var wg sync.WaitGroup
-	for _, d := range manager.disks {
+	for _, d := range disks {
 		dps := make([]*DataPartition, 0)
 
-		for _, dp := range manager.partitions {
+		for _, dp := range partitions {
 			if dp.disk == d {
 				dps = append(dps, dp)
 			}
@@ -245,22 +253,35 @@ func (manager *SpaceManager) GetRaftStore() (raftStore raftstore.RaftStore) {
 	return manager.raftStore
 }
 
-func (manager *SpaceManager) RangePartitions(f func(partition *DataPartition) bool) {
+func (manager *SpaceManager) RangePartitions(f func(partition *DataPartition, testID string) bool, reqID string) {
 	if f == nil {
 		return
 	}
-	manager.partitionMutex.RLock()
-	partitions := make([]*DataPartition, 0)
-	for _, dp := range manager.partitions {
-		partitions = append(partitions, dp)
-	}
-	manager.partitionMutex.RUnlock()
+	begin := time.Now()
+	partitions := manager.getPartitions()
+	testID := uuid.New().String()
+	log.LogDebugf("RangePartitions req(%v) get lock cost %v testID %v", reqID, time.Since(begin), testID)
 
-	for _, partition := range partitions {
-		if !f(partition) {
-			break
-		}
+	var wg sync.WaitGroup
+	partitionsCh := make(chan *DataPartition)
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for partition := range partitionsCh {
+				if !f(partition, testID) {
+					break
+				}
+			}
+		}()
 	}
+	for _, partition := range partitions {
+		partitionsCh <- partition
+	}
+	close(partitionsCh)
+	wg.Wait()
+	log.LogDebugf("RangePartitions req(%v) traverse dps %v cost %v testID %v", reqID, len(partitions), time.Since(begin), testID)
 }
 
 func (manager *SpaceManager) GetDisks() (disks []*Disk) {
@@ -308,6 +329,22 @@ func (manager *SpaceManager) LoadDisk(path string, reservedSpace, diskRdonlySpac
 		manager.putDisk(disk)
 		err = nil
 		go disk.doBackendTask()
+	}
+	return
+}
+
+func (manager *SpaceManager) LoadBrokenDisk(path string, reservedSpace, diskRdonlySpace uint64, maxErrCnt int, diskEnableReadRepairExtentLimit bool) (err error) {
+	var disk *Disk
+
+	if diskRdonlySpace < reservedSpace {
+		diskRdonlySpace = reservedSpace
+	}
+
+	log.LogDebugf("action[LoadBrokenDisk] load broken disk from path(%v).", path)
+
+	if _, err = manager.GetDisk(path); err != nil {
+		disk = NewBrokenDisk(path, reservedSpace, diskRdonlySpace, maxErrCnt, manager, diskEnableReadRepairExtentLimit)
+		manager.putDisk(disk)
 	}
 	return
 }
@@ -434,70 +471,14 @@ func (manager *SpaceManager) Partition(partitionID uint64) (dp *DataPartition) {
 
 func (manager *SpaceManager) AttachPartition(dp *DataPartition) {
 	begin := time.Now()
-	defer func() {
-		log.LogInfof("[AttachPartition] load dp(%v) attach using time(%v)", dp.partitionID, time.Since(begin))
-	}()
 	manager.partitionMutex.Lock()
-	if loadedDp, has := manager.partitions[dp.partitionID]; !has {
+	defer func() {
+		log.LogInfof("[AttachPartition] load dp(%v) attach using time(%v)", dp.info(), time.Since(begin))
+		manager.partitionMutex.Unlock()
+	}()
+	if _, has := manager.partitions[dp.partitionID]; !has {
 		manager.partitions[dp.partitionID] = dp
-		manager.partitionMutex.Unlock()
 		log.LogDebugf("action[AttachPartition] put partition(%v) to manager.", dp.partitionID)
-	} else {
-		manager.partitionMutex.Unlock()
-
-		if loadedDp.disk.Path == dp.disk.Path {
-			log.LogWarnf("[AttachPartition] dp(%v) is loaded, to load(%v), but disk path is the same",
-				loadedDp.info(), dp.info())
-			return
-		}
-
-		log.LogWarnf("action[AttachPartition] dp(%v) is loaded, to load(%v).", loadedDp.info(), dp.info())
-		_, _, infos, err := dp.fetchReplicasFromMaster()
-		if err != nil {
-			manager.DetachDataPartition(loadedDp.partitionID)
-			loadedDp.Stop()
-			loadedDp.Disk().DetachDataPartition(loadedDp)
-			log.LogErrorf("action[LoadDisk] dp(%v) is detached,due to get dp info failed(%v).",
-				loadedDp.info(), err)
-		} else {
-			var correctReplica ReplicaInfo
-			for _, replica := range infos {
-				if replica.Addr == manager.dataNode.localServerAddr {
-					correctReplica = replica
-					break
-				}
-			}
-			if correctReplica.Disk == "" && correctReplica.Addr == "" {
-				loadedDp.Stop()
-				loadedDp.Disk().DetachDataPartition(loadedDp)
-				log.LogErrorf("action[LoadDisk] dp(%v) is detached,due to data node not contains in replicas"+
-					"from master.", loadedDp.info())
-			} else {
-				if loadedDp.disk.Path == correctReplica.Disk {
-					dp.Stop()
-					dp.Disk().DetachDataPartition(dp)
-					if err := dp.RemoveAll(proto.InitialDecommission, true); err != nil {
-						log.LogErrorf("action[LoadDisk]failed to remove dp(%v) dir(%v), err(%v)",
-							dp.partitionID, dp.Path(), err)
-					}
-				} else {
-					// detach loaded dp
-					loadedDp.Stop()
-					loadedDp.Disk().DetachDataPartition(loadedDp)
-					if err := loadedDp.RemoveAll(proto.InitialDecommission, true); err != nil {
-						log.LogErrorf("action[LoadDisk]failed to remove dp(%v) dir(%v), err(%v)",
-							loadedDp.partitionID, loadedDp.Path(), err)
-					}
-					dp.Stop()
-					dp.Disk().DetachDataPartition(dp)
-					_, err := LoadDataPartition(dp.path, dp.disk)
-					if err != nil {
-						log.LogErrorf("action[LoadDisk]failed to load dp %v (%v_%v), err(%v)",
-							dp.partitionID, dp.path, dp.disk, err)
-					}
-				}
-			}
-		}
 	}
 }
 
@@ -509,26 +490,26 @@ func (manager *SpaceManager) DetachDataPartition(partitionID uint64) {
 }
 
 func (manager *SpaceManager) CreatePartition(request *proto.CreateDataPartitionRequest) (dp *DataPartition, err error) {
-	manager.partitionMutex.Lock()
-	defer manager.partitionMutex.Unlock()
 	dpCfg := &dataPartitionCfg{
-		PartitionID:   request.PartitionId,
-		VolName:       request.VolumeId,
-		Peers:         request.Members,
-		Hosts:         request.Hosts,
-		RaftStore:     manager.raftStore,
-		NodeID:        manager.nodeID,
-		ClusterID:     manager.clusterID,
-		PartitionSize: request.PartitionSize,
-		PartitionType: int(request.PartitionTyp),
-		ReplicaNum:    request.ReplicaNum,
-		VerSeq:        request.VerSeq,
-		CreateType:    request.CreateType,
-		Forbidden:     false,
+		PartitionID:              request.PartitionId,
+		VolName:                  request.VolumeId,
+		Peers:                    request.Members,
+		Hosts:                    request.Hosts,
+		RaftStore:                manager.raftStore,
+		NodeID:                   manager.nodeID,
+		ClusterID:                manager.clusterID,
+		PartitionSize:            request.PartitionSize,
+		PartitionType:            int(request.PartitionTyp),
+		ReplicaNum:               request.ReplicaNum,
+		VerSeq:                   request.VerSeq,
+		CreateType:               request.CreateType,
+		Forbidden:                false,
+		IsEnableSnapshot:         manager.dataNode.clusterEnableSnapshot,
+		ForbidWriteOpOfProtoVer0: false,
 	}
 	log.LogInfof("action[CreatePartition] dp %v dpCfg.Peers %v request.Members %v",
 		dpCfg.PartitionID, dpCfg.Peers, request.Members)
-	dp = manager.partitions[dpCfg.PartitionID]
+	dp = manager.Partition(dpCfg.PartitionID)
 	if dp != nil {
 		if err = dp.IsEqualCreateDataPartitionRequest(request); err != nil {
 			return nil, err
@@ -540,22 +521,30 @@ func (manager *SpaceManager) CreatePartition(request *proto.CreateDataPartitionR
 		log.LogErrorf("[CreatePartition] dp(%v) failed to select disk", dpCfg.PartitionID)
 		return nil, ErrNoSpaceToCreatePartition
 	}
+	defer func() {
+		msg := fmt.Sprintf("dp %v request.Members %v on disk %v",
+			dpCfg.PartitionID, request.Members, disk.Path)
+		auditlog.LogDataNodeOp("DataPartitionCreate", msg, err)
+	}()
+
 	if dp, err = CreateDataPartition(dpCfg, disk, request); err != nil {
 		return
 	}
+	manager.partitionMutex.Lock()
 	manager.partitions[dp.partitionID] = dp
+	manager.partitionMutex.Unlock()
 	return
 }
 
 // DeletePartition deletes a partition based on the partition id.
-func (manager *SpaceManager) DeletePartition(dpID uint64, decommissionType uint32, force bool) (err error) {
+func (manager *SpaceManager) DeletePartition(dpID uint64, force bool) (err error) {
 	manager.partitionMutex.Lock()
 
 	dp := manager.partitions[dpID]
 	if dp == nil {
 		manager.partitionMutex.Unlock()
 		// maybe dp not loaded when triggered disk error, need to remove disk root dir
-		err = manager.deleteDataPartitionNotLoaded(dpID, decommissionType, force)
+		err = manager.deleteDataPartitionNotLoaded(dpID, force)
 		return err
 	}
 
@@ -563,13 +552,15 @@ func (manager *SpaceManager) DeletePartition(dpID uint64, decommissionType uint3
 	manager.partitionMutex.Unlock()
 	dp.Stop()
 	dp.Disk().DetachDataPartition(dp)
-	if err := dp.RemoveAll(decommissionType, force); err != nil {
+	if err := dp.RemoveAll(force); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatResponse) {
+func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatResponse,
+	forbiddenVols map[string]struct{}, dpRepairBlockSize map[string]uint64, reqID string,
+) {
 	response.Status = proto.TaskSucceeds
 	stat := s.space.Stats()
 	stat.Lock()
@@ -581,15 +572,22 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 	response.MaxCapacity = stat.MaxCapacityToCreatePartition
 	response.RemainingCapacity = stat.RemainingCapacityToCreatePartition
 	response.BadDisks = make([]string, 0)
+	response.BadDiskStats = make([]proto.BadDiskStat, 0)
 	response.DiskStats = make([]proto.DiskStat, 0)
 	response.StartTime = s.startTime
 	stat.Unlock()
 
 	response.ZoneName = s.zoneName
+	response.ReceivedForbidWriteOpOfProtoVer0 = s.nodeForbidWriteOpOfProtoVer0
 	response.PartitionReports = make([]*proto.DataPartitionReport, 0)
 	space := s.space
-	space.RangePartitions(func(partition *DataPartition) bool {
+	begin := time.Now()
+	var respLock sync.Mutex
+	space.RangePartitions(func(partition *DataPartition, testID string) bool {
+		dpForbid := partition.IsForbidWriteOpOfProtoVer0() || s.nodeForbidWriteOpOfProtoVer0
+
 		leaderAddr, isLeader := partition.IsRaftLeader()
+		begin2 := time.Now()
 		vr := &proto.DataPartitionReport{
 			VolName:                    partition.volumeID,
 			PartitionID:                uint64(partition.partitionID),
@@ -598,18 +596,73 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 			Used:                       uint64(partition.Used()),
 			DiskPath:                   partition.Disk().Path,
 			IsLeader:                   isLeader,
-			ExtentCount:                partition.GetExtentCount(),
+			ExtentCount:                partition.GetExtentCountWithoutLock(),
 			NeedCompare:                true,
 			DecommissionRepairProgress: partition.decommissionRepairProgress,
 			LocalPeers:                 partition.config.Peers,
 			TriggerDiskError:           atomic.LoadUint64(&partition.diskErrCnt) > 0,
+			ForbidWriteOpOfProtoVer0:   dpForbid,
 		}
-		log.LogDebugf("action[Heartbeats] dpid(%v), status(%v) total(%v) used(%v) leader(%v) isLeader(%v) TriggerDiskError(%v).",
-			vr.PartitionID, vr.PartitionStatus, vr.Total, vr.Used, leaderAddr, vr.IsLeader, vr.TriggerDiskError)
+		log.LogDebugf("action[Heartbeats] dpid(%v), status(%v) total(%v) used(%v) leader(%v) isLeader(%v) "+
+			"TriggerDiskError(%v) reqId(%v) testID(%v) cost(%v).",
+			vr.PartitionID, vr.PartitionStatus, vr.Total, vr.Used, leaderAddr, vr.IsLeader, vr.TriggerDiskError,
+			reqID, testID, time.Since(begin2))
+		respLock.Lock()
 		response.PartitionReports = append(response.PartitionReports, vr)
-		return true
-	})
+		respLock.Unlock()
+		begin2 = time.Now()
 
+		if len(forbiddenVols) != 0 {
+			if _, ok := forbiddenVols[partition.volumeID]; ok {
+				partition.SetForbidden(true)
+			} else {
+				partition.SetForbidden(false)
+			}
+		}
+
+		oldVal := partition.IsForbidWriteOpOfProtoVer0()
+		VolsForbidWriteOpOfProtoVer0 := s.VolsForbidWriteOpOfProtoVer0
+		if _, ok := VolsForbidWriteOpOfProtoVer0[partition.volumeID]; ok {
+			partition.SetForbidWriteOpOfProtoVer0(true)
+		} else {
+			partition.SetForbidWriteOpOfProtoVer0(false)
+		}
+		newVal := partition.IsForbidWriteOpOfProtoVer0()
+		if oldVal != newVal {
+			log.LogWarnf("[Heartbeats] vol(%v) dpId(%v) IsForbidWriteOpOfProtoVer0 change to %v",
+				partition.volumeID, partition.partitionID, newVal)
+		}
+
+		directReadVols := s.DirectReadVols
+		if _, ok := directReadVols[partition.volumeID]; ok {
+			partition.extentStore.SetDirectRead(true)
+		} else {
+			partition.extentStore.SetDirectRead(false)
+		}
+
+		size := uint64(proto.DefaultDpRepairBlockSize)
+		if len(dpRepairBlockSize) != 0 {
+			var ok bool
+			if size, ok = dpRepairBlockSize[partition.volumeID]; !ok {
+				size = proto.DefaultDpRepairBlockSize
+			}
+		}
+		log.LogDebugf("action[Heartbeats] volume(%v) dp(%v) repair block size(%v) current size(%v) reqId(%v) testID(%v) nodeForbidWriteOpOfProtoVer0(%v) cost(%v)",
+			partition.volumeID, partition.partitionID, size, partition.GetRepairBlockSize(), reqID, testID, partition.IsForbidWriteOpOfProtoVer0(), time.Since(begin2))
+		if partition.GetRepairBlockSize() != size {
+			partition.SetRepairBlockSize(size)
+		}
+		return true
+	}, reqID)
+
+	if opstat.DpStat.IsSendMaster() {
+		response.DiskOpLogs = s.getDiskOpLog()
+	}
+	if opstat.DiskStat.IsSendMaster() {
+		response.DpOpLogs = s.getDpOpLog()
+	}
+
+	log.LogDebugf("buildHeartBeatResponse range dp req(%v) cost %v", reqID, time.Since(begin))
 	disks := space.GetDisks()
 	for _, d := range disks {
 		response.AllDisks = append(response.AllDisks, d.Path)
@@ -631,7 +684,10 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 	}
 }
 
-func (manager *SpaceManager) deleteDataPartitionNotLoaded(id uint64, decommissionType uint32, force bool) error {
+func (manager *SpaceManager) deleteDataPartitionNotLoaded(id uint64, force bool) error {
+	if !manager.dataNode.checkAllDiskLoaded() {
+		return errors.NewErrorf("Disks on data node %v are not loaded completed", manager.dataNode.localServerAddr)
+	}
 	disks := manager.GetDisks()
 	for _, d := range disks {
 		if d.HasDiskErrPartition(id) {
@@ -659,8 +715,17 @@ func (manager *SpaceManager) deleteDataPartitionNotLoaded(id uint64, decommissio
 				} else {
 					if partitionID == id {
 						rootPath := path.Join(d.Path, filename)
-						if decommissionType == proto.AutoDecommission && force {
-							newPath := path.Join(d.Path, BackupPartitionPrefix+filename)
+						if force {
+							newPath := fmt.Sprintf("%v-%v", path.Join(d.Path, BackupPartitionPrefix+filename), time.Now().Format("20060102150405"))
+							//_, err := os.Stat(newPath)
+							//if err == nil {
+							//	newPathWithTimestamp := fmt.Sprintf("%v-%v", newPath, time.Now().Format("20060102150405"))
+							//	err = os.Rename(newPath, newPathWithTimestamp)
+							//	if err != nil {
+							//		log.LogWarnf("action[deleteDataPartitionNotLoaded]: rename dir from %v to %v,err %v", newPath, newPathWithTimestamp, err)
+							//		return err
+							//	}
+							//}
 							err = os.Rename(rootPath, newPath)
 							if err == nil {
 								d.AddBackupPartitionDir(id)
@@ -728,4 +793,14 @@ func (manager *SpaceManager) getDataNodeIDs() []DataNodeID {
 		ids = append(ids, DataNodeID{Addr: addr, ID: id})
 	}
 	return ids
+}
+
+func (manager *SpaceManager) getPartitions() []*DataPartition {
+	partitions := make([]*DataPartition, 0)
+	manager.partitionMutex.RLock()
+	defer manager.partitionMutex.RUnlock()
+	for _, dp := range manager.partitions {
+		partitions = append(partitions, dp)
+	}
+	return partitions
 }

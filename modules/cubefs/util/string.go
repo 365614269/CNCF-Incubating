@@ -227,5 +227,8 @@ func String2Any(str string, pvalue interface{}) error {
 	default:
 		return fmt.Errorf("unknown type %v of %s %v", v, str, pvalue)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }

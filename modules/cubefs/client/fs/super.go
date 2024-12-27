@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/cubefs/cubefs/blobstore/api/access"
-	"github.com/cubefs/cubefs/blockcache/bcache"
+	"github.com/cubefs/cubefs/client/blockcache/bcache"
 	"github.com/cubefs/cubefs/client/common"
 	"github.com/cubefs/cubefs/depends/bazil.org/fuse"
 	"github.com/cubefs/cubefs/depends/bazil.org/fuse/fs"
@@ -90,6 +90,8 @@ type Super struct {
 
 	taskPool []common.TaskPool
 	closeC   chan struct{}
+
+	cacheDpStorageClass uint32
 }
 
 // Functions that Super needs to implement
@@ -215,6 +217,8 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		s.bc = bcache.NewBcacheClient()
 	}
 
+	s.cacheDpStorageClass = opt.VolCacheDpStorageClass
+
 	extentConfig := &stream.ExtentConfig{
 		Volume:            opt.Volname,
 		Masters:           masters,
@@ -222,7 +226,6 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		NearRead:          opt.NearRead,
 		ReadRate:          opt.ReadRate,
 		WriteRate:         opt.WriteRate,
-		VolumeType:        opt.VolType,
 		BcacheEnable:      opt.EnableBcache,
 		BcacheDir:         opt.BcacheDir,
 		MaxStreamerLimit:  opt.MaxStreamerLimit,
@@ -238,6 +241,15 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 
 		DisableMetaCache:             DisableMetaCache,
 		MinWriteAbleDataPartitionCnt: opt.MinWriteAbleDataPartitionCnt,
+		StreamRetryTimeout:           opt.StreamRetryTimeout,
+		OnRenewalForbiddenMigration:  s.mw.RenewalForbiddenMigration,
+		VolStorageClass:              opt.VolStorageClass,
+		VolAllowedStorageClass:       opt.VolAllowedStorageClass,
+		VolCacheDpStorageClass:       s.cacheDpStorageClass,
+		OnForbiddenMigration:         s.mw.ForbiddenMigration,
+
+		OnGetInodeInfo:      s.InodeGet,
+		BcacheOnlyForNotSSD: opt.BcacheOnlyForNotSSD,
 	}
 
 	s.ec, err = stream.NewExtentClient(extentConfig)
@@ -245,7 +257,21 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		return nil, errors.Trace(err, "NewExtentClient failed!")
 	}
 	s.mw.VerReadSeq = s.ec.GetReadVer()
-	if proto.IsCold(opt.VolType) {
+
+	needCreateBlobClient := false
+	if !proto.IsValidStorageClass(opt.VolStorageClass) {
+		// for compatability: old version server modules has no filed VolStorageClas
+		if proto.IsCold(opt.VolType) {
+			needCreateBlobClient = true
+			log.LogInfof("[NewSuper] to create blobstore client for old fashion cold volume")
+		}
+	} else {
+		if proto.IsVolSupportStorageClass(extentConfig.VolAllowedStorageClass, proto.StorageClass_BlobStore) {
+			needCreateBlobClient = true
+			log.LogInfof("[NewSuper] to create blobstore client for volume allowed blobstore storageClass")
+		}
+	}
+	if needCreateBlobClient {
 		s.ebsc, err = blobstore.NewEbsClient(access.Config{
 			ConnMode: access.NoLimitConnMode,
 			Consul: access.ConsulConfig{
@@ -257,9 +283,11 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 			},
 		})
 		if err != nil {
+			log.LogErrorf("[NewSuper] create blobstore client err: %v", err)
 			return nil, errors.Trace(err, "NewEbsClient failed!")
 		}
 	}
+
 	s.mw.Client = s.ec
 
 	if !opt.EnablePosixACL {
@@ -271,7 +299,7 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 	}
 
 	s.suspendCh = make(chan interface{})
-	if proto.IsCold(opt.VolType) {
+	if proto.IsCold(opt.VolType) || proto.IsVolSupportStorageClass(opt.VolAllowedStorageClass, proto.StorageClass_BlobStore) {
 		go s.scheduleFlush()
 	}
 	if s.mw.EnableSummary {
@@ -282,8 +310,8 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		atomic.StoreUint32((*uint32)(&s.state), uint32(fs.FSStatRestore))
 	}
 
-	log.LogInfof("NewSuper: cluster(%v) volname(%v) icacheExpiration(%v) LookupValidDuration(%v) AttrValidDuration(%v) state(%v)",
-		s.cluster, s.volname, inodeExpiration, LookupValidDuration, AttrValidDuration, s.state)
+	log.LogInfof("NewSuper: cluster(%v) volname(%v) icacheExpiration(%v) LookupValidDuration(%v) AttrValidDuration(%v) state(%v) cacheDpStorageClass(%v)",
+		s.cluster, s.volname, inodeExpiration, LookupValidDuration, AttrValidDuration, s.state, s.cacheDpStorageClass)
 
 	go s.loopSyncMeta()
 
@@ -746,6 +774,7 @@ func getDelInodes(src []uint64, act []*proto.InodeInfo) []uint64 {
 
 func (s *Super) Close() {
 	close(s.closeC)
+	s.mw.Close()
 }
 
 func (s *Super) SetTransaction(txMaskStr string, timeout int64, retryNum int64, retryInterval int64) {

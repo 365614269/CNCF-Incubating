@@ -17,11 +17,13 @@ package lcnode
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net"
 	"sync/atomic"
 	"time"
 
 	"github.com/cubefs/cubefs/proto"
+	"github.com/cubefs/cubefs/util/auditlog"
 	"github.com/cubefs/cubefs/util/log"
 )
 
@@ -51,23 +53,33 @@ func (l *LcNode) opMasterHeartbeat(conn net.Conn, p *proto.Packet, remoteAddr st
 		decode.UseNumber()
 		if err = decode.Decode(adminTask); err != nil {
 			resp.Status = proto.TaskFailed
-			resp.Result = err.Error()
+			resp.Result = fmt.Sprintf("lcnode(%v) heartbeat decode err(%v)", l.localServerAddr, err.Error())
 			goto end
 		}
 
 		l.scannerMutex.RLock()
 		for _, scanner := range l.lcScanners {
 			result := &proto.LcNodeRuleTaskResponse{
-				ID:     scanner.ID,
-				LcNode: l.localServerAddr,
+				ID:        scanner.ID,
+				LcNode:    l.localServerAddr,
+				StartTime: &scanner.now,
+				Volume:    scanner.Volume,
+				RcvStop:   scanner.receiveStop,
+				Rule:      scanner.rule,
 				LcNodeRuleTaskStatistics: proto.LcNodeRuleTaskStatistics{
-					Volume:               scanner.Volume,
-					RuleId:               scanner.rule.ID,
-					TotalInodeScannedNum: atomic.LoadInt64(&scanner.currentStat.TotalInodeScannedNum),
-					FileScannedNum:       atomic.LoadInt64(&scanner.currentStat.FileScannedNum),
-					DirScannedNum:        atomic.LoadInt64(&scanner.currentStat.DirScannedNum),
-					ExpiredNum:           atomic.LoadInt64(&scanner.currentStat.ExpiredNum),
-					ErrorSkippedNum:      atomic.LoadInt64(&scanner.currentStat.ErrorSkippedNum),
+					TotalFileScannedNum:      atomic.LoadInt64(&scanner.currentStat.TotalFileScannedNum),
+					TotalFileExpiredNum:      atomic.LoadInt64(&scanner.currentStat.TotalFileExpiredNum),
+					TotalDirScannedNum:       atomic.LoadInt64(&scanner.currentStat.TotalDirScannedNum),
+					ExpiredDeleteNum:         atomic.LoadInt64(&scanner.currentStat.ExpiredDeleteNum),
+					ExpiredMToHddNum:         atomic.LoadInt64(&scanner.currentStat.ExpiredMToHddNum),
+					ExpiredMToBlobstoreNum:   atomic.LoadInt64(&scanner.currentStat.ExpiredMToBlobstoreNum),
+					ExpiredMToHddBytes:       atomic.LoadInt64(&scanner.currentStat.ExpiredMToHddBytes),
+					ExpiredMToBlobstoreBytes: atomic.LoadInt64(&scanner.currentStat.ExpiredMToBlobstoreBytes),
+					ExpiredSkipNum:           atomic.LoadInt64(&scanner.currentStat.ExpiredSkipNum),
+					ErrorDeleteNum:           atomic.LoadInt64(&scanner.currentStat.ErrorDeleteNum),
+					ErrorMToHddNum:           atomic.LoadInt64(&scanner.currentStat.ErrorMToHddNum),
+					ErrorMToBlobstoreNum:     atomic.LoadInt64(&scanner.currentStat.ErrorMToBlobstoreNum),
+					ErrorReadDirNum:          atomic.LoadInt64(&scanner.currentStat.ErrorReadDirNum),
 				},
 			}
 			resp.LcScanningTasks[scanner.ID] = result
@@ -96,8 +108,9 @@ func (l *LcNode) opMasterHeartbeat(conn net.Conn, p *proto.Packet, remoteAddr st
 	end:
 		adminTask.Response = resp
 		l.respondToMaster(adminTask)
-		log.LogInfof("%s pkt %s, resp success req: %v, respAdminTask: %v, resp: %v, cost %s",
-			remoteAddr, p.String(), req, adminTask, resp, time.Since(start).String())
+		msg := fmt.Sprintf("from(%v), adminTask(%+v), resp(%+v), %v", remoteAddr, adminTask, resp, time.Since(start).String())
+		log.LogInfof("MasterHeartbeat %v ", msg)
+		auditlog.LogMasterOp("MasterHeartbeat", msg, err)
 	}()
 
 	l.lastHeartbeat = time.Now()
@@ -124,8 +137,10 @@ func (l *LcNode) opLcScan(conn net.Conn, p *proto.Packet) (err error) {
 	decoder := json.NewDecoder(bytes.NewBuffer(data))
 	decoder.UseNumber()
 	if err = decoder.Decode(adminTask); err != nil {
+		resp.LcNode = l.localServerAddr
 		resp.Status = proto.TaskFailed
-		resp.Result = err.Error()
+		resp.Done = true
+		resp.StartErr = err.Error()
 		adminTask.Response = resp
 		l.respondToMaster(adminTask)
 		return

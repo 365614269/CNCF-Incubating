@@ -28,10 +28,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cubefs/cubefs/util/exporter"
-
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	"github.com/cubefs/cubefs/proto"
+	"github.com/cubefs/cubefs/util/auditlog"
+	"github.com/cubefs/cubefs/util/errors"
+	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/loadutil"
 	"github.com/cubefs/cubefs/util/log"
 	"github.com/cubefs/cubefs/util/strutil"
@@ -41,11 +42,11 @@ import (
 
 var (
 	// RegexpDataPartitionDir validates the directory name of a data partition.
-	RegexpDataPartitionDir, _        = regexp.Compile(`^datapartition_(\d)+_(\d)+$`)
-	RegexpCachePartitionDir, _       = regexp.Compile(`^cachepartition_(\d)+_(\d)+$`)
-	RegexpPreLoadPartitionDir, _     = regexp.Compile(`^preloadpartition_(\d)+_(\d)+$`)
-	RegexpExpiredDataPartitionDir, _ = regexp.Compile(`^expired_datapartition_(\d)+_(\d)+$`)
-	RegexpBackupDataPartitionDir, _  = regexp.Compile(`^backup_datapartition_(\d)+_(\d)+$`)
+	RegexpDataPartitionDir, _               = regexp.Compile(`^datapartition_(\d)+_(\d)+$`)
+	RegexpCachePartitionDir, _              = regexp.Compile(`^cachepartition_(\d)+_(\d)+$`)
+	RegexpPreLoadPartitionDir, _            = regexp.Compile(`^preloadpartition_(\d)+_(\d)+$`)
+	RegexpExpiredDataPartitionDir, _        = regexp.Compile(`^expired_datapartition_(\d)+_(\d)+$`)
+	RegexpBackupDataPartitionDirToDelete, _ = regexp.Compile(`backup_datapartition_(\d+)_(\d+)-(\d+)`)
 )
 
 const (
@@ -96,11 +97,18 @@ type Disk struct {
 	enableExtentRepairReadLimit bool
 	extentRepairReadDp          uint64
 	BackupDataPartitions        sync.Map
+	recoverStatus               uint32
+	BackupReplicaLk             sync.RWMutex
 }
 
 const (
 	SyncTinyDeleteRecordFromLeaderOnEveryDisk = 5
 	MaxExtentRepairReadLimit                  = 1 //
+)
+
+const (
+	DiskRecoverStop uint32 = iota
+	DiskRecoverStart
 )
 
 type PartitionVisitor func(dp *DataPartition)
@@ -134,6 +142,7 @@ func NewDisk(path string, reservedSpace, diskRdonlySpace uint64, maxErrCnt int, 
 		err = nil
 	}
 	d.startScheduleToUpdateSpaceInfo()
+	d.startScheduleToDeleteBackupReplicaDirectories()
 
 	d.limitFactor = make(map[uint32]*rate.Limiter)
 	d.limitFactor[proto.FlowReadType] = rate.NewLimiter(rate.Limit(proto.QosDefaultDiskMaxFLowLimit), proto.QosDefaultBurst)
@@ -152,6 +161,22 @@ func NewDisk(path string, reservedSpace, diskRdonlySpace uint64, maxErrCnt int, 
 	d.extentRepairReadLimit = make(chan struct{}, MaxExtentRepairReadLimit)
 	d.extentRepairReadLimit <- struct{}{}
 	d.enableExtentRepairReadLimit = diskEnableReadRepairExtentLimit
+	return
+}
+
+func NewBrokenDisk(path string, reservedSpace, diskRdonlySpace uint64, maxErrCnt int, space *SpaceManager, diskEnableReadRepairExtentLimit bool) (d *Disk) {
+	d = &Disk{
+		Path:                        path,
+		ReservedSpace:               reservedSpace,
+		MaxErrCnt:                   maxErrCnt,
+		Status:                      proto.Unavailable,
+		RejectWrite:                 true,
+		space:                       space,
+		dataNode:                    space.dataNode,
+		partitionMap:                make(map[uint64]*DataPartition),
+		DiskErrPartitionSet:         sync.Map{},
+		enableExtentRepairReadLimit: diskEnableReadRepairExtentLimit,
+	}
 	return
 }
 
@@ -199,7 +224,16 @@ func (d *Disk) GetDiskPartition() *disk.PartitionStat {
 	return d.diskPartition
 }
 
+func (d *Disk) isBrokenDisk() (ok bool) {
+	ok = d.Status == proto.Unavailable && d.limitRead == nil && d.limitWrite == nil
+	return
+}
+
 func (d *Disk) updateQosLimiter() {
+	if d.isBrokenDisk() {
+		log.LogInfof("[updateQosLimiter] disk(%v) is broken", d.Path)
+		return
+	}
 	if d.dataNode.diskReadFlow > 0 {
 		d.limitFactor[proto.FlowReadType].SetLimit(rate.Limit(d.dataNode.diskReadFlow))
 	}
@@ -215,12 +249,12 @@ func (d *Disk) updateQosLimiter() {
 	for i := proto.IopsReadType; i < proto.FlowWriteType; i++ {
 		log.LogInfof("action[updateQosLimiter] type %v limit %v", proto.QosTypeString(i), d.limitFactor[i].Limit())
 	}
-	log.LogInfof("action[updateQosLimiter] read(iocc:%d iops:%d flow:%d) write(iocc:%d iops:%d flow:%d)",
+	log.LogWarnf("action[updateQosLimiter] read(iocc:%d iops:%d flow:%d) write(iocc:%d iops:%d flow:%d)",
 		d.dataNode.diskReadIocc, d.dataNode.diskReadIops, d.dataNode.diskReadFlow,
 		d.dataNode.diskWriteIocc, d.dataNode.diskWriteIops, d.dataNode.diskWriteFlow)
-	d.limitRead.ResetIO(d.dataNode.diskReadIocc)
+	d.limitRead.ResetIO(d.dataNode.diskReadIocc, 0)
 	d.limitRead.ResetFlow(d.dataNode.diskReadFlow)
-	d.limitWrite.ResetIO(d.dataNode.diskWriteIocc)
+	d.limitWrite.ResetIO(d.dataNode.diskWriteIocc, d.dataNode.diskWQueFactor)
 	d.limitWrite.ResetFlow(d.dataNode.diskWriteFlow)
 }
 
@@ -579,6 +613,7 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 		result := &DataNodeInfo{}
 		result.Addr = node.Addr
 		result.PersistenceDataPartitions = node.PersistenceDataPartitions
+		result.PersistenceDataPartitionsWithDiskPath = node.PersistenceDataPartitionsWithDiskPath
 		return result
 	}
 	var dataNode *proto.DataNodeInfo
@@ -597,10 +632,16 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 	}
 
 	var (
-		partitionID   uint64
-		partitionSize int
+		partitionID      uint64
+		partitionSize    int
+		replicaDiskInfos = make(map[uint64]string)
 	)
 
+	for _, info := range dinfo.PersistenceDataPartitionsWithDiskPath {
+		if _, ok := replicaDiskInfos[info.PartitionId]; !ok {
+			replicaDiskInfos[info.PartitionId] = info.Disk
+		}
+	}
 	fileInfoList, err := os.ReadDir(d.Path)
 	if err != nil {
 		log.LogErrorf("action[RestorePartition] read dir(%v) err(%v).", d.Path, err)
@@ -635,6 +676,23 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 						log.LogInfof("[RestorePartition] disk(%v) load dp(%v) using time(%v) slow(%v)", d.Path, dp.partitionID, time.Since(begin), time.Since(begin) > 1*time.Second)
 					}
 				}()
+
+				// if master is updated after dataNode, replicaDiskInfos should be empty
+				// so do not rename dp with BackupPartitionPrefix
+				if len(replicaDiskInfos) != 0 && !checkDiskPathWithMaster(d.Path, partitionID, replicaDiskInfos) {
+					msg := fmt.Sprintf("action[RestorePartition]  replica for partition(%v) on disk (%v) is not "+
+						"matched with master",
+						partitionID, d.Path)
+					originalPath := path.Join(d.Path, filename)
+					newFilename := BackupPartitionPrefix + filename
+					newPath := fmt.Sprintf("%v-%v", path.Join(d.Path, newFilename), time.Now().Format("20060102150405"))
+					os.Rename(originalPath, newPath)
+					log.LogError(msg)
+					exporter.Warning(msg)
+					syslog.Println(msg)
+					err = errors.NewErrorf(msg)
+					return
+				}
 				if dp, err = LoadDataPartition(path.Join(d.Path, filename), d); err != nil {
 					if !strings.Contains(err.Error(), raft.ErrRaftExists.Error()) {
 						mesg := fmt.Sprintf("action[RestorePartition] new partition(%v) err(%v) ",
@@ -668,8 +726,8 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 				toDeleteExpiredPartitionNames = append(toDeleteExpiredPartitionNames, name)
 				log.LogInfof("action[RestorePartition] find expired partition on path(%s)", name)
 			}
-			if d.isBackupPartitionDir(filename) {
-				if partitionID, err = unmarshalBackupPartitionDirName(filename); err != nil {
+			if d.isBackupPartitionDirToDelete(filename) {
+				if partitionID, _, err = unmarshalBackupPartitionDirNameAndTimestamp(filename); err != nil {
 					log.LogErrorf("action[RestorePartition] unmarshal partitionName(%v) from disk(%v) err(%v) ",
 						filename, d.Path, err.Error())
 				} else {
@@ -743,7 +801,9 @@ func (d *Disk) deleteExpiredPartitions(toDeleteExpiredPartitionNames []string) (
 				log.LogErrorf("action[deleteExpiredPartitions] delete expiredPartition %v automatically fail, err(%v)", partitionName, err)
 				continue
 			}
-			log.LogInfof("action[deleteExpiredPartitions] delete expiredPartition %v automatically", partitionName)
+			msg := fmt.Sprintf("action[deleteExpiredPartitions] delete expiredPartition %v automatically", partitionName)
+			log.LogInfof("%v", msg)
+			auditlog.LogDataNodeOp("deleteExpiredPartitions", msg, nil)
 			time.Sleep(time.Second)
 		} else {
 			notDeletedExpiredPartitionNames = append(notDeletedExpiredPartitionNames, partitionName)
@@ -839,11 +899,6 @@ func (d *Disk) QueryExtentRepairReadLimitStatus() (bool, uint64) {
 	return d.enableExtentRepairReadLimit, d.extentRepairReadDp
 }
 
-func (d *Disk) isBackupPartitionDir(filename string) (isBackupPartitionDir bool) {
-	isBackupPartitionDir = RegexpBackupDataPartitionDir.MatchString(filename)
-	return
-}
-
 func (d *Disk) AddBackupPartitionDir(id uint64) {
 	d.BackupDataPartitions.Store(id, proto.BackupDataPartitionInfo{Addr: d.dataNode.localServerAddr, Disk: d.Path, PartitionID: id})
 }
@@ -857,14 +912,100 @@ func (d *Disk) GetBackupPartitionDirList() (backupInfos []proto.BackupDataPartit
 	return backupInfos
 }
 
-func unmarshalBackupPartitionDirName(name string) (partitionID uint64, err error) {
+func unmarshalBackupPartitionDirNameAndTimestamp(name string) (partitionID uint64, timestamp int64, err error) {
 	arr := strings.Split(name, "_")
 	if len(arr) != 4 {
-		err = fmt.Errorf("error backupDataPartition name(%v)", name)
+		err = fmt.Errorf("error backupDataPartition name(%v) invaild length", name)
 		return
 	}
 	if partitionID, err = strconv.ParseUint(arr[2], 10, 64); err != nil {
 		return
 	}
+
+	arr = strings.Split(name, "-")
+	if len(arr) != 2 {
+		err = fmt.Errorf("error backupDataPartition name(%v) timestamp not found", name)
+		return
+	}
+	timestampStr := arr[1]
+	t, err := time.Parse("20060102150405", timestampStr)
+	if err != nil {
+		err = fmt.Errorf("error backupDataPartition timestamp(%v)", timestampStr)
+		return
+	}
+	timestamp = t.Unix()
 	return
+}
+
+func (d *Disk) recoverDiskError() {
+	d.Status = proto.ReadWrite
+}
+
+func (d *Disk) startRecover() bool {
+	return atomic.CompareAndSwapUint32(&d.recoverStatus, DiskRecoverStop, DiskRecoverStart)
+}
+
+func (d *Disk) stopRecover() {
+	atomic.StoreUint32(&d.recoverStatus, DiskRecoverStop)
+}
+
+func (d *Disk) isBackupPartitionDirToDelete(filename string) (isBackupPartitionDir bool) {
+	isBackupPartitionDir = RegexpBackupDataPartitionDirToDelete.MatchString(filename)
+	return
+}
+
+func (d *Disk) startScheduleToDeleteBackupReplicaDirectories() {
+	go func() {
+		ticker := time.NewTicker(time.Minute * 5)
+		defer func() {
+			ticker.Stop()
+		}()
+		for range ticker.C {
+			if d.dataNode.dpBackupTimeout <= 0 {
+				log.LogDebugf("action[startScheduleToDeleteBackupReplicaDirectories] skip.")
+				continue
+			}
+			d.BackupReplicaLk.Lock()
+			log.LogDebugf("action[startScheduleToDeleteBackupReplicaDirectories] begin.")
+			fileInfoList, err := os.ReadDir(d.Path)
+			if err != nil {
+				log.LogErrorf("action[startScheduleToDeleteBackupReplicaDirectories] read dir(%v) err(%v).", d.Path, err)
+				d.BackupReplicaLk.Unlock()
+				continue
+			}
+			var ts int64
+
+			for _, fileInfo := range fileInfoList {
+				filename := fileInfo.Name()
+
+				if !d.isBackupPartitionDirToDelete(filename) {
+					continue
+				}
+
+				if _, _, err = unmarshalBackupPartitionDirNameAndTimestamp(filename); err != nil {
+					log.LogErrorf("action[startScheduleToDeleteBackupReplicaDirectories] unmarshal partitionName(%v) from disk(%v) err(%v) ",
+						filename, d.Path, err.Error())
+					continue
+				}
+				if time.Since(time.Unix(ts, 0)) > d.dataNode.dpBackupTimeout {
+					err = os.RemoveAll(path.Join(d.Path, filename))
+					if err != nil {
+						log.LogWarnf("action[startScheduleToDeleteBackupReplicaDirectories] failed to remove %v err(%v) ",
+							path.Join(d.Path, filename), err.Error())
+					} else {
+						msg := fmt.Sprintf("action[startScheduleToDeleteBackupReplicaDirectories] remove %v", path.Join(d.Path, filename))
+						auditlog.LogDataNodeOp("DeleteBackupReplicaDirectories", msg, nil)
+					}
+				}
+			}
+			d.BackupReplicaLk.Unlock()
+		}
+	}()
+}
+
+func checkDiskPathWithMaster(diskPath string, id uint64, infos map[uint64]string) bool {
+	if value, ok := infos[id]; ok {
+		return value == diskPath
+	}
+	return false
 }

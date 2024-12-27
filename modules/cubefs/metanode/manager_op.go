@@ -16,6 +16,7 @@ package metanode
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -25,11 +26,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cubefs/cubefs/storage"
+	"github.com/cubefs/cubefs/datanode/storage"
 
 	raftProto "github.com/cubefs/cubefs/depends/tiglabs/raft/proto"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util"
+	"github.com/cubefs/cubefs/util/auditlog"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
 )
@@ -47,6 +49,33 @@ func (m *metadataManager) checkFollowerRead(volNames []string, partition MetaPar
 		}
 	}
 	partition.SetFollowerRead(false)
+}
+
+func (m *metadataManager) checkVolForbidWriteOpOfProtoVer0(partition MetaPartition) {
+	mpVolName := partition.GetVolName()
+	oldVal := partition.IsForbidWriteOpOfProtoVer0()
+	VolsForbidWriteOpOfProtoVer0 := m.metaNode.VolsForbidWriteOpOfProtoVer0
+	if _, ok := VolsForbidWriteOpOfProtoVer0[mpVolName]; ok {
+		partition.SetForbidWriteOpOfProtoVer0(true)
+	} else {
+		partition.SetForbidWriteOpOfProtoVer0(false)
+	}
+	newVal := partition.IsForbidWriteOpOfProtoVer0()
+	if oldVal != newVal {
+		log.LogWarnf("[checkVolForbidWriteOpOfProtoVer0] vol(%v) mpId(%v) IsForbidWriteOpOfProtoVer0 change to %v",
+			mpVolName, partition.GetBaseConfig().PartitionId, newVal)
+	}
+}
+
+func (m *metadataManager) isVolForbidWriteOpOfProtoVer0(volName string) (forbid bool) {
+	VolsForbidWriteOpOfProtoVer0 := m.metaNode.VolsForbidWriteOpOfProtoVer0
+	if _, ok := VolsForbidWriteOpOfProtoVer0[volName]; ok {
+		forbid = true
+	} else {
+		forbid = false
+	}
+
+	return
 }
 
 func (m *metadataManager) checkForbiddenVolume(volNames []string, partition MetaPartition) {
@@ -84,6 +113,7 @@ func (m *metadataManager) opMasterHeartbeat(conn net.Conn, p *Packet,
 		adminTask = &proto.AdminTask{
 			Request: req,
 		}
+		volsForbidWriteOpOfProtoVer0 = make(map[string]struct{})
 	)
 	start := time.Now()
 	go func() {
@@ -95,9 +125,24 @@ func (m *metadataManager) opMasterHeartbeat(conn net.Conn, p *Packet,
 			goto end
 		}
 		m.fileStatsEnable = req.FileStatsEnable
+		if m.metaNode.nodeForbidWriteOpOfProtoVer0 != req.NotifyForbidWriteOpOfProtoVer0 {
+			log.LogWarnf("[opMasterHeartbeat] change nodeForbidWriteOpOfProtoVer0, old(%v) new(%v)",
+				m.metaNode.nodeForbidWriteOpOfProtoVer0, req.NotifyForbidWriteOpOfProtoVer0)
+			m.metaNode.nodeForbidWriteOpOfProtoVer0 = req.NotifyForbidWriteOpOfProtoVer0
+		}
+
+		for _, vol := range req.VolsForbidWriteOpOfProtoVer0 {
+			if _, ok := volsForbidWriteOpOfProtoVer0[vol]; !ok {
+				volsForbidWriteOpOfProtoVer0[vol] = struct{}{}
+			}
+		}
+		m.metaNode.VolsForbidWriteOpOfProtoVer0 = volsForbidWriteOpOfProtoVer0
+		log.LogDebugf("[opMasterHeartbeat] from master, volumes forbid write operate of proto version-0: %v",
+			req.VolsForbidWriteOpOfProtoVer0)
+
 		// collect memory info
 		resp.Total = configTotalMem
-		resp.MemUsed, err = util.GetProcessMemory(os.Getpid())
+		resp.Used, err = util.GetProcessMemory(os.Getpid())
 		if err != nil {
 			adminTask.Status = proto.TaskFailed
 			goto end
@@ -108,32 +153,38 @@ func (m *metadataManager) opMasterHeartbeat(conn net.Conn, p *Packet,
 		m.Range(true, func(id uint64, partition MetaPartition) bool {
 			m.checkFollowerRead(req.FLReadVols, partition)
 			m.checkForbiddenVolume(req.ForbiddenVols, partition)
+			m.checkVolForbidWriteOpOfProtoVer0(partition)
 			m.checkDisableAuditLogVolume(req.DisableAuditVols, partition)
 			partition.SetUidLimit(req.UidLimitInfo)
 			partition.SetTxInfo(req.TxInfo)
 			partition.setQuotaHbInfo(req.QuotaHbInfos)
 			mConf := partition.GetBaseConfig()
 
+			mpForbidWriteVer0 := partition.IsForbidWriteOpOfProtoVer0() || m.metaNode.nodeForbidWriteOpOfProtoVer0
+
 			mpr := &proto.MetaPartitionReport{
-				PartitionID:      mConf.PartitionId,
-				Start:            mConf.Start,
-				End:              mConf.End,
-				Status:           proto.ReadWrite,
-				MaxInodeID:       mConf.Cursor,
-				VolName:          mConf.VolName,
-				Size:             partition.DataSize(),
-				InodeCnt:         uint64(partition.GetInodeTreeLen()),
-				DentryCnt:        uint64(partition.GetDentryTreeLen()),
-				FreeListLen:      uint64(partition.GetFreeListLen()),
-				UidInfo:          partition.GetUidInfo(),
-				QuotaReportInfos: partition.getQuotaReportInfos(),
+				PartitionID:               mConf.PartitionId,
+				Start:                     mConf.Start,
+				End:                       mConf.End,
+				Status:                    proto.ReadWrite,
+				MaxInodeID:                mConf.Cursor,
+				VolName:                   mConf.VolName,
+				Size:                      partition.DataSize(),
+				InodeCnt:                  uint64(partition.GetInodeTreeLen()),
+				DentryCnt:                 uint64(partition.GetDentryTreeLen()),
+				FreeListLen:               uint64(partition.GetFreeListLen()),
+				UidInfo:                   partition.GetUidInfo(),
+				QuotaReportInfos:          partition.getQuotaReportInfos(),
+				StatByStorageClass:        partition.GetStatByStorageClass(),
+				StatByMigrateStorageClass: partition.GetMigrateStatByStorageClass(),
+				ForbidWriteOpOfProtoVer0:  mpForbidWriteVer0,
 			}
 			mpr.TxCnt, mpr.TxRbInoCnt, mpr.TxRbDenCnt = partition.TxGetCnt()
 
 			if mConf.Cursor >= mConf.End {
 				mpr.Status = proto.ReadOnly
 			}
-			if resp.MemUsed > uint64(float64(resp.Total)*MaxUsedMemFactor) {
+			if resp.Used > uint64(float64(resp.Total)*MaxUsedMemFactor) {
 				mpr.Status = proto.ReadOnly
 			}
 
@@ -147,6 +198,7 @@ func (m *metadataManager) opMasterHeartbeat(conn net.Conn, p *Packet,
 			return true
 		})
 		resp.ZoneName = m.zoneName
+		resp.ReceivedForbidWriteOpOfProtoVer0 = m.metaNode.nodeForbidWriteOpOfProtoVer0
 		resp.Status = proto.TaskSucceeds
 	end:
 		adminTask.Request = nil
@@ -931,7 +983,7 @@ func (m *metadataManager) opReadDirOnly(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.ReadDirOnly(req, p)
@@ -959,7 +1011,7 @@ func (m *metadataManager) opReadDir(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.ReadDir(req, p)
@@ -987,7 +1039,7 @@ func (m *metadataManager) opReadDirLimit(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.ReadDirLimit(req, p)
@@ -1013,7 +1065,7 @@ func (m *metadataManager) opMetaInodeGet(conn net.Conn, p *Packet, remoteAddr st
 		err = errors.NewErrorf("getPartition [%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	if err = mp.InodeGet(req, p); err != nil {
@@ -1174,7 +1226,7 @@ func (m *metadataManager) opMetaLookup(conn net.Conn, p *Packet,
 		return
 	}
 
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.Lookup(req, p)
@@ -1271,6 +1323,7 @@ func (m *metadataManager) opMetaExtentsList(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
+	log.LogDebugf("opMetaExtentsList: id(%v) req(%v) ", p.GetReqID(), req)
 	mp, err := m.getPartition(req.PartitionID)
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
@@ -1278,7 +1331,7 @@ func (m *metadataManager) opMetaExtentsList(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 
@@ -1308,7 +1361,7 @@ func (m *metadataManager) opMetaObjExtentsList(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 
@@ -1364,6 +1417,14 @@ func (m *metadataManager) opMetaExtentsTruncate(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
+
+	if err = m.checkForbidWriteOpOfProtoVer0(p.ProtoVersion, mp.IsForbidWriteOpOfProtoVer0()); err != nil {
+		log.LogWarnf("[opMetaExtentsTruncate] reqId(%v) mpId(%v) ino(%v) err: %v", p.ReqID, req.PartitionID, req.Inode, err)
+		p.PacketErrorWithBody(proto.OpWriteOpOfProtoVerForbidden, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		return
+	}
+
 	if !m.serveProxy(conn, mp, p) {
 		return
 	}
@@ -1372,10 +1433,14 @@ func (m *metadataManager) opMetaExtentsTruncate(conn net.Conn, p *Packet,
 		m.respondToClientWithVer(conn, p)
 		return
 	}
-	mp.ExtentsTruncate(req, p, remoteAddr)
+
+	if err = mp.ExtentsTruncate(req, p, remoteAddr); err != nil {
+		log.LogErrorf("[opMetaExtentsTruncate] mpId(%v) ino(%v) err: %v", req.PartitionID, req.Inode, err)
+	}
+
 	m.updatePackRspSeq(mp, p)
 	m.respondToClientWithVer(conn, p)
-	log.LogDebugf("%s [OpMetaTruncate] req: %d - %v, resp body: %v, "+
+	log.LogDebugf("%s [opMetaExtentsTruncate] req: %d - %v, resp body: %v, "+
 		"resp body: %s", remoteAddr, p.GetReqID(), req, p.GetResultMsg(), p.Data)
 	return
 }
@@ -1427,7 +1492,7 @@ func (m *metadataManager) opDeleteMetaPartition(conn net.Conn,
 	if err != nil {
 		p.PacketOkReply()
 		m.respondToClientWithVer(conn, p)
-		return
+		return nil
 	}
 	// Ack the master request
 	conf := mp.GetBaseConfig()
@@ -1747,7 +1812,7 @@ func (m *metadataManager) opMetaBatchInodeGet(conn net.Conn, p *Packet,
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.InodeGetBatch(req, p)
@@ -1941,7 +2006,7 @@ func (m *metadataManager) opMetaGetXAttr(conn net.Conn, p *Packet, remoteAddr st
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.GetXAttr(req, p)
@@ -1966,9 +2031,18 @@ func (m *metadataManager) opMetaLockDir(conn net.Conn, p *Packet, remoteAddr str
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
+
+	start := time.Now()
+	if mp.IsEnableAuditLog() {
+		defer func() {
+			err1 := fmt.Errorf("data(%s)_err(%v)_status(%s)", p.Data, err, p.GetResultMsg())
+			auditlog.LogInodeOp(remoteAddr, "", p.GetOpMsg(), req.String(), err1, time.Since(start).Milliseconds(), req.Inode, 0)
+		}()
+	}
+
 	err = mp.LockDir(req, p)
 	_ = m.respondToClient(conn, p)
 	log.LogDebugf("%s [opMetaLockDir] req: %d - %v, resp: %v, body: %s",
@@ -2016,7 +2090,7 @@ func (m *metadataManager) opMetaBatchGetXAttr(conn net.Conn, p *Packet, remoteAd
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.BatchGetXAttr(req, p)
@@ -2072,7 +2146,7 @@ func (m *metadataManager) opMetaListXAttr(conn net.Conn, p *Packet, remoteAddr s
 		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.ListXAttr(req, p)
@@ -2225,7 +2299,7 @@ func (m *metadataManager) opGetMultipart(conn net.Conn, p *Packet, remote string
 		err = errors.NewErrorf("[opGetMultipart] req: %v, resp: %v", req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.GetMultipart(req, p)
@@ -2246,7 +2320,7 @@ func (m *metadataManager) opAppendMultipart(conn net.Conn, p *Packet, remote str
 		m.respondToClientWithVer(conn, p)
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
 	err = mp.AppendMultipart(req, p)
@@ -2269,9 +2343,10 @@ func (m *metadataManager) opListMultipart(conn net.Conn, p *Packet, remoteAddr s
 		err = errors.NewErrorf("[opListMultipart] req: %v, resp: %v", req, err.Error())
 		return
 	}
-	if !mp.IsFollowerRead() && !m.serveProxy(conn, mp, p) {
+	if !m.serveProxy(conn, mp, p) {
 		return
 	}
+
 	err = mp.ListMultipart(req, p)
 	_ = m.respondToClient(conn, p)
 	return
@@ -2413,6 +2488,33 @@ func (m *metadataManager) opMetaGetInodeQuota(conn net.Conn, p *Packet, remote s
 	err = mp.getInodeQuota(req.Inode, p)
 	_ = m.respondToClient(conn, p)
 	log.LogInfof("[opMetaGetInodeQuota] get inode[%v] quota success.", req.Inode)
+	return
+}
+
+func (m *metadataManager) opMetaGetAppliedID(conn net.Conn, p *Packet, remote string) (err error) {
+	req := &proto.GetAppliedIDRequest{}
+	if err = json.Unmarshal(p.Data, req); err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClient(conn, p)
+		err = errors.NewErrorf("[opMetaGetAppliedID] req: %v, resp: %v", req, err.Error())
+		return
+	}
+
+	mp, err := m.getPartition(req.PartitionId)
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClient(conn, p)
+		err = errors.NewErrorf("[opMetaGetAppliedID] req: %v, resp: %v", req, err.Error())
+		return
+	}
+
+	appliedID := mp.GetAppliedID()
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, appliedID)
+	p.PacketOkWithBody(buf)
+	m.respondToClient(conn, p)
+	log.LogDebugf("%s [opMetaGetAppliedID] req: %d - %v, req args: %v, resp: %v, body: %v",
+		remote, p.GetReqID(), req, string(p.Arg), p.GetResultMsg(), appliedID)
 	return
 }
 
@@ -2598,6 +2700,9 @@ func (m *metadataManager) commitCreateVersion(VolumeID string, VerSeq uint64, Op
 }
 
 func (m *metadataManager) updatePackRspSeq(mp MetaPartition, p *Packet) {
+	if !m.metaNode.clusterEnableSnapshot {
+		return
+	}
 	if mp.GetVerSeq() > p.VerSeq {
 		log.LogDebugf("action[checkmultiSnap.multiVersionstatus] mp ver [%v], packet ver [%v]", mp.GetVerSeq(), p.VerSeq)
 		p.VerSeq = mp.GetVerSeq() // used to response to client and try update verSeq of client
@@ -2608,6 +2713,9 @@ func (m *metadataManager) updatePackRspSeq(mp MetaPartition, p *Packet) {
 }
 
 func (m *metadataManager) checkMultiVersionStatus(mp MetaPartition, p *Packet) (err error) {
+	if !m.metaNode.clusterEnableSnapshot {
+		return
+	}
 	if (p.ExtentType&proto.MultiVersionFlag == 0) && mp.GetVerSeq() > 0 {
 		log.LogWarnf("action[checkmultiSnap.multiVersionstatus] volname [%v] mp ver [%v], client use old ver before snapshot", mp.GetVolName(), mp.GetVerSeq())
 		return fmt.Errorf("client use old ver before snapshot")
@@ -2697,21 +2805,26 @@ func (m *metadataManager) opMultiVersionOp(conn net.Conn, p *Packet,
 	remoteAddr string,
 ) (err error) {
 	// For ack to master
-	data := p.Data
 	m.responseAckOKToMaster(conn, p)
 
 	var (
+		opAgain   bool
+		start     = time.Now()
+		data      = p.Data
 		req       = &proto.MultiVersionOpRequest{}
 		resp      = &proto.MultiVersionOpResponse{}
 		adminTask = &proto.AdminTask{
 			Request: req,
 		}
-		opAgain bool
+		decode = json.NewDecoder(bytes.NewBuffer(data))
 	)
-	log.LogDebugf("action[opMultiVersionOp] volume %v op [%v]", req.VolumeID, req.Op)
 
-	start := time.Now()
-	decode := json.NewDecoder(bytes.NewBuffer(data))
+	if !m.metaNode.clusterEnableSnapshot {
+		err = fmt.Errorf("cluster not EnableSnapshot")
+		log.LogErrorf("opMultiVersionOp volume %v", err)
+		goto end
+	}
+
 	decode.UseNumber()
 	if err = decode.Decode(adminTask); err != nil {
 		resp.Status = proto.TaskFailed
@@ -2719,6 +2832,7 @@ func (m *metadataManager) opMultiVersionOp(conn net.Conn, p *Packet,
 		log.LogErrorf("action[opMultiVersionOp] %v mp  err %v do Decoder", req.VolumeID, err.Error())
 		goto end
 	}
+	log.LogDebugf("action[opMultiVersionOp] volume %v op [%v]", req.VolumeID, req.Op)
 
 	resp.Status = proto.TaskSucceeds
 	resp.VolumeID = req.VolumeID
@@ -2758,5 +2872,135 @@ end:
 			remoteAddr, p.String(), req, adminTask, string(rspData), time.Since(start).String())
 	}
 
+	return
+}
+
+func (m *metadataManager) opMetaInodeAccessTimeGet(conn net.Conn, p *Packet,
+	remoteAddr string,
+) (err error) {
+	req := &InodeGetReq{}
+	if err = json.Unmarshal(p.Data, req); err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClient(conn, p)
+		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
+		return
+	}
+	mp, err := m.getPartition(req.PartitionID)
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClient(conn, p)
+		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
+		return
+	}
+	if !m.serveProxy(conn, mp, p) {
+		return
+	}
+	if err = mp.InodeGetAccessTime(req, p); err != nil {
+		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
+	}
+	m.respondToClient(conn, p)
+	log.LogDebugf("%s [opMetaInodeAccessTimeGet] req: %d - %v; resp: %v, body: %s",
+		remoteAddr, p.GetReqID(), req, p.GetResultMsg(), p.Data)
+	return
+}
+
+func (m *metadataManager) opMetaRenewalForbiddenMigration(conn net.Conn, p *Packet,
+	remoteAddr string,
+) (err error) {
+	req := &RenewalForbiddenMigrationRequest{}
+	if err = json.Unmarshal(p.Data, req); err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
+		return
+	}
+	mp, err := m.getPartition(req.PartitionID)
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
+		return
+	}
+	if !m.serveProxy(conn, mp, p) {
+		return
+	}
+	if err = m.checkMultiVersionStatus(mp, p); err != nil {
+		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
+		return
+	}
+	err = mp.RenewalForbiddenMigration(req, p, remoteAddr)
+	m.updatePackRspSeq(mp, p)
+	m.respondToClientWithVer(conn, p)
+	log.LogDebugf("%s [opMetaRenewalForbiddenMigration] req: %d - %v, resp body: %v, "+
+		"resp body: %s", remoteAddr, p.GetReqID(), req, p.GetResultMsg(), p.Data)
+	return
+}
+
+func (m *metadataManager) opMetaUpdateExtentKeyAfterMigration(conn net.Conn, p *Packet,
+	remoteAddr string,
+) (err error) {
+	req := &UpdateExtentKeyAfterMigrationRequest{}
+	if err = json.Unmarshal(p.Data, req); err != nil {
+		err = fmt.Errorf("unmarshal req packet err: %v", err.Error())
+		p.PacketErrorWithBody(proto.OpArgMismatchErr, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
+		return
+	}
+	mp, err := m.getPartition(req.PartitionID)
+	if err != nil {
+		err = fmt.Errorf("not found mpId(%v), err %s ", req.PartitionID, err.Error())
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
+		return
+	}
+	if !m.serveProxy(conn, mp, p) {
+		return
+	}
+	if err = m.checkMultiVersionStatus(mp, p); err != nil {
+		err = fmt.Errorf("mpId(%v) checkMultiVersionStatus err: %v", mp.GetBaseConfig().PartitionId, err.Error())
+		p.PacketErrorWithBody(proto.OpArgMismatchErr, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
+		return
+	}
+	err = mp.UpdateExtentKeyAfterMigration(req, p, remoteAddr)
+	m.updatePackRspSeq(mp, p)
+	m.respondToClientWithVer(conn, p)
+	log.LogDebugf("%s [opMetaUpdateExtentKeyAfterMigration] req: %d - %v, resp body: %v, "+
+		"resp body: %s", remoteAddr, p.GetReqID(), req, p.GetResultMsg(), p.Data)
+	return
+}
+
+func (m *metadataManager) opDeleteMigrationExtentKey(conn net.Conn, p *Packet,
+	remoteAddr string,
+) (err error) {
+	req := &DeleteMigrationExtentKeyRequest{}
+	if err = json.Unmarshal(p.Data, req); err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
+		return
+	}
+	mp, err := m.getPartition(req.PartitionID)
+	if err != nil {
+		p.PacketErrorWithBody(proto.OpErr, ([]byte)(err.Error()))
+		m.respondToClientWithVer(conn, p)
+		err = errors.NewErrorf("[%v] req: %v, resp: %v", p.GetOpMsgWithReqAndResult(), req, err.Error())
+		return
+	}
+	if !m.serveProxy(conn, mp, p) {
+		return
+	}
+	if err = m.checkMultiVersionStatus(mp, p); err != nil {
+		err = errors.NewErrorf("[%v],req[%v],err[%v]", p.GetOpMsgWithReqAndResult(), req, string(p.Data))
+		return
+	}
+	err = mp.DeleteMigrationExtentKey(req, p, remoteAddr)
+	m.updatePackRspSeq(mp, p)
+	m.respondToClientWithVer(conn, p)
+	log.LogDebugf("%s [opDeleteMigrationExtentKey] req: %d - %v, resp body: %v, "+
+		"resp body: %s", remoteAddr, p.GetReqID(), req, p.GetResultMsg(), p.Data)
 	return
 }

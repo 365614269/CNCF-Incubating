@@ -14,7 +14,12 @@
 
 package lcnode
 
-import "github.com/cubefs/cubefs/proto"
+import (
+	"os"
+	"time"
+
+	"github.com/cubefs/cubefs/proto"
+)
 
 type MockMetaWrapper struct{}
 
@@ -34,8 +39,33 @@ func (*MockMetaWrapper) Lookup_ll(parentID uint64, name string) (inode uint64, m
 	return
 }
 
-func (*MockMetaWrapper) BatchInodeGet(inodes []uint64) []*proto.InodeInfo {
-	return nil
+func (*MockMetaWrapper) InodeGet_ll(inode uint64) (*proto.InodeInfo, error) {
+	switch inode {
+	case 1:
+		return &proto.InodeInfo{
+			Inode:      1,
+			AccessTime: time.Now().AddDate(0, 0, -2),
+			Size:       100,
+		}, nil
+	case 2:
+		return &proto.InodeInfo{
+			Inode:      2,
+			AccessTime: time.Now().AddDate(0, 0, -3),
+			Size:       200,
+		}, nil
+	case 3:
+		return &proto.InodeInfo{
+			Inode:      3,
+			AccessTime: time.Now().AddDate(0, 0, -4),
+		}, nil
+	case 6:
+		return &proto.InodeInfo{
+			Inode:       6,
+			AccessTime:  time.Now().AddDate(0, 0, -4),
+			ForbiddenLc: true,
+		}, nil
+	}
+	return nil, nil
 }
 
 func (*MockMetaWrapper) DeleteWithCond_ll(parentID, cond uint64, name string, isDir bool, fullPath string) (*proto.InodeInfo, error) {
@@ -46,8 +76,54 @@ func (*MockMetaWrapper) Evict(inode uint64, fullPath string) error {
 	return nil
 }
 
+func (*MockMetaWrapper) UpdateExtentKeyAfterMigration(inode uint64, storageType uint32, extentKeys []proto.ObjExtentKey, writeGen uint64, delayDelMinute uint64, fullPath string) error {
+	return nil
+}
+
+func (*MockMetaWrapper) DeleteMigrationExtentKey(inode uint64, fullPath string) error {
+	return nil
+}
+
 func (*MockMetaWrapper) ReadDirLimit_ll(parentID uint64, from string, limit uint64) ([]proto.Dentry, error) {
-	return nil, nil
+	// for handleDirLimitDepthFirst
+	if parentID == 4 {
+		return []proto.Dentry{
+			{
+				Inode: 5,
+				Type:  uint32(os.ModeDir),
+			},
+			{
+				Inode: 6,
+				Type:  uint32(420),
+			},
+		}, nil
+	}
+	// for handleDirLimitBreadthFirst
+	if parentID == 5 {
+		return nil, nil
+	}
+	return []proto.Dentry{
+		{
+			Inode: 1,
+			Type:  uint32(420),
+		},
+		{
+			Inode: 2,
+			Type:  uint32(420),
+		},
+		{
+			Inode: 3,
+			Type:  uint32(420),
+		},
+		{
+			Inode: 4,
+			Type:  uint32(os.ModeDir),
+		},
+		{
+			Inode: 5,
+			Type:  uint32(os.ModeDir),
+		},
+	}, nil
 }
 
 func (*MockMetaWrapper) Close() error {

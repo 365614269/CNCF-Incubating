@@ -50,6 +50,8 @@ type MetaNode struct {
 	MigrateLock               sync.RWMutex
 	MpCntLimit                LimitCounter       `json:"-"` // max count of meta partition in a meta node
 	CpuUtil                   atomicutil.Float64 `json:"-"`
+
+	ReceivedForbidWriteOpOfProtoVer0 bool
 }
 
 func newMetaNode(addr, zoneName, clusterID string) (node *MetaNode) {
@@ -104,6 +106,12 @@ func (metaNode *MetaNode) GetAddr() string {
 	return metaNode.Addr
 }
 
+func (metaNode *MetaNode) GetZoneName() string {
+	metaNode.RLock()
+	defer metaNode.RUnlock()
+	return metaNode.ZoneName
+}
+
 // SelectNodeForWrite implements the Node interface
 func (metaNode *MetaNode) SelectNodeForWrite() {
 	metaNode.Lock()
@@ -137,13 +145,13 @@ func (metaNode *MetaNode) updateMetric(resp *proto.MetaNodeHeartbeatResponse, th
 	metaNode.metaPartitionInfos = resp.MetaPartitionReports
 	metaNode.MetaPartitionCount = len(metaNode.metaPartitionInfos)
 	metaNode.Total = resp.Total
-	metaNode.Used = resp.MemUsed
+	metaNode.Used = resp.Used
 	if resp.Total == 0 {
 		metaNode.Ratio = 0
 	} else {
-		metaNode.Ratio = float64(resp.MemUsed) / float64(resp.Total)
+		metaNode.Ratio = float64(resp.Used) / float64(resp.Total)
 	}
-	left := int64(resp.Total - resp.MemUsed)
+	left := int64(resp.Total - resp.Used)
 	if left < 0 {
 		metaNode.MaxMemAvailWeight = 0
 	} else {
@@ -160,12 +168,15 @@ func (metaNode *MetaNode) reachesThreshold() bool {
 	return float32(float64(metaNode.Used)/float64(metaNode.Total)) > metaNode.Threshold
 }
 
-func (metaNode *MetaNode) createHeartbeatTask(masterAddr string, fileStatsEnable bool) (task *proto.AdminTask) {
+func (metaNode *MetaNode) createHeartbeatTask(masterAddr string, fileStatsEnable bool,
+	notifyForbidWriteOpOfProtoVer0 bool,
+) (task *proto.AdminTask) {
 	request := &proto.HeartBeatRequest{
 		CurrTime:   time.Now().Unix(),
 		MasterAddr: masterAddr,
 	}
 	request.FileStatsEnable = fileStatsEnable
+	request.NotifyForbidWriteOpOfProtoVer0 = notifyForbidWriteOpOfProtoVer0
 	task = proto.NewAdminTask(proto.OpMetaNodeHeartbeat, metaNode.Addr, request)
 	return
 }
@@ -197,6 +208,10 @@ func (metaNode *MetaNode) GetPartitionLimitCnt() (limit uint32) {
 
 func (metaNode *MetaNode) PartitionCntLimited() bool {
 	return uint32(metaNode.MetaPartitionCount) <= metaNode.GetPartitionLimitCnt()
+}
+
+func (metaNode *MetaNode) IsOffline() bool {
+	return metaNode.ToBeOffline
 }
 
 // LeaderMetaNode define the leader metaPartitions in meta node

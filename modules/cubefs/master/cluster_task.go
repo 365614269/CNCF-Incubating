@@ -161,7 +161,7 @@ func (c *Cluster) migrateMetaPartition(srcAddr, targetAddr string, mp *MetaParti
 				excludeZone = append(excludeZone, zones[0])
 			}
 			// choose a meta node in other zone
-			if _, newPeers, err = c.getHostFromNormalZone(TypeMetaPartition, excludeZone, excludeNodeSets, oldHosts, 1, 1, ""); err != nil {
+			if _, newPeers, err = c.getHostFromNormalZone(TypeMetaPartition, excludeZone, excludeNodeSets, oldHosts, 1, 1, "", proto.MediaType_Unspecified); err != nil {
 				goto errHandler
 			}
 		}
@@ -258,39 +258,6 @@ func (c *Cluster) checkInactiveMetaNodes() (inactiveMetaNodes []string, err erro
 	return
 }
 
-// check corrupt partitions related to this meta node
-func (c *Cluster) checkCorruptMetaNode(metaNode *MetaNode) (corruptPartitions []*MetaPartition, err error) {
-	var (
-		partition         *MetaPartition
-		mn                *MetaNode
-		corruptPids       []uint64
-		corruptReplicaNum uint8
-	)
-	metaNode.RLock()
-	defer metaNode.RUnlock()
-	for _, pid := range metaNode.PersistenceMetaPartitions {
-		corruptReplicaNum = 0
-		if partition, err = c.getMetaPartitionByID(pid); err != nil {
-			return
-		}
-		for _, host := range partition.Hosts {
-			if mn, err = c.metaNode(host); err != nil {
-				return
-			}
-			if !mn.IsActive {
-				corruptReplicaNum = corruptReplicaNum + 1
-			}
-		}
-		if corruptReplicaNum > partition.ReplicaNum/2 {
-			corruptPartitions = append(corruptPartitions, partition)
-			corruptPids = append(corruptPids, pid)
-		}
-	}
-	log.LogInfof("action[checkCorruptMetaNode],clusterID[%v] metaNodeAddr:[%v], corrupt partitions%v",
-		c.Name, metaNode.Addr, corruptPids)
-	return
-}
-
 type VolNameSet map[string]struct{}
 
 func (c *Cluster) checkReplicaMetaPartitions() (
@@ -315,7 +282,7 @@ func (c *Cluster) checkReplicaMetaPartitions() (
 
 		vol.mpsLock.RLock()
 		for _, mp := range vol.MetaPartitions {
-			if uint8(len(mp.Hosts)) < mp.ReplicaNum || uint8(len(mp.Replicas)) < mp.ReplicaNum {
+			if uint8(len(mp.Hosts)) < mp.ReplicaNum || uint8(len(mp.getActiveAddrs())) < mp.ReplicaNum {
 				lackReplicaMetaPartitions = append(lackReplicaMetaPartitions, mp)
 			}
 
@@ -717,7 +684,7 @@ func (c *Cluster) handleMetaNodeTaskResponse(nodeAddr string, task *proto.AdminT
 	if err != nil {
 		log.LogErrorf("process task[%s] failed", task.ToString())
 	} else {
-		log.LogInfof("process task:%s status:%d success", task.IdString(), task.Status)
+		log.LogInfof("[handleMetaNodeTaskResponse] process task:%v status:%v success", task.IdString(), task.Status)
 	}
 	return
 errHandler:
@@ -828,6 +795,12 @@ func (c *Cluster) dealMetaNodeHeartbeatResp(nodeAddr string, resp *proto.MetaNod
 		log.LogWarnf("metaNode zone changed from [%v] to [%v]", oldZoneName, resp.ZoneName)
 	}
 
+	metaNode.ReceivedForbidWriteOpOfProtoVer0 = resp.ReceivedForbidWriteOpOfProtoVer0
+	if metaNode.ReceivedForbidWriteOpOfProtoVer0 != c.cfg.forbidWriteOpOfProtoVer0 {
+		log.LogWarnf("[dealMetaNodeHeartbeatResp] metaNode[%v] ReceivedForbidWriteOpOfProtoVer0(%v) is different from master forbidWriteOpOfProtoVer0(%v)",
+			metaNode.Addr, metaNode.ReceivedForbidWriteOpOfProtoVer0, c.cfg.forbidWriteOpOfProtoVer0)
+	}
+
 	// change cpu util and io used
 	metaNode.CpuUtil.Store(resp.CpuUtil)
 	metaNode.updateMetric(resp, c.cfg.MetaNodeThreshold)
@@ -863,7 +836,7 @@ func (c *Cluster) adjustMetaNode(metaNode *MetaNode) {
 	var zone *Zone
 	zone, err = c.t.getZone(metaNode.ZoneName)
 	if err != nil {
-		zone = newZone(metaNode.ZoneName)
+		zone = newZone(metaNode.ZoneName, proto.MediaType_Unspecified)
 		c.t.putZone(zone)
 	}
 	c.nsMutex.Lock()
@@ -917,7 +890,7 @@ func (c *Cluster) handleDataNodeTaskResponse(nodeAddr string, task *proto.AdminT
 		err = c.handleResponseToLoadDataPartition(task.OperatorAddr, response)
 	case proto.OpDataNodeHeartbeat:
 		response := task.Response.(*proto.DataNodeHeartbeatResponse)
-		err = c.handleDataNodeHeartbeatResp(task.OperatorAddr, response)
+		err = c.handleDataNodeHeartbeatResp(task.OperatorAddr, response, task.RequestID)
 	case proto.OpVersionOperation:
 		response := task.Response.(*proto.MultiVersionOpResponse)
 		err = c.dealOpDataNodeMultiVerResp(task.OperatorAddr, response)
@@ -981,12 +954,13 @@ func (c *Cluster) handleResponseToLoadDataPartition(nodeAddr string, resp *proto
 	return
 }
 
-func (c *Cluster) handleDataNodeHeartbeatResp(nodeAddr string, resp *proto.DataNodeHeartbeatResponse) (err error) {
+func (c *Cluster) handleDataNodeHeartbeatResp(nodeAddr string, resp *proto.DataNodeHeartbeatResponse, reqId string) (err error) {
 	var (
 		dataNode *DataNode
 		logMsg   string
 	)
-	log.LogInfof("action[handleDataNodeHeartbeatResp] clusterID[%v] receive dataNode[%v] heartbeat, ", c.Name, nodeAddr)
+	log.LogInfof("action[handleDataNodeHeartbeatResp] clusterID[%v] receive dataNode[%v] heartbeat %v ",
+		c.Name, nodeAddr, reqId)
 	if resp.Status != proto.TaskSucceeds {
 		Warn(c.Name, fmt.Sprintf("action[handleDataNodeHeartbeatResp] clusterID[%v] dataNode[%v] heartbeat task failed",
 			c.Name, nodeAddr))
@@ -1007,19 +981,28 @@ func (c *Cluster) handleDataNodeHeartbeatResp(nodeAddr string, resp *proto.DataN
 		c.t.deleteDataNode(dataNode)
 		oldZoneName := dataNode.ZoneName
 		dataNode.ZoneName = resp.ZoneName
+		c.dnMutex.Lock()
 		c.adjustDataNode(dataNode)
+		c.dnMutex.Unlock()
 		log.LogWarnf("dataNode [%v] zone changed from [%v] to [%v]", dataNode.Addr, oldZoneName, resp.ZoneName)
 	}
 	// change cpu util and io used
 	dataNode.CpuUtil.Store(resp.CpuUtil)
 	dataNode.SetIoUtils(resp.IoUtils)
 
-	dataNode.updateNodeMetric(resp)
+	dataNode.updateNodeMetric(c, resp)
 
 	if err = c.t.putDataNode(dataNode); err != nil {
 		log.LogErrorf("action[handleDataNodeHeartbeatResp] dataNode[%v],zone[%v],node set[%v], err[%v]", dataNode.Addr, dataNode.ZoneName, dataNode.NodeSetID, err)
 	}
 	c.updateDataNode(dataNode, resp.PartitionReports)
+
+	dataNode.ReceivedForbidWriteOpOfProtoVer0 = resp.ReceivedForbidWriteOpOfProtoVer0
+	if dataNode.ReceivedForbidWriteOpOfProtoVer0 != c.cfg.forbidWriteOpOfProtoVer0 {
+		log.LogWarnf("[handleDataNodeHeartbeatResp] dataNode[%v] receivedForbiddenWriteOpVerBitmask(%v) is different from master forbidWriteOpOfProtoVer0(%v)",
+			dataNode.Addr, dataNode.ReceivedForbidWriteOpOfProtoVer0, c.cfg.forbidWriteOpOfProtoVer0)
+	}
+
 	logMsg = fmt.Sprintf("action[handleDataNodeHeartbeatResp],dataNode:%v,zone[%v], ReportTime:%v  success", dataNode.Addr, dataNode.ZoneName, time.Now().Unix())
 	log.LogInfof(logMsg)
 	return
@@ -1030,8 +1013,6 @@ errHandler:
 }
 
 func (c *Cluster) adjustDataNode(dataNode *DataNode) {
-	c.dnMutex.Lock()
-	defer c.dnMutex.Unlock()
 	oldNodeSetID := dataNode.NodeSetID
 	var err error
 	defer func() {
@@ -1044,7 +1025,7 @@ func (c *Cluster) adjustDataNode(dataNode *DataNode) {
 	var zone *Zone
 	zone, err = c.t.getZone(dataNode.ZoneName)
 	if err != nil {
-		zone = newZone(dataNode.ZoneName)
+		zone = newZone(dataNode.ZoneName, dataNode.MediaType)
 		c.t.putZone(zone)
 	}
 
@@ -1057,6 +1038,10 @@ func (c *Cluster) adjustDataNode(dataNode *DataNode) {
 		}
 	}
 	c.nsMutex.Unlock()
+
+	if _, err = c.checkSetZoneMediaTypePersist(zone, dataNode.MediaType); err != nil {
+		return
+	}
 
 	dataNode.NodeSetID = ns.ID
 	if err = c.syncUpdateDataNode(dataNode); err != nil {
@@ -1166,7 +1151,7 @@ func (c *Cluster) updateInodeIDUpperBound(mp *MetaPartition, mr *proto.MetaParti
 		return
 	}
 	if err = vol.splitMetaPartition(c, mp, end, metaPartitionInodeIdStep, false); err != nil {
-		log.LogError(err)
+		log.LogErrorf("mpId[%v], splitMetaPartition err %v", mp.PartitionID, err)
 	}
 	return
 }

@@ -52,54 +52,61 @@ type MetaNodeInfo struct {
 
 // DataNode stores all the information about a data node
 type DataNodeInfo struct {
-	Total                     uint64 `json:"TotalWeight"`
-	Used                      uint64 `json:"UsedWeight"`
-	AvailableSpace            uint64
-	ID                        uint64
-	ZoneName                  string `json:"Zone"`
-	Addr                      string
-	DomainAddr                string
-	ReportTime                time.Time
-	IsActive                  bool
-	ToBeOffline               bool
-	IsWriteAble               bool
-	UsageRatio                float64 // used / total space
-	SelectedTimes             uint64  // number times that this datanode has been selected as the location for a data partition.
-	DataPartitionReports      []*DataPartitionReport
-	DataPartitionCount        uint32
-	NodeSetID                 uint64
-	PersistenceDataPartitions []uint64
-	BadDisks                  []string
-	RdOnly                    bool
-	CanAllocPartition         bool
-	MaxDpCntLimit             uint32             `json:"maxDpCntLimit"`
-	CpuUtil                   float64            `json:"cpuUtil"`
-	IoUtils                   map[string]float64 `json:"ioUtil"`
-	DecommissionedDisk        []string
-	BackupDataPartitions      []uint64
+	Total                                 uint64 `json:"TotalWeight"`
+	Used                                  uint64 `json:"UsedWeight"`
+	AvailableSpace                        uint64
+	ID                                    uint64
+	ZoneName                              string `json:"Zone"`
+	Addr                                  string
+	DomainAddr                            string
+	ReportTime                            time.Time
+	IsActive                              bool
+	ToBeOffline                           bool
+	IsWriteAble                           bool
+	UsageRatio                            float64 // used / total space
+	SelectedTimes                         uint64  // number times that this datanode has been selected as the location for a data partition.
+	DataPartitionReports                  []*DataPartitionReport
+	DataPartitionCount                    uint32
+	NodeSetID                             uint64
+	PersistenceDataPartitions             []uint64
+	PersistenceDataPartitionsWithDiskPath []DataPartitionDiskInfo
+	BadDisks                              []string
+	RdOnly                                bool
+	CanAllocPartition                     bool
+	MaxDpCntLimit                         uint32             `json:"maxDpCntLimit"`
+	CpuUtil                               float64            `json:"cpuUtil"`
+	IoUtils                               map[string]float64 `json:"ioUtil"`
+	DecommissionedDisk                    []string
+	BackupDataPartitions                  []uint64
+	MediaType                             uint32
+	DiskOpLogs                            []OpLog
+	DpOpLogs                              []OpLog
 }
 
 // MetaPartition defines the structure of a meta partition
 type MetaPartitionInfo struct {
-	PartitionID   uint64
-	Start         uint64
-	End           uint64
-	MaxInodeID    uint64
-	InodeCount    uint64
-	DentryCount   uint64
-	VolName       string
-	Replicas      []*MetaReplicaInfo
-	ReplicaNum    uint8
-	Status        int8
-	IsRecover     bool
-	Hosts         []string
-	Peers         []Peer
-	Zones         []string
-	NodeSets      []uint64
-	OfflinePeerID uint64
-	MissNodes     map[string]int64
-	LoadResponse  []*MetaPartitionLoadResponse
-	Forbidden     bool
+	PartitionID               uint64
+	Start                     uint64
+	End                       uint64
+	MaxInodeID                uint64
+	InodeCount                uint64
+	DentryCount               uint64
+	VolName                   string
+	Replicas                  []*MetaReplicaInfo
+	ReplicaNum                uint8
+	Status                    int8
+	IsRecover                 bool
+	Hosts                     []string
+	Peers                     []Peer
+	Zones                     []string
+	NodeSets                  []uint64
+	OfflinePeerID             uint64
+	MissNodes                 map[string]int64
+	LoadResponse              []*MetaPartitionLoadResponse
+	Forbidden                 bool
+	StatByStorageClass        []*StatOfStorageClass
+	StatByMigrateStorageClass []*StatOfStorageClass
+	ForbidWriteOpOfProtoVer0  bool
 }
 
 // MetaReplica defines the replica of a meta partition
@@ -117,31 +124,39 @@ type MetaReplicaInfo struct {
 
 // ClusterView provides the view of a cluster.
 type ClusterView struct {
-	Name                     string
-	CreateTime               string
-	LeaderAddr               string
-	DisableAutoAlloc         bool
-	ForbidMpDecommission     bool
-	MetaNodeThreshold        float32
-	Applied                  uint64
-	MaxDataPartitionID       uint64
-	MaxMetaNodeID            uint64
-	MaxMetaPartitionID       uint64
-	VolDeletionDelayTimeHour int64
-	MarkDiskBrokenThreshold  float64
-	EnableAutoDpMetaRepair   bool
-	EnableAutoDecommission   bool
-	DecommissionDiskLimit    uint32
-	DpRepairTimeout          time.Duration
-	DpTimeout                time.Duration
-	DataNodeStatInfo         *NodeStatInfo
-	MetaNodeStatInfo         *NodeStatInfo
-	VolStatInfo              []*VolStatInfo
-	BadPartitionIDs          []BadPartitionView
-	BadMetaPartitionIDs      []BadPartitionView
-	MasterNodes              []NodeView
-	MetaNodes                []NodeView
-	DataNodes                []NodeView
+	Name                         string
+	CreateTime                   string
+	LeaderAddr                   string
+	DisableAutoAlloc             bool
+	ForbidMpDecommission         bool
+	MetaNodeThreshold            float32
+	Applied                      uint64
+	MaxDataPartitionID           uint64
+	MaxMetaNodeID                uint64
+	MaxMetaPartitionID           uint64
+	VolDeletionDelayTimeHour     int64
+	MarkDiskBrokenThreshold      float64
+	EnableAutoDpMetaRepair       bool
+	AutoDpMetaRepairParallelCnt  int
+	EnableAutoDecommission       bool
+	AutoDecommissionDiskInterval string
+	DecommissionLimit            uint64
+	DecommissionDiskLimit        uint32
+	DpRepairTimeout              string
+	DpBackupTimeout              string
+	DpTimeout                    string
+	DataNodeStatInfo             *NodeStatInfo
+	MetaNodeStatInfo             *NodeStatInfo
+	VolStatInfo                  []*VolStatInfo
+	BadPartitionIDs              []BadPartitionView
+	BadMetaPartitionIDs          []BadPartitionView
+	MasterNodes                  []NodeView
+	MetaNodes                    []NodeView
+	DataNodes                    []NodeView
+	StatOfStorageClass           []*StatOfStorageClass
+	StatMigrateStorageClass      []*StatOfStorageClass
+	ForbidWriteOpOfProtoVer0     bool
+	LegacyDataMediaType          uint32
 }
 
 // ClusterNode defines the structure of a cluster node
@@ -166,11 +181,13 @@ type ClusterIP struct {
 
 // NodeView provides the view of the data or meta node.
 type NodeView struct {
-	Addr       string
-	IsActive   bool
-	DomainAddr string
-	ID         uint64
-	IsWritable bool
+	Addr                     string
+	Status                   bool
+	DomainAddr               string
+	ID                       uint64
+	IsWritable               bool
+	MediaType                uint32
+	ForbidWriteOpOfProtoVer0 bool
 }
 
 type DpRepairInfo struct {
@@ -259,20 +276,27 @@ type NodeStatInfo struct {
 }
 
 type VolStatInfo struct {
-	Name                  string
-	TotalSize             uint64
-	UsedSize              uint64
-	UsedRatio             string
-	CacheTotalSize        uint64
-	CacheUsedSize         uint64
-	CacheUsedRatio        string
-	EnableToken           bool
-	InodeCount            uint64
-	TxCnt                 uint64
-	TxRbInoCnt            uint64
-	TxRbDenCnt            uint64
-	DpReadOnlyWhenVolFull bool
-	TrashInterval         int64 `json:"TrashIntervalV2"`
+	Name                    string
+	TotalSize               uint64
+	UsedSize                uint64
+	UsedRatio               string
+	CacheTotalSize          uint64
+	CacheUsedSize           uint64
+	CacheUsedRatio          string
+	EnableToken             bool
+	InodeCount              uint64
+	TxCnt                   uint64
+	TxRbInoCnt              uint64
+	TxRbDenCnt              uint64
+	DpReadOnlyWhenVolFull   bool
+	TrashInterval           int64 `json:"TrashIntervalV2"`
+	DefaultStorageClass     uint32
+	CacheDpStorageClass     uint32
+	MetaFollowerRead        bool
+	LeaderRetryTimeOut      int
+	StatByStorageClass      []*StatOfStorageClass
+	StatMigrateStorageClass []*StatOfStorageClass
+	StatByDpMediaType       []*StatOfStorageClass
 }
 
 // DataPartition represents the structure of storing the file contents.
@@ -301,6 +325,8 @@ type DataPartitionInfo struct {
 	RdOnly                   bool
 	IsDiscard                bool
 	Forbidden                bool
+	MediaType                uint32
+	ForbidWriteOpOfProtoVer0 bool
 }
 
 // FileInCore define file in data partition
@@ -334,6 +360,7 @@ type DataReplica struct {
 	DecommissionRepairProgress float64
 	LocalPeers                 []Peer
 	TriggerDiskError           bool
+	ForbidWriteOpOfProtoVer0   bool
 }
 
 // data partition diagnosis represents the inactive data nodes, corrupt data partitions, and data partitions lack of replicas
@@ -368,11 +395,27 @@ type FailedDpInfo struct {
 	ErrMsg      string
 }
 
+type IgnoreDecommissionDP struct {
+	PartitionID uint64
+	ErrMsg      string
+}
+
 type DecommissionProgress struct {
+	StatusMessage string
+	Progress      string
+	FailedDps     []FailedDpInfo
+	IgnoreDps     []IgnoreDecommissionDP
+	ResidualDps   []IgnoreDecommissionDP
+	StartTime     string
+}
+
+type DataDecommissionProgress struct {
 	Status        uint32
 	StatusMessage string
 	Progress      string
 	FailedDps     []FailedDpInfo
+	IgnoreDps     []IgnoreDecommissionDP
+	ResidualDps   []IgnoreDecommissionDP
 }
 
 type DiskInfo struct {
@@ -399,10 +442,24 @@ type DiscardDataPartitionInfos struct {
 }
 
 type DecommissionTokenStatus struct {
-	NodesetID   uint64
-	CurTokenNum int32
-	MaxTokenNum int32
-	RunningDp   []uint64
+	NodesetID                   uint64
+	CurTokenNum                 int32
+	MaxTokenNum                 int32
+	RunningDp                   []uint64
+	TotalDP                     int
+	ManualDecommissionDisk      []string
+	ManualDecommissionDiskTotal int
+	AutoDecommissionDisk        []string
+	AutoDecommissionDiskTotal   int
+	MaxDiskTokenNum             uint32
+	RunningDisk                 []string
+}
+
+type UpgradeCompatibleSettings struct {
+	VolsForbidWriteOpOfProtoVer0    []string
+	ClusterForbidWriteOpOfProtoVer0 bool
+	LegacyDataMediaType             uint32
+	DataMediaTypeVaild              bool
 }
 
 type VolVersionInfo struct {
@@ -498,6 +555,7 @@ type DecommissionDataPartitionInfo struct {
 	DecommissionType   string
 	RestoreReplicaType string
 	IsDiscard          bool
+	RecoverStartTime   string
 }
 
 type DecommissionedDisks struct {
@@ -520,7 +578,25 @@ type DecommissionFailedDiskInfo struct {
 	SrcAddr               string
 	DiskPath              string
 	DecommissionRaftForce bool
-	DecommissionRetry     uint8
+	DecommissionTimes     uint8
 	DecommissionDpTotal   int
 	IsAutoDecommission    bool
+}
+
+type BadDiskRecoverProgress struct {
+	TotalPartitionsNum   int
+	BadDataPartitions    []uint64
+	BadDataPartitionsNum int
+	Status               string
+}
+
+type BadDiskInfo struct {
+	Address              string
+	Path                 string
+	TotalPartitionCnt    int
+	DiskErrPartitionList []uint64
+}
+
+type BadDiskInfos struct {
+	BadDisks []BadDiskInfo
 }

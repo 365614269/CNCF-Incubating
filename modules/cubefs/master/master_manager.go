@@ -29,6 +29,10 @@ type LeaderInfo struct {
 	addr string //host:port
 }
 
+func (m *Server) getCurrAddr() string {
+	return AddrDatabase[m.id]
+}
+
 func (m *Server) handleLeaderChange(leader uint64) {
 	if leader == 0 {
 		log.LogWarnf("action[handleLeaderChange] but no leader")
@@ -56,12 +60,18 @@ func (m *Server) handleLeaderChange(leader uint64) {
 		m.cluster.checkDataNodeHeartbeat()
 		m.cluster.checkMetaNodeHeartbeat()
 		m.cluster.checkLcNodeHeartbeat()
+		m.cluster.lcMgr.startLcScanHandleLeaderChange()
 		m.cluster.followerReadManager.reSet()
 
 	} else {
 		Warn(m.clusterName, fmt.Sprintf("clusterID[%v] leader is changed to %v",
 			m.clusterName, m.leaderInfo.addr))
 		m.clearMetadata()
+		if m.cluster.lcMgr != nil {
+			close(m.cluster.lcMgr.exitCh)
+			m.cluster.lcMgr = newLifecycleManager()
+			m.cluster.lcMgr.cluster = m.cluster
+		}
 		m.metaReady = false
 		m.cluster.metaReady = false
 		m.cluster.masterClient.AddNode(m.leaderInfo.addr)
@@ -119,15 +129,17 @@ func (m *Server) restoreIDAlloc() {
 
 // Load stored metadata into the memory
 func (m *Server) loadMetadata() {
+	var err error
 	log.LogInfo("action[loadMetadata] begin")
 	syslog.Println("action[loadMetadata] begin")
 	m.clearMetadata()
 	m.restoreIDAlloc()
 	m.cluster.fsm.restore()
-	var err error
+
 	if err = m.cluster.loadClusterValue(); err != nil {
 		panic(err)
 	}
+
 	var loadDomain bool
 	if m.cluster.FaultDomain { // try load exclude
 		if loadDomain, err = m.cluster.loadZoneDomain(); err != nil {
@@ -178,6 +190,7 @@ func (m *Server) loadMetadata() {
 	if err = m.cluster.loadMetaPartitions(); err != nil {
 		panic(err)
 	}
+
 	if err = m.cluster.loadDataPartitions(); err != nil {
 		panic(err)
 	}
@@ -187,8 +200,6 @@ func (m *Server) loadMetadata() {
 	if err = m.cluster.startDecommissionListTraverse(); err != nil {
 		panic(err)
 	}
-	log.LogInfo("action[loadMetadata] end")
-	syslog.Println("action[loadMetadata] end")
 
 	log.LogInfo("action[loadUserInfo] begin")
 	if err = m.user.loadUserStore(); err != nil {
@@ -226,21 +237,47 @@ func (m *Server) loadMetadata() {
 	}
 	log.LogInfo("action[loadLcConfs] end")
 
+	log.LogInfo("action[loadLcTasks] begin")
+	if err = m.cluster.loadLcTasks(); err != nil {
+		panic(err)
+	}
+	log.LogInfo("action[loadLcTasks] end")
+
+	log.LogInfo("action[loadLcResults] begin")
+	if err = m.cluster.loadLcResults(); err != nil {
+		panic(err)
+	}
+	log.LogInfo("action[loadLcResults] end")
+
 	log.LogInfo("action[loadLcNodes] begin")
 	if err = m.cluster.loadLcNodes(); err != nil {
 		panic(err)
 	}
 	log.LogInfo("action[loadLcNodes] end")
-	syslog.Println("action[loadMetadata] end")
 
 	log.LogInfo("action[loadS3QoSInfo] begin")
 	if err = m.cluster.loadS3ApiQosInfo(); err != nil {
 		panic(err)
 	}
 	log.LogInfo("action[loadS3QoSInfo] end")
+
+	m.cluster.checkMediaVaild()
+
+	log.LogInfo("action[loadMetadata] end")
+	syslog.Println("action[loadMetadata] end")
 }
 
 func (m *Server) clearMetadata() {
+	// stop decommission dp traverse
+	zones := m.cluster.t.getAllZones()
+	for _, zone := range zones {
+		nsc := zone.getAllNodeSet()
+		for _, ns := range nsc {
+			ns.stopDecommissionSchedule()
+		}
+	}
+	// clear bad dp ids
+	m.cluster.clearBadDataPartitionIDS()
 	m.cluster.clearTopology()
 	m.cluster.clearDataNodes()
 	m.cluster.clearMetaNodes()

@@ -24,8 +24,8 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/cubefs/cubefs/depends/tiglabs/raft/proto"
-	bsProto "github.com/cubefs/cubefs/proto"
+	raftProto "github.com/cubefs/cubefs/depends/tiglabs/raft/proto"
+	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
 )
@@ -35,72 +35,82 @@ import (
    transferred over the network. */
 
 type clusterValue struct {
-	Name                        string
-	CreateTime                  int64
-	Threshold                   float32
-	LoadFactor                  float32
-	DisableAutoAllocate         bool
-	ForbidMpDecommission        bool
-	DataNodeDeleteLimitRate     uint64
-	MetaNodeDeleteBatchCount    uint64
-	MetaNodeDeleteWorkerSleepMs uint64
-	DataNodeAutoRepairLimitRate uint64
-	MaxDpCntLimit               uint64
-	MaxMpCntLimit               uint64
-	FaultDomain                 bool
-	DiskQosEnable               bool
-	QosLimitUpload              uint64
-	DirChildrenNumLimit         uint32
-	DecommissionLimit           uint64
-	CheckDataReplicasEnable     bool
-	FileStatsEnable             bool
-	ClusterUuid                 string
-	ClusterUuidEnable           bool
-	MetaPartitionInodeIdStep    uint64
-	MaxConcurrentLcNodes        uint64
-	DpMaxRepairErrCnt           uint64
-	DpRepairTimeOut             uint64
-	EnableAutoDecommissionDisk  bool
-	DecommissionDiskLimit       uint32
-	VolDeletionDelayTimeHour    int64
-	MarkDiskBrokenThreshold     float64
-	EnableAutoDpMetaRepair      bool
-	DataPartitionTimeoutSec     int64
+	Name                         string
+	CreateTime                   int64
+	Threshold                    float32
+	LoadFactor                   float32
+	DisableAutoAllocate          bool
+	ForbidMpDecommission         bool
+	DataNodeDeleteLimitRate      uint64
+	MetaNodeDeleteBatchCount     uint64
+	MetaNodeDeleteWorkerSleepMs  uint64
+	DataNodeAutoRepairLimitRate  uint64
+	MaxDpCntLimit                uint64
+	MaxMpCntLimit                uint64
+	FaultDomain                  bool
+	DiskQosEnable                bool
+	QosLimitUpload               uint64
+	DirChildrenNumLimit          uint32
+	DecommissionLimit            uint64
+	CheckDataReplicasEnable      bool
+	FileStatsEnable              bool
+	ClusterUuid                  string
+	ClusterUuidEnable            bool
+	MetaPartitionInodeIdStep     uint64
+	MaxConcurrentLcNodes         uint64
+	DpMaxRepairErrCnt            uint64
+	DpRepairTimeOut              uint64
+	DpBackupTimeOut              uint64
+	EnableAutoDecommissionDisk   bool
+	AutoDecommissionDiskInterval int64
+	DecommissionDiskLimit        uint32
+	VolDeletionDelayTimeHour     int64
+	MarkDiskBrokenThreshold      float64
+	EnableAutoDpMetaRepair       bool
+	AutoDpMetaRepairParallelCnt  uint32
+	DataPartitionTimeoutSec      int64
+	ForbidWriteOpOfProtoVer0     bool
+	LegacyDataMediaType          uint32
 }
 
 func newClusterValue(c *Cluster) (cv *clusterValue) {
 	cv = &clusterValue{
-		Name:                        c.Name,
-		CreateTime:                  c.CreateTime,
-		LoadFactor:                  c.cfg.ClusterLoadFactor,
-		Threshold:                   c.cfg.MetaNodeThreshold,
-		DataNodeDeleteLimitRate:     c.cfg.DataNodeDeleteLimitRate,
-		MetaNodeDeleteBatchCount:    c.cfg.MetaNodeDeleteBatchCount,
-		MetaNodeDeleteWorkerSleepMs: c.cfg.MetaNodeDeleteWorkerSleepMs,
-		DataNodeAutoRepairLimitRate: c.cfg.DataNodeAutoRepairLimitRate,
-		DisableAutoAllocate:         c.DisableAutoAllocate,
-		ForbidMpDecommission:        c.ForbidMpDecommission,
-		MaxDpCntLimit:               c.cfg.MaxDpCntLimit,
-		MaxMpCntLimit:               c.cfg.MaxMpCntLimit,
-		FaultDomain:                 c.FaultDomain,
-		DiskQosEnable:               c.diskQosEnable,
-		QosLimitUpload:              uint64(c.QosAcceptLimit.Limit()),
-		DirChildrenNumLimit:         c.cfg.DirChildrenNumLimit,
-		DecommissionLimit:           c.DecommissionLimit,
-		CheckDataReplicasEnable:     c.checkDataReplicasEnable,
-		FileStatsEnable:             c.fileStatsEnable,
-		ClusterUuid:                 c.clusterUuid,
-		ClusterUuidEnable:           c.clusterUuidEnable,
-		MetaPartitionInodeIdStep:    c.cfg.MetaPartitionInodeIdStep,
-		MaxConcurrentLcNodes:        c.cfg.MaxConcurrentLcNodes,
-		DpMaxRepairErrCnt:           c.cfg.DpMaxRepairErrCnt,
-		DpRepairTimeOut:             c.cfg.DpRepairTimeOut,
-		EnableAutoDecommissionDisk:  c.EnableAutoDecommissionDisk,
-		DecommissionDiskLimit:       c.GetDecommissionDiskLimit(),
-		VolDeletionDelayTimeHour:    c.cfg.volDelayDeleteTimeHour,
-		MarkDiskBrokenThreshold:     c.getMarkDiskBrokenThreshold(),
-		EnableAutoDpMetaRepair:      c.getEnableAutoDpMetaRepair(),
-		DataPartitionTimeoutSec:     c.getDataPartitionTimeoutSec(),
+		Name:                         c.Name,
+		CreateTime:                   c.CreateTime,
+		LoadFactor:                   c.cfg.ClusterLoadFactor,
+		Threshold:                    c.cfg.MetaNodeThreshold,
+		DataNodeDeleteLimitRate:      c.cfg.DataNodeDeleteLimitRate,
+		MetaNodeDeleteBatchCount:     c.cfg.MetaNodeDeleteBatchCount,
+		MetaNodeDeleteWorkerSleepMs:  c.cfg.MetaNodeDeleteWorkerSleepMs,
+		DataNodeAutoRepairLimitRate:  c.cfg.DataNodeAutoRepairLimitRate,
+		DisableAutoAllocate:          c.DisableAutoAllocate,
+		ForbidMpDecommission:         c.ForbidMpDecommission,
+		MaxDpCntLimit:                c.cfg.MaxDpCntLimit,
+		MaxMpCntLimit:                c.cfg.MaxMpCntLimit,
+		FaultDomain:                  c.FaultDomain,
+		DiskQosEnable:                c.diskQosEnable,
+		QosLimitUpload:               uint64(c.QosAcceptLimit.Limit()),
+		DirChildrenNumLimit:          c.cfg.DirChildrenNumLimit,
+		DecommissionLimit:            c.DecommissionLimit,
+		CheckDataReplicasEnable:      c.checkDataReplicasEnable,
+		FileStatsEnable:              c.fileStatsEnable,
+		ClusterUuid:                  c.clusterUuid,
+		ClusterUuidEnable:            c.clusterUuidEnable,
+		MetaPartitionInodeIdStep:     c.cfg.MetaPartitionInodeIdStep,
+		MaxConcurrentLcNodes:         c.cfg.MaxConcurrentLcNodes,
+		DpMaxRepairErrCnt:            c.cfg.DpMaxRepairErrCnt,
+		DpRepairTimeOut:              c.cfg.DpRepairTimeOut,
+		DpBackupTimeOut:              c.cfg.DpBackupTimeOut,
+		EnableAutoDecommissionDisk:   c.EnableAutoDecommissionDisk.Load(),
+		AutoDecommissionDiskInterval: c.AutoDecommissionInterval.Load(),
+		DecommissionDiskLimit:        c.GetDecommissionDiskLimit(),
+		VolDeletionDelayTimeHour:     c.cfg.volDelayDeleteTimeHour,
+		MarkDiskBrokenThreshold:      c.getMarkDiskBrokenThreshold(),
+		EnableAutoDpMetaRepair:       c.getEnableAutoDpMetaRepair(),
+		AutoDpMetaRepairParallelCnt:  c.AutoDpMetaRepairParallelCnt.Load(),
+		DataPartitionTimeoutSec:      c.getDataPartitionTimeoutSec(),
+		ForbidWriteOpOfProtoVer0:     c.cfg.forbidWriteOpOfProtoVer0,
+		LegacyDataMediaType:          c.legacyDataMediaType,
 	}
 	return cv
 }
@@ -115,7 +125,7 @@ type metaPartitionValue struct {
 	VolName       string
 	Hosts         string
 	OfflinePeerID uint64
-	Peers         []bsProto.Peer
+	Peers         []proto.Peer
 	IsRecover     bool
 }
 
@@ -140,7 +150,7 @@ type dataPartitionValue struct {
 	PartitionID                    uint64
 	ReplicaNum                     uint8
 	Hosts                          string
-	Peers                          []bsProto.Peer
+	Peers                          []proto.Peer
 	Status                         int8
 	VolID                          uint64
 	VolName                        string
@@ -168,6 +178,7 @@ type dataPartitionValue struct {
 	DecommissionNeedRollbackTimes  uint32
 	DecommissionType               uint32
 	RestoreReplica                 uint32
+	MediaType                      uint32
 }
 
 func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
@@ -177,7 +188,8 @@ func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
 			dpv.Peers[i].ID = dn.(*DataNode).ID
 		}
 	}
-	dp = newDataPartition(dpv.PartitionID, dpv.ReplicaNum, dpv.VolName, dpv.VolID, dpv.PartitionType, dpv.PartitionTTL)
+	dp = newDataPartition(dpv.PartitionID, dpv.ReplicaNum, dpv.VolName, dpv.VolID,
+		dpv.PartitionType, dpv.PartitionTTL, dpv.MediaType)
 	dp.Hosts = strings.Split(dpv.Hosts, underlineSeparator)
 	dp.Peers = dpv.Peers
 	dp.OfflinePeerID = dpv.OfflinePeerID
@@ -200,6 +212,8 @@ func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
 	dp.DecommissionErrorMessage = dpv.DecommissionErrorMessage
 	dp.DecommissionType = dpv.DecommissionType
 	dp.RestoreReplica = dpv.RestoreReplica
+	dp.MediaType = dpv.MediaType
+
 	// to ensure progress of checkReplicaMeta can be run again, the status of RestoreReplicaMeta can not be
 	// set to RestoreReplicaMetaStop otherwise for checkReplicaMeta cannot be executed.
 	if dp.RestoreReplica == RestoreReplicaMetaRunning {
@@ -251,6 +265,7 @@ func newDataPartitionValue(dp *DataPartition) (dpv *dataPartitionValue) {
 		DecommissionNeedRollbackTimes:  dp.DecommissionNeedRollbackTimes,
 		DecommissionType:               dp.DecommissionType,
 		RestoreReplica:                 atomic.LoadUint32(&dp.RestoreReplica),
+		MediaType:                      dp.MediaType,
 	}
 	for _, replica := range dp.Replicas {
 		rv := &replicaValue{Addr: replica.Addr, DiskPath: replica.DiskPath}
@@ -269,6 +284,8 @@ type volValue struct {
 	Capacity              uint64
 	Owner                 string
 	FollowerRead          bool
+	MetaFollowerRead      bool
+	DirectRead            bool
 	Authenticate          bool
 	DpReadOnlyWhenVolFull bool
 
@@ -276,19 +293,20 @@ type volValue struct {
 	DeleteExecTime time.Time
 	User           *User
 
-	CrossZone       bool
-	DomainOn        bool
-	ZoneName        string
-	OSSAccessKey    string
-	OSSSecretKey    string
-	CreateTime      int64
-	DeleteLockTime  int64
-	Description     string
-	DpSelectorName  string
-	DpSelectorParm  string
-	DefaultPriority bool
-	DomainId        uint64
-	VolType         int
+	CrossZone          bool
+	DomainOn           bool
+	ZoneName           string
+	OSSAccessKey       string
+	OSSSecretKey       string
+	CreateTime         int64
+	DeleteLockTime     int64
+	LeaderRetryTimeOut int64
+	Description        string
+	DpSelectorName     string
+	DpSelectorParm     string
+	DefaultPriority    bool
+	DomainId           uint64
+	VolType            int
 
 	EbsBlkSize       int
 	CacheCapacity    uint64
@@ -303,7 +321,7 @@ type volValue struct {
 	EnablePosixAcl bool
 	EnableQuota    bool
 
-	EnableTransaction       bsProto.TxOpMask
+	EnableTransaction       proto.TxOpMask
 	TxTimeout               int64
 	TxConflictRetryNum      int64
 	TxConflictRetryInterval int64
@@ -316,15 +334,28 @@ type volValue struct {
 	ClientReqPeriod, ClientHitTriggerCnt                   uint32
 	TrashInterval                                          int64
 	DisableAuditLog                                        bool
+	AccessTimeInterval                                     int64
+	EnablePersistAccessTime                                bool
 
 	Forbidden            bool
 	DpRepairBlockSize    uint64
 	EnableAutoMetaRepair bool
+
+	VolStorageClass          uint32
+	AllowedStorageClass      []uint32
+	CacheDpStorageClass      uint32
+	ForbidWriteOpOfProtoVer0 bool
+	QuotaOfClass             []*proto.StatOfStorageClass
 }
 
 func (v *volValue) Bytes() (raw []byte, err error) {
 	raw, err = json.Marshal(v)
 	return
+}
+
+func (v *volValue) String() string {
+	raw, _ := json.Marshal(v)
+	return string(raw)
 }
 
 func newVolValue(vol *Vol) (vv *volValue) {
@@ -338,6 +369,9 @@ func newVolValue(vol *Vol) (vv *volValue) {
 		Capacity:                vol.Capacity,
 		Owner:                   vol.Owner,
 		FollowerRead:            vol.FollowerRead,
+		MetaFollowerRead:        vol.MetaFollowerRead,
+		DirectRead:              vol.DirectRead,
+		LeaderRetryTimeOut:      vol.LeaderRetryTimeout,
 		Authenticate:            vol.authenticate,
 		CrossZone:               vol.crossZone,
 		DomainOn:                vol.domainOn,
@@ -369,27 +403,38 @@ func newVolValue(vol *Vol) (vv *volValue) {
 		CacheLRUInterval:    vol.CacheLRUInterval,
 		CacheRule:           vol.CacheRule,
 		VolQosEnable:        vol.qosManager.qosEnable,
-		IopsRLimit:          vol.qosManager.getQosLimit(bsProto.IopsReadType),
-		IopsWLimit:          vol.qosManager.getQosLimit(bsProto.IopsWriteType),
-		FlowRlimit:          vol.qosManager.getQosLimit(bsProto.FlowReadType),
-		FlowWlimit:          vol.qosManager.getQosLimit(bsProto.FlowWriteType),
-		IopsRMagnify:        vol.qosManager.getQosMagnify(bsProto.IopsReadType),
-		IopsWMagnify:        vol.qosManager.getQosMagnify(bsProto.IopsWriteType),
-		FlowRMagnify:        vol.qosManager.getQosMagnify(bsProto.FlowReadType),
-		FlowWMagnify:        vol.qosManager.getQosMagnify(bsProto.FlowWriteType),
+		IopsRLimit:          vol.qosManager.getQosLimit(proto.IopsReadType),
+		IopsWLimit:          vol.qosManager.getQosLimit(proto.IopsWriteType),
+		FlowRlimit:          vol.qosManager.getQosLimit(proto.FlowReadType),
+		FlowWlimit:          vol.qosManager.getQosLimit(proto.FlowWriteType),
+		IopsRMagnify:        vol.qosManager.getQosMagnify(proto.IopsReadType),
+		IopsWMagnify:        vol.qosManager.getQosMagnify(proto.IopsWriteType),
+		FlowRMagnify:        vol.qosManager.getQosMagnify(proto.FlowReadType),
+		FlowWMagnify:        vol.qosManager.getQosMagnify(proto.FlowWriteType),
 		ClientReqPeriod:     vol.qosManager.ClientReqPeriod,
 		ClientHitTriggerCnt: vol.qosManager.ClientHitTriggerCnt,
 
-		DpReadOnlyWhenVolFull: vol.DpReadOnlyWhenVolFull,
-		TrashInterval:         vol.TrashInterval,
-		DisableAuditLog:       vol.DisableAuditLog,
-		Forbidden:             vol.Forbidden,
-		AuthKey:               vol.authKey,
-		DeleteExecTime:        vol.DeleteExecTime,
-		User:                  vol.user,
-		DpRepairBlockSize:     vol.dpRepairBlockSize,
-		EnableAutoMetaRepair:  vol.EnableAutoMetaRepair.Load(),
+		DpReadOnlyWhenVolFull:   vol.DpReadOnlyWhenVolFull,
+		TrashInterval:           vol.TrashInterval,
+		DisableAuditLog:         vol.DisableAuditLog,
+		Forbidden:               vol.Forbidden,
+		AuthKey:                 vol.authKey,
+		DeleteExecTime:          vol.DeleteExecTime,
+		User:                    vol.user,
+		DpRepairBlockSize:       vol.dpRepairBlockSize,
+		EnableAutoMetaRepair:    vol.EnableAutoMetaRepair.Load(),
+		AccessTimeInterval:      vol.AccessTimeValidInterval,
+		EnablePersistAccessTime: vol.EnablePersistAccessTime,
+
+		VolStorageClass:          vol.volStorageClass,
+		CacheDpStorageClass:      vol.cacheDpStorageClass,
+		ForbidWriteOpOfProtoVer0: vol.ForbidWriteOpOfProtoVer0.Load(),
 	}
+	vv.AllowedStorageClass = make([]uint32, len(vol.allowedStorageClass))
+	copy(vv.AllowedStorageClass, vol.allowedStorageClass)
+
+	vv.QuotaOfClass = make([]*proto.StatOfStorageClass, len(vol.QuotaByClass))
+	copy(vv.QuotaOfClass, vol.QuotaByClass)
 
 	return
 }
@@ -417,6 +462,8 @@ type dataNodeValue struct {
 	ToBeOffline              bool
 	DecommissionDiskList     []string
 	DecommissionDpTotal      int
+	BadDisks                 []string
+	MediaType                uint32
 }
 
 func newDataNodeValue(dataNode *DataNode) *dataNodeValue {
@@ -435,6 +482,8 @@ func newDataNodeValue(dataNode *DataNode) *dataNodeValue {
 		ToBeOffline:              dataNode.ToBeOffline,
 		DecommissionDiskList:     dataNode.DecommissionDiskList,
 		DecommissionDpTotal:      dataNode.DecommissionDpTotal,
+		BadDisks:                 dataNode.BadDisks,
+		MediaType:                dataNode.MediaType,
 	}
 }
 
@@ -562,6 +611,10 @@ func (m *RaftCmd) setOpType() {
 		m.Op = opSyncAddLcNode
 	case lcConfigurationAcronym:
 		m.Op = opSyncAddLcConf
+	case lcTaskAcronym:
+		m.Op = opSyncAddLcTask
+	case lcResultAcronym:
+		m.Op = opSyncAddLcResult
 	default:
 		log.LogWarnf("action[setOpType] unknown opCode[%v]", keyArr[1])
 	}
@@ -980,8 +1033,8 @@ func (c *Cluster) syncPutDataNode(opType uint32, dataNode *DataNode) (err error)
 func (c *Cluster) addRaftNode(nodeID uint64, addr string) (err error) {
 	log.LogInfof("action[addRaftNode] nodeID: %v, addr: %v:", nodeID, addr)
 
-	peer := proto.Peer{ID: nodeID}
-	_, err = c.partition.ChangeMember(proto.ConfAddNode, peer, []byte(addr))
+	peer := raftProto.Peer{ID: nodeID}
+	_, err = c.partition.ChangeMember(raftProto.ConfAddNode, peer, []byte(addr))
 	if err != nil {
 		return errors.New("action[addRaftNode] error: " + err.Error())
 	}
@@ -991,8 +1044,8 @@ func (c *Cluster) addRaftNode(nodeID uint64, addr string) (err error) {
 func (c *Cluster) removeRaftNode(nodeID uint64, addr string) (err error) {
 	log.LogInfof("action[removeRaftNode] nodeID: %v, addr: %v:", nodeID, addr)
 
-	peer := proto.Peer{ID: nodeID}
-	_, err = c.partition.ChangeMember(proto.ConfRemoveNode, peer, []byte(addr))
+	peer := raftProto.Peer{ID: nodeID}
+	_, err = c.partition.ChangeMember(raftProto.ConfRemoveNode, peer, []byte(addr))
 	if err != nil {
 		return errors.New("action[removeRaftNode] error: " + err.Error())
 	}
@@ -1000,8 +1053,8 @@ func (c *Cluster) removeRaftNode(nodeID uint64, addr string) (err error) {
 }
 
 func (c *Cluster) updateDirChildrenNumLimit(val uint32) {
-	if val < bsProto.MinDirChildrenNumLimit {
-		val = bsProto.DefaultDirChildrenNumLimit
+	if val < proto.MinDirChildrenNumLimit {
+		val = proto.DefaultDirChildrenNumLimit
 	}
 	atomic.StoreUint32(&c.cfg.DirChildrenNumLimit, val)
 }
@@ -1020,6 +1073,10 @@ func (c *Cluster) updateDataPartitionMaxRepairErrCnt(val uint64) {
 
 func (c *Cluster) updateDataPartitionRepairTimeOut(val uint64) {
 	atomic.StoreUint64(&c.cfg.DpRepairTimeOut, val)
+}
+
+func (c *Cluster) updateDataPartitionBackupTimeOut(val uint64) {
+	atomic.StoreUint64(&c.cfg.DpBackupTimeOut, val)
 }
 
 func (c *Cluster) updateDataPartitionTimeoutSec(val int64) {
@@ -1057,6 +1114,14 @@ func (c *Cluster) updateEnableAutoDpMetaRepair(val bool) {
 	c.EnableAutoDpMetaRepair.Store(val)
 }
 
+func (c *Cluster) updateAutoDecommissionDiskInterval(val int64) {
+	c.AutoDecommissionInterval.Store(val)
+}
+
+func (c *Cluster) updateAutoDpMetaRepairParallelCnt(cnt uint32) {
+	c.AutoDpMetaRepairParallelCnt.Store(cnt)
+}
+
 func (c *Cluster) updateDecommissionDiskLimit(val uint32) {
 	if val < 1 {
 		val = 1
@@ -1069,8 +1134,9 @@ func (c *Cluster) loadZoneValue() (err error) {
 	result, err := c.fsm.store.SeekForPrefix([]byte(zonePrefix))
 	if err != nil {
 		err = fmt.Errorf("action[loadZoneValue],err:%v", err.Error())
-		return err
+		return
 	}
+
 	for _, value := range result {
 		cv := &zoneValue{}
 		if err = json.Unmarshal(value, cv); err != nil {
@@ -1093,9 +1159,23 @@ func (c *Cluster) loadZoneValue() (err error) {
 		if zone.GetMetaNodesetSelector() != cv.MetaNodesetSelector {
 			zone.metaNodesetSelector = NewNodesetSelector(cv.MetaNodesetSelector, MetaNodeType)
 		}
-		log.LogInfof("action[loadZoneValue] load zonename[%v] with limit [%v,%v,%v,%v]",
-			zone.name, cv.QosFlowRLimit, cv.QosIopsWLimit, cv.QosFlowWLimit, cv.QosIopsRLimit)
+
+		zone.SetDataMediaType(cv.DataMediaType)
+		if !proto.IsValidMediaType(zone.dataMediaType) {
+			zone.SetDataMediaType(c.legacyDataMediaType)
+		}
+
+		log.LogInfof("action[loadZoneValue] load zoneName[%v] with limit [%v,%v,%v,%v], dataMediaType[%v]",
+			zone.name, cv.QosFlowRLimit, cv.QosIopsWLimit, cv.QosFlowWLimit, cv.QosIopsRLimit,
+			proto.MediaTypeString(zone.dataMediaType))
 		zone.loadDataNodeQosLimit()
+	}
+
+	for _, z := range c.t.zones {
+		if !proto.IsValidMediaType(z.dataMediaType) {
+			log.LogInfof("action[loadZoneValue]: set zone %s as %d", z.name, c.legacyDataMediaType)
+			z.SetDataMediaType(c.legacyDataMediaType)
+		}
 	}
 
 	return
@@ -1156,7 +1236,8 @@ func (c *Cluster) loadClusterValue() (err error) {
 		}
 
 		if cv.Name != c.Name {
-			log.LogErrorf("action[loadClusterValue] loaded cluster value: %+v", cv)
+			log.LogErrorf("action[loadClusterValue] clusterName(%v) not match loaded clusterName(%v), n loaded cluster value: %+v",
+				c.Name, cv.Name, cv)
 			continue
 		}
 
@@ -1179,7 +1260,8 @@ func (c *Cluster) loadClusterValue() (err error) {
 		c.clusterUuid = cv.ClusterUuid
 		c.clusterUuidEnable = cv.ClusterUuidEnable
 		c.DecommissionLimit = cv.DecommissionLimit
-		c.EnableAutoDecommissionDisk = cv.EnableAutoDecommissionDisk
+		c.EnableAutoDecommissionDisk.Store(cv.EnableAutoDecommissionDisk)
+		c.updateAutoDecommissionDiskInterval(cv.AutoDecommissionDiskInterval)
 		c.DecommissionLimit = cv.DecommissionLimit
 		c.cfg.volDelayDeleteTimeHour = cv.VolDeletionDelayTimeHour
 
@@ -1200,6 +1282,7 @@ func (c *Cluster) loadClusterValue() (err error) {
 		c.updateDataNodeAutoRepairLimit(cv.DataNodeAutoRepairLimitRate)
 		c.updateDataPartitionMaxRepairErrCnt(cv.DpMaxRepairErrCnt)
 		c.updateDataPartitionRepairTimeOut(cv.DpRepairTimeOut)
+		c.updateDataPartitionBackupTimeOut(cv.DpBackupTimeOut)
 		c.updateMaxDpCntLimit(cv.MaxDpCntLimit)
 		c.updateMaxMpCntLimit(cv.MaxMpCntLimit)
 		if cv.MetaPartitionInodeIdStep == 0 {
@@ -1213,8 +1296,14 @@ func (c *Cluster) loadClusterValue() (err error) {
 		c.checkDataReplicasEnable = cv.CheckDataReplicasEnable
 		c.updateMarkDiskBrokenThreshold(cv.MarkDiskBrokenThreshold)
 		c.updateEnableAutoDpMetaRepair(cv.EnableAutoDpMetaRepair)
+		c.updateAutoDpMetaRepairParallelCnt(cv.AutoDpMetaRepairParallelCnt)
 		c.updateDataPartitionTimeoutSec(cv.DataPartitionTimeoutSec)
+		c.cfg.forbidWriteOpOfProtoVer0 = cv.ForbidWriteOpOfProtoVer0
+		c.legacyDataMediaType = cv.LegacyDataMediaType
+		log.LogInfof("action[loadClusterValue] ForbidWriteOpOfProtoVer0(%v), mediaType %d",
+			cv.ForbidWriteOpOfProtoVer0, cv.LegacyDataMediaType)
 	}
+
 	return
 }
 
@@ -1249,7 +1338,7 @@ func (c *Cluster) loadNodeSets() (err error) {
 		zone, err := c.t.getZone(nsv.ZoneName)
 		if err != nil {
 			log.LogErrorf("action[loadNodeSets], getZone err:%v", err)
-			zone = newZone(nsv.ZoneName)
+			zone = newZone(nsv.ZoneName, proto.MediaType_Unspecified)
 			c.t.putZoneIfAbsent(zone)
 		}
 		ns.UpdateMaxParallel(int32(c.DecommissionLimit))
@@ -1345,7 +1434,8 @@ func (c *Cluster) loadZoneDomain() (ok bool, err error) {
 				domainGrp := newDomainNodeSetGrpManager()
 				domainGrp.domainId = domainId
 				c.domainManager.domainNodeSetGrpVec = append(c.domainManager.domainNodeSetGrpVec, domainGrp)
-				c.domainManager.domainId2IndexMap[domainId] = len(c.domainManager.domainNodeSetGrpVec) - 1
+				domainIndex := len(c.domainManager.domainNodeSetGrpVec) - 1
+				c.domainManager.domainId2IndexMap[domainId] = domainIndex
 			}
 		}
 
@@ -1410,7 +1500,7 @@ func (c *Cluster) loadDataNodes() (err error) {
 	result, err := c.fsm.store.SeekForPrefix([]byte(dataNodePrefix))
 	if err != nil {
 		err = fmt.Errorf("action[loadDataNodes],err:%v", err.Error())
-		return err
+		return
 	}
 
 	for _, value := range result {
@@ -1422,7 +1512,14 @@ func (c *Cluster) loadDataNodes() (err error) {
 		if dnv.ZoneName == "" {
 			dnv.ZoneName = DefaultZoneName
 		}
-		dataNode := newDataNode(dnv.Addr, dnv.ZoneName, c.Name)
+
+		if dnv.MediaType == proto.MediaType_Unspecified {
+			dnv.MediaType = c.legacyDataMediaType
+			log.LogInfof("[loadDataNodes] legacy datanode(%v), set mediaType(%v) by cluster LegacyDataMediaType",
+				dnv.Addr, proto.MediaTypeString(dnv.MediaType))
+		}
+
+		dataNode := newDataNode(dnv.Addr, dnv.ZoneName, c.Name, dnv.MediaType)
 		dataNode.DpCntLimit = newLimitCounter(&c.cfg.MaxDpCntLimit, defaultMaxDpCntLimit)
 		dataNode.ID = dnv.ID
 		dataNode.NodeSetID = dnv.NodeSetID
@@ -1438,6 +1535,7 @@ func (c *Cluster) loadDataNodes() (err error) {
 		dataNode.ToBeOffline = dnv.ToBeOffline
 		dataNode.DecommissionDiskList = dnv.DecommissionDiskList
 		dataNode.DecommissionDpTotal = dnv.DecommissionDpTotal
+		dataNode.BadDisks = dnv.BadDisks
 		olddn, ok := c.dataNodes.Load(dataNode.Addr)
 		if ok {
 			if olddn.(*DataNode).ID <= dataNode.ID {
@@ -1446,13 +1544,16 @@ func (c *Cluster) loadDataNodes() (err error) {
 			}
 		}
 		c.dataNodes.Store(dataNode.Addr, dataNode)
-		log.LogInfof("action[loadDataNodes],dataNode[%v],dataNodeID[%v],zone[%v],ns[%v] DecommissionStatus [%v] "+
+
+		log.LogInfof("action[loadDataNodes],dataNode[%v],dataNodeID[%v],MediaType[%v],zone[%v],ns[%v] DecommissionStatus [%v] "+
 			"DecommissionDstAddr[%v] DecommissionRaftForce[%v] DecommissionDpTotal[%v] DecommissionLimit[%v]  "+
 			"DecommissionCompleteTime [%v] ToBeOffline[%v]",
-			dataNode.Addr, dataNode.ID, dnv.ZoneName, dnv.NodeSetID, dataNode.DecommissionStatus, dataNode.DecommissionDstAddr,
-			dataNode.DecommissionRaftForce, dataNode.DecommissionDpTotal, dataNode.DecommissionLimit,
-			time.Unix(dataNode.DecommissionCompleteTime, 0).Format("2006-01-02 15:04:05"),
-			dataNode.ToBeOffline)
+			dataNode.Addr, dataNode.ID, dataNode.MediaType, dnv.ZoneName, dnv.NodeSetID, dataNode.DecommissionStatus,
+			dataNode.DecommissionDstAddr, dataNode.DecommissionRaftForce, dataNode.DecommissionDpTotal, dataNode.DecommissionLimit,
+			time.Unix(dataNode.DecommissionCompleteTime, 0).Format("2006-01-02 15:04:05"), dataNode.ToBeOffline)
+
+		log.LogInfof("action[loadDataNodes],dataNode[%v],dataNodeID[%v],zone[%v],ns[%v],MediaType[%v]",
+			dataNode.Addr, dataNode.ID, dnv.ZoneName, dnv.NodeSetID, dataNode.MediaType)
 	}
 	return
 }
@@ -1509,19 +1610,64 @@ func (c *Cluster) loadVolsViews() (err error, volViews []*volValue) {
 	return
 }
 
+func (c *Cluster) setStorageClassForLegacyVol(vv *Vol) {
+	if vv.volStorageClass != proto.StorageClass_Unspecified {
+		log.LogDebugf("vol(%v) no need to set storageClass", vv.Name)
+		return
+	}
+
+	if proto.IsHot(vv.VolType) {
+		vv.volStorageClass = proto.GetStorageClassByMediaType(c.legacyDataMediaType)
+		vv.allowedStorageClass = []uint32{vv.volStorageClass}
+		vv.cacheDpStorageClass = proto.StorageClass_Unspecified
+		log.LogInfof("legacy vol(%v), set volStorageClass(%v) by cluster LegacyDataMediaType",
+			vv.Name, proto.StorageClassString(vv.volStorageClass))
+		return
+	}
+
+	vv.volStorageClass = proto.StorageClass_BlobStore
+	vv.allowedStorageClass = []uint32{vv.volStorageClass}
+
+	if vv.CacheCapacity == 0 {
+		vv.cacheDpStorageClass = proto.StorageClass_Unspecified
+		log.LogWarnf("legacy cold vol(%v) cacheCapacity is 0, set cacheDpStorageClass(%v)",
+			vv.Name, proto.StorageClassString(vv.cacheDpStorageClass))
+		return
+	}
+
+	vv.cacheDpStorageClass = proto.GetStorageClassByMediaType(c.legacyDataMediaType)
+	log.LogWarnf("legacy cold vol(%v), set cacheDpStorageClass(%v) by cluster LegacyDataMediaType",
+		vv.Name, proto.StorageClassString(vv.cacheDpStorageClass))
+}
+
 func (c *Cluster) loadVols() (err error) {
 	result, err := c.fsm.store.SeekForPrefix([]byte(volPrefix))
 	if err != nil {
 		err = fmt.Errorf("action[loadVols],err:%v", err.Error())
-		return err
+		return
 	}
+
 	for _, value := range result {
 		var vv *volValue
+
 		if vv, err = newVolValueFromBytes(value); err != nil {
 			err = fmt.Errorf("action[loadVols],value:%v,unmarshal err:%v", string(value), err)
-			return err
+			return
 		}
+
 		vol := newVolFromVolValue(vv)
+		c.setStorageClassForLegacyVol(vol)
+
+		if len(vol.QuotaByClass) == 0 {
+			for _, c := range vol.allowedStorageClass {
+				vol.QuotaByClass = append(vol.QuotaByClass, proto.NewStatOfStorageClass(c))
+			}
+		}
+
+		if err = c.checkVol(vol); err != nil {
+			log.LogInfof("action[loadVols],vol[%v] checkVol error %v", vol.Name, err)
+			continue
+		}
 		vol.Status = vv.Status
 		if err = c.loadAclList(vol); err != nil {
 			log.LogInfof("action[loadVols],vol[%v] load acl manager error %v", vol.Name, err)
@@ -1538,13 +1684,18 @@ func (c *Cluster) loadVols() (err error) {
 			continue
 		}
 
-		c.putVol(vol)
+		if err = c.putVol(vol); err != nil {
+			log.LogInfof("action[loadVols],vol[%v] putVol error %v", vol.Name, err)
+			continue
+		}
+
 		log.LogInfof("action[loadVols],vol[%v]", vol.Name)
-		if vol.Forbidden && vol.Status == bsProto.VolStatusMarkDelete {
+		if vol.Forbidden && vol.Status == proto.VolStatusMarkDelete {
 			c.delayDeleteVolsInfo = append(c.delayDeleteVolsInfo, &delayDeleteVolInfo{volName: vol.Name, authKey: vol.authKey, execTime: vol.DeleteExecTime, user: vol.user})
 			log.LogInfof("action[loadDelayDeleteVols],vol[%v]", vol.Name)
 		}
 	}
+
 	return
 }
 
@@ -1600,23 +1751,30 @@ func (c *Cluster) loadDataPartitions() (err error) {
 	result, err := c.fsm.store.SeekForPrefix([]byte(dataPartitionPrefix))
 	if err != nil {
 		err = fmt.Errorf("action[loadDataPartitions],err:%v", err.Error())
-		return err
+		return
 	}
+
 	for _, value := range result {
 
 		dpv := &dataPartitionValue{}
 		if err = json.Unmarshal(value, dpv); err != nil {
 			err = fmt.Errorf("action[loadDataPartitions],value:%v,unmarshal err:%v", string(value), err)
-			return err
+			return
 		}
 		vol, err1 := c.getVol(dpv.VolName)
 		if err1 != nil {
-			log.LogErrorf("action[loadDataPartitions] err:%v %v", dpv.VolName, err1.Error())
+			log.LogErrorf("action[loadDataPartitions] dp:%v err:%v %v", dpv.PartitionID, dpv.VolName, err1.Error())
 			continue
 		}
 		if vol.ID != dpv.VolID {
 			Warn(c.Name, fmt.Sprintf("action[loadDataPartitions] has duplicate vol[%v],vol.gridId[%v],mpv.VolID[%v]", dpv.VolName, vol.ID, dpv.VolID))
 			continue
+		}
+
+		if dpv.MediaType == proto.MediaType_Unspecified {
+			dpv.MediaType = c.legacyDataMediaType
+			log.LogDebugf("legacy dataPartition(id:%v), set mediaType(%v) by cluster LegacyDataMediaType",
+				dpv.PartitionID, proto.MediaTypeString(dpv.MediaType))
 		}
 
 		dp := dpv.Restore(c)
@@ -1627,7 +1785,9 @@ func (c *Cluster) loadDataPartitions() (err error) {
 		c.addBadDataPartitionIdMap(dp)
 		// add to nodeset decommission list
 		go dp.addToDecommissionList(c)
-		log.LogInfof("action[loadDataPartitions],vol[%v],dp[%v] ", vol.Name, dp.PartitionID)
+
+		log.LogInfof("action[loadDataPartitions],vol[%v],dp[%v],mediaType[%v]",
+			vol.Name, dp.PartitionID, proto.MediaTypeString(dp.MediaType))
 	}
 	return
 }
@@ -1662,6 +1822,41 @@ func (c *Cluster) loadS3ApiQosInfo() (err error) {
 		c.S3ApiQosQuota.Store(key, s3qosQuota)
 	}
 	return
+}
+
+func (c *Cluster) checkMediaVaild() {
+	log.LogWarnf("checkMediaVaild: start check checkMediaVaild")
+	defer func() {
+		log.LogWarnf("checkMediaVaild: finish check checkMediaVaild, valid %v", c.dataMediaTypeVaild)
+	}()
+
+	c.dataMediaTypeVaild = true
+
+	if proto.IsValidMediaType(c.legacyDataMediaType) {
+		return
+	}
+
+	c.volMutex.RLock()
+	for _, v := range c.vols {
+		if v.volStorageClass == proto.StorageClass_Unspecified {
+			c.dataMediaTypeVaild = false
+			break
+		}
+	}
+	c.volMutex.RUnlock()
+
+	if !c.dataMediaTypeVaild {
+		return
+	}
+
+	c.dataNodes.Range(func(key, value interface{}) bool {
+		data := value.(*DataNode)
+		if data.MediaType == proto.MediaType_Unspecified {
+			c.dataMediaTypeVaild = false
+			return false
+		}
+		return true
+	})
 }
 
 func (c *Cluster) addBadDataPartitionIdMap(dp *DataPartition) {
@@ -1701,12 +1896,15 @@ type decommissionDiskValue struct {
 	DiskPath                 string
 	DecommissionStatus       uint32
 	DecommissionRaftForce    bool
-	DecommissionRetry        uint8
+	DecommissionTimes        uint8
 	DecommissionDpTotal      int
 	DecommissionTerm         uint64
 	Type                     uint32
 	DecommissionCompleteTime int64
 	DecommissionLimit        int
+	IgnoreDecommissionDps    []proto.IgnoreDecommissionDP
+	ResidualDecommissionDps  []proto.IgnoreDecommissionDP
+	DiskDisable              bool
 }
 
 func newDecommissionDiskValue(disk *DecommissionDisk) *decommissionDiskValue {
@@ -1714,7 +1912,7 @@ func newDecommissionDiskValue(disk *DecommissionDisk) *decommissionDiskValue {
 		SrcAddr:                  disk.SrcAddr,
 		DstAddr:                  disk.DstAddr,
 		DiskPath:                 disk.DiskPath,
-		DecommissionRetry:        disk.DecommissionRetry,
+		DecommissionTimes:        disk.DecommissionTimes,
 		DecommissionStatus:       atomic.LoadUint32(&disk.DecommissionStatus),
 		DecommissionRaftForce:    disk.DecommissionRaftForce,
 		DecommissionDpTotal:      disk.DecommissionDpTotal,
@@ -1722,6 +1920,9 @@ func newDecommissionDiskValue(disk *DecommissionDisk) *decommissionDiskValue {
 		Type:                     disk.Type,
 		DecommissionCompleteTime: disk.DecommissionCompleteTime,
 		DecommissionLimit:        disk.DecommissionDpCount,
+		IgnoreDecommissionDps:    disk.IgnoreDecommissionDps,
+		ResidualDecommissionDps:  disk.ResidualDecommissionDps,
+		DiskDisable:              disk.DiskDisable,
 	}
 }
 
@@ -1730,7 +1931,7 @@ func (ddv *decommissionDiskValue) Restore() *DecommissionDisk {
 		SrcAddr:                  ddv.SrcAddr,
 		DstAddr:                  ddv.DstAddr,
 		DiskPath:                 ddv.DiskPath,
-		DecommissionRetry:        ddv.DecommissionRetry,
+		DecommissionTimes:        ddv.DecommissionTimes,
 		DecommissionStatus:       ddv.DecommissionStatus,
 		DecommissionRaftForce:    ddv.DecommissionRaftForce,
 		DecommissionDpTotal:      ddv.DecommissionDpTotal,
@@ -1738,6 +1939,9 @@ func (ddv *decommissionDiskValue) Restore() *DecommissionDisk {
 		Type:                     ddv.Type,
 		DecommissionCompleteTime: ddv.DecommissionCompleteTime,
 		DecommissionDpCount:      ddv.DecommissionLimit,
+		IgnoreDecommissionDps:    ddv.IgnoreDecommissionDps,
+		ResidualDecommissionDps:  ddv.ResidualDecommissionDps,
+		DiskDisable:              ddv.DiskDisable,
 	}
 }
 
@@ -1830,19 +2034,19 @@ func (c *Cluster) loadLcNodes() (err error) {
 	return
 }
 
-func (c *Cluster) syncAddLcConf(lcConf *bsProto.LcConfiguration) (err error) {
+func (c *Cluster) syncAddLcConf(lcConf *proto.LcConfiguration) (err error) {
 	return c.syncPutLcConfInfo(opSyncAddLcConf, lcConf)
 }
 
-func (c *Cluster) syncDeleteLcConf(lcConf *bsProto.LcConfiguration) (err error) {
+func (c *Cluster) syncDeleteLcConf(lcConf *proto.LcConfiguration) (err error) {
 	return c.syncPutLcConfInfo(opSyncDeleteLcConf, lcConf)
 }
 
-func (c *Cluster) syncUpdateLcConf(lcConf *bsProto.LcConfiguration) (err error) {
+func (c *Cluster) syncUpdateLcConf(lcConf *proto.LcConfiguration) (err error) {
 	return c.syncPutLcConfInfo(opSyncUpdateLcConf, lcConf)
 }
 
-func (c *Cluster) syncPutLcConfInfo(opType uint32, lcConf *bsProto.LcConfiguration) (err error) {
+func (c *Cluster) syncPutLcConfInfo(opType uint32, lcConf *proto.LcConfiguration) (err error) {
 	metadata := new(RaftCmd)
 	metadata.Op = opType
 	metadata.K = lcConfPrefix + lcConf.VolName
@@ -1861,13 +2065,89 @@ func (c *Cluster) loadLcConfs() (err error) {
 	}
 
 	for _, value := range result {
-		lcConf := &bsProto.LcConfiguration{}
+		lcConf := &proto.LcConfiguration{}
 		if err = json.Unmarshal(value, lcConf); err != nil {
 			err = fmt.Errorf("action[loadLcConfs],value:%v,unmarshal err:%v", string(value), err)
 			return
 		}
 		_ = c.lcMgr.SetS3BucketLifecycle(lcConf)
 		log.LogInfof("action[loadLcConfs],vol[%v]", lcConf.VolName)
+	}
+	return
+}
+
+func (c *Cluster) syncAddLcTask(lcTask *proto.RuleTask) (err error) {
+	return c.syncPutLcTaskInfo(opSyncAddLcTask, lcTask)
+}
+
+func (c *Cluster) syncDeleteLcTask(lcTask *proto.RuleTask) (err error) {
+	return c.syncPutLcTaskInfo(opSyncDeleteLcTask, lcTask)
+}
+
+func (c *Cluster) syncPutLcTaskInfo(opType uint32, lcTask *proto.RuleTask) (err error) {
+	metadata := new(RaftCmd)
+	metadata.Op = opType
+	metadata.K = lcTaskPrefix + lcTask.Id
+	metadata.V, err = json.Marshal(lcTask)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return c.submit(metadata)
+}
+
+func (c *Cluster) loadLcTasks() (err error) {
+	result, err := c.fsm.store.SeekForPrefix([]byte(lcTaskPrefix))
+	if err != nil {
+		err = fmt.Errorf("action[loadLcTasks],err:%v", err.Error())
+		return err
+	}
+
+	for _, value := range result {
+		task := &proto.RuleTask{}
+		if err = json.Unmarshal(value, task); err != nil {
+			err = fmt.Errorf("action[loadLcTasks],value:%v,unmarshal err:%v", string(value), err)
+			return
+		}
+		c.lcMgr.lcRuleTaskStatus.RedoTask(task)
+		log.LogInfof("action[loadLcTasks], id[%v]", task.Id)
+	}
+	return
+}
+
+func (c *Cluster) syncAddLcResult(lcResult *proto.LcNodeRuleTaskResponse) (err error) {
+	return c.syncPutLcResultInfo(opSyncAddLcResult, lcResult)
+}
+
+func (c *Cluster) syncDeleteLcResult(lcResult *proto.LcNodeRuleTaskResponse) (err error) {
+	return c.syncPutLcResultInfo(opSyncDeleteLcResult, lcResult)
+}
+
+func (c *Cluster) syncPutLcResultInfo(opType uint32, lcResult *proto.LcNodeRuleTaskResponse) (err error) {
+	metadata := new(RaftCmd)
+	metadata.Op = opType
+	metadata.K = lcResultPrefix + lcResult.ID
+	metadata.V, err = json.Marshal(lcResult)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+	return c.submit(metadata)
+}
+
+func (c *Cluster) loadLcResults() (err error) {
+	result, err := c.fsm.store.SeekForPrefix([]byte(lcResultPrefix))
+	if err != nil {
+		err = fmt.Errorf("action[loadLcResults],err:%v", err.Error())
+		return err
+	}
+
+	for _, value := range result {
+		rsp := &proto.LcNodeRuleTaskResponse{}
+		if err = json.Unmarshal(value, rsp); err != nil {
+			err = fmt.Errorf("action[loadLcResults],value:%v,unmarshal err:%v", string(value), err)
+			return
+		}
+		c.lcMgr.lcRuleTaskStatus.AddResult(rsp)
+		log.LogInfof("action[loadLcResults], id[%v]", rsp.ID)
 	}
 	return
 }

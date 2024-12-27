@@ -25,11 +25,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cubefs/cubefs/blobstore/util/bytespool"
 	"github.com/cubefs/cubefs/util/exporter"
 
+	"github.com/cubefs/cubefs/datanode/repl"
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/repl"
-	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
@@ -79,13 +80,16 @@ func NewDataPartitionRepairTask(extentFiles []*storage.ExtentInfo, tinyDeleteRec
 //     - periodically check the size of the local extent, and if it is smaller than the largest size,
 //     add it to the tobeRepaired list, and generate the corresponding tasks.
 func (dp *DataPartition) repair(extentType uint8) {
-	start := time.Now().UnixNano()
-	log.LogInfof("action[repair] partition(%v) start.", dp.partitionID)
+	start := time.Now()
+	log.LogInfof("action[repair] partition(%v) start extentType %v.",
+		dp.partitionID, extentType)
 
 	var tinyExtents []uint64 // unavailable extents
 	if proto.IsTinyExtentType(extentType) {
 		tinyExtents = dp.brokenTinyExtents()
 		if len(tinyExtents) == 0 {
+			log.LogInfof("action[repair] partition(%v) has no tiny extents to repair.",
+				dp.partitionID)
 			return
 		}
 	}
@@ -96,12 +100,13 @@ func (dp *DataPartition) repair(extentType uint8) {
 	err := dp.buildDataPartitionRepairTask(repairTasks, extentType, tinyExtents, replica)
 	if err != nil {
 		log.LogErrorf(errors.Stack(err))
-		log.LogErrorf("action[repair] partition(%v) err(%v).",
-			dp.partitionID, err)
+		log.LogErrorf("action[repair] partition(%v) tinyExtents(%v)%v extentType %v err(%v).",
+			dp.partitionID, len(tinyExtents), tinyExtents, extentType, err)
 		dp.moveToBrokenTinyExtentC(extentType, tinyExtents)
 		return
 	}
-	log.LogInfof("action[repair] partition(%v) before prepareRepairTasks", dp.partitionID)
+	log.LogInfof("action[repair] partition(%v) before prepareRepairTasks extentType %v tinyExtents(%v)%v",
+		dp.partitionID, extentType, len(tinyExtents), tinyExtents)
 	// compare all the extents in the replicas to compute the good and bad ones
 	availableTinyExtents, brokenTinyExtents := dp.prepareRepairTasks(repairTasks)
 
@@ -109,53 +114,72 @@ func (dp *DataPartition) repair(extentType uint8) {
 	err = dp.NotifyExtentRepair(repairTasks)
 	if err != nil {
 		dp.sendAllTinyExtentsToC(extentType, availableTinyExtents, brokenTinyExtents)
-		log.LogErrorf("action[repair] partition(%v) err(%v).",
-			dp.partitionID, err)
+		log.LogErrorf("action[repair] partition(%v) availableTinyExtents (%v)%v brokenTinyExtents(%v)%v "+
+			"extentType %v err(%v).",
+			dp.partitionID, len(availableTinyExtents), availableTinyExtents, len(brokenTinyExtents), brokenTinyExtents,
+			extentType, err)
 		log.LogError(errors.Stack(err))
 		return
 	}
 	log.LogDebugf("DoRepair")
 	// ask the leader to do the repair
 	dp.DoRepair(repairTasks)
-	end := time.Now().UnixNano()
-
+	log.LogInfof("action[repair] partition(%v) send availableTinyExtents (%v)%v brokenTinyExtents(%v)%v  extentType %v.",
+		dp.partitionID, len(availableTinyExtents), availableTinyExtents, len(brokenTinyExtents), brokenTinyExtents, extentType)
 	// every time we need to figure out which extents need to be repaired and which ones do not.
 	dp.sendAllTinyExtentsToC(extentType, availableTinyExtents, brokenTinyExtents)
 
 	// error check
 	if dp.extentStore.AvailableTinyExtentCnt()+dp.extentStore.BrokenTinyExtentCnt() > storage.TinyExtentCount {
 		log.LogWarnf("action[repair] partition(%v) GoodTinyExtents(%v) "+
-			"BadTinyExtents(%v) finish cost[%vms].", dp.partitionID, dp.extentStore.AvailableTinyExtentCnt(),
-			dp.extentStore.BrokenTinyExtentCnt(), (end-start)/int64(time.Millisecond))
+			"BadTinyExtents(%v) finish cost[%v] extentType %v.", dp.partitionID, dp.extentStore.AvailableTinyExtentCnt(),
+			dp.extentStore.BrokenTinyExtentCnt(), time.Since(start).String(), extentType)
 	}
 
 	log.LogInfof("action[repair] partition(%v) GoodTinyExtents(%v) BadTinyExtents(%v)"+
-		" finish cost[%vms] masterAddr(%v).", dp.partitionID, dp.extentStore.AvailableTinyExtentCnt(),
-		dp.extentStore.BrokenTinyExtentCnt(), (end-start)/int64(time.Millisecond), MasterClient.Nodes())
+		" finish cost[%v] masterAddr(%v) extentType %v.", dp.partitionID, dp.extentStore.AvailableTinyExtentCnt(),
+		dp.extentStore.BrokenTinyExtentCnt(), time.Since(start).String(), MasterClient.Nodes(), extentType)
 }
 
 func (dp *DataPartition) buildDataPartitionRepairTask(repairTasks []*DataPartitionRepairTask, extentType uint8, tinyExtents []uint64, replica []string) (err error) {
 	// get the local extent info
 	extents, leaderTinyDeleteRecordFileSize, err := dp.getLocalExtentInfo(extentType, tinyExtents)
 	if err != nil {
+		log.LogWarnf("buildDataPartitionRepairTask PartitionID(%v) getLocalExtentInfo err(%v)", dp.partitionID, err)
 		return err
 	}
 	// new repair task for the leader
-	log.LogInfof("buildDataPartitionRepairTask dp %v, extent type %v, len extent %v, replica size %v",
-		dp.partitionID, extentType, len(extents), len(replica))
-	repairTasks[0] = NewDataPartitionRepairTask(extents, leaderTinyDeleteRecordFileSize, replica[0], replica[0], extentType)
-	repairTasks[0].addr = replica[0]
+	log.LogInfof("buildDataPartitionRepairTask dp %v, extent type %v, len extent %v, replica %v size %v local %v",
+		dp.partitionID, extentType, len(extents), replica, len(replica), dp.dataNode.localServerAddr)
+	// host order may be different form master
+	repairTasks[0] = NewDataPartitionRepairTask(extents, leaderTinyDeleteRecordFileSize, dp.dataNode.localServerAddr, dp.dataNode.localServerAddr, extentType)
+	repairTasks[0].addr = dp.dataNode.localServerAddr
 
-	// new repair tasks for the followers
-	for index := 1; index < len(replica); index++ {
-		extents, err := dp.getRemoteExtentInfo(extentType, tinyExtents, replica[index])
-		if err != nil {
-			log.LogErrorf("buildDataPartitionRepairTask PartitionID(%v) on (%v) err(%v)", dp.partitionID, replica[index], err)
+	var (
+		followers []string
+		found     = false
+	)
+	for _, follower := range replica {
+		if follower == dp.dataNode.localServerAddr {
+			found = true
 			continue
 		}
-		log.LogInfof("buildDataPartitionRepairTask dp %v,add new add %v,  extent type %v", dp.partitionID, replica[index], extentType)
-		repairTasks[index] = NewDataPartitionRepairTask(extents, leaderTinyDeleteRecordFileSize, replica[index], replica[0], extentType)
-		repairTasks[index].addr = replica[index]
+		followers = append(followers, follower)
+	}
+	// dp.replica may be different from replicas on master
+	if !found {
+		return errors.NewErrorf("cannot found %v in replica %v, stop repairing", dp.dataNode.localServerAddr, replica)
+	}
+	// new repair tasks for the followers
+	for index := 0; index < len(followers); index++ {
+		extents, err := dp.getRemoteExtentInfo(extentType, tinyExtents, followers[index])
+		if err != nil {
+			log.LogWarnf("buildDataPartitionRepairTask PartitionID(%v) on (%v) err(%v)", dp.partitionID, followers[index], err)
+			continue
+		}
+		log.LogInfof("buildDataPartitionRepairTask dp %v,add new add %v,  extent type %v", dp.partitionID, followers[index], extentType)
+		repairTasks[index+1] = NewDataPartitionRepairTask(extents, leaderTinyDeleteRecordFileSize, followers[index], dp.dataNode.localServerAddr, extentType)
+		repairTasks[index+1].addr = followers[index]
 	}
 
 	return
@@ -224,7 +248,6 @@ func (dp *DataPartition) getRemoteExtentInfo(extentType uint8, tinyExtents []uin
 			dp.partitionID, string(reply.Data[:reply.Size]), target)
 		return
 	}
-
 	return
 }
 
@@ -516,6 +539,7 @@ func (dp *DataPartition) ExtentWithHoleRepairRead(request repl.PacketInterface, 
 		}
 		reply.SetExtentOffset(offset)
 		crc, err = dp.extentStore.Read(reply.GetExtentID(), offset, int64(currReadSize), reply.GetData(), false, request.GetOpcode() == proto.OpBackupRead)
+		dp.checkIsDiskError(err, ReadFlag)
 		if err != nil {
 			return
 		}
@@ -528,7 +552,7 @@ func (dp *DataPartition) ExtentWithHoleRepairRead(request repl.PacketInterface, 
 		}
 		needReplySize -= int64(currReadSize)
 		offset += int64(currReadSize)
-		if currReadSize == util.ReadBlockSize {
+		if currReadSize == util.ReadBlockSize || currReadSize == util.RepairReadBlockSize {
 			proto.Buffers.Put(reply.GetData())
 		}
 		if connect.RemoteAddr() != nil { // conn in testcase may not initialize
@@ -582,7 +606,7 @@ func (dp *DataPartition) NormalExtentRepairRead(p repl.PacketInterface, connect 
 			}
 			reply.SetData(data)
 		} else {
-			reply.SetData(make([]byte, currReadSize))
+			reply.SetData(bytespool.Alloc(int(currReadSize)))
 		}
 		if !shallDegrade {
 			partitionIOMetric = exporter.NewTPCnt(MetricPartitionIOName)
@@ -620,10 +644,13 @@ func (dp *DataPartition) NormalExtentRepairRead(p repl.PacketInterface, connect 
 		}
 		needReplySize -= currReadSize
 		offset += int64(currReadSize)
-		if currReadSize == util.ReadBlockSize {
+		if currReadSize == util.ReadBlockSize || currReadSize == util.RepairReadBlockSize {
 			proto.Buffers.Put(reply.GetData())
+		} else {
+			bytespool.Free(reply.GetData())
 		}
-		if connect.RemoteAddr() != nil {
+
+		if log.EnableInfo() && connect.RemoteAddr() != nil {
 			logContent := fmt.Sprintf("action[operatePacket] %v.",
 				reply.LogMessage(reply.GetOpMsg(), connect.RemoteAddr().String(), reply.GetStartT(), err))
 			log.LogReadf(logContent)
@@ -831,8 +858,8 @@ func (dp *DataPartition) streamRepairExtent(remoteExtentInfo *storage.ExtentInfo
 					reply.SetSize(uint32(currRecoverySize))
 				}
 			}
-			log.LogDebugf("streamRepairExtent dp[%v] extent[%v] localExtentInfo[%v] remote info(remoteAvaliSize[%v],isEmptyResponse[%v],currRecoverySize[%v]",
-				dp.partitionID, localExtentInfo, remoteExtentInfo, remoteAvaliSize, isEmptyResponse, currRecoverySize)
+			log.LogDebugf("streamRepairExtent dp[%v] extent[%v] localExtentInfo[%v] remote info(remoteAvaliSize[%v],isEmptyResponse[%v],currRecoverySize[%v] currFixOffset[%v]",
+				dp.partitionID, localExtentInfo, remoteExtentInfo, remoteAvaliSize, isEmptyResponse, currRecoverySize, currFixOffset)
 			if storage.IsTinyExtent(localExtentInfo.FileID) {
 				err = store.TinyExtentRecover(uint64(localExtentInfo.FileID), int64(currFixOffset), int64(currRecoverySize), reply.GetData(), reply.GetCRC(), isEmptyResponse)
 				if hasRecoverySize+currRecoverySize >= remoteAvaliSize {

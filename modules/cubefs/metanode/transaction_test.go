@@ -56,18 +56,19 @@ func newMetaPartition(PartitionId uint64, manager *metadataManager) (mp *metaPar
 	}
 
 	mp = &metaPartition{
-		config:        metaConf,
-		dentryTree:    NewBtree(),
-		inodeTree:     NewBtree(),
-		extendTree:    NewBtree(),
-		multipartTree: NewBtree(),
-		stopC:         make(chan bool),
-		storeChan:     make(chan *storeMsg, 100),
-		freeList:      newFreeList(),
-		extDelCh:      make(chan []proto.ExtentKey, defaultDelExtentsCnt),
-		extReset:      make(chan struct{}),
-		vol:           NewVol(),
-		manager:       manager,
+		config:         metaConf,
+		dentryTree:     NewBtree(),
+		inodeTree:      NewBtree(),
+		extendTree:     NewBtree(),
+		multipartTree:  NewBtree(),
+		stopC:          make(chan bool),
+		storeChan:      make(chan *storeMsg, 100),
+		freeList:       newFreeList(),
+		freeHybridList: newFreeList(),
+		extDelCh:       make(chan []proto.ExtentKey, defaultDelExtentsCnt),
+		extReset:       make(chan struct{}),
+		vol:            NewVol(),
+		manager:        manager,
 	}
 	mp.config.Cursor = 1000
 	mp.config.End = 100000
@@ -117,25 +118,28 @@ func TestRollbackInodeLess(t *testing.T) {
 
 func TestRollbackInodeSerialization(t *testing.T) {
 	inode := &Inode{
-		Inode:      1024,
-		Gid:        11,
-		Uid:        10,
-		Size:       101,
-		Type:       0o755,
-		Generation: 13,
-		CreateTime: 102,
-		AccessTime: 104,
-		ModifyTime: 107,
-		LinkTarget: []byte("link target"),
-		NLink:      7,
-		Flag:       1,
-		Reserved:   3,
-		Extents: NewSortedExtentsFromEks([]proto.ExtentKey{
-			{FileOffset: 11, PartitionId: 12, ExtentId: 13, ExtentOffset: 0, Size: 0, CRC: 0},
-		}),
-		ObjExtents: NewSortedObjExtents(),
+		Inode:                       1024,
+		Gid:                         11,
+		Uid:                         10,
+		Size:                        101,
+		Type:                        0o755,
+		Generation:                  13,
+		CreateTime:                  102,
+		AccessTime:                  104,
+		ModifyTime:                  107,
+		LinkTarget:                  []byte("link target"),
+		NLink:                       7,
+		Flag:                        1,
+		Reserved:                    3,
+		Extents:                     NewSortedExtents(),
+		StorageClass:                proto.StorageClass_Replica_HDD,
+		HybridCloudExtents:          NewSortedHybridCloudExtents(),
+		HybridCloudExtentsMigration: NewSortedHybridCloudExtentsMigration(),
+		//Extents: NewSortedExtentsFromEks([]proto.ExtentKey{
+		//	{FileOffset: 11, PartitionId: 12, ExtentId: 13, ExtentOffset: 0, Size: 0, CRC: 0},
+		//}),
 	}
-
+	inode.HybridCloudExtents.sortedEks = NewSortedExtentsFromEks([]proto.ExtentKey{{FileOffset: 11, PartitionId: 12, ExtentId: 13, ExtentOffset: 0, Size: 0, CRC: 0}})
 	ids := []uint32{11, 13}
 
 	txInodeInfo := proto.NewTxInodeInfo(MemberAddrs, inodeNum, 10001)
@@ -145,7 +149,6 @@ func TestRollbackInodeSerialization(t *testing.T) {
 
 	txRbInode := NewTxRollbackInode(nil, []uint32{}, nil, 0)
 	txRbInode.Unmarshal(data)
-
 	assert.True(t, rbInode.Equal(txRbInode))
 
 	inode.Inode = 1023

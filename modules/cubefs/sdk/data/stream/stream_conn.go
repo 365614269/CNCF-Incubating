@@ -16,6 +16,7 @@ package stream
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -29,14 +30,17 @@ import (
 )
 
 var (
-	TryOtherAddrError = errors.New("TryOtherAddrError")
-	DpDiscardError    = errors.New("DpDiscardError")
-	LimitedIoError    = errors.New("LimitedIoError")
+	TryOtherAddrError   = errors.New("TryOtherAddrError")
+	DpDiscardError      = errors.New("DpDiscardError")
+	LimitedIoError      = errors.New("LimitedIoError")
+	ExtentNotFoundError = errors.New("ExtentNotFoundError")
 )
 
 const (
 	StreamSendMaxRetry      = 200
 	StreamSendSleepInterval = 100 * time.Millisecond
+	StreamSendMaxTimeout    = 10 * time.Minute
+	RetryFactor             = 12 / 10
 )
 
 type GetReplyFunc func(conn *net.TCPConn) (err error, again bool)
@@ -45,12 +49,23 @@ type GetReplyFunc func(conn *net.TCPConn) (err error, again bool)
 type StreamConn struct {
 	dp       *wrapper.DataPartition
 	currAddr string
+
+	maxRetryTimeout time.Duration
 }
 
-var StreamConnPool = util.NewConnectPool()
+var (
+	StreamConnPool      = util.NewConnectPool()
+	StreamWriteConnPool = util.NewConnectPool()
+)
 
 // NewStreamConn returns a new stream connection.
-func NewStreamConn(dp *wrapper.DataPartition, follower bool) (sc *StreamConn) {
+func NewStreamConn(dp *wrapper.DataPartition, follower bool, timeout time.Duration) (sc *StreamConn) {
+	defer func() {
+		if sc != nil {
+			sc.maxRetryTimeout = timeout
+		}
+	}()
+
 	if !follower {
 		sc = &StreamConn{
 			dp:       dp,
@@ -103,18 +118,40 @@ func (sc *StreamConn) String() string {
 	return fmt.Sprintf("Partition(%v) CurrentAddr(%v) Hosts(%v)", sc.dp.PartitionID, sc.currAddr, sc.dp.Hosts)
 }
 
+func (sc *StreamConn) getRetryTimeOut() time.Duration {
+	if sc.maxRetryTimeout <= 0 {
+		return StreamSendMaxTimeout
+	}
+	return sc.maxRetryTimeout
+}
+
 // Send send the given packet over the network through the stream connection until success
 // or the maximum number of retries is reached.
 func (sc *StreamConn) Send(retry *bool, req *Packet, getReply GetReplyFunc) (err error) {
+	start := time.Now()
+	retryInterval := StreamSendSleepInterval
+	req.ExtentType |= proto.PacketProtocolVersionFlag
+
 	for i := 0; i < StreamSendMaxRetry; i++ {
 		err = sc.sendToDataPartition(req, retry, getReply)
-		if err == nil || err == proto.ErrCodeVersionOp || !*retry || err == TryOtherAddrError || strings.Contains(err.Error(), "OpForbidErr") {
+		if err == nil || err == proto.ErrCodeVersionOp || !*retry || err == TryOtherAddrError || strings.Contains(err.Error(), "OpForbidErr") || err == ExtentNotFoundError {
 			return
 		}
-		log.LogWarnf("StreamConn Send: err(%v)", err)
-		time.Sleep(StreamSendSleepInterval)
+
+		if time.Since(start) > sc.getRetryTimeOut() {
+			log.LogWarnf("StreamConn Send: retry still failed after %d ms, req %d", sc.getRetryTimeOut().Milliseconds(), req.ReqID)
+			return errors.NewErrorf("retry failed, err %s", err.Error())
+		}
+
+		if req.IsRandomWrite() {
+			retryInterval = retryInterval*RetryFactor + time.Duration(rand.Int63n(int64(retryInterval)))
+		}
+
+		log.LogWarnf("StreamConn Send: err(%v), req %d, interval %d ms, cost %d ms",
+			err, req.ReqID, retryInterval.Milliseconds(), time.Since(start).Milliseconds())
+		time.Sleep(retryInterval)
 	}
-	return errors.New(fmt.Sprintf("StreamConn Send: retried %v times and still failed, sc(%v) reqPacket(%v)", StreamSendMaxRetry, sc, req))
+	return errors.NewErrorf("StreamConn Send: retried %v times and still failed, sc(%v) reqPacket(%v), err %s", StreamSendMaxRetry, sc, req, err.Error())
 }
 
 func (sc *StreamConn) sendToDataPartition(req *Packet, retry *bool, getReply GetReplyFunc) (err error) {
@@ -123,7 +160,7 @@ func (sc *StreamConn) sendToDataPartition(req *Packet, retry *bool, getReply Get
 		log.LogDebugf("req opcode %v, conn %v", req.Opcode, conn)
 		err = sc.sendToConn(conn, req, getReply)
 		if err == nil {
-			StreamConnPool.PutConnect(conn, false)
+			StreamConnPool.PutConnectV2(conn, false, sc.currAddr)
 			return
 		}
 		log.LogWarnf("sendToDataPartition: send to curr addr failed, addr(%v) reqPacket(%v) err(%v)", sc.currAddr, req, err)
@@ -148,7 +185,7 @@ func (sc *StreamConn) sendToDataPartition(req *Packet, retry *bool, getReply Get
 		sc.dp.LeaderAddr = addr
 		err = sc.sendToConn(conn, req, getReply)
 		if err == nil {
-			StreamConnPool.PutConnect(conn, false)
+			StreamConnPool.PutConnectV2(conn, false, addr)
 			return
 		}
 		StreamConnPool.PutConnect(conn, true)
@@ -180,6 +217,7 @@ func (sc *StreamConn) sendToConn(conn *net.TCPConn, req *Packet, getReply GetRep
 		}
 		// NOTE: if we meet a try again error
 		if err == LimitedIoError {
+			log.LogWarnf("sendToConn: found ulimit io error, dp %d, req %d, err %s", req.PartitionID, req.ReqID, err.Error())
 			i -= 1
 		}
 
@@ -206,6 +244,8 @@ func sortByStatus(dp *wrapper.DataPartition, selectAll bool) (hosts []string) {
 	} else {
 		dpHosts = dp.Hosts
 	}
+
+	hosts = make([]string, 0, len(dpHosts))
 
 	for _, addr := range dpHosts {
 		status, ok := hostsStatus[addr]

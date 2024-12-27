@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cubefs/cubefs/blobstore/cli/common/fmt"
 	"github.com/cubefs/cubefs/sdk/master"
 	"github.com/spf13/cobra"
 )
@@ -39,15 +40,21 @@ func newDataNodeCmd(client *master.MasterClient) *cobra.Command {
 		newDataNodeDecommissionCmd(client),
 		newDataNodeMigrateCmd(client),
 		newDataNodeQueryDecommissionedDisk(client),
+		newDataNodeCancelDecommissionCmd(client),
+		// newDataNodeDiskOpCmd(client),
+		// newDataNodeDpOpCmd(client),
 	)
 	return cmd
 }
 
 const (
-	cmdDataNodeListShort                     = "List information of data nodes"
-	cmdDataNodeInfoShort                     = "Show information of a data node"
-	cmdDataNodeDecommissionInfoShort         = "decommission partitions in a data node to others"
-	cmdDataNodeQueryDecommissionedDisksShort = "query datanode decommissioned disks"
+	cmdDataNodeListShort                      = "List information of data nodes"
+	cmdDataNodeInfoShort                      = "Show information of a data node"
+	cmdDataNodeDecommissionInfoShort          = "decommission partitions in a data node to others"
+	cmdDataNodeQueryDecommissionedDisksShort  = "query datanode decommissioned disks"
+	cmdDataNodeCancelDecommissionedDisksShort = "cancel decommission progress for datanode"
+	// cmdDataNodeDiskOpShort                    = "Show Disk_op information of a data node"
+	// cmdDataNodeDpOpShort                      = "Show Dp_op information of a data node"
 )
 
 func newDataNodeListCmd(client *master.MasterClient) *cobra.Command {
@@ -69,7 +76,7 @@ func newDataNodeListCmd(client *master.MasterClient) *cobra.Command {
 			stdoutln(formatNodeViewTableHeader())
 			for _, node := range dataNodes {
 				if optFilterStatus != "" &&
-					!strings.Contains(formatNodeStatus(node.IsActive), optFilterStatus) {
+					!strings.Contains(formatNodeStatus(node.Status), optFilterStatus) {
 					continue
 				}
 				if optFilterWritable != "" &&
@@ -82,7 +89,7 @@ func newDataNodeListCmd(client *master.MasterClient) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&optFilterWritable, "filter-writable", "", "Filter node writable status")
-	cmd.Flags().StringVar(&optFilterStatus, "filter-status", "", "Filter node status [Active, Inactive")
+	cmd.Flags().StringVar(&optFilterStatus, "filter-status", "", "Filter node status [Active, Inactive]")
 	return cmd
 }
 
@@ -112,8 +119,9 @@ func newDataNodeInfoCmd(client *master.MasterClient) *cobra.Command {
 
 func newDataNodeDecommissionCmd(client *master.MasterClient) *cobra.Command {
 	var (
-		optCount    int
-		clientIDKey string
+		optCount     int
+		clientIDKey  string
+		raftForceDel bool
 	)
 	cmd := &cobra.Command{
 		Use:   CliOpDecommission + " [{HOST}:{PORT}]",
@@ -124,7 +132,7 @@ func newDataNodeDecommissionCmd(client *master.MasterClient) *cobra.Command {
 				stdoutln("Migrate dp count should >= 0")
 				return nil
 			}
-			if err := client.NodeAPI().DataNodeDecommission(args[0], optCount, clientIDKey); err != nil {
+			if err := client.NodeAPI().DataNodeDecommission(args[0], optCount, clientIDKey, raftForceDel); err != nil {
 				return err
 			}
 			stdoutln("Decommission data node successfully")
@@ -139,6 +147,7 @@ func newDataNodeDecommissionCmd(client *master.MasterClient) *cobra.Command {
 	}
 	cmd.Flags().IntVar(&optCount, CliFlagCount, 0, "DataNode delete mp count")
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
+	cmd.Flags().BoolVarP(&raftForceDel, CliFlagDecommissionRaftForce, "r", false, "true for raftForceDel")
 	return cmd
 }
 
@@ -169,7 +178,7 @@ func newDataNodeMigrateCmd(client *master.MasterClient) *cobra.Command {
 			return validDataNodes(client, toComplete), cobra.ShellCompDirectiveNoFileComp
 		},
 	}
-	cmd.Flags().IntVar(&optCount, CliFlagCount, dpMigrateMax, "Migrate dp count,default 15")
+	cmd.Flags().IntVar(&optCount, CliFlagCount, dpMigrateMax, fmt.Sprintf("Migrate dp count,default %v", dpMigrateMax))
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
 	return cmd
 }
@@ -194,3 +203,81 @@ func newDataNodeQueryDecommissionedDisk(client *master.MasterClient) *cobra.Comm
 	}
 	return cmd
 }
+
+func newDataNodeCancelDecommissionCmd(client *master.MasterClient) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   CliOpCancelDecommission + " [{HOST}:{PORT}]",
+		Short: cmdDataNodeCancelDecommissionedDisksShort,
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := client.NodeAPI().QueryCancelDecommissionedDataNode(args[0])
+			if err != nil {
+				stdout("%v", err)
+				return err
+			}
+			stdoutln(fmt.Sprintf("Cancel decommission for %v success", args[0]))
+			return nil
+		},
+	}
+	return cmd
+}
+
+// func newDataNodeDiskOpCmd(client *master.MasterClient) *cobra.Command {
+// 	var filterOp string
+// 	var diskName string
+// 	var logNum int
+// 	cmd := &cobra.Command{
+// 		Use:   CliOpDiskOp + " [{HOST}:{PORT}]",
+// 		Short: cmdDataNodeDiskOpShort,
+// 		Args:  cobra.MinimumNArgs(1),
+// 		RunE: func(cmd *cobra.Command, args []string) error {
+// 			datanodeInfo, err := client.NodeAPI().GetDataNode(args[0])
+// 			if err != nil {
+// 				return err
+// 			}
+// 			stdoutln(fmt.Sprintf("%-30v %-20v %v", "DiskName", "OpType", "Count"))
+// 			stdoutln(formatDataNodeDiskOp(datanodeInfo, logNum, diskName, filterOp))
+// 			return nil
+// 		},
+// 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+// 			if len(args) != 0 {
+// 				return nil, cobra.ShellCompDirectiveNoFileComp
+// 			}
+// 			return validDataNodes(client, toComplete), cobra.ShellCompDirectiveNoFileComp
+// 		},
+// 	}
+// 	cmd.Flags().IntVar(&logNum, "num", 50, "Number of logs to display")
+// 	cmd.Flags().StringVar(&diskName, "disk", "", "Filter logs by disk name")
+// 	cmd.Flags().StringVar(&filterOp, "filter-op", "", "Filter operations by type")
+// 	return cmd
+// }
+
+// func newDataNodeDpOpCmd(client *master.MasterClient) *cobra.Command {
+// 	var filterOp string
+// 	var dpId string
+// 	var logNum int
+// 	cmd := &cobra.Command{
+// 		Use:   CliOpDpOp + " [{HOST}:{PORT}]",
+// 		Short: cmdDataNodeDpOpShort,
+// 		Args:  cobra.MinimumNArgs(1),
+// 		RunE: func(cmd *cobra.Command, args []string) error {
+// 			datanodeInfo, err := client.NodeAPI().GetDataNode(args[0])
+// 			if err != nil {
+// 				return err
+// 			}
+// 			stdoutln(fmt.Sprintf("%-30v %-20v %v", "DpId", "OpType", "Count"))
+// 			stdoutln(formatDataNodeDpOp(datanodeInfo, logNum, dpId, filterOp))
+// 			return nil
+// 		},
+// 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+// 			if len(args) != 0 {
+// 				return nil, cobra.ShellCompDirectiveNoFileComp
+// 			}
+// 			return validDataNodes(client, toComplete), cobra.ShellCompDirectiveNoFileComp
+// 		},
+// 	}
+// 	cmd.Flags().IntVar(&logNum, "num", 50, "Number of logs to display")
+// 	cmd.Flags().StringVar(&dpId, "dp", "", "Filter logs by dp id")
+// 	cmd.Flags().StringVar(&filterOp, "filter-op", "", "Filter operations by type")
+// 	return cmd
+// }

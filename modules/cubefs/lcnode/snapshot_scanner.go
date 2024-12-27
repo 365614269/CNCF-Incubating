@@ -50,10 +50,13 @@ func NewSnapshotScanner(adminTask *proto.AdminTask, l *LcNode) (*SnapshotScanner
 	request := adminTask.Request.(*proto.SnapshotVerDelTaskRequest)
 	var err error
 	metaConfig := &meta.MetaConfig{
-		Volume:        request.Task.VolName,
-		Masters:       l.masters,
-		Authenticate:  false,
-		ValidateOwner: false,
+		Volume:               request.Task.VolName,
+		Masters:              l.masters,
+		Authenticate:         false,
+		ValidateOwner:        false,
+		InnerReq:             true,
+		MetaSendTimeout:      600,
+		DisableTrashByClient: true,
 	}
 
 	var metaWrapper *meta.MetaWrapper
@@ -442,9 +445,13 @@ func (s *SnapshotScanner) checkScanning(report bool) {
 					response.DirNum = s.currentStat.DirNum
 					response.TotalInodeNum = s.currentStat.TotalInodeNum
 					response.ErrorSkippedNum = s.currentStat.ErrorSkippedNum
+
 					s.lcnode.scannerMutex.Lock()
-					s.Stop()
-					delete(s.lcnode.snapshotScanners, s.ID)
+					// ensure stop only once if heartbeat timeout now
+					if _, ok := s.lcnode.snapshotScanners[s.ID]; ok {
+						s.Stop()
+						delete(s.lcnode.snapshotScanners, s.ID)
+					}
 					s.lcnode.scannerMutex.Unlock()
 
 					s.lcnode.respondToMaster(s.adminTask)

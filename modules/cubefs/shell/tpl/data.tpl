@@ -2,6 +2,7 @@
   "role": "datanode",
   "listen": "17310",
   "localIP": "_ip_",
+  "prof": "17320",
   "bindIp": "true",
   "raftHeartbeat": "17330",
   "raftReplica": "17340",
@@ -13,6 +14,7 @@
   	"_dir_/disk:3930691768"
   ],
   "enableSmuxConnPool": "true",
+"mediaType": 1,
   "masterAddr": [
       _master_addr_
   ]

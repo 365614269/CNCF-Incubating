@@ -15,7 +15,10 @@
 package fs
 
 import (
+	"syscall"
 	"time"
+
+	"github.com/cubefs/cubefs/sdk/data/blobstore"
 
 	"github.com/cubefs/cubefs/depends/bazil.org/fuse"
 
@@ -52,10 +55,62 @@ func (s *Super) InodeGet(ino uint64) (info *proto.InodeInfo, err error) {
 		if ok {
 			s.info = info
 		} else {
+			migrated := info.StorageClass != node.(*File).info.StorageClass
+			// the first time storage class change to blob store
+			if migrated && proto.IsStorageClassBlobStore(info.StorageClass) {
+				f := node.(*File)
+				fileSize, _ := f.fileSizeVersion2(f.info.Inode)
+				clientConf := blobstore.ClientConfig{
+					VolName:         f.super.volname,
+					VolType:         f.super.volType,
+					BlockSize:       f.super.EbsBlockSize,
+					Ino:             f.info.Inode,
+					Bc:              f.super.bc,
+					Mw:              f.super.mw,
+					Ec:              f.super.ec,
+					Ebsc:            f.super.ebsc,
+					EnableBcache:    f.super.enableBcache,
+					WConcurrency:    f.super.writeThreads,
+					ReadConcurrency: f.super.readThreads,
+					CacheAction:     f.super.CacheAction,
+					FileCache:       false,
+					FileSize:        uint64(fileSize),
+					CacheThreshold:  f.super.CacheThreshold,
+					StorageClass:    f.info.StorageClass,
+				}
+				f.fWriter.FreeCache()
+				switch f.flag & 0x0f {
+				case syscall.O_RDONLY:
+					log.LogDebugf("InodeGet: ino(%v) migrate(%v) info(%v) flag(%v) O_RDONLY", ino, migrated, info, f.flag)
+					f.fReader = blobstore.NewReader(clientConf)
+					f.fWriter = nil
+				case syscall.O_WRONLY:
+					log.LogDebugf("InodeGet: ino(%v) migrate(%v) info(%v) flag(%v) O_WRONLY", ino, migrated, info, f.flag)
+					f.fWriter = blobstore.NewWriter(clientConf)
+					f.fReader = nil
+				case syscall.O_RDWR:
+					log.LogDebugf("InodeGet: ino(%v) migrate(%v) info(%v) flag(%v) O_RDWR", ino, migrated, info, f.flag)
+					f.fReader = blobstore.NewReader(clientConf)
+					f.fWriter = blobstore.NewWriter(clientConf)
+				default:
+					log.LogDebugf("InodeGet: ino(%v) migrate(%v) info(%v) flag(%v) default", ino, migrated, info, f.flag)
+					f.fWriter = blobstore.NewWriter(clientConf)
+					f.fReader = nil
+				}
+			}
+			// update inode cache for File after reader and write is ready
 			node.(*File).info = info
+			log.LogDebugf("InodeGet: ino(%v) migrate(%v) info(%v)", ino, migrated, info)
 		}
 	}
-	s.ec.RefreshExtentsCache(ino)
+	if proto.IsStorageClassBlobStore(info.StorageClass) {
+		return info, nil
+	}
+	if err = s.ec.RefreshExtentsCache(ino); err != nil {
+		log.LogErrorf("[InodeGet] get ino(%v) inode(%v) err: %v", ino, info, err)
+		// TODO:tangjingyu return ParseError(err)?
+		return info, err
+	}
 	log.LogInfof("[InodeGet] get ino(%v) inode(%v)", ino, info)
 	return info, nil
 }

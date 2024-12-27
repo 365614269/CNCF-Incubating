@@ -22,10 +22,11 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	raftproto "github.com/cubefs/cubefs/depends/tiglabs/raft/proto"
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/storage"
+	"github.com/cubefs/cubefs/util/auditlog"
 	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/log"
 )
@@ -64,36 +65,41 @@ func (dp *DataPartition) Apply(command []byte, index uint64) (resp interface{}, 
 // ApplyMemberChange supports adding new raft member or deleting an existing raft member.
 // It does not support updating an existing member at this point.
 func (dp *DataPartition) ApplyMemberChange(confChange *raftproto.ConfChange, index uint64) (resp interface{}, err error) {
+	// Change memory the status
+	var (
+		isUpdated bool
+		msg       string
+	)
 	defer func(index uint64) {
 		if err == nil {
-			if !dp.extentStore.IsClosed() {
-				log.LogWarnf("[ApplyMemberChange] vol(%v) dp(%v) delay update apply id(%v), dp already stop!", dp.volumeID, dp.partitionID, index)
-				return
-			}
 			dp.uploadApplyID(index)
+			// persist apply id immediately
+			req := PersistApplyIdRequest{}
+			req.done = make(chan struct{}, 1)
+			dp.PersistApplyIdChan <- req
+			<-req.done
 		} else {
 			err = fmt.Errorf("[ApplyMemberChange] ApplyID(%v) Partition(%v) apply err(%v)]", index, dp.partitionID, err)
 			exporter.Warning(err.Error())
 			// panic(newRaftApplyError(err))
 		}
+		auditlog.LogDataNodeOp("DataPartitionMemberChange exit", msg, err)
 	}(index)
 
 	if dp.extentStore.IsClosed() {
 		log.LogWarnf("[ApplyMemberChange] vol(%v) dp(%v) delay apply member change, apply id(%v), dp already stop!", dp.volumeID, dp.partitionID, index)
+		err = fmt.Errorf("dp(%v) already stop", dp.partitionID)
 		return
 	}
 
-	// Change memory the status
-	var (
-		isUpdated bool
-	)
 	switch confChange.Type {
 	case raftproto.ConfAddNode:
 		req := &proto.AddDataPartitionRaftMemberRequest{}
 		if err = json.Unmarshal(confChange.Context, req); err != nil {
 			return
 		}
-		log.LogInfof("action[ApplyMemberChange] ConfAddNode [%v], partitionId [%v] index(%v)", req.AddPeer, req.PartitionId, index)
+		msg = fmt.Sprintf("ConfAddNode [%v], partitionId [%v] index(%v)", req.AddPeer, req.PartitionId, index)
+		log.LogInfof("action[ApplyMemberChange] %v", msg)
 		isUpdated, err = dp.addRaftNode(req, index)
 		if isUpdated && err == nil {
 			// Perform the update replicas operation asynchronously after the execution of the member change applying
@@ -114,13 +120,16 @@ func (dp *DataPartition) ApplyMemberChange(confChange *raftproto.ConfChange, ind
 			}()
 			updateWG.Wait()
 		}
+		auditlog.LogDataNodeOp("DataPartitionMemberChange", msg, err)
 	case raftproto.ConfRemoveNode:
 		req := &proto.RemoveDataPartitionRaftMemberRequest{}
 		if err = json.Unmarshal(confChange.Context, req); err != nil {
 			return
 		}
-		log.LogInfof("action[ApplyMemberChange] ConfRemoveNode [%v], partitionId [%v] index(%v)", req.RemovePeer, req.PartitionId, index)
+		msg = fmt.Sprintf(" ConfRemoveNode [%v], partitionId [%v] index(%v)", req.RemovePeer, req.PartitionId, index)
+		log.LogInfof("action[ApplyMemberChange] %v", msg)
 		isUpdated, err = dp.removeRaftNode(req, index)
+		auditlog.LogDataNodeOp("DataPartitionMemberChange", msg, err)
 	case raftproto.ConfUpdateNode:
 		log.LogDebugf("[updateRaftNode]: not support.")
 	default:
@@ -203,6 +212,9 @@ func (dp *DataPartition) Del(key interface{}) (interface{}, error) {
 }
 
 func (dp *DataPartition) uploadApplyID(applyID uint64) {
+	if applyID == 0 {
+		return
+	}
 	log.LogDebugf("[uploadApplyID] dp(%v) upload apply id(%v)", dp.partitionID, applyID)
 	atomic.StoreUint64(&dp.appliedID, applyID)
 	atomic.StoreUint64(&dp.extentStore.ApplyId, applyID)

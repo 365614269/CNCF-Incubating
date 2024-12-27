@@ -15,6 +15,7 @@
 package master
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cubefs/cubefs/proto"
@@ -28,7 +29,6 @@ const (
 	nameKey                 = "name"
 	idKey                   = "id"
 	countKey                = "count"
-	startKey                = "start"
 	enableKey               = "enable"
 	thresholdKey            = "threshold"
 	volDeletionDelayTimeKey = "volDeletionDelayTime"
@@ -50,97 +50,113 @@ const (
 	forbiddenKey           = "forbidden"
 	deleteVolKey           = "delete"
 
-	forceDelVolKey             = "forceDelVol"
-	ebsBlkSizeKey              = "ebsBlkSize"
-	cacheCapacity              = "cacheCap"
-	cacheActionKey             = "cacheAction"
-	cacheThresholdKey          = "cacheThreshold"
-	cacheTTLKey                = "cacheTTL"
-	cacheHighWaterKey          = "cacheHighWater"
-	cacheLowWaterKey           = "cacheLowWater"
-	cacheLRUIntervalKey        = "cacheLRUInterval"
-	clientVersion              = "version"
-	domainIdKey                = "domainId"
-	volOwnerKey                = "owner"
-	volAuthKey                 = "authKey"
-	replicaNumKey              = "replicaNum"
-	followerReadKey            = "followerRead"
-	authenticateKey            = "authenticate"
-	akKey                      = "ak"
-	keywordsKey                = "keywords"
-	zoneNameKey                = "zoneName"
-	nodesetIdKey               = "nodesetId"
-	crossZoneKey               = "crossZone"
-	normalZonesFirstKey        = "normalZonesFirst"
-	userKey                    = "user"
-	nodeHostsKey               = "hosts"
-	nodeDeleteBatchCountKey    = "batchCount"
-	nodeMarkDeleteRateKey      = "markDeleteRate"
-	nodeDeleteWorkerSleepMs    = "deleteWorkerSleepMs"
-	nodeAutoRepairRateKey      = "autoRepairRate"
-	nodeDpRepairTimeOutKey     = "dpRepairTimeOut"
-	nodeDpMaxRepairErrCntKey   = "dpMaxRepairErrCnt"
-	clusterLoadFactorKey       = "loadFactor"
-	maxDpCntLimitKey           = "maxDpCntLimit"
-	maxMpCntLimitKey           = "maxMpCntLimit"
-	clusterCreateTimeKey       = "clusterCreateTime"
-	descriptionKey             = "description"
-	dpSelectorNameKey          = "dpSelectorName"
-	dpSelectorParmKey          = "dpSelectorParm"
-	nodeTypeKey                = "nodeType"
-	ratio                      = "ratio"
-	rdOnlyKey                  = "rdOnly"
-	srcAddrKey                 = "srcAddr"
-	targetAddrKey              = "targetAddr"
-	forceKey                   = "force"
-	raftForceDelKey            = "raftForceDel"
-	enablePosixAclKey          = "enablePosixAcl"
-	enableTxMaskKey            = "enableTxMask"
-	txTimeoutKey               = "txTimeout"
-	txConflictRetryNumKey      = "txConflictRetryNum"
-	txConflictRetryIntervalKey = "txConflictRetryInterval"
-	txOpLimitKey               = "txOpLimit"
-	txForceResetKey            = "txForceReset"
-	QosEnableKey               = "qosEnable"
-	DiskEnableKey              = "diskenable"
-	IopsWKey                   = "iopsWKey"
-	IopsRKey                   = "iopsRKey"
-	FlowWKey                   = "flowWKey"
-	FlowRKey                   = "flowRKey"
-	ClientReqPeriod            = "reqPeriod"
-	ClientTriggerCnt           = "triggerCnt"
-	QosMasterLimit             = "qosLimit"
-	decommissionLimit          = "decommissionLimit"
-	DiskDisableKey             = "diskDisable"
-	Limit                      = "limit"
-	TimeOut                    = "timeout"
-	CountByMeta                = "countByMeta"
-	dpReadOnlyWhenVolFull      = "dpReadOnlyWhenVolFull"
-	PeriodicKey                = "periodic"
-	IPKey                      = "ip"
-	OperateKey                 = "op"
-	UIDKey                     = "uid"
-	CapacityKey                = "capacity"
-	configKey                  = "config"
-	MaxFilesKey                = "maxFiles"
-	MaxBytesKey                = "maxBytes"
-	fullPathKey                = "fullPath"
-	inodeKey                   = "inode"
-	quotaKey                   = "quotaId"
-	enableQuota                = "enableQuota"
-	dpDiscardKey               = "dpDiscard"
-	ignoreDiscardKey           = "ignoreDiscard"
-	TrashIntervalKey           = "trashInterval"
-	ClientIDKey                = "clientIDKey"
-	verSeqKey                  = "verSeq"
-	Periodic                   = "periodic"
-	DecommissionType           = "decommissionType"
-	decommissionDiskLimit      = "decommissionDiskLimit"
-	dpRepairBlockSizeKey       = "dpRepairBlockSize"
-	markDiskBrokenThresholdKey = "markDiskBrokenThreshold"
-	decommissionTypeKey        = "decommissionType"
-	autoDpMetaRepairKey        = "autoDpMetaRepair"
-	dpTimeoutKey               = "dpTimeout"
+	forceDelVolKey                  = "forceDelVol"
+	ebsBlkSizeKey                   = "ebsBlkSize"
+	cacheCapacity                   = "cacheCap"
+	cacheActionKey                  = "cacheAction"
+	cacheThresholdKey               = "cacheThreshold"
+	cacheTTLKey                     = "cacheTTL"
+	cacheHighWaterKey               = "cacheHighWater"
+	cacheLowWaterKey                = "cacheLowWater"
+	cacheLRUIntervalKey             = "cacheLRUInterval"
+	clientVersion                   = "version"
+	domainIdKey                     = "domainId"
+	volOwnerKey                     = "owner"
+	volAuthKey                      = "authKey"
+	replicaNumKey                   = "replicaNum"
+	followerReadKey                 = "followerRead"
+	authenticateKey                 = "authenticate"
+	akKey                           = "ak"
+	keywordsKey                     = "keywords"
+	zoneNameKey                     = "zoneName"
+	nodesetIdKey                    = "nodesetId"
+	crossZoneKey                    = "crossZone"
+	normalZonesFirstKey             = "normalZonesFirst"
+	userKey                         = "user"
+	nodeDeleteBatchCountKey         = "batchCount"
+	nodeMarkDeleteRateKey           = "markDeleteRate"
+	nodeDeleteWorkerSleepMs         = "deleteWorkerSleepMs"
+	nodeAutoRepairRateKey           = "autoRepairRate"
+	nodeDpRepairTimeOutKey          = "dpRepairTimeOut"
+	nodeDpBackupKey                 = "dpBackupTimeout"
+	nodeDpMaxRepairErrCntKey        = "dpMaxRepairErrCnt"
+	clusterLoadFactorKey            = "loadFactor"
+	maxDpCntLimitKey                = "maxDpCntLimit"
+	maxMpCntLimitKey                = "maxMpCntLimit"
+	clusterCreateTimeKey            = "clusterCreateTime"
+	descriptionKey                  = "description"
+	dpSelectorNameKey               = "dpSelectorName"
+	dpSelectorParmKey               = "dpSelectorParm"
+	nodeTypeKey                     = "nodeType"
+	ratio                           = "ratio"
+	rdOnlyKey                       = "rdOnly"
+	srcAddrKey                      = "srcAddr"
+	targetAddrKey                   = "targetAddr"
+	forceKey                        = "force"
+	raftForceDelKey                 = "raftForceDel"
+	enablePosixAclKey               = "enablePosixAcl"
+	enableTxMaskKey                 = "enableTxMask"
+	txTimeoutKey                    = "txTimeout"
+	txConflictRetryNumKey           = "txConflictRetryNum"
+	txConflictRetryIntervalKey      = "txConflictRetryInterval"
+	txOpLimitKey                    = "txOpLimit"
+	txForceResetKey                 = "txForceReset"
+	QosEnableKey                    = "qosEnable"
+	DiskEnableKey                   = "diskenable"
+	IopsWKey                        = "iopsWKey"
+	IopsRKey                        = "iopsRKey"
+	FlowWKey                        = "flowWKey"
+	FlowRKey                        = "flowRKey"
+	ClientReqPeriod                 = "reqPeriod"
+	ClientTriggerCnt                = "triggerCnt"
+	QosMasterLimit                  = "qosLimit"
+	decommissionLimit               = "decommissionLimit"
+	DiskDisableKey                  = "diskDisable"
+	Limit                           = "limit"
+	TimeOut                         = "timeout"
+	CountByMeta                     = "countByMeta"
+	dpReadOnlyWhenVolFull           = "dpReadOnlyWhenVolFull"
+	PeriodicKey                     = "periodic"
+	IPKey                           = "ip"
+	OperateKey                      = "op"
+	UIDKey                          = "uid"
+	CapacityKey                     = "capacity"
+	configKey                       = "config"
+	MaxFilesKey                     = "maxFiles"
+	MaxBytesKey                     = "maxBytes"
+	quotaKey                        = "quotaId"
+	enableQuota                     = "enableQuota"
+	dpDiscardKey                    = "dpDiscard"
+	ignoreDiscardKey                = "ignoreDiscard"
+	TrashIntervalKey                = "trashInterval"
+	ClientIDKey                     = "clientIDKey"
+	verSeqKey                       = "verSeq"
+	Periodic                        = "periodic"
+	DecommissionType                = "decommissionType"
+	decommissionDiskLimit           = "decommissionDiskLimit"
+	dpRepairBlockSizeKey            = "dpRepairBlockSize"
+	markDiskBrokenThresholdKey      = "markDiskBrokenThreshold"
+	decommissionTypeKey             = "decommissionType"
+	autoDecommissionDiskKey         = "autoDecommissionDisk"
+	autoDecommissionDiskIntervalKey = "autoDecommissionDiskInterval"
+	autoDpMetaRepairKey             = "autoDpMetaRepair"
+	autoDpMetaRepairParallelCntKey  = "autoDpMetaRepairParallelCnt"
+	dpTimeoutKey                    = "dpTimeout"
+	ShowAll                         = "showAll"
+	trashIntervalKey                = "trashInterval"
+	accessTimeIntervalKey           = "accessTimeValidInterval"
+	enablePersistAccessTimeKey      = "enablePersistAccessTime"
+	mediaTypeKey                    = "mediaType"
+	allowedStorageClassKey          = "allowedStorageClass"
+	volStorageClassKey              = "volStorageClass"
+	opLogDimensionKey               = "opLogDimension"
+	volNameKey                      = "volName"
+	dpIdKey                         = "dpId"
+	diskNameKey                     = "diskName"
+	forbidWriteOpOfProtoVersion0    = "forbidWriteOpOfProtoVersion0"
+	quotaClass                      = "quotaClass"
+	quotaOfClass                    = "quotaOfStorageClass"
+	dataMediaTypeKey                = "dataMediaType"
 )
 
 const (
@@ -154,7 +170,6 @@ const (
 	deleteIllegalReplicaErr   = "deleteIllegalReplicaErr "
 	addMissingReplicaErr      = "addMissingReplicaErr "
 	checkDataPartitionDiskErr = "checkDataPartitionDiskErr  "
-	dataNodeOfflineErr        = "dataNodeOfflineErr "
 	diskOfflineErr            = "diskOfflineErr "
 )
 
@@ -176,45 +191,47 @@ const (
 )
 
 const (
-	defaultFaultDomainZoneCnt                    = 3
-	defaultNormalCrossZoneCnt                    = 3
-	defaultInitMetaPartitionCount                = 3
-	defaultMaxInitMetaPartitionCount             = 100
-	defaultMaxMetaPartitionInodeID        uint64 = 1<<63 - 1
-	defaultMetaPartitionInodeIDStep       uint64 = 1 << 22
-	defaultMetaNodeReservedMem            uint64 = 1 << 30
-	runtimeStackBufSize                          = 4096
-	spaceAvailableRate                           = 0.90
-	defaultNodeSetCapacity                       = 18
-	minNumOfRWDataPartitions                     = 10
-	intervalToCheckMissingReplica                = 600
-	intervalToWarnDataPartition                  = 600
-	intervalToLoadDataPartition                  = 12 * 60 * 60
-	defaultInitDataPartitionCnt                  = 10
-	maxInitDataPartitionCnt                      = 200
-	volExpansionRatio                            = 0.1
-	maxNumberOfDataPartitionsForExpansion        = 100
-	EmptyCrcValue                         uint32 = 4045511210
-	DefaultZoneName                              = proto.DefaultZoneName
-	retrySendSyncTaskInternal                    = 3 * time.Second
-	defaultRangeOfCountDifferencesAllowed        = 50
-	defaultMinusOfMaxInodeID                     = 1000
-	defaultNodeSetGrpBatchCnt                    = 3
-	defaultMigrateDpCnt                          = 50
-	defaultMigrateMpCnt                          = 3
-	defaultMaxReplicaCnt                         = 16
-	defaultIopsRLimit                     uint64 = 1 << 35
-	defaultIopsWLimit                     uint64 = 1 << 35
-	defaultFlowWLimit                     uint64 = 1 << 35
-	defaultFlowRLimit                     uint64 = 1 << 35
-	defaultLimitTypeCnt                          = 4
-	defaultClientTriggerHitCnt                   = 1
-	defaultClientReqPeriodSeconds                = 1
-	defaultMaxQuotaNumPerVol                     = 100
-	defaultVolDelayDeleteTimeHour                = 48
-	defaultMarkDiskBrokenThreshold               = 0 // decommission all dp from disk
-	defaultEnableDpMetaRepair                    = false
-	maxMpCreationCount                           = 10
+	defaultFaultDomainZoneCnt                     = 3
+	defaultNormalCrossZoneCnt                     = 3
+	defaultInitMetaPartitionCount                 = 3
+	defaultMaxInitMetaPartitionCount              = 100
+	defaultMaxMetaPartitionInodeID         uint64 = 1<<63 - 1
+	defaultMetaPartitionInodeIDStep        uint64 = 1 << 22
+	defaultMetaNodeReservedMem             uint64 = 1 << 30
+	runtimeStackBufSize                           = 4096
+	spaceAvailableRate                            = 0.90
+	defaultNodeSetCapacity                        = 18
+	minNumOfRWDataPartitions                      = 10
+	intervalToCheckMissingReplica                 = 600
+	intervalToWarnDataPartition                   = 600
+	intervalToLoadDataPartition                   = 12 * 60 * 60
+	defaultInitDataPartitionCnt                   = 10
+	maxInitDataPartitionCnt                       = 200
+	volExpansionRatio                             = 0.1
+	maxNumberOfDataPartitionsForExpansion         = 100
+	EmptyCrcValue                          uint32 = 4045511210
+	DefaultZoneName                               = proto.DefaultZoneName
+	retrySendSyncTaskInternal                     = 3 * time.Second
+	defaultRangeOfCountDifferencesAllowed         = 50
+	defaultMinusOfMaxInodeID                      = 1000
+	defaultNodeSetGrpBatchCnt                     = 3
+	defaultMigrateMpCnt                           = 3
+	defaultMaxReplicaCnt                          = 16
+	defaultIopsRLimit                      uint64 = 1 << 35
+	defaultIopsWLimit                      uint64 = 1 << 35
+	defaultFlowWLimit                      uint64 = 1 << 35
+	defaultFlowRLimit                      uint64 = 1 << 35
+	defaultLimitTypeCnt                           = 4
+	defaultClientTriggerHitCnt                    = 1
+	defaultClientReqPeriodSeconds                 = 1
+	defaultMaxQuotaNumPerVol                      = 100
+	defaultVolDelayDeleteTimeHour                 = 48
+	defaultMarkDiskBrokenThreshold                = 0 // decommission all dp from disk
+	defaultEnableDpMetaRepair                     = false
+	defaultAutoDpMetaRepairPallarelCnt            = 100
+	defaultAutoDecommissionDiskInterval           = 10 * time.Second
+	maxMpCreationCount                            = 10
+	defaultVolForbidWriteOpOfProtoVersion0        = true
 )
 
 const (
@@ -268,7 +285,6 @@ const (
 	opSyncDeleteVolUser             uint32 = 0x1D
 	opSyncUpdateVolUser             uint32 = 0x1E
 	opSyncNodeSetGrp                uint32 = 0x1F
-	opSyncDataPartitionsView        uint32 = 0x20
 	opSyncExclueDomain              uint32 = 0x23
 	opSyncUpdateZone                uint32 = 0x24
 	opSyncAllocClientID             uint32 = 0x25
@@ -284,12 +300,16 @@ const (
 
 	opSyncAddLcNode    uint32 = 0x30
 	opSyncDeleteLcNode uint32 = 0x31
-	opSyncUpdateLcNode uint32 = 0x32
 	opSyncAddLcConf    uint32 = 0x33
 	opSyncDeleteLcConf uint32 = 0x34
 	opSyncUpdateLcConf uint32 = 0x35
 	opSyncAcl          uint32 = 0x36
 	opSyncUid          uint32 = 0x37
+	opSyncAddLcTask    uint32 = 0x38
+	opSyncDeleteLcTask uint32 = 0x39
+
+	opSyncAddLcResult    uint32 = 0x3a
+	opSyncDeleteLcResult uint32 = 0x3b
 
 	opSyncAllocQuotaID uint32 = 0x40
 	opSyncSetQuota     uint32 = 0x41
@@ -302,7 +322,6 @@ const (
 
 const (
 	keySeparator           = "#"
-	idSeparator            = "$" // To seperate ID of server that submits raft changes
 	metaNodeAcronym        = "mn"
 	dataNodeAcronym        = "dn"
 	lcNodeAcronym          = "ln"
@@ -316,6 +335,8 @@ const (
 	domainAcronym          = "zoneDomain"
 	apiLimiterAcronym      = "al"
 	lcConfigurationAcronym = "lc"
+	lcTaskAcronym          = "lct"
+	lcResultAcronym        = "lcr"
 	S3QoS                  = "s3qos"
 	maxDataPartitionIDKey  = keySeparator + "max_dp_id"
 	maxMetaPartitionIDKey  = keySeparator + "max_mp_id"
@@ -341,15 +362,15 @@ const (
 	akAcronym        = "ak"
 	userAcronym      = "user"
 	volUserAcronym   = "voluser"
-	volNameAcronym   = "volname"
 	akPrefix         = keySeparator + akAcronym + keySeparator
 	userPrefix       = keySeparator + userAcronym + keySeparator
 	volUserPrefix    = keySeparator + volUserAcronym + keySeparator
 	volWarnUsedRatio = 0.9
-	volCachePrefix   = keySeparator + volNameAcronym + keySeparator
 	quotaPrefix      = keySeparator + "quota" + keySeparator
 	lcNodePrefix     = keySeparator + lcNodeAcronym + keySeparator
 	lcConfPrefix     = keySeparator + lcConfigurationAcronym + keySeparator
+	lcTaskPrefix     = keySeparator + lcTaskAcronym + keySeparator
+	lcResultPrefix   = keySeparator + lcResultAcronym + keySeparator
 	S3QoSPrefix      = keySeparator + S3QoS + keySeparator
 )
 
@@ -361,30 +382,13 @@ const (
 	MetaNodeType = NodeType(iota)
 )
 
-// TODO: to remove unused by golangci
-var (
-	_ = startKey
-	_ = nodeHostsKey
-	_ = fullPathKey
-	_ = inodeKey
-	_ = dataNodeOfflineErr
-	_ = defaultMigrateDpCnt
-	_ = idSeparator
-	_ = volCachePrefix
-	_ = opSyncDataPartitionsView
-	_ = opSyncUpdateLcNode
-
-	_ = (createVolReq{}).clientReqPeriod
-	_ = (createVolReq{}).clientHitTriggerCnt
-
-	_ = (*Server).createDomainHandler
-	_ = (*VolumeService).markDeleteVol
-
-	__c = (*Cluster)(nil)
-	_   = __c.checkLackReplicaDataPartitions
-	_   = __c.getAllMetaPartitionsByMetaNode
-	_   = __c.isRecovering
-	_   = __c.updateInodeIDRange
-	_   = __c.setMaxConcurrentLcNodes
-	_   = __c.checkCorruptMetaNode
-)
+func NodeTypeString(nodeType NodeType) string {
+	switch nodeType {
+	case DataNodeType:
+		return "dataNode"
+	case MetaNodeType:
+		return "metaNode"
+	default:
+		return fmt.Sprintf("unKnownNodeType(%v)", nodeType)
+	}
+}

@@ -28,60 +28,67 @@ import (
 
 // MetaReplica defines the replica of a meta partition
 type MetaReplica struct {
-	Addr        string
-	start       uint64 // lower bound of the inode id
-	end         uint64 // upper bound of the inode id
-	dataSize    uint64
-	nodeID      uint64
-	MaxInodeID  uint64
-	InodeCount  uint64
-	DentryCount uint64
-	TxCnt       uint64
-	TxRbInoCnt  uint64
-	TxRbDenCnt  uint64
-	FreeListLen uint64
-	ReportTime  int64
-	Status      int8 // unavailable, readOnly, readWrite
-	IsLeader    bool
-	metaNode    *MetaNode
+	Addr                      string
+	start                     uint64 // lower bound of the inode id
+	end                       uint64 // upper bound of the inode id
+	dataSize                  uint64
+	nodeID                    uint64
+	MaxInodeID                uint64
+	InodeCount                uint64
+	DentryCount               uint64
+	TxCnt                     uint64
+	TxRbInoCnt                uint64
+	TxRbDenCnt                uint64
+	FreeListLen               uint64
+	ReportTime                int64
+	Status                    int8 // unavailable, readOnly, readWrite
+	IsLeader                  bool
+	ForbidWriteOpOfProtoVer0  bool
+	StatByStorageClass        []*proto.StatOfStorageClass
+	StatByMigrateStorageClass []*proto.StatOfStorageClass
+	metaNode                  *MetaNode
 }
 
 // MetaPartition defines the structure of a meta partition
 type MetaPartition struct {
-	PartitionID      uint64
-	Start            uint64
-	End              uint64
-	MaxInodeID       uint64
-	InodeCount       uint64
-	DentryCount      uint64
-	FreeListLen      uint64
-	TxCnt            uint64
-	TxRbInoCnt       uint64
-	TxRbDenCnt       uint64
-	Replicas         []*MetaReplica
-	LeaderReportTime int64
-	ReplicaNum       uint8
-	Status           int8
-	IsRecover        bool
-	volID            uint64
-	volName          string
-	Hosts            []string
-	Peers            []proto.Peer
-	OfflinePeerID    uint64
-	MissNodes        map[string]int64
-	LoadResponse     []*proto.MetaPartitionLoadResponse
-	offlineMutex     sync.RWMutex
-	uidInfo          []*proto.UidReportSpaceInfo
-	EqualCheckPass   bool
-	VerSeq           uint64
-	heartBeatDone    bool
-
+	PartitionID               uint64
+	Start                     uint64
+	End                       uint64
+	MaxInodeID                uint64
+	InodeCount                uint64
+	DentryCount               uint64
+	FreeListLen               uint64
+	TxCnt                     uint64
+	TxRbInoCnt                uint64
+	TxRbDenCnt                uint64
+	Replicas                  []*MetaReplica
+	LeaderReportTime          int64
+	ReplicaNum                uint8
+	Status                    int8
+	IsRecover                 bool
+	volID                     uint64
+	volName                   string
+	Hosts                     []string
+	Peers                     []proto.Peer
+	OfflinePeerID             uint64
+	MissNodes                 map[string]int64
+	LoadResponse              []*proto.MetaPartitionLoadResponse
+	offlineMutex              sync.RWMutex
+	uidInfo                   []*proto.UidReportSpaceInfo
+	EqualCheckPass            bool
+	VerSeq                    uint64
+	heartBeatDone             bool
+	ForbidWriteOpOfProtoVer0  bool
+	StatByStorageClass        []*proto.StatOfStorageClass
+	StatByMigrateStorageClass []*proto.StatOfStorageClass
 	sync.RWMutex
 }
 
 func newMetaReplica(start, end uint64, metaNode *MetaNode) (mr *MetaReplica) {
 	mr = &MetaReplica{start: start, end: end, nodeID: metaNode.ID, Addr: metaNode.Addr}
 	mr.metaNode = metaNode
+	mr.StatByStorageClass = make([]*proto.StatOfStorageClass, 0)
+	mr.StatByMigrateStorageClass = make([]*proto.StatOfStorageClass, 0)
 	mr.ReportTime = time.Now().Unix()
 	return
 }
@@ -98,6 +105,7 @@ func newMetaPartition(partitionID, start, end uint64, replicaNum uint8, volName 
 	mp.VerSeq = verSeq
 	mp.LoadResponse = make([]*proto.MetaPartitionLoadResponse, 0)
 	mp.EqualCheckPass = true
+	mp.StatByStorageClass = make([]*proto.StatOfStorageClass, 0)
 	return
 }
 
@@ -309,11 +317,6 @@ func (mp *MetaPartition) checkStatus(clusterID string, writeLog bool, replicaNum
 		} else {
 			mp.Status = proto.ReadOnly
 		}
-		if mr.Status == proto.Unavailable || !forbiddenVol {
-			mp.Status = mr.Status
-		} else {
-			mp.Status = proto.ReadOnly
-		}
 
 		for _, replica := range liveReplicas {
 			if replica.Status == proto.ReadOnly {
@@ -426,7 +429,9 @@ func (mp *MetaPartition) updateMetaPartition(mgr *proto.MetaPartitionReport, met
 	mp.SetTxCnt()
 	mp.removeMissingReplica(metaNode.Addr)
 	mp.setUidInfo(mgr)
+	mp.setStatByStorageClass()
 	mp.setHeartBeatDone()
+	mp.SetForbidWriteOpOfProtoVer0()
 }
 
 func (mp *MetaPartition) canBeOffline(nodeAddr string, replicaNum int) (err error) {
@@ -484,6 +489,8 @@ func (mp *MetaPartition) checkReplicas() {
 	for _, mr := range mp.Replicas {
 		if !mr.isActive() {
 			mr.Status = proto.Unavailable
+			mr.StatByStorageClass = make([]*proto.StatOfStorageClass, 0)
+			mr.StatByMigrateStorageClass = make([]*proto.StatOfStorageClass, 0)
 		}
 	}
 }
@@ -749,6 +756,21 @@ func (mr *MetaReplica) updateMetric(mgr *proto.MetaPartitionReport) {
 	mr.TxRbDenCnt = mgr.TxRbDenCnt
 	mr.FreeListLen = mgr.FreeListLen
 	mr.dataSize = mgr.Size
+	mr.ForbidWriteOpOfProtoVer0 = mgr.ForbidWriteOpOfProtoVer0
+
+	if mgr.StatByStorageClass != nil {
+		mr.StatByStorageClass = mgr.StatByStorageClass
+	} else if len(mr.StatByStorageClass) != 0 {
+		// handle compatibility, report from old version metanode has no filed StatByStorageClass
+		mr.StatByStorageClass = make([]*proto.StatOfStorageClass, 0)
+	}
+
+	if mgr.StatByMigrateStorageClass != nil {
+		mr.StatByMigrateStorageClass = mgr.StatByMigrateStorageClass
+	} else if len(mr.StatByMigrateStorageClass) != 0 {
+		mr.StatByMigrateStorageClass = make([]*proto.StatOfStorageClass, 0)
+	}
+
 	mr.setLastReportTime()
 
 	if mr.metaNode.RdOnly && mr.Status == proto.ReadWrite {
@@ -801,9 +823,6 @@ func (mp *MetaPartition) getMinusOfMaxInodeID() (minus float64) {
 }
 
 func (mp *MetaPartition) activeMaxInodeSimilar() bool {
-	mp.RLock()
-	defer mp.RUnlock()
-
 	minus := float64(0)
 	var sentry float64
 	replicas := mp.getLiveReplicas()
@@ -866,6 +885,19 @@ func (mp *MetaPartition) setDentryCount() {
 	mp.DentryCount = dentryCount
 }
 
+func (mp *MetaPartition) SetForbidWriteOpOfProtoVer0() {
+	for _, r := range mp.Replicas {
+		if !r.isActive() {
+			continue
+		}
+		if !r.ForbidWriteOpOfProtoVer0 {
+			mp.ForbidWriteOpOfProtoVer0 = false
+			return
+		}
+	}
+	mp.ForbidWriteOpOfProtoVer0 = true
+}
+
 func (mp *MetaPartition) setFreeListLen() {
 	var freeListLen uint64
 	for _, r := range mp.Replicas {
@@ -890,6 +922,62 @@ func (mp *MetaPartition) SetTxCnt() {
 		}
 	}
 	mp.TxCnt, mp.TxRbInoCnt, mp.TxRbDenCnt = txCnt, rbInoCnt, rbDenCnt
+}
+
+func (mp *MetaPartition) setStatByStorageClass() {
+	var mpNormalStat *proto.StatOfStorageClass
+	var mpMigrateStat *proto.StatOfStorageClass
+	var ok bool
+	statNormalStorageClassMap := make(map[uint32]*proto.StatOfStorageClass)
+	statMigrateStorageClassMap := make(map[uint32]*proto.StatOfStorageClass)
+
+	for _, r := range mp.Replicas {
+		if r.StatByStorageClass == nil {
+			continue
+		}
+
+		for _, rStat := range r.StatByStorageClass {
+			if mpNormalStat, ok = statNormalStorageClassMap[rStat.StorageClass]; !ok {
+				mpNormalStat = proto.NewStatOfStorageClass(rStat.StorageClass)
+				statNormalStorageClassMap[rStat.StorageClass] = mpNormalStat
+			}
+
+			if rStat.InodeCount > mpNormalStat.InodeCount {
+				mpNormalStat.InodeCount = rStat.InodeCount
+			}
+
+			if rStat.UsedSizeBytes > mpNormalStat.UsedSizeBytes {
+				mpNormalStat.UsedSizeBytes = rStat.UsedSizeBytes
+			}
+		}
+
+		for _, rMigrateStat := range r.StatByMigrateStorageClass {
+			if mpMigrateStat, ok = statMigrateStorageClassMap[rMigrateStat.StorageClass]; !ok {
+				mpMigrateStat = proto.NewStatOfStorageClass(rMigrateStat.StorageClass)
+				statMigrateStorageClassMap[rMigrateStat.StorageClass] = mpMigrateStat
+			}
+
+			if rMigrateStat.InodeCount > mpMigrateStat.InodeCount {
+				mpMigrateStat.InodeCount = rMigrateStat.InodeCount
+			}
+
+			if rMigrateStat.UsedSizeBytes > mpMigrateStat.UsedSizeBytes {
+				mpMigrateStat.UsedSizeBytes = rMigrateStat.UsedSizeBytes
+			}
+		}
+	}
+
+	normalToSlice := make([]*proto.StatOfStorageClass, 0)
+	for _, mpStat := range statNormalStorageClassMap {
+		normalToSlice = append(normalToSlice, mpStat)
+	}
+	mp.StatByStorageClass = normalToSlice
+
+	migrateToSlice := make([]*proto.StatOfStorageClass, 0)
+	for _, mpStat := range statMigrateStorageClassMap {
+		migrateToSlice = append(migrateToSlice, mpStat)
+	}
+	mp.StatByMigrateStorageClass = migrateToSlice
 }
 
 func (mp *MetaPartition) getLiveZones(offlineAddr string) (zones []string) {

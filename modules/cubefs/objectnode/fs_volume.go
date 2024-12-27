@@ -132,6 +132,7 @@ type ListFilesV2Result struct {
 type Volume struct {
 	mw         *meta.MetaWrapper
 	ec         *stream.ExtentClient
+	mc         *master.MasterClient
 	store      Store // Storage for ACP management
 	name       string
 	owner      string
@@ -175,6 +176,18 @@ func (v *Volume) loadOSSMeta() {
 			v.onAsyncTaskError.OnError(err)
 		}
 	}()
+
+	volumeInfo, err := v.mc.AdminAPI().GetVolumeSimpleInfo(v.name)
+	if err != nil {
+		log.LogErrorf("loadOSSMeta: get volume info from master failed: volume(%s) err(%v)", v.name, err)
+		return
+	}
+	if volumeInfo.Status == 1 {
+		log.LogWarnf("loadOSSMeta: volume has been deleted: volume(%s) status(%d)", v.name, volumeInfo.Status)
+		err = syscall.ENOENT
+		return
+	}
+
 	var policy *Policy
 	if policy, err = v.loadBucketPolicy(); err != nil {
 		return
@@ -700,7 +713,11 @@ func (v *Volume) PutObject(path string, reader io.Reader, opt *PutFileOption) (f
 	}()
 
 	md5Hash := md5.New()
-	if err = v.ec.OpenStream(invisibleTempDataInode.Inode); err != nil {
+	isCache := false
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(invisibleTempDataInode.StorageClass) {
+		isCache = true
+	}
+	if err = v.ec.OpenStream(invisibleTempDataInode.Inode, true, isCache); err != nil {
 		log.LogErrorf("PutObject: open stream fail: volume(%v) path(%v) inode(%v) err(%v)",
 			v.name, path, invisibleTempDataInode.Inode, err)
 		return
@@ -712,14 +729,14 @@ func (v *Volume) PutObject(path string, reader io.Reader, opt *PutFileOption) (f
 		}
 	}()
 
-	if proto.IsCold(v.volType) {
-		if _, err = v.ebsWrite(invisibleTempDataInode.Inode, reader, md5Hash); err != nil {
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(invisibleTempDataInode.StorageClass) {
+		if _, err = v.ebsWrite(invisibleTempDataInode.Inode, reader, md5Hash, invisibleTempDataInode.StorageClass); err != nil {
 			log.LogErrorf("PutObject: ebs write fail: volume(%v) path(%v) inode(%v) err(%v)",
 				v.name, path, invisibleTempDataInode.Inode, err)
 			return
 		}
 	} else {
-		if _, err = v.streamWrite(invisibleTempDataInode.Inode, reader, md5Hash); err != nil {
+		if _, err = v.streamWrite(invisibleTempDataInode.Inode, reader, md5Hash, invisibleTempDataInode.StorageClass); err != nil {
 			log.LogErrorf("PutObject: stream write fail: volume(%v) path(%v) inode(%v) err(%v)",
 				v.name, path, invisibleTempDataInode.Inode, err)
 			return
@@ -804,7 +821,8 @@ func (v *Volume) PutObject(path string, reader io.Reader, opt *PutFileOption) (f
 	}
 
 	// apply new inode to dentry
-	err = v.applyInodeToDEntry(parentId, lastPathItem.Name, invisibleTempDataInode.Inode, false, fixedPath)
+	err = v.applyInodeToDEntry(parentId, lastPathItem.Name, invisibleTempDataInode.Inode, false,
+		fixedPath, invisibleTempDataInode.StorageClass)
 	if err != nil {
 		log.LogErrorf("PutObject: apply new inode to dentry fail: parentID(%v) name(%v) inode(%v) err(%v)",
 			parentId, lastPathItem.Name, invisibleTempDataInode.Inode, err)
@@ -818,7 +836,8 @@ func (v *Volume) PutObject(path string, reader io.Reader, opt *PutFileOption) (f
 	return fsInfo, nil
 }
 
-func (v *Volume) applyInodeToDEntry(parentId uint64, name string, inode uint64, isCompleteMultipart bool, fullPath string) (err error) {
+func (v *Volume) applyInodeToDEntry(parentId uint64, name string, inode uint64, isCompleteMultipart bool,
+	fullPath string, storageClass uint32) (err error) {
 	var existMode uint32
 	_, existMode, err = v.mw.Lookup_ll(parentId, name) // exist object inode
 	if err != nil && err != syscall.ENOENT {
@@ -844,7 +863,7 @@ func (v *Volume) applyInodeToDEntry(parentId uint64, name string, inode uint64, 
 		// current implementation doesn't support object versioning, so uploading a object with a key already existed in bucket
 		// is implemented with replacing the old one instead.
 		// refer: https://docs.aws.amazon.com/AmazonS3/latest/userguide/upload-objects.html
-		if err = v.applyInodeToExistDentry(parentId, name, inode, isCompleteMultipart, fullPath); err != nil {
+		if err = v.applyInodeToExistDentry(parentId, name, inode, isCompleteMultipart, fullPath, storageClass); err != nil {
 			log.LogErrorf("applyInodeToDEntry: apply inode to exist dentry fail: parentID(%v) name(%v) inode(%v) err(%v)",
 				parentId, name, inode, err)
 			return
@@ -1035,7 +1054,11 @@ func (v *Volume) WritePart(path string, multipartId string, partId uint16, reade
 		etag    string
 		md5Hash = md5.New()
 	)
-	if err = v.ec.OpenStream(tempInodeInfo.Inode); err != nil {
+	isCache := false
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(tempInodeInfo.StorageClass) {
+		isCache = true
+	}
+	if err = v.ec.OpenStream(tempInodeInfo.Inode, true, isCache); err != nil {
 		log.LogErrorf("WritePart: data open stream fail: volume(%v) path(%v) multipartID(%v) partID(%v) inode(%v) err(%v)",
 			v.name, path, multipartId, partId, tempInodeInfo.Inode, err)
 		return nil, err
@@ -1046,15 +1069,15 @@ func (v *Volume) WritePart(path string, multipartId string, partId uint16, reade
 				v.name, path, multipartId, partId, tempInodeInfo.Inode, closeErr)
 		}
 	}()
-	if proto.IsCold(v.volType) {
-		if size, err = v.ebsWrite(tempInodeInfo.Inode, reader, md5Hash); err != nil {
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(tempInodeInfo.StorageClass) {
+		if size, err = v.ebsWrite(tempInodeInfo.Inode, reader, md5Hash, tempInodeInfo.StorageClass); err != nil {
 			log.LogErrorf("WritePart: ebs write fail: volume(%v) inode(%v) multipartID(%v) partID(%v) err(%v)",
 				v.name, tempInodeInfo.Inode, multipartId, partId, err)
 			return nil, err
 		}
 	} else {
 		// Write data to data node
-		if size, err = v.streamWrite(tempInodeInfo.Inode, reader, md5Hash); err != nil {
+		if size, err = v.streamWrite(tempInodeInfo.Inode, reader, md5Hash, tempInodeInfo.StorageClass); err != nil {
 			log.LogErrorf("WritePart: stream write fail: volume(%v) inode(%v) multipartID(%v) partID(%v) err(%v)",
 				v.name, tempInodeInfo.Inode, multipartId, partId, err)
 			return nil, err
@@ -1194,7 +1217,7 @@ func (v *Volume) CompleteMultipart(path, multipartID string, multipartInfo *prot
 	// merge complete extent keys
 	var size uint64
 	var fileOffset uint64
-	if proto.IsCold(v.volType) {
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(completeInodeInfo.StorageClass) {
 		completeObjExtentKeys := make([]proto.ObjExtentKey, 0)
 		for _, part := range parts {
 			var objExtents []proto.ObjExtentKey
@@ -1219,7 +1242,7 @@ func (v *Volume) CompleteMultipart(path, multipartID string, multipartInfo *prot
 		completeExtentKeys := make([]proto.ExtentKey, 0)
 		for _, part := range parts {
 			var eks []proto.ExtentKey
-			if _, _, eks, err = v.mw.GetExtents(part.Inode); err != nil {
+			if _, _, eks, err = v.mw.GetExtents(part.Inode, false, true, false); err != nil {
 				log.LogErrorf("CompleteMultipart: meta get extents fail: volume(%v) path(%v) multipartID(%v) partID(%v) inode(%v) err(%v)",
 					v.name, path, multipartID, part.ID, part.Inode, err)
 				return
@@ -1232,7 +1255,7 @@ func (v *Volume) CompleteMultipart(path, multipartID string, multipartInfo *prot
 			}
 			size += part.Size
 		}
-		if err = v.mw.AppendExtentKeys(completeInodeInfo.Inode, completeExtentKeys); err != nil {
+		if err = v.mw.AppendExtentKeys(completeInodeInfo.Inode, completeExtentKeys, completeInodeInfo.StorageClass); err != nil {
 			log.LogErrorf("CompleteMultipart: meta append extent keys fail: volume(%v) path(%v) multipartID(%v) inode(%v) err(%v)",
 				v.name, path, multipartID, completeInodeInfo.Inode, err)
 			return
@@ -1291,7 +1314,8 @@ func (v *Volume) CompleteMultipart(path, multipartID string, multipartInfo *prot
 	}
 
 	// apply new inode to dentry
-	if err = v.applyInodeToDEntry(parentId, filename, completeInodeInfo.Inode, true, path); err != nil {
+	if err = v.applyInodeToDEntry(parentId, filename, completeInodeInfo.Inode, true,
+		path, completeInodeInfo.StorageClass); err != nil {
 		log.LogErrorf("CompleteMultipart: apply inode to dentry fail: volume(%v) multipartID(%v) parentId(%v) "+
 			"fileName(%v) inode(%v) err(%v)", v.name, multipartID, parentId, filename, completeInodeInfo.Inode, err)
 		return
@@ -1346,13 +1370,13 @@ func (v *Volume) CompleteMultipart(path, multipartID string, multipartInfo *prot
 	return fInfo, nil
 }
 
-func (v *Volume) ebsWrite(inode uint64, reader io.Reader, h hash.Hash) (size uint64, err error) {
+func (v *Volume) ebsWrite(inode uint64, reader io.Reader, h hash.Hash, storageClass uint32) (size uint64, err error) {
 	ctx := context.Background()
-	size, err = v.getEbsWriter(inode).WriteFromReader(ctx, reader, h)
+	size, err = v.getEbsWriter(inode, storageClass).WriteFromReader(ctx, reader, h)
 	return
 }
 
-func (v *Volume) streamWrite(inode uint64, reader io.Reader, h hash.Hash) (size uint64, err error) {
+func (v *Volume) streamWrite(inode uint64, reader io.Reader, h hash.Hash, storageClass uint32) (size uint64, err error) {
 	var (
 		buf                   = make([]byte, 2*util.BlockSize)
 		readN, writeN, offset int
@@ -1378,7 +1402,7 @@ func (v *Volume) streamWrite(inode uint64, reader io.Reader, h hash.Hash) (size 
 				}
 				return nil
 			}
-			if writeN, err = v.ec.Write(inode, offset, buf[:readN], 0, checkFunc); err != nil {
+			if writeN, err = v.ec.Write(inode, offset, buf[:readN], 0, checkFunc, storageClass, false); err != nil {
 				log.LogErrorf("streamWrite: data write tmp file fail, inode(%v) offset(%v) err(%v)", inode, offset, err)
 				exporter.Warning(fmt.Sprintf("write data fail: volume(%v) inode(%v) offset(%v) size(%v) err(%v)",
 					v.name, inode, offset, readN, err))
@@ -1401,7 +1425,7 @@ func (v *Volume) streamWrite(inode uint64, reader io.Reader, h hash.Hash) (size 
 }
 
 func (v *Volume) appendInodeHash(h hash.Hash, inode uint64, total uint64, preAllocatedBuf []byte) (err error) {
-	if err = v.ec.OpenStream(inode); err != nil {
+	if err = v.ec.OpenStream(inode, false, false); err != nil {
 		log.LogErrorf("appendInodeHash: data open stream fail: inode(%v) err(%v)",
 			inode, err)
 		return
@@ -1429,7 +1453,8 @@ func (v *Volume) appendInodeHash(h hash.Hash, inode uint64, total uint64, preAll
 		if uint64(size) > rest {
 			size = int(rest)
 		}
-		n, err = v.ec.Read(inode, buf, offset, size)
+		// no reference to this appendInodeHash
+		n, err = v.ec.Read(inode, buf, offset, size, proto.StorageClass_Unspecified, false)
 		if err != nil && err != io.EOF {
 			log.LogErrorf("appendInodeHash: data read fail, inode(%v) offset(%v) size(%v) err(%v)", inode, offset, size, err)
 			return
@@ -1458,7 +1483,8 @@ func (v *Volume) applyInodeToNewDentry(parentID uint64, name string, inode uint6
 	return
 }
 
-func (v *Volume) applyInodeToExistDentry(parentID uint64, name string, inode uint64, isCompleteMultipart bool, fullPath string) (err error) {
+func (v *Volume) applyInodeToExistDentry(parentID uint64, name string, inode uint64, isCompleteMultipart bool,
+	fullPath string, storageClass uint32) (err error) {
 	var oldInode uint64
 	oldInode, err = v.mw.DentryUpdate_ll(parentID, name, inode, fullPath)
 	if err != nil {
@@ -1474,7 +1500,7 @@ func (v *Volume) applyInodeToExistDentry(parentID uint64, name string, inode uin
 
 	// concurrent completeMultipart request: temporary data security check
 	if isCompleteMultipart {
-		isSameExtent, err := v.referenceExtentKey(oldInode, inode)
+		isSameExtent, err := v.referenceExtentKey(oldInode, inode, storageClass)
 		if err != nil {
 			return err
 		}
@@ -1530,8 +1556,12 @@ func (v *Volume) loadUserDefinedMetadata(inode uint64) (metadata map[string]stri
 	return
 }
 
-func (v *Volume) readFile(inode, inodeSize uint64, path string, writer io.Writer, offset, size uint64) (err error) {
-	if err = v.ec.OpenStream(inode); err != nil {
+func (v *Volume) readFile(inode, inodeSize uint64, path string, writer io.Writer, offset, size uint64, storageClass uint32) (err error) {
+	isCache := false
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(storageClass) {
+		isCache = true
+	}
+	if err = v.ec.OpenStream(inode, false, isCache); err != nil {
 		log.LogErrorf("readFile: data open stream fail, Inode(%v) err(%v)", inode, err)
 		return err
 	}
@@ -1540,27 +1570,26 @@ func (v *Volume) readFile(inode, inodeSize uint64, path string, writer io.Writer
 			log.LogErrorf("readFile: data close stream fail: inode(%v) err(%v)", inode, closeErr)
 		}
 	}()
-
-	if proto.IsHot(v.volType) {
-		return v.read(inode, inodeSize, path, writer, offset, size)
+	if proto.IsHot(v.volType) || proto.IsStorageClassReplica(storageClass) {
+		return v.read(inode, inodeSize, path, writer, offset, size, storageClass)
 	} else {
-		return v.readEbs(inode, inodeSize, path, writer, offset, size)
+		return v.readEbs(inode, inodeSize, path, writer, offset, size, storageClass)
 	}
 }
 
-func (v *Volume) readEbs(inode, inodeSize uint64, path string, writer io.Writer, offset, size uint64) error {
+func (v *Volume) readEbs(inode, inodeSize uint64, path string, writer io.Writer, offset, size uint64, storageClass uint32) error {
 	upper := size + offset
 	if upper > inodeSize {
 		upper = inodeSize - offset
 	}
 
 	ctx := context.Background()
-	// _ = context.WithValue(ctx, "objectnode", 1) // TODO: ???
-	reader := v.getEbsReader(inode)
+	_ = context.WithValue(ctx, "objectnode", 1) // nolint: staticcheck
+	reader := v.getEbsReader(inode, storageClass)
 	var n int
 	var rest uint64
-	tmp := buf.ReadBufPool.Get().([]byte)
-	defer buf.ReadBufPool.Put(tmp) // nolint: staticcheck
+	tmp := buf.ClodVolReaderBufPool.Get().([]byte)
+	defer buf.ClodVolReaderBufPool.Put(tmp) // nolint: staticcheck
 
 	for {
 		if rest = upper - offset; rest <= 0 {
@@ -1597,7 +1626,7 @@ func (v *Volume) readEbs(inode, inodeSize uint64, path string, writer io.Writer,
 	return nil
 }
 
-func (v *Volume) read(inode, inodeSize uint64, path string, writer io.Writer, offset, size uint64) error {
+func (v *Volume) read(inode, inodeSize uint64, path string, writer io.Writer, offset, size uint64, storageClass uint32) error {
 	upper := size + offset
 	if upper > inodeSize {
 		upper = inodeSize - offset
@@ -1618,7 +1647,7 @@ func (v *Volume) read(inode, inodeSize uint64, path string, writer io.Writer, of
 		if err != nil {
 			return err
 		}
-		n, err = v.ec.Read(inode, tmp, off, readSize)
+		n, err = v.ec.Read(inode, tmp, off, readSize, storageClass, false)
 		if err != nil && err != io.EOF {
 			log.LogErrorf("ReadFile: data read fail: volume(%v) path(%v) inode(%v) offset(%v) size(%v) err(%v)",
 				v.name, path, inode, offset, size, err)
@@ -1657,7 +1686,7 @@ func (v *Volume) ReadFile(path string, writer io.Writer, offset, size uint64) er
 		return err
 	}
 
-	return v.readFile(ino, inoInfo.Size, path, writer, offset, size)
+	return v.readFile(ino, inoInfo.Size, path, writer, offset, size, inoInfo.StorageClass)
 }
 
 func (v *Volume) ObjectMeta(path string) (info *FSFileInfo, xattr *proto.XAttrInfo, err error) {
@@ -1785,6 +1814,7 @@ func (v *Volume) ObjectMeta(path string) (info *FSFileInfo, xattr *proto.XAttrIn
 		Expires:         expires,
 		Metadata:        metadata,
 		RetainUntilDate: retainUntilDate,
+		StorageClass:    inoInfo.StorageClass,
 	}
 	return
 }
@@ -2602,7 +2632,11 @@ func (v *Volume) CopyFile(sv *Volume, sourcePath, targetPath, metaDirective stri
 		log.LogErrorf("CopyFile: copy source path file size greater than 5GB, source path(%v), target path(%v)", sourcePath, targetPath)
 		return nil, syscall.EFBIG
 	}
-	if err = sv.ec.OpenStream(sInode); err != nil {
+	isCache := false
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(sInodeInfo.StorageClass) {
+		isCache = true
+	}
+	if err = sv.ec.OpenStream(sInode, false, isCache); err != nil {
 		log.LogErrorf("CopyFile: open source path stream fail, source path(%v) source path inode(%v) err(%v)",
 			sourcePath, sInode, err)
 		return
@@ -2753,6 +2787,7 @@ func (v *Volume) CopyFile(sv *Volume, sourcePath, targetPath, metaDirective stri
 	if tInodeInfo, err = v.mw.InodeCreate_ll(tParentId, uint32(sMode), 0, 0, nil, make([]uint64, 0), targetPath); err != nil {
 		return
 	}
+
 	defer func() {
 		// An error has caused the entire process to fail. Delete the inode and release the written data.
 		if err != nil {
@@ -2764,7 +2799,12 @@ func (v *Volume) CopyFile(sv *Volume, sourcePath, targetPath, metaDirective stri
 			_ = v.mw.Evict(tInodeInfo.Inode, targetPath)
 		}
 	}()
-	if err = v.ec.OpenStream(tInodeInfo.Inode); err != nil {
+
+	isCache = false
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(tInodeInfo.StorageClass) {
+		isCache = true
+	}
+	if err = v.ec.OpenStream(tInodeInfo.Inode, true, isCache); err != nil {
 		return
 	}
 	defer func() {
@@ -2793,13 +2833,13 @@ func (v *Volume) CopyFile(sv *Volume, sourcePath, targetPath, metaDirective stri
 	var ebsReader *blobstore.Reader
 	var tctx context.Context
 	var ebsWriter *blobstore.Writer
-	if proto.IsCold(sv.volType) {
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(sInodeInfo.StorageClass) {
 		sctx = context.Background()
-		ebsReader = v.getEbsReader(sInode)
+		ebsReader = v.getEbsReader(sInode, sInodeInfo.StorageClass)
 	}
-	if proto.IsCold(v.volType) {
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(tInodeInfo.StorageClass) {
 		tctx = context.Background()
-		ebsWriter = v.getEbsWriter(tInodeInfo.Inode)
+		ebsWriter = v.getEbsWriter(tInodeInfo.Inode, tInodeInfo.StorageClass)
 	}
 
 	for {
@@ -2811,19 +2851,19 @@ func (v *Volume) CopyFile(sv *Volume, sourcePath, targetPath, metaDirective stri
 			readSize = rest
 		}
 		buf = buf[:readSize]
-		if proto.IsCold(sv.volType) {
+		if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(sInodeInfo.StorageClass) {
 			readN, err = ebsReader.Read(sctx, buf, readOffset, readSize)
 		} else {
-			readN, err = sv.ec.Read(sInode, buf, readOffset, readSize)
+			readN, err = sv.ec.Read(sInode, buf, readOffset, readSize, sInodeInfo.StorageClass, false)
 		}
 		if err != nil && err != io.EOF {
 			return
 		}
 		if readN > 0 {
-			if proto.IsCold(v.volType) {
+			if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(tInodeInfo.StorageClass) {
 				writeN, err = ebsWriter.WriteWithoutPool(tctx, writeOffset, buf[:readN])
 			} else {
-				writeN, err = v.ec.Write(tInodeInfo.Inode, writeOffset, buf[:readN], 0, nil)
+				writeN, err = v.ec.Write(tInodeInfo.Inode, writeOffset, buf[:readN], 0, nil, tInodeInfo.StorageClass, false)
 			}
 			if err != nil {
 				log.LogErrorf("CopyFile: write target path from source fail, volume(%v) path(%v) inode(%v) target offset(%v) err(%v)",
@@ -2842,7 +2882,7 @@ func (v *Volume) CopyFile(sv *Volume, sourcePath, targetPath, metaDirective stri
 		}
 	}
 	// flush
-	if proto.IsCold(v.volType) {
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(tInodeInfo.StorageClass) {
 		err = ebsWriter.FlushWithoutPool(tInodeInfo.Inode, tctx)
 	} else {
 		v.ec.Flush(tInodeInfo.Inode)
@@ -2956,7 +2996,8 @@ func (v *Volume) CopyFile(sv *Volume, sourcePath, targetPath, metaDirective stri
 	}
 
 	// apply new inode to dentry
-	err = v.applyInodeToDEntry(tParentId, tLastName, tInodeInfo.Inode, false, targetPath)
+	err = v.applyInodeToDEntry(tParentId, tLastName, tInodeInfo.Inode, false,
+		targetPath, tInodeInfo.StorageClass)
 	if err != nil {
 		log.LogErrorf("CopyFile: apply inode to new dentry fail: path(%v) parentID(%v) name(%v) inode(%v) err(%v)",
 			targetPath, tParentId, tLastName, tInodeInfo.Inode, err)
@@ -2981,6 +3022,20 @@ func (v *Volume) copyFile(parentID uint64, newFileName string, sourceFileInode u
 
 func NewVolume(config *VolumeConfig) (*Volume, error) {
 	var err error
+
+	mc := master.NewMasterClient(config.Masters, false)
+	var volumeInfo *proto.SimpleVolView
+	volumeInfo, err = mc.AdminAPI().GetVolumeSimpleInfo(config.Volume)
+	if err != nil {
+		log.LogErrorf("NewVolume: get volume info from master failed: volume(%v) err(%v)", config.Volume, err)
+		return nil, err
+	}
+	if volumeInfo.Status == 1 {
+		log.LogWarnf("NewVolume: volume has been marked for deletion: volume(%v) status(%v - 0:normal/1:markDelete)",
+			config.Volume, volumeInfo.Status)
+		return nil, proto.ErrVolNotExists
+	}
+
 	metaConfig := &meta.MetaConfig{
 		Volume:        config.Volume,
 		Masters:       config.Masters,
@@ -3002,29 +3057,22 @@ func NewVolume(config *VolumeConfig) (*Volume, error) {
 		}
 	}()
 
-	mc := master.NewMasterClient(config.Masters, false)
-	var volumeInfo *proto.SimpleVolView
-	volumeInfo, err = mc.AdminAPI().GetVolumeSimpleInfo(config.Volume)
-	if err != nil {
-		log.LogErrorf("NewVolume: get volume info from master failed: volume(%v) err(%v)", config.Volume, err)
-		return nil, err
-	}
-	if volumeInfo.Status == 1 {
-		log.LogWarnf("NewVolume: volume has been marked for deletion: volume(%v) status(%v - 0:normal/1:markDelete)",
-			config.Volume, volumeInfo.Status)
-		return nil, proto.ErrVolNotExists
+	extentConfig := &stream.ExtentConfig{
+		Volume:                      config.Volume,
+		Masters:                     config.Masters,
+		FollowerRead:                true,
+		OnAppendExtentKey:           metaWrapper.AppendExtentKey,
+		OnSplitExtentKey:            metaWrapper.SplitExtentKey,
+		OnGetExtents:                metaWrapper.GetExtents,
+		OnTruncate:                  metaWrapper.Truncate,
+		OnRenewalForbiddenMigration: metaWrapper.RenewalForbiddenMigration,
+		VolStorageClass:             volumeInfo.VolStorageClass,
+		VolAllowedStorageClass:      volumeInfo.AllowedStorageClass,
+		VolCacheDpStorageClass:      volumeInfo.CacheDpStorageClass,
+		OnForbiddenMigration:        metaWrapper.ForbiddenMigration,
 	}
 
-	extentConfig := &stream.ExtentConfig{
-		Volume:            config.Volume,
-		Masters:           config.Masters,
-		FollowerRead:      true,
-		OnAppendExtentKey: metaWrapper.AppendExtentKey,
-		OnSplitExtentKey:  metaWrapper.SplitExtentKey,
-		OnGetExtents:      metaWrapper.GetExtents,
-		OnTruncate:        metaWrapper.Truncate,
-	}
-	if proto.IsCold(volumeInfo.VolType) {
+	if proto.IsCold(volumeInfo.VolType) || proto.IsStorageClassBlobStore(volumeInfo.VolStorageClass) {
 		if blockCache != nil {
 			extentConfig.BcacheEnable = true
 			extentConfig.OnLoadBcache = blockCache.Get
@@ -3042,6 +3090,7 @@ func NewVolume(config *VolumeConfig) (*Volume, error) {
 	v := &Volume{
 		mw:             metaWrapper,
 		ec:             extentClient,
+		mc:             mc,
 		name:           config.Volume,
 		owner:          volumeInfo.Owner,
 		store:          config.Store,
@@ -3071,7 +3120,7 @@ func NewVolume(config *VolumeConfig) (*Volume, error) {
 	return v, nil
 }
 
-func (v *Volume) getEbsWriter(ino uint64) (writer *blobstore.Writer) {
+func (v *Volume) getEbsWriter(ino uint64, storageClass uint32) (writer *blobstore.Writer) {
 	clientConf := blobstore.ClientConfig{
 		VolName:         v.name,
 		VolType:         v.volType,
@@ -3088,6 +3137,7 @@ func (v *Volume) getEbsWriter(ino uint64) (writer *blobstore.Writer) {
 		FileCache:       false,
 		FileSize:        0,
 		CacheThreshold:  v.cacheThreshold,
+		StorageClass:    storageClass,
 	}
 
 	writer = blobstore.NewWriter(clientConf)
@@ -3095,7 +3145,7 @@ func (v *Volume) getEbsWriter(ino uint64) (writer *blobstore.Writer) {
 	return
 }
 
-func (v *Volume) getEbsReader(ino uint64) (reader *blobstore.Reader) {
+func (v *Volume) getEbsReader(ino uint64, storageClass uint32) (reader *blobstore.Reader) {
 	clientConf := blobstore.ClientConfig{
 		VolName:         v.name,
 		VolType:         v.volType,
@@ -3112,6 +3162,7 @@ func (v *Volume) getEbsReader(ino uint64) (reader *blobstore.Reader) {
 		FileCache:       false,
 		FileSize:        0,
 		CacheThreshold:  v.cacheThreshold,
+		StorageClass:    storageClass,
 	}
 
 	reader = blobstore.NewReader(clientConf)
@@ -3145,9 +3196,9 @@ func safeConvertStrToUint16(str string) (uint16, error) {
 	return uint16(parsed), nil
 }
 
-func (v *Volume) referenceExtentKey(oldInode, inode uint64) (bool, error) {
+func (v *Volume) referenceExtentKey(oldInode, inode uint64, storageClass uint32) (bool, error) {
 	// cold volume
-	if proto.IsCold(v.volType) {
+	if proto.IsCold(v.volType) || proto.IsStorageClassBlobStore(storageClass) {
 		_, _, _, oldObjExtents, err := v.mw.GetObjExtents(oldInode)
 		if err != nil {
 			log.LogErrorf("referenceExtentKey: meta get oldInode objextents fail: volume(%v) inode(%v) err(%v)",
@@ -3167,13 +3218,13 @@ func (v *Volume) referenceExtentKey(oldInode, inode uint64) (bool, error) {
 
 	}
 	// hot volume
-	_, _, oldExtents, err := v.mw.GetExtents(oldInode)
+	_, _, oldExtents, err := v.mw.GetExtents(oldInode, false, false, false)
 	if err != nil {
 		log.LogErrorf("referenceExtentKey: meta get oldInode extents fail: volume(%v) inode(%v) err(%v)",
 			v.name, oldInode, err)
 		return false, err
 	}
-	_, _, extents, err := v.mw.GetExtents(inode)
+	_, _, extents, err := v.mw.GetExtents(inode, false, false, false)
 	if err != nil {
 		log.LogErrorf("referenceExtentKey: meta get inode objextents fail: volume(%v) inode(%v) err(%v)",
 			v.name, inode, err)

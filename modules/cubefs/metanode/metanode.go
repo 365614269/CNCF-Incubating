@@ -37,42 +37,52 @@ import (
 )
 
 var (
-	clusterInfo *proto.ClusterInfo
+	gClusterInfo *proto.ClusterInfo
 	// masterClient   *masterSDK.MasterClient
-	masterClient   *masterSDK.MasterCLientWithResolver
-	configTotalMem uint64
-	serverPort     string
-	smuxPortShift  int
-	smuxPool       *util.SmuxConnectPool
-	smuxPoolCfg    = util.DefaultSmuxConnPoolConfig()
+	masterClient              *masterSDK.MasterCLientWithResolver
+	configTotalMem            uint64
+	serverPort                string
+	smuxPortShift             int
+	smuxPool                  *util.SmuxConnectPool
+	smuxPoolCfg               = util.DefaultSmuxConnPoolConfig()
+	clusterEnableSnapshot     bool
+	legacyReplicaStorageClass uint32 // for compatibility when older version upgrade to hybrid cloud
 )
+
+// only used for mp check
+func SetLegacyType(t uint32) {
+	legacyReplicaStorageClass = t
+}
 
 // The MetaNode manages the dentry and inode information of the meta partitions on a meta node.
 // The data consistency is ensured by Raft.
 type MetaNode struct {
-	nodeId                    uint64
-	listen                    string
-	bindIp                    bool
-	metadataDir               string // root dir of the metaNode
-	raftDir                   string // root dir of the raftStore log
-	metadataManager           MetadataManager
-	localAddr                 string
-	clusterId                 string
-	raftStore                 raftstore.RaftStore
-	raftHeartbeatPort         string
-	raftReplicatePort         string
-	raftRetainLogs            uint64
-	raftSyncSnapFormatVersion uint32 // format version of snapshot that raft leader sent to follower
-	zoneName                  string
-	httpStopC                 chan uint8
-	smuxStopC                 chan uint8
-	metrics                   *MetaNodeMetrics
-	tickInterval              int
-	raftRecvBufSize           int
-	connectionCnt             int64
-	clusterUuid               string
-	clusterUuidEnable         bool
-	serviceIDKey              string
+	nodeId                       uint64
+	listen                       string
+	bindIp                       bool
+	metadataDir                  string // root dir of the metaNode
+	raftDir                      string // root dir of the raftStore log
+	metadataManager              MetadataManager
+	localAddr                    string
+	clusterId                    string
+	raftStore                    raftstore.RaftStore
+	raftHeartbeatPort            string
+	raftReplicatePort            string
+	raftRetainLogs               uint64
+	raftSyncSnapFormatVersion    uint32 // format version of snapshot that raft leader sent to follower
+	zoneName                     string
+	httpStopC                    chan uint8
+	smuxStopC                    chan uint8
+	metrics                      *MetaNodeMetrics
+	tickInterval                 int
+	raftRecvBufSize              int
+	connectionCnt                int64
+	clusterUuid                  string
+	clusterUuidEnable            bool
+	clusterEnableSnapshot        bool
+	serviceIDKey                 string
+	nodeForbidWriteOpOfProtoVer0 bool                // whether forbid by node granularity,
+	VolsForbidWriteOpOfProtoVer0 map[string]struct{} // whether forbid by volume granularity,
 
 	control common.Control
 }
@@ -141,7 +151,7 @@ func doStart(s common.Server, cfg *config.Config) (err error) {
 	if err = m.startRaftServer(cfg); err != nil {
 		return
 	}
-	if err = m.newMetaManager(); err != nil {
+	if err = m.newMetaManager(cfg); err != nil {
 		return
 	}
 	if err = m.startServer(); err != nil {
@@ -161,13 +171,15 @@ func doStart(s common.Server, cfg *config.Config) (err error) {
 
 	m.startStat()
 
+	exporter.RegistConsul(m.clusterId, cfg.GetString("role"), cfg)
+
 	// check local partition compare with master ,if lack,then not start
 	if err = m.checkLocalPartitionMatchWithMaster(); err != nil {
 		syslog.Println(err)
 		exporter.Warning(err.Error())
 		return
 	}
-	exporter.RegistConsul(m.clusterId, cfg.GetString("role"), cfg)
+
 	return
 }
 
@@ -269,7 +281,7 @@ func (m *MetaNode) parseConfig(cfg *config.Config) (err error) {
 	log.LogInfof("[parseConfig] raftRetainLogs[%v]", m.raftRetainLogs)
 
 	if cfg.HasKey(cfgRaftSyncSnapFormatVersion) {
-		raftSyncSnapFormatVersion := uint32(cfg.GetInt(cfgRaftSyncSnapFormatVersion))
+		raftSyncSnapFormatVersion := uint32(cfg.GetInt64(cfgRaftSyncSnapFormatVersion))
 		if raftSyncSnapFormatVersion > SnapFormatVersion_1 {
 			m.raftSyncSnapFormatVersion = SnapFormatVersion_1
 			log.LogInfof("invalid config raftSyncSnapFormatVersion, using default[%v]", m.raftSyncSnapFormatVersion)
@@ -329,9 +341,14 @@ func (m *MetaNode) parseConfig(cfg *config.Config) (err error) {
 		log.LogErrorf("parseConfig: masters addrs format err[%v]", masters)
 		return err
 	}
+	poolSize := cfg.GetInt64(proto.CfgHttpPoolSize)
+	syslog.Printf("parseConfig: http pool size %d", poolSize)
+	masterClient.SetTransport(proto.GetHttpTransporter(&proto.HttpCfg{PoolSize: int(poolSize)}))
+
 	if err = masterClient.Start(); err != nil {
 		return err
 	}
+
 	err = m.validConfig()
 	return
 }
@@ -392,7 +409,7 @@ func (m *MetaNode) validConfig() (err error) {
 	return
 }
 
-func (m *MetaNode) newMetaManager() (err error) {
+func (m *MetaNode) newMetaManager(cfg *config.Config) (err error) {
 	if _, err = os.Stat(m.metadataDir); err != nil {
 		if err = os.MkdirAll(m.metadataDir, 0o755); err != nil {
 			return
@@ -419,10 +436,11 @@ func (m *MetaNode) newMetaManager() (err error) {
 
 	// load metadataManager
 	conf := MetadataManagerConfig{
-		NodeID:    m.nodeId,
-		RootDir:   m.metadataDir,
-		RaftStore: m.raftStore,
-		ZoneName:  m.zoneName,
+		NodeID:        m.nodeId,
+		RootDir:       m.metadataDir,
+		RaftStore:     m.raftStore,
+		ZoneName:      m.zoneName,
+		EnableGcTimer: cfg.GetBoolWithDefault(cfgEnableGcTimer, false),
 	}
 	m.metadataManager = NewMetadataManager(conf, m)
 	return
@@ -442,31 +460,92 @@ func (m *MetaNode) stopMetaManager() {
 }
 
 func (m *MetaNode) register() (err error) {
-	step := 0
+	tryCnt := 0
 	var nodeAddress string
+	var volsForbidWriteOpVerMsg string
+	var nodeForbidWriteOpOfProtoVerMsg string
+	var legacyReplicaStorageClassMsg string
+
 	for {
-		if step < 1 {
-			clusterInfo, err = getClusterInfo()
-			if err != nil {
-				log.LogErrorf("[register] %s", err.Error())
-				continue
-			}
-			if m.localAddr == "" {
-				m.localAddr = clusterInfo.Ip
-			}
-			m.clusterUuid = clusterInfo.ClusterUuid
-			m.clusterUuidEnable = clusterInfo.ClusterUuidEnable
-			m.clusterId = clusterInfo.Cluster
-			nodeAddress = m.localAddr + ":" + m.listen
-			step++
+		tryCnt++
+		gClusterInfo, err = getClusterInfo()
+		if err != nil {
+			log.LogErrorf("[register] tryCnt(%v), getClusterInfo err: %s", tryCnt, err.Error())
+			time.Sleep(3 * time.Second)
+			continue
 		}
+		if m.localAddr == "" {
+			m.localAddr = gClusterInfo.Ip
+		}
+		m.clusterUuid = gClusterInfo.ClusterUuid
+		m.clusterUuidEnable = gClusterInfo.ClusterUuidEnable
+		m.clusterEnableSnapshot = gClusterInfo.ClusterEnableSnapshot
+		clusterEnableSnapshot = m.clusterEnableSnapshot
+		m.clusterId = gClusterInfo.Cluster
+		nodeAddress = m.localAddr + ":" + m.listen
+
+		var settingsFromMaster *proto.UpgradeCompatibleSettings
+		if settingsFromMaster, err = getUpgradeCompatibleSettings(); err != nil {
+			if strings.Contains(err.Error(), proto.KeyWordInHttpApiNotSupportErr) {
+				// master may be lower version and has no this API
+				err = fmt.Errorf("getUpgradeCompatibleSettings from master failed for current master version not support this API")
+				volsForbidWriteOpVerMsg = "[register] master version has no api GetUpgradeCompatibleSettings, ues default value"
+				log.LogError(volsForbidWriteOpVerMsg)
+				syslog.Printf("%v \n", volsForbidWriteOpVerMsg)
+				return err
+			}
+			log.LogErrorf("[register] tryCnt(%v), GetUpgradeCompatibleSettings from master err: %v", tryCnt, err)
+			time.Sleep(3 * time.Second)
+			continue
+		}
+
+		if !settingsFromMaster.DataMediaTypeVaild {
+			err = fmt.Errorf("getUpgradeCompatibleSettings from master: master not set vaild mediaType, cfg %v", settingsFromMaster)
+			log.LogError(err)
+			return
+		}
+
+		volListForbidWriteOpOfProtoVer0 := settingsFromMaster.VolsForbidWriteOpOfProtoVer0
+		volsForbidWriteOpVerMsg = fmt.Sprintf("[register] from master, volumes forbid write operate of proto version-0: %v",
+			volListForbidWriteOpOfProtoVer0)
+
+		m.nodeForbidWriteOpOfProtoVer0 = settingsFromMaster.ClusterForbidWriteOpOfProtoVer0
+		nodeForbidWriteOpOfProtoVerMsg = fmt.Sprintf("[register] from master, cluster node forbid write Operate Of proto version-0: %v",
+			m.nodeForbidWriteOpOfProtoVer0)
+
+		legacyReplicaStorageClass = proto.GetMediaTypeByStorageClass(settingsFromMaster.LegacyDataMediaType)
+
+		volMapForbidWriteOpOfProtoVer0 := make(map[string]struct{})
+		for _, vol := range volListForbidWriteOpOfProtoVer0 {
+			if _, ok := volMapForbidWriteOpOfProtoVer0[vol]; !ok {
+				volMapForbidWriteOpOfProtoVer0[vol] = struct{}{}
+			}
+		}
+		m.VolsForbidWriteOpOfProtoVer0 = volMapForbidWriteOpOfProtoVer0
+
 		var nodeID uint64
 		if nodeID, err = masterClient.NodeAPI().AddMetaNodeWithAuthNode(nodeAddress, m.zoneName, m.serviceIDKey); err != nil {
-			log.LogErrorf("register: register to master fail: address(%v) err(%s)", nodeAddress, err)
+			log.LogErrorf("[register] tryCnt(%v), register to master fail: address(%v) err(%s)", tryCnt, nodeAddress, err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
 		m.nodeId = nodeID
+
+		if proto.IsStorageClassReplica(legacyReplicaStorageClass) {
+			legacyReplicaStorageClassMsg = fmt.Sprintf("[register] from master, legacyReplicaStorageClass(%v)",
+				proto.StorageClassString(legacyReplicaStorageClass))
+			log.LogInfo(legacyReplicaStorageClassMsg)
+		} else {
+			legacyReplicaStorageClassMsg = fmt.Sprintf("[register] from master, invalid legacyReplicaStorageClass(%v)",
+				settingsFromMaster.LegacyDataMediaType)
+			legacyReplicaStorageClass = proto.StorageClass_Unspecified
+			log.LogWarn(legacyReplicaStorageClassMsg)
+		}
+		syslog.Printf("%v \n", legacyReplicaStorageClassMsg)
+
+		log.LogInfo(nodeForbidWriteOpOfProtoVerMsg)
+		syslog.Printf("%v \n", nodeForbidWriteOpOfProtoVerMsg)
+		log.LogInfo(volsForbidWriteOpVerMsg)
 		return
 	}
 }
@@ -489,4 +568,9 @@ func (m *MetaNode) AddConnection() {
 // RemoveConnection removes a connection.
 func (m *MetaNode) RemoveConnection() {
 	atomic.AddInt64(&m.connectionCnt, -1)
+}
+
+func getUpgradeCompatibleSettings() (volListForbidWriteOpOfProtoVer0 *proto.UpgradeCompatibleSettings, err error) {
+	volListForbidWriteOpOfProtoVer0, err = masterClient.AdminAPI().GetUpgradeCompatibleSettings()
+	return
 }

@@ -25,7 +25,7 @@ const (
 	defaultMagnifyFactor = 100
 )
 
-type UploadFlowInfoFunc func(clientInfo wrapper.SimpleClientInfo) error
+type UploadFlowInfoFunc func(clientInfo wrapper.SimpleClientInfo) (bWork bool, err error)
 
 type GridElement struct {
 	time     time.Time
@@ -296,6 +296,7 @@ type LimitManager struct {
 	lastReqTime        time.Time
 	lastTimeOfSetLimit time.Time
 	isLastReqValid     bool
+	Version            *proto.VersionInfo
 	once               sync.Once
 }
 
@@ -306,6 +307,7 @@ func NewLimitManager(client wrapper.SimpleClientInfo) *LimitManager {
 		simpleClient:  client,
 		HitTriggerCnt: gridHitLimitCnt,
 		ReqPeriod:     1,
+		Version:       proto.GetVersion("client"),
 	}
 	mgr.limitMap[proto.IopsReadType] = newLimitFactor(mgr, proto.IopsReadType)
 	mgr.limitMap[proto.IopsWriteType] = newLimitFactor(mgr, proto.IopsWriteType)
@@ -353,6 +355,7 @@ func (limitManager *LimitManager) CalcNeedByPow(limitFactor *LimitFactor, used u
 func (limitManager *LimitManager) GetFlowInfo() (*proto.ClientReportLimitInfo, bool) {
 	info := &proto.ClientReportLimitInfo{
 		FactorMap: make(map[uint32]*proto.ClientLimitInfo),
+		Version:   limitManager.Version,
 	}
 	var (
 		validCliInfo bool
@@ -375,15 +378,6 @@ func (limitManager *LimitManager) GetFlowInfo() (*proto.ClientReportLimitInfo, b
 			buffer += grid.Value.(*GridElement).buffer
 			griCnt++
 
-			// log.LogDebugf("action[GetFlowInfo] type [%v] grid id[%v] used %v limit %v buffer %v time %v sum_used %v sum_limit %v,len %v",
-			//	proto.QosTypeString(factorType),
-			//	grid.Value.(*GridElement).ID,
-			//	grid.Value.(*GridElement).used,
-			//	grid.Value.(*GridElement).limit,
-			//	grid.Value.(*GridElement).buffer,
-			//	grid.Value.(*GridElement).time,
-			//	reqUsed,
-			//	limit, limitFactor.gridList.Len())
 			if grid.Prev() == nil || griCnt >= girdCntOneSecond {
 				log.QosWriteDebugf("action[[GetFlowInfo] type [%v] grid count %v reqused %v list len %v",
 					proto.QosTypeString(factorType), griCnt, reqUsed, limitFactor.gridList.Len())
@@ -507,11 +501,17 @@ func (limitManager *LimitManager) SetClientLimit(limit *proto.LimitRsp2Client) {
 }
 
 func (limitManager *LimitManager) ReadAlloc(ctx context.Context, size int) {
+	if !limitManager.enable {
+		return
+	}
 	limitManager.WaitN(ctx, limitManager.limitMap[proto.IopsReadType], 1)
 	limitManager.WaitN(ctx, limitManager.limitMap[proto.FlowReadType], size)
 }
 
 func (limitManager *LimitManager) WriteAlloc(ctx context.Context, size int) {
+	if !limitManager.enable {
+		return
+	}
 	limitManager.WaitN(ctx, limitManager.limitMap[proto.IopsWriteType], 1)
 	limitManager.WaitN(ctx, limitManager.limitMap[proto.FlowWriteType], size)
 }

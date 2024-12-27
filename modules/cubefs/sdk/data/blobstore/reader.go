@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cubefs/cubefs/blockcache/bcache"
+	"github.com/cubefs/cubefs/client/blockcache/bcache"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/data/manager"
 	"github.com/cubefs/cubefs/sdk/data/stream"
@@ -111,6 +111,7 @@ type ClientConfig struct {
 	FileCache       bool
 	FileSize        uint64
 	CacheThreshold  int
+	StorageClass    uint32
 }
 
 func NewReader(config ClientConfig) (reader *Reader) {
@@ -129,7 +130,7 @@ func NewReader(config ClientConfig) (reader *Reader) {
 	reader.fileCache = config.FileCache
 	reader.cacheThreshold = config.CacheThreshold
 
-	if proto.IsCold(reader.volType) {
+	if proto.IsCold(reader.volType) || proto.IsStorageClassBlobStore(config.StorageClass) {
 		reader.ec.UpdateDataPartitionForColdVolume()
 	}
 
@@ -327,7 +328,8 @@ func (reader *Reader) readSliceRange(ctx context.Context, rs *rwSlice) (err erro
 		// check if dp is exist in preload sence
 		err = reader.ec.CheckDataPartitionExsit(rs.extentKey.PartitionId)
 		if err == nil || ctx.Value("objectnode") != nil {
-			readN, err, readLimitOn = reader.ec.ReadExtent(reader.ino, &rs.extentKey, buf, int(rs.rOffset), int(rs.rSize))
+			readN, err, readLimitOn = reader.ec.ReadExtent(reader.ino, &rs.extentKey, buf, int(rs.rOffset),
+				int(rs.rSize), proto.StorageClass_BlobStore)
 			if err == nil && readN == int(rs.rSize) {
 
 				// L2 cache hit.
@@ -397,8 +399,15 @@ func (reader *Reader) asyncCache(ctx context.Context, cacheKey string, objExtent
 	}
 
 	if reader.needCacheL2() {
-		reader.ec.Write(reader.ino, int(objExtentKey.FileOffset), buf, proto.FlagsCache, nil)
-		log.LogDebugf("TRACE blobStore asyncCache(L2) Exit. cacheKey=%v", cacheKey)
+		streamer := reader.ec.GetStreamer(reader.ino)
+		if streamer == nil {
+			log.LogWarnf("[asyncCache(L2)] streamer for ino %v is nil ", reader.ino)
+			return
+		}
+
+		reader.ec.Write(reader.ino, int(objExtentKey.FileOffset), buf, proto.FlagsCache, nil, reader.ec.CacheDpStorageClass, false)
+		log.LogDebugf("TRACE blobStore asyncCache(L2) Exit. storageClass(%v) cacheKey=%v",
+			proto.StorageClassString(reader.ec.CacheDpStorageClass), cacheKey)
 		return
 	}
 

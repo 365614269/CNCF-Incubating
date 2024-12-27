@@ -71,9 +71,11 @@ const (
 )
 
 var (
-	server    = createDefaultMasterServerForTest()
-	commonVol *Vol
-	cfsUser   *proto.UserInfo
+	server                 = createDefaultMasterServerForTest()
+	commonVol              *Vol
+	defaultVolStorageClass = proto.StorageClass_Replica_SSD
+	defaultMediaType       = proto.MediaType_SSD
+	cfsUser                *proto.UserInfo
 )
 
 var mockServerLock sync.Mutex
@@ -123,21 +125,27 @@ func createDefaultMasterServerForTest() *Server {
 		"logLevel":"DEBUG",
 		"walDir":"/tmp/cubefs/raft",
 		"storeDir":"/tmp/cubefs/rocksdbstore",
-		"clusterName":"cubefs"
+		"clusterName":"cubefs",
+		"bStoreAddr":"127.0.0.1:8500",
+		"bStoreServicePath":"access",
+        "enableDirectDeleteVol":true,
+		"legacyDataMediaType": 1
 	}`
 
 	testServer, err := createMasterServer(cfgJSON)
+	testServer.cluster.cfg.volForceDeletion = true
+
 	if err != nil {
 		panic(err)
 	}
 	// add data node
 	mockDataServers = make([]*mocktest.MockDataServer, 0)
-	mockDataServers = append(mockDataServers, addDataServer(mds1Addr, testZone1))
-	mockDataServers = append(mockDataServers, addDataServer(mds2Addr, testZone1))
-	mockDataServers = append(mockDataServers, addDataServer(mds3Addr, testZone2))
-	mockDataServers = append(mockDataServers, addDataServer(mds4Addr, testZone2))
-	mockDataServers = append(mockDataServers, addDataServer(mds5Addr, testZone2))
-	mockDataServers = append(mockDataServers, addDataServer(mds6Addr, testZone2))
+	mockDataServers = append(mockDataServers, addDataServer(mds1Addr, testZone1, defaultMediaType))
+	mockDataServers = append(mockDataServers, addDataServer(mds2Addr, testZone1, defaultMediaType))
+	mockDataServers = append(mockDataServers, addDataServer(mds3Addr, testZone2, defaultMediaType))
+	mockDataServers = append(mockDataServers, addDataServer(mds4Addr, testZone2, defaultMediaType))
+	mockDataServers = append(mockDataServers, addDataServer(mds5Addr, testZone2, defaultMediaType))
+	mockDataServers = append(mockDataServers, addDataServer(mds6Addr, testZone2, defaultMediaType))
 
 	// add meta node
 	mockMetaServers = make([]*mocktest.MockMetaServer, 0)
@@ -162,7 +170,7 @@ func createDefaultMasterServerForTest() *Server {
 	req := &createVolReq{
 		name:             commonVolName,
 		owner:            "cfs",
-		dpSize:           3,
+		dpSize:           11,
 		mpCount:          3,
 		dpReplicaNum:     3,
 		capacity:         300,
@@ -173,6 +181,12 @@ func createDefaultMasterServerForTest() *Server {
 		zoneName:         testZone2,
 		description:      "",
 		qosLimitArgs:     &qosArgs{},
+		volStorageClass:  defaultVolStorageClass,
+	}
+
+	err = testServer.checkCreateVolReq(req)
+	if err != nil {
+		panic("checkCreateVolReq failed: " + err.Error())
 	}
 
 	_, err = testServer.cluster.createVol(req)
@@ -274,8 +288,8 @@ func createMasterServer(cfgJSON string) (server *Server, err error) {
 	return server, nil
 }
 
-func addDataServer(addr, zoneName string) *mocktest.MockDataServer {
-	mds := mocktest.NewMockDataServer(addr, zoneName)
+func addDataServer(addr, zoneName string, mediaType uint32) *mocktest.MockDataServer {
+	mds := mocktest.NewMockDataServer(addr, zoneName, mediaType)
 	mds.Start()
 	return mds
 }
@@ -507,7 +521,7 @@ func TestPreloadDp(t *testing.T) {
 	volName := "preloadVol"
 	req := map[string]interface{}{}
 	req[nameKey] = volName
-	req[volTypeKey] = proto.VolumeTypeCold
+	req[volStorageClassKey] = proto.StorageClass_BlobStore
 	createVol(req, t)
 
 	preCap := 60
@@ -519,7 +533,7 @@ func TestUpdateVol(t *testing.T) {
 	volName := "updateVol"
 	req := map[string]interface{}{}
 	req[nameKey] = volName
-	req[volTypeKey] = proto.VolumeTypeCold
+	req[volStorageClassKey] = proto.StorageClass_BlobStore
 
 	createVol(req, t)
 
@@ -604,7 +618,7 @@ func TestUpdateVol(t *testing.T) {
 	assert.True(t, view.CacheRule == "")
 
 	for id, name := range []string{"z1", "z2", "z3"} {
-		zone := newZone(name)
+		zone := newZone(name, defaultMediaType)
 		nodeSet1 := newNodeSet(server.cluster, uint64(id), 6, name)
 
 		zone.putNodeSet(nodeSet1)
@@ -689,7 +703,7 @@ func delVol(name string, t *testing.T) {
 
 	vol, err := server.cluster.getVol(name)
 	assert.True(t, err == nil)
-	t.Logf("vol statu %v", vol.Status)
+
 	assert.True(t, vol.Status == proto.VolStatusMarkDelete)
 }
 
@@ -878,7 +892,7 @@ func TestAddDataReplica(t *testing.T) {
 	func() {
 		mockServerLock.Lock()
 		defer mockServerLock.Unlock()
-		mockDataServers = append(mockDataServers, addDataServer(dsAddr, "zone2"))
+		mockDataServers = append(mockDataServers, addDataServer(dsAddr, "zone2", defaultMediaType))
 	}()
 	reqURL := fmt.Sprintf("%v%v?id=%v&addr=%v&force=true", hostAddr, proto.AdminAddDataReplica, partition.PartitionID, dsAddr)
 	process(reqURL, t)
@@ -1643,6 +1657,30 @@ func TestSetMarkDiskBrokenThreshold(t *testing.T) {
 	require.EqualValues(t, oldVal, server.cluster.getMarkDiskBrokenThreshold())
 }
 
+func TestSetEnableAutoDecommissionDisk(t *testing.T) {
+	reqUrl := fmt.Sprintf("%v%v", hostAddr, proto.AdminSetNodeInfo)
+	oldVal := server.cluster.EnableAutoDecommissionDisk.Load()
+	setVal := !oldVal
+	setUrl := fmt.Sprintf("%v?%v=%v&dirSizeLimit=0", reqUrl, autoDecommissionDiskKey, setVal)
+	unsetUrl := fmt.Sprintf("%v?%v=%v&dirSizeLimit=0", reqUrl, autoDecommissionDiskKey, oldVal)
+	process(setUrl, t)
+	require.EqualValues(t, setVal, server.cluster.EnableAutoDecommissionDisk.Load())
+	process(unsetUrl, t)
+	require.EqualValues(t, oldVal, server.cluster.EnableAutoDecommissionDisk.Load())
+}
+
+func TestSetDecommissionDiskInterval(t *testing.T) {
+	reqUrl := fmt.Sprintf("%v%v", hostAddr, proto.AdminSetNodeInfo)
+	oldVal := server.cluster.GetAutoDecommissionDiskInterval()
+	setVal := oldVal + 10*time.Second
+	setUrl := fmt.Sprintf("%v?%v=%v&dirSizeLimit=0", reqUrl, autoDecommissionDiskIntervalKey, int64(setVal))
+	unsetUrl := fmt.Sprintf("%v?%v=%v&dirSizeLimit=0", reqUrl, autoDecommissionDiskIntervalKey, int64(oldVal))
+	process(setUrl, t)
+	require.EqualValues(t, setVal, server.cluster.GetAutoDecommissionDiskInterval())
+	process(unsetUrl, t)
+	require.EqualValues(t, oldVal, server.cluster.GetAutoDecommissionDiskInterval())
+}
+
 func TestSetEnableAutoDpMetaRepair(t *testing.T) {
 	reqUrl := fmt.Sprintf("%v%v", hostAddr, proto.AdminSetNodeInfo)
 	oldVal := server.cluster.getEnableAutoDpMetaRepair()
@@ -1653,6 +1691,18 @@ func TestSetEnableAutoDpMetaRepair(t *testing.T) {
 	require.EqualValues(t, setVal, server.cluster.getEnableAutoDpMetaRepair())
 	process(unsetUrl, t)
 	require.EqualValues(t, oldVal, server.cluster.getEnableAutoDpMetaRepair())
+}
+
+func TestSetAutoDpMetaRepairParallelCnt(t *testing.T) {
+	reqUrl := fmt.Sprintf("%v%v", hostAddr, proto.AdminSetNodeInfo)
+	oldVal := server.cluster.GetAutoDpMetaRepairParallelCnt()
+	setVal := 200
+	setUrl := fmt.Sprintf("%v?%v=%v&dirSizeLimit=0", reqUrl, autoDpMetaRepairParallelCntKey, setVal)
+	unsetUrl := fmt.Sprintf("%v?%v=%v&dirSizeLimit=0", reqUrl, autoDpMetaRepairParallelCntKey, oldVal)
+	process(setUrl, t)
+	require.EqualValues(t, setVal, server.cluster.GetAutoDpMetaRepairParallelCnt())
+	process(unsetUrl, t)
+	require.EqualValues(t, oldVal, server.cluster.GetAutoDpMetaRepairParallelCnt())
 }
 
 func TestSetDpTimeout(t *testing.T) {

@@ -174,8 +174,15 @@ func (d *Dir) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.Cr
 	d.super.ic.Put(info)
 	child := NewFile(d.super, info, uint32(req.Flags&DefaultFlag), d.info.Inode, req.Name)
 	newInode = info.Inode
-
-	d.super.ec.OpenStream(info.Inode)
+	openForWrite := false
+	if req.Flags&0x0f != syscall.O_RDONLY {
+		openForWrite = true
+	}
+	isCache := false
+	if proto.IsCold(d.super.volType) || proto.IsStorageClassBlobStore(info.StorageClass) {
+		isCache = true
+	}
+	d.super.ec.OpenStream(info.Inode, openForWrite, isCache)
 	d.super.fslock.Lock()
 	d.super.nodeCache[info.Inode] = child
 	d.super.fslock.Unlock()
@@ -349,13 +356,27 @@ func (d *Dir) Lookup(ctx context.Context, req *fuse.LookupRequest, resp *fuse.Lo
 		}
 		ino = cino
 	}
-
-	info, err := d.super.InodeGet(ino)
-	if err != nil {
-		log.LogErrorf("Lookup: parent(%v) name(%v) ino(%v) err(%v)", d.info.Inode, req.Name, ino, err)
-		dummyInodeInfo := &proto.InodeInfo{Inode: ino}
-		dummyChild := NewFile(d.super, dummyInodeInfo, DefaultFlag, d.info.Inode, req.Name)
-		return dummyChild, nil
+	var info *proto.InodeInfo
+	for {
+		info, err = d.super.InodeGet(ino)
+		if err != nil {
+			// if OpMismatchStorageClass ,clear nodeCache and inode cache
+			if strings.Contains(err.Error(), "OpMismatchStorageClass") {
+				d.super.fslock.Lock()
+				delete(d.super.nodeCache, ino)
+				d.super.fslock.Unlock()
+				d.super.ic.Delete(ino)
+				_, err = d.super.InodeGet(ino)
+				if err == nil {
+					continue
+				}
+			}
+			log.LogErrorf("Lookup: parent(%v) name(%v) ino(%v) err(%v)", d.info.Inode, req.Name, ino, err)
+			dummyInodeInfo := &proto.InodeInfo{Inode: ino}
+			dummyChild := NewFile(d.super, dummyInodeInfo, DefaultFlag, d.info.Inode, req.Name)
+			return dummyChild, nil
+		}
+		break
 	}
 	mode := proto.OsMode(info.Mode)
 	d.super.fslock.Lock()
@@ -365,8 +386,24 @@ func (d *Dir) Lookup(ctx context.Context, req *fuse.LookupRequest, resp *fuse.Lo
 			child = NewDir(d.super, info, d.info.Inode, req.Name)
 		} else {
 			child = NewFile(d.super, info, DefaultFlag, d.info.Inode, req.Name)
+			log.LogDebugf("Lookup: new file nodeCache parent(%v) name(%v) ino(%v) storageClass(%v)",
+				d.info.Inode, req.Name, ino, child.(*File).info.StorageClass)
 		}
 		d.super.nodeCache[ino] = child
+	} else {
+		// read dir first then look up
+		if mode.IsDir() {
+			if child.(*Dir).info.StorageClass != info.StorageClass {
+				child = NewDir(d.super, info, d.info.Inode, req.Name)
+			}
+		} else {
+			if child.(*File).info.StorageClass != info.StorageClass {
+				child = NewFile(d.super, info, DefaultFlag, d.info.Inode, req.Name)
+			}
+			log.LogDebugf("Lookup: update nodeCache parent(%v) name(%v) ino(%v) storageClass(%v)",
+				d.info.Inode, req.Name, ino, child.(*File).info.StorageClass)
+			d.super.nodeCache[ino] = child
+		}
 	}
 	d.super.fslock.Unlock()
 
@@ -485,6 +522,16 @@ func (d *Dir) ReadDir(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Rea
 
 	infos := d.super.mw.BatchInodeGet(inodes)
 	for _, info := range infos {
+		cacheInfo := d.super.ic.Get(info.Inode)
+		if cacheInfo != nil {
+			// if storage class has been changed. delete the
+			if cacheInfo.StorageClass != info.StorageClass {
+				d.super.fslock.Lock()
+				delete(d.super.nodeCache, info.Inode)
+				d.super.fslock.Unlock()
+			}
+		}
+		// update inode cache
 		d.super.ic.Put(info)
 	}
 
@@ -824,12 +871,23 @@ func (d *Dir) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fus
 			d.super.sc.Put(ino, &summaryInfo)
 		}
 
-		files := summaryInfo.Files
+		filesHdd := summaryInfo.FilesHdd
+		fileSsd := summaryInfo.FilesSsd
+		filesBlobStore := summaryInfo.FilesBlobStore
+
+		fbytesHdd := summaryInfo.FbytesHdd
+		fbytesSsd := summaryInfo.FbytesSsd
+		fbytesBlobStore := summaryInfo.FbytesBlobStore
+
 		subdirs := summaryInfo.Subdirs
-		fbytes := summaryInfo.Fbytes
-		summaryStr := "Files:" + strconv.FormatInt(int64(files), 10) + "," +
-			"Dirs:" + strconv.FormatInt(int64(subdirs), 10) + "," +
-			"Bytes:" + strconv.FormatInt(int64(fbytes), 10)
+
+		summaryStr := "FilesHdd:" + strconv.FormatInt(int64(filesHdd), 10) + "," +
+			"FilesSsd:" + strconv.FormatInt(int64(fileSsd), 10) + "," +
+			"FilesBlobStore:" + strconv.FormatInt(int64(filesBlobStore), 10) + "," +
+			"BytesHdd:" + strconv.FormatInt(int64(fbytesHdd), 10) + "," +
+			"BytesSsd:" + strconv.FormatInt(int64(fbytesSsd), 10) + "," +
+			"BytesBlobStore:" + strconv.FormatInt(int64(fbytesBlobStore), 10) + "," +
+			"Dirs:" + strconv.FormatInt(int64(subdirs), 10)
 		value = []byte(summaryStr)
 
 	} else {

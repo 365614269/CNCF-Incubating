@@ -17,7 +17,6 @@ package raft
 
 import (
 	"fmt"
-	"github.com/cubefs/cubefs/util/log"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -124,6 +123,7 @@ type raft struct {
 	stopc             chan struct{}
 	done              chan struct{}
 	mu                sync.Mutex
+	applyLk           sync.Mutex
 }
 
 func newRaft(config *Config, raftConfig *RaftConfig) (*raft, error) {
@@ -181,7 +181,7 @@ func (s *raft) stop() {
 	<-s.done
 	// remove peers from the monitor for raft after raftFsm is stopped to avoid panic raised by
 	// concurrent map access
-	peers := make([]proto.Peer, len(s.raftFsm.replicas))
+	peers := make([]proto.Peer, 0, len(s.raftFsm.replicas))
 	for _, r := range s.raftFsm.replicas {
 		peers = append(peers, r.peer)
 	}
@@ -207,11 +207,11 @@ func (s *raft) doStop() {
 func (s *raft) runApply() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.LogWarnf("raft(%v) runApply occurred panic,err[%v]", s.raftFsm.id, r)
+			logger.Warn("raft[%v] runApply occurred panic,err[%v]", s.raftFsm.id, r)
 		}
 		s.doStop()
 		s.resetApply()
-		log.LogWarnf("raft(%v) quit runApply", s.raftFsm.id)
+		logger.Warn("raft[%v] quit runApply", s.raftFsm.id)
 	}()
 
 	loopCount := 0
@@ -227,10 +227,14 @@ func (s *raft) runApply() {
 			return
 
 		case apply := <-s.applyc:
+
+			s.applyLk.Lock()
 			if apply.index <= s.curApplied.Get() {
+				logger.Debug("rarft(%d) index %d is less than applied %d", s.raftFsm.id, apply.index, s.curApplied.Get())
 				if len(apply.readIndexes) > 0 {
 					respondReadIndex(apply.readIndexes, nil)
 				}
+				s.applyLk.Unlock()
 				continue
 			}
 
@@ -255,8 +259,10 @@ func (s *raft) runApply() {
 			if len(apply.readIndexes) > 0 {
 				respondReadIndex(apply.readIndexes, nil)
 			}
+			// logger.Debug("raft(%v) Set index %v", s.raftFsm.id, apply.index)
 			s.curApplied.Set(apply.index)
 			pool.returnApply(apply)
+			s.applyLk.Unlock()
 		}
 	}
 }
@@ -264,7 +270,7 @@ func (s *raft) runApply() {
 func (s *raft) run() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.LogWarnf("raft(%v) run occurred panic,err[%v]", s.raftFsm.id, r)
+			logger.Warn("raft[%v] run occurred panic,err[%v]", s.raftFsm.id, r)
 		}
 		s.doStop()
 		s.resetPending(ErrStopped)
@@ -272,7 +278,8 @@ func (s *raft) run() {
 		s.stopSnapping()
 		s.raftConfig.Storage.Close()
 		close(s.done)
-		log.LogWarnf("raft(%v) quit run", s.raftFsm.id)
+		atomic.StorePointer(&s.curSoftSt, unsafe.Pointer(&softState{leader: NoLeader, term: 0}))
+		logger.Warn("raft[%v] quit run", s.raftFsm.id)
 	}()
 
 	s.prevHardSt.Term = s.raftFsm.term
@@ -438,6 +445,7 @@ func (s *raft) tick() {
 	case <-s.stopc:
 	case s.tickc <- struct{}{}:
 	default:
+		logger.Warn(fmt.Sprintf("raft[%v] tickc is full", s.raftConfig.ID))
 		return
 	}
 }
@@ -770,6 +778,7 @@ func (s *raft) getStatus() *Status {
 		PendQueue:         len(s.pending),
 		RecvQueue:         len(s.recvc),
 		AppQueue:          len(s.applyc),
+		TicketQueue:       len(s.tickc),
 		Stopped:           stopped,
 	}
 	if s.raftFsm.state == stateLeader {

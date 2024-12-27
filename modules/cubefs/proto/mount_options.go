@@ -76,6 +76,9 @@ const (
 	SnapshotReadVerSeq
 
 	DisableMountSubtype
+	StreamRetryTimeOut
+	BufferChanSize
+	BcacheOnlyForNotSSD
 	MaxMountOption
 )
 
@@ -155,6 +158,7 @@ func InitMountOptions(opts []MountOption) {
 	opts[WriteThreads] = MountOption{"writeThreads", "Cold volume write threads", "", int64(10)}
 	opts[MetaSendTimeout] = MountOption{"metaSendTimeout", "Meta send timeout", "", int64(600)}
 	opts[BuffersTotalLimit] = MountOption{"buffersTotalLimit", "Send/Receive packets memory limit", "", int64(32768)} // default 4G
+	opts[BufferChanSize] = MountOption{"buffersChanSize", "Send/Receive buffer chan size", "", int64(256)}            // default 256
 	opts[MaxStreamerLimit] = MountOption{"maxStreamerLimit", "The maximum number of streamers", "", int64(0)}         // default 0
 	opts[BcacheFilterFiles] = MountOption{"bcacheFilterFiles", "The block cache filter files suffix", "", "py;pyx;sh;yaml;conf;pt;pth;log;out"}
 	opts[BcacheBatchCnt] = MountOption{"bcacheBatchCnt", "The block cache get meta count", "", int64(100000)}
@@ -170,6 +174,8 @@ func InitMountOptions(opts []MountOption) {
 	opts[FileSystemName] = MountOption{"fileSystemName", "The explicit name of the filesystem", "", ""}
 	opts[SnapshotReadVerSeq] = MountOption{"snapshotReadSeq", "Snapshot read seq", "", int64(0)} // default false
 	opts[DisableMountSubtype] = MountOption{"disableMountSubtype", "Disable Mount Subtype", "", false}
+	opts[StreamRetryTimeOut] = MountOption{"streamRetryTimeout", "max stream retry timeout, s", "", int64(0)}
+	opts[BcacheOnlyForNotSSD] = MountOption{"enableBcacheOnlyForNotSSD", "Enable block cache only for not ssd", "", false}
 
 	for i := 0; i < MaxMountOption; i++ {
 		flag.StringVar(&opts[i].cmdlineValue, opts[i].keyword, "", opts[i].description)
@@ -312,6 +318,7 @@ type MountOptions struct {
 	CacheThreshold               int
 	EbsBlockSize                 int
 	EnableBcache                 bool
+	BcacheOnlyForNotSSD          bool
 	BcacheDir                    string
 	BcacheFilterFiles            string
 	BcacheCheckIntervalS         int64
@@ -323,6 +330,7 @@ type MountOptions struct {
 	NeedRestoreFuse              bool
 	MetaSendTimeout              int64
 	BuffersTotalLimit            int64
+	BufferChanSize               int64
 	MaxStreamerLimit             int64
 	EnableAudit                  bool
 	RequestTimeout               int64
@@ -335,4 +343,11 @@ type MountOptions struct {
 	VerReadSeq uint64
 	// disable mount subtype
 	DisableMountSubtype bool
+	// stream retry timeout
+	StreamRetryTimeout int
+
+	// hybrid cloud
+	VolStorageClass        uint32
+	VolAllowedStorageClass []uint32
+	VolCacheDpStorageClass uint32
 }

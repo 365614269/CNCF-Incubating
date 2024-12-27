@@ -20,7 +20,10 @@ import (
 	"math/rand"
 
 	"github.com/cubefs/cubefs/proto"
+	"github.com/cubefs/cubefs/util/iputil"
 )
+
+var BcacheOnlyForNotSSD bool
 
 type Decoder func([]byte) ([]byte, error)
 
@@ -83,7 +86,14 @@ func (api *ClientAPI) GetVolumeWithAuthnode(volName string, authKey string, toke
 func (api *ClientAPI) GetVolumeStat(volName string) (info *proto.VolStatInfo, err error) {
 	info = &proto.VolStatInfo{}
 	err = api.mc.requestWith(info, newRequest(get, proto.ClientVolStat).
-		Header(api.h).Param(anyParam{"name", volName}, anyParam{"version", proto.LFClient}))
+		Header(api.h).Param(
+		anyParam{"name", volName},
+		anyParam{"version", proto.LFClient},
+		anyParam{proto.ClientVerKey, proto.Version},
+		anyParam{proto.HostKey, iputil.HostName},
+		anyParam{proto.RoleKey, proto.Role},
+		anyParam{proto.BcacheOnlyForNotSSDKey, BcacheOnlyForNotSSD},
+	))
 	return
 }
 
@@ -115,14 +125,14 @@ func (api *ClientAPI) GetDataPartitionsFromLeader(volName string) (view *proto.D
 }
 
 func (api *ClientAPI) GetDataPartitions(volName string) (view *proto.DataPartitionsView, err error) {
-	lastLeader := api.mc.leaderAddr
+	lastLeader := api.mc.Leader()
 	defer api.mc.SetLeader(lastLeader)
 	randIndex := rand.Intn(len(api.mc.masters))
 	if randIndex >= len(api.mc.masters) {
 		err = fmt.Errorf("master len %v less or equal request index %v", len(api.mc.masters), randIndex)
 		return
 	}
-	api.mc.SetLeader(api.mc.masters[randIndex])
+	api.mc.SetLeader(api.mc.GetMasterAddresses()[randIndex])
 	view, err = api.GetDataPartitionsFromLeader(volName)
 	return
 }

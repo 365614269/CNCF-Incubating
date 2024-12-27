@@ -2,6 +2,7 @@ package master
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func buildPanicCluster() *Cluster {
-	c := newCluster(server.cluster.Name, server.cluster.leaderInfo, server.cluster.fsm, server.cluster.partition, server.config)
+	c := newCluster(server.cluster.Name, server.cluster.leaderInfo, server.cluster.fsm, server.cluster.partition, server.config, server)
 	v := buildPanicVol()
 	c.putVol(v)
 	return c
@@ -131,7 +132,8 @@ func TestPanicCheckBadDiskRecovery(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	dp := newDataPartition(partitionID, vol.dpReplicaNum, vol.Name, vol.ID, proto.PartitionTypeNormal, 0)
+	dp := newDataPartition(partitionID, vol.dpReplicaNum, vol.Name, vol.ID,
+		proto.PartitionTypeNormal, 0, defaultMediaType)
 	c.BadDataPartitionIds.Store(fmt.Sprintf("%v", dp.PartitionID), dp)
 	c.scheduleToCheckDiskRecoveryProgress()
 }
@@ -362,8 +364,9 @@ func TestBalanceMetaPartition(t *testing.T) {
 func TestMasterClientLeaderChange(t *testing.T) {
 	cluster := &Cluster{
 		masterClient: masterSDK.NewMasterClient(nil, false),
-		t:            newTopology(),
 	}
+	cluster.t = newTopology()
+	cluster.BadDataPartitionIds = new(sync.Map)
 	server := &Server{
 		cluster: cluster,
 		leaderInfo: &LeaderInfo{
@@ -388,7 +391,7 @@ func TestCreateVolWithDpCount(t *testing.T) {
 		req := &createVolReq{
 			name:             commonVolName + "001",
 			owner:            "cfs",
-			dpSize:           3,
+			dpSize:           11,
 			mpCount:          30,
 			dpCount:          30,
 			dpReplicaNum:     3,
@@ -400,8 +403,14 @@ func TestCreateVolWithDpCount(t *testing.T) {
 			zoneName:         testZone1 + "," + testZone2,
 			description:      "",
 			qosLimitArgs:     &qosArgs{},
+			volStorageClass:  defaultVolStorageClass,
 		}
-		_, err := server.cluster.createVol(req)
+
+		// auto set allowedStorageClass[] in createVolReq
+		err := server.checkCreateVolReq(req)
+		require.NoError(t, err)
+
+		_, err = server.cluster.createVol(req)
 		require.NoError(t, err)
 
 		vol, err := server.cluster.getVol(req.name)
@@ -427,8 +436,10 @@ func TestCreateVolWithDpCount(t *testing.T) {
 			zoneName:         testZone1 + "," + testZone2,
 			description:      "",
 			qosLimitArgs:     &qosArgs{},
+			volStorageClass:  defaultVolStorageClass,
 		}
-		_, err := server.cluster.createVol(req)
+
+		err := server.checkCreateVolReq(req)
 		require.Error(t, err)
 	})
 }

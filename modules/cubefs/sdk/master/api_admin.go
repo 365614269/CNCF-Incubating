@@ -43,9 +43,22 @@ func (api *AdminAPI) EncodingGzip() *AdminAPI {
 	return api.EncodingWith(encodingGzip)
 }
 
-func (api *AdminAPI) GetCluster() (cv *proto.ClusterView, err error) {
+func (api *AdminAPI) GetOpLog(dimension string, volName string, addr string, dpId string, diskName string) (opv *proto.OpLogView, err error) {
+	opv = &proto.OpLogView{}
+	err = api.mc.requestWith(opv, newRequest(get, proto.AdminGetOpLog).Header(api.h).Param(
+		anyParam{"opLogDimension", dimension},
+		anyParam{"volName", volName},
+		anyParam{"addr", addr},
+		anyParam{"dpId", dpId},
+		anyParam{"diskName", diskName},
+	))
+	return
+}
+
+func (api *AdminAPI) GetCluster(volStorageClass bool) (cv *proto.ClusterView, err error) {
 	cv = &proto.ClusterView{}
-	err = api.mc.requestWith(cv, newRequest(get, proto.AdminGetCluster).Header(api.h))
+	err = api.mc.requestWith(cv, newRequest(get, proto.AdminGetCluster).Header(api.h).
+		addParam("volStorageClass", strconv.FormatBool(volStorageClass)))
 	return
 }
 
@@ -162,11 +175,12 @@ func (api *AdminAPI) LoadDataPartition(volName string, partitionID uint64, clien
 	))
 }
 
-func (api *AdminAPI) CreateDataPartition(volName string, count int, clientIDKey string) (err error) {
+func (api *AdminAPI) CreateDataPartition(volName string, count int, clientIDKey string, mediaType uint32) (err error) {
 	return api.mc.request(newRequest(get, proto.AdminCreateDataPartition).Header(api.h).Param(
 		anyParam{"name", volName},
 		anyParam{"count", count},
 		anyParam{"clientIDKey", clientIDKey},
+		anyParam{"mediaType", mediaType},
 	))
 }
 
@@ -190,11 +204,12 @@ func (api *AdminAPI) DecommissionMetaPartition(metaPartitionID uint64, nodeAddr,
 	return
 }
 
-func (api *AdminAPI) DeleteDataReplica(dataPartitionID uint64, nodeAddr, clientIDKey string) (err error) {
+func (api *AdminAPI) DeleteDataReplica(dataPartitionID uint64, nodeAddr, clientIDKey string, raftForce bool) (err error) {
 	request := newRequest(get, proto.AdminDeleteDataReplica).Header(api.h)
 	request.addParam("id", strconv.FormatUint(dataPartitionID, 10))
 	request.addParam("addr", nodeAddr)
 	request.addParam("clientIDKey", clientIDKey)
+	request.addParam("raftForceDel", strconv.FormatBool(raftForce))
 	_, err = api.mc.serveRequest(request)
 	return
 }
@@ -269,6 +284,7 @@ func (api *AdminAPI) UpdateVolume(
 	txConflictRetryInterval int64,
 	txOpLimit int,
 	clientIDKey string,
+	optVolCapClass int,
 ) (err error) {
 	request := newRequest(get, proto.AdminUpdateVol).Header(api.h)
 	request.addParam("name", vv.Name)
@@ -278,6 +294,8 @@ func (api *AdminAPI) UpdateVolume(
 	request.addParam("zoneName", vv.ZoneName)
 	request.addParam("capacity", strconv.FormatUint(vv.Capacity, 10))
 	request.addParam("followerRead", strconv.FormatBool(vv.FollowerRead))
+	request.addParam(proto.MetaFollowerReadKey, strconv.FormatBool(vv.MetaFollowerRead))
+	request.addParam(proto.VolEnableDirectRead, strconv.FormatBool(vv.DirectRead))
 	request.addParam("ebsBlkSize", strconv.Itoa(vv.ObjBlockSize))
 	request.addParam("cacheCap", strconv.FormatUint(vv.CacheCapacity, 10))
 	request.addParam("cacheAction", strconv.Itoa(vv.CacheAction))
@@ -293,6 +311,14 @@ func (api *AdminAPI) UpdateVolume(
 	request.addParam("deleteLockTime", strconv.FormatInt(vv.DeleteLockTime, 10))
 	request.addParam("autoDpMetaRepair", strconv.FormatBool(vv.EnableAutoDpMetaRepair))
 	request.addParam("clientIDKey", clientIDKey)
+	request.addParam("interval", strconv.FormatInt(vv.TrashInterval, 10))
+	request.addParam("trashInterval", strconv.FormatInt(vv.TrashInterval, 10))
+	request.addParam("accessTimeValidInterval", strconv.FormatInt(vv.AccessTimeInterval, 10))
+	request.addParam("enablePersistAccessTime", strconv.FormatBool(vv.EnablePersistAccessTime))
+	request.addParam("volStorageClass", strconv.FormatUint(uint64(vv.VolStorageClass), 10))
+	request.addParam("forbidWriteOpOfProtoVersion0", strconv.FormatBool(vv.ForbidWriteOpOfProtoVer0))
+	request.addParam(proto.LeaderRetryTimeoutKey, strconv.FormatUint(uint64(vv.LeaderRetryTimeOut), 10))
+
 	if txMask != "" {
 		request.addParam("enableTxMask", txMask)
 		request.addParam("txForceReset", strconv.FormatBool(txForceReset))
@@ -308,6 +334,10 @@ func (api *AdminAPI) UpdateVolume(
 	}
 	if txConflictRetryInterval > 0 {
 		request.addParam("txConflictRetryInterval", strconv.FormatInt(txConflictRetryInterval, 10))
+	}
+	if optVolCapClass > 0 {
+		request.addParam("quotaClass", strconv.FormatInt(int64(optVolCapClass), 10))
+		request.addParam("quotaOfStorageClass", strconv.FormatInt(int64(vv.QuotaOfStorageClass[0].QuotaGB), 10))
 	}
 	_, err = api.mc.serveRequest(request)
 	return
@@ -338,11 +368,25 @@ func (api *AdminAPI) VolExpand(volName string, capacity uint64, authKey, clientI
 	return
 }
 
-func (api *AdminAPI) CreateVolName(volName, owner string, capacity uint64, deleteLockTime int64, crossZone, normalZonesFirst bool, business string,
-	mpCount, dpCount, replicaNum, dpSize, volType int, followerRead bool, zoneName, cacheRuleKey string, ebsBlkSize,
+func (api *AdminAPI) VolAddAllowedStorageClass(volName string, addAllowedStorageClass uint32, ebsBlkSize int, authKey, clientIDKey string, force bool) (err error) {
+	request := newRequest(http.MethodGet, proto.AdminVolAddAllowedStorageClass).Header(api.h)
+	request.addParam("name", volName)
+	request.addParam("allowedStorageClass", strconv.FormatUint(uint64(addAllowedStorageClass), 10))
+	request.addParam("ebsBlkSize", strconv.Itoa(ebsBlkSize))
+	request.addParam("authKey", authKey)
+	request.addParam("clientIDKey", clientIDKey)
+	request.addParam("force", strconv.FormatBool(force))
+	if _, err = api.mc.serveRequest(request); err != nil {
+		return
+	}
+	return
+}
+
+func (api *AdminAPI) CreateVolName(volName, owner string, capacity uint64, deleteLockTime int64, crossZone, normalZonesFirst bool,
+	business string, mpCount, dpCount, replicaNum, dpSize int, followerRead bool, zoneName, cacheRuleKey string, ebsBlkSize,
 	cacheCapacity, cacheAction, cacheThreshold, cacheTTL, cacheHighWater, cacheLowWater, cacheLRUInterval int,
 	dpReadOnlyWhenVolFull bool, txMask string, txTimeout uint32, txConflictRetryNum int64, txConflictRetryInterval int64, optEnableQuota string,
-	clientIDKey string,
+	clientIDKey string, volStorageClass uint32, allowedStorageClass string, optMetaFollowerRead string,
 ) (err error) {
 	request := newRequest(get, proto.AdminCreateVol).Header(api.h)
 	request.addParam("name", volName)
@@ -356,8 +400,8 @@ func (api *AdminAPI) CreateVolName(volName, owner string, capacity uint64, delet
 	request.addParam("dpCount", strconv.Itoa(dpCount))
 	request.addParam("replicaNum", strconv.Itoa(replicaNum))
 	request.addParam("dpSize", strconv.Itoa(dpSize))
-	request.addParam("volType", strconv.Itoa(volType))
 	request.addParam("followerRead", strconv.FormatBool(followerRead))
+	request.addParam(proto.MetaFollowerReadKey, optMetaFollowerRead)
 	request.addParam("zoneName", zoneName)
 	request.addParam("cacheRuleKey", cacheRuleKey)
 	request.addParam("ebsBlkSize", strconv.Itoa(ebsBlkSize))
@@ -371,6 +415,9 @@ func (api *AdminAPI) CreateVolName(volName, owner string, capacity uint64, delet
 	request.addParam("dpReadOnlyWhenVolFull", strconv.FormatBool(dpReadOnlyWhenVolFull))
 	request.addParam("enableQuota", optEnableQuota)
 	request.addParam("clientIDKey", clientIDKey)
+	request.addParam("volStorageClass", strconv.FormatUint(uint64(volStorageClass), 10))
+	request.addParam("allowedStorageClass", allowedStorageClass)
+
 	if txMask != "" {
 		request.addParam("enableTxMask", txMask)
 	}
@@ -516,8 +563,10 @@ func (api *AdminAPI) SetMasterVolDeletionDelayTime(volDeletionDelayTimeHour int)
 }
 
 func (api *AdminAPI) SetClusterParas(batchCount, markDeleteRate, deleteWorkerSleepMs, autoRepairRate, loadFactor, maxDpCntLimit, maxMpCntLimit, clientIDKey string,
-	dataNodesetSelector, metaNodesetSelector, dataNodeSelector, metaNodeSelector string, markDiskBrokenThreshold string,
-	enableAutoDpMetaRepair string, dpRepairTimeout string, dpTimeout string,
+	enableAutoDecommissionDisk string, autoDecommissionDiskInterval string,
+	enableAutoDpMetaRepair string, autoDpMetaRepairParallelCnt string,
+	dpRepairTimeout string, dpTimeout string, dpBackupTimeout string,
+	decommissionDpLimit, decommissionDiskLimit, forbidWriteOpOfProtoVersion0 string, mediaType string,
 ) (err error) {
 	request := newRequest(get, proto.AdminSetNodeInfo).Header(api.h)
 	request.addParam("batchCount", batchCount)
@@ -529,21 +578,45 @@ func (api *AdminAPI) SetClusterParas(batchCount, markDeleteRate, deleteWorkerSle
 	request.addParam("maxMpCntLimit", maxMpCntLimit)
 	request.addParam("clientIDKey", clientIDKey)
 
-	request.addParam("dataNodesetSelector", dataNodesetSelector)
-	request.addParam("metaNodesetSelector", metaNodesetSelector)
-	request.addParam("dataNodeSelector", dataNodeSelector)
-	request.addParam("metaNodeSelector", metaNodeSelector)
-	if markDiskBrokenThreshold != "" {
-		request.addParam("markDiskBrokenThreshold", markDiskBrokenThreshold)
+	// request.addParam("dataNodesetSelector", dataNodesetSelector)
+	// request.addParam("metaNodesetSelector", metaNodesetSelector)
+	// request.addParam("dataNodeSelector", dataNodeSelector)
+	// request.addParam("metaNodeSelector", metaNodeSelector)
+	// if markDiskBrokenThreshold != "" {
+	//	request.addParam("markDiskBrokenThreshold", markDiskBrokenThreshold)
+	// }
+	if enableAutoDecommissionDisk != "" {
+		request.addParam("autoDecommissionDisk", enableAutoDecommissionDisk)
+	}
+	if autoDecommissionDiskInterval != "" {
+		request.addParam("autoDecommissionDiskInterval", autoDecommissionDiskInterval)
 	}
 	if enableAutoDpMetaRepair != "" {
 		request.addParam("autoDpMetaRepair", enableAutoDpMetaRepair)
+	}
+	if autoDpMetaRepairParallelCnt != "" {
+		request.addParam("autoDpMetaRepairParallelCnt", autoDpMetaRepairParallelCnt)
 	}
 	if dpRepairTimeout != "" {
 		request.addParam("dpRepairTimeOut", dpRepairTimeout)
 	}
 	if dpTimeout != "" {
 		request.addParam("dpTimeout", dpTimeout)
+	}
+	if dpBackupTimeout != "" {
+		request.addParam("dpBackupTimeout", dpBackupTimeout)
+	}
+	if decommissionDpLimit != "" {
+		request.addParam("decommissionLimit", decommissionDpLimit)
+	}
+	if decommissionDiskLimit != "" {
+		request.addParam("decommissionDiskLimit", decommissionDiskLimit)
+	}
+	if forbidWriteOpOfProtoVersion0 != "" {
+		request.addParam("forbidWriteOpOfProtoVersion0", forbidWriteOpOfProtoVersion0)
+	}
+	if mediaType != "" {
+		request.addParam("dataMediaType", mediaType)
 	}
 	_, err = api.mc.serveRequest(request)
 	return
@@ -634,8 +707,8 @@ func (api *AdminAPI) GetQuota(volName string, quotaId string) (quotaInfo *proto.
 	return quotaInfo, err
 }
 
-func (api *AdminAPI) QueryBadDisks() (badDisks *proto.DiskInfos, err error) {
-	badDisks = &proto.DiskInfos{}
+func (api *AdminAPI) QueryBadDisks() (badDisks *proto.BadDiskInfos, err error) {
+	badDisks = &proto.BadDiskInfos{}
 	err = api.mc.requestWith(badDisks, newRequest(get, proto.QueryBadDisks).Header(api.h))
 	return
 }
@@ -778,7 +851,7 @@ func (api *AdminAPI) QueryDecommissionFailedDisk(decommType int) (diskInfo []*pr
 }
 
 func (api *AdminAPI) AbortDiskDecommission(addr string, disk string) (err error) {
-	request := newRequest(post, proto.AdminAbortDecommissionDisk)
+	request := newRequest(post, proto.CancelDecommissionDisk)
 	request.addParam("addr", addr)
 	request.addParam("disk", disk)
 
@@ -832,5 +905,11 @@ func (api *AdminAPI) ResetDataPartitionRestoreStatus(dpId uint64) (ok bool, err 
 	request.addParam("id", strconv.FormatUint(dpId, 10))
 
 	err = api.mc.requestWith(&ok, request)
+	return
+}
+
+func (api *AdminAPI) GetUpgradeCompatibleSettings() (upgradeCompatibleSettings *proto.UpgradeCompatibleSettings, err error) {
+	upgradeCompatibleSettings = &proto.UpgradeCompatibleSettings{}
+	err = api.mc.requestWith(upgradeCompatibleSettings, newRequest(get, proto.AdminGetUpgradeCompatibleSettings).Header(api.h))
 	return
 }

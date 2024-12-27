@@ -15,11 +15,14 @@
 package metanode
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 	"time"
+
+	"github.com/cubefs/cubefs/util/timeutil"
 
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/util/auditlog"
@@ -46,9 +49,11 @@ func (mp *metaPartition) CheckQuota(inodeId uint64, p *Packet) (iParm *Inode, in
 		return
 	}
 	inode = item.(*Inode)
+	iParm.StorageClass = inode.StorageClass
+
 	mp.uidManager.acLock.Lock()
 	if mp.uidManager.getUidAcl(inode.Uid) {
-		log.LogWarnf("CheckQuota UidSpace.volname [%v] mp[%v] uid %v be set full", mp.uidManager.mpID, mp.uidManager.volName, inode.Uid)
+		log.LogWarnf("CheckQuota UidSpace.volName[%v] mp[%v] uid %v be set full", mp.uidManager.mpID, mp.uidManager.volName, inode.Uid)
 		mp.uidManager.acLock.Unlock()
 		status = proto.OpNoSpaceErr
 		err = errors.New("CheckQuota UidSpace is over quota")
@@ -99,6 +104,13 @@ func (mp *metaPartition) ExtentAppendWithCheck(req *proto.AppendExtentKeyWithChe
 		p.PacketErrorWithBody(status, reply)
 		return
 	}
+	if req.IsCache && req.IsMigration {
+		err = errors.New("ExtentAppendWithCheck parameter IsCache and IsMigration can not be ture at the same time")
+		log.LogError(err)
+		reply := []byte(err.Error())
+		p.PacketErrorWithBody(status, reply)
+		return
+	}
 	var (
 		inoParm *Inode
 		i       *Inode
@@ -108,18 +120,37 @@ func (mp *metaPartition) ExtentAppendWithCheck(req *proto.AppendExtentKeyWithChe
 		return
 	}
 
+	if req.StorageClass == proto.StorageClass_Unspecified {
+		log.LogInfof("[ExtentAppendWithCheck] mp(%v) inode(%v) storageClass(%v), reqStorageClass(%v), maybe from lower version client, set it as inode StorageClass",
+			mp.config.PartitionId, inoParm.Inode, proto.StorageClassString(inoParm.StorageClass), proto.StorageClassString(req.StorageClass))
+		req.StorageClass = inoParm.StorageClass
+	} else if !proto.IsStorageClassReplica(req.StorageClass) {
+		err = errors.New(fmt.Sprintf("mp(%v) inode(%v) wrong storageClass(%v), expect replica storageClass",
+			mp.config.PartitionId, inoParm.Inode, req.StorageClass))
+		log.LogErrorf("[ExtentAppendWithCheck] %v", err)
+
+		reply := []byte(err.Error())
+		p.PacketErrorWithBody(proto.OpMismatchStorageClass, reply)
+		return
+	}
+
+	// TODO:hechi: if storage type is not ssd , update extent key by CacheExtentAppendWithCheck
 	// check volume's Type: if volume's type is cold, cbfs' extent can be modify/add only when objextent exist
-	if proto.IsCold(mp.volType) {
+	if req.IsCache {
 		i.RLock()
-		exist, idx := i.ObjExtents.FindOffsetExist(req.Extent.FileOffset)
+		if i.HybridCloudExtents.sortedEks == nil {
+			i.HybridCloudExtents.sortedEks = NewSortedObjExtents()
+		}
+		ObjExtents := i.HybridCloudExtents.sortedEks.(*SortedObjExtents)
+		exist, idx := ObjExtents.FindOffsetExist(req.Extent.FileOffset)
 		if !exist {
 			i.RUnlock()
 			err = fmt.Errorf("ebs's objextent not exist with offset[%v]", req.Extent.FileOffset)
 			p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
 			return
 		}
-		if i.ObjExtents.eks[idx].Size != uint64(req.Extent.Size) {
-			err = fmt.Errorf("ebs's objextent size[%v] isn't equal to the append size[%v]", i.ObjExtents.eks[idx].Size, req.Extent.Size)
+		if ObjExtents.eks[idx].Size != uint64(req.Extent.Size) {
+			err = fmt.Errorf("ebs's objextent size[%v] isn't equal to the append size[%v]", ObjExtents.eks[idx].Size, req.Extent.Size)
 			p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
 			i.RUnlock()
 			return
@@ -132,12 +163,35 @@ func (mp *metaPartition) ExtentAppendWithCheck(req *proto.AppendExtentKeyWithChe
 	// extent key verSeq not set value since marshal will not include verseq
 	// use inode verSeq instead
 	inoParm.setVer(mp.verSeq)
-	inoParm.Extents.Append(ext)
-	log.LogDebugf("ExtentAppendWithCheck: ino(%v) mp[%v] verSeq (%v)", req.Inode, req.PartitionID, mp.verSeq)
+	if !req.IsCache {
+		inoParm.StorageClass = req.StorageClass
+	}
+
+	if req.IsCache {
+		inoParm.Extents.Append(ext)
+	} else if req.IsMigration {
+		inoParm.HybridCloudExtentsMigration.storageClass = req.StorageClass
+		inoParm.HybridCloudExtentsMigration.sortedEks = NewSortedExtents()
+		inoParm.HybridCloudExtentsMigration.sortedEks.(*SortedExtents).Append(ext)
+	} else {
+		inoParm.HybridCloudExtents.sortedEks = NewSortedExtents()
+		inoParm.HybridCloudExtents.sortedEks.(*SortedExtents).Append(ext)
+	}
+	log.LogDebugf("ExtentAppendWithCheck: ino(%v) mp(%v) isCache(%v) verSeq(%v) storageClass(%v) migrationStorageClass(%v)",
+		req.Inode, req.PartitionID, req.IsCache, mp.verSeq, proto.StorageClassString(inoParm.StorageClass),
+		proto.StorageClassString(inoParm.HybridCloudExtentsMigration.storageClass))
 
 	// Store discard extents right after the append extent key.
 	if len(req.DiscardExtents) != 0 {
-		inoParm.Extents.eks = append(inoParm.Extents.eks, req.DiscardExtents...)
+		if req.IsCache {
+			inoParm.Extents.eks = append(inoParm.Extents.eks, req.DiscardExtents...)
+		} else if req.IsMigration {
+			extents := inoParm.HybridCloudExtentsMigration.sortedEks.(*SortedExtents)
+			extents.eks = append(extents.eks, req.DiscardExtents...)
+		} else {
+			extents := inoParm.HybridCloudExtents.sortedEks.(*SortedExtents)
+			extents.eks = append(extents.eks, req.DiscardExtents...)
+		}
 	}
 	val, err := inoParm.Marshal()
 	if err != nil {
@@ -383,7 +437,8 @@ func (mp *metaPartition) ExtentsList(req *proto.GetExtentsRequest, p *Packet) (e
 	ino := NewInode(req.Inode, 0)
 	retMsg := mp.getInodeTopLayer(ino)
 	if retMsg.Status != proto.OpOk || retMsg.Msg == nil {
-		err = fmt.Errorf("inode(%v) not found", req.Inode)
+		err = fmt.Errorf("mpId(%v) inode(%v) not found", mp.config.PartitionId, req.Inode)
+		p.PacketErrorWithBody(retMsg.Status, []byte(err.Error()))
 		log.LogErrorf("[ExtentsList] %v", err.Error())
 		return
 	}
@@ -395,39 +450,88 @@ func (mp *metaPartition) ExtentsList(req *proto.GetExtentsRequest, p *Packet) (e
 		status = retMsg.Status
 	)
 
-	if status == proto.OpOk {
-		resp := &proto.GetExtentsResponse{}
-		log.LogInfof("action[ExtentsList] inode[%v] request verseq [%v] ino ver [%v] extent size %v ino.Size %v ino[%v] hist len %v",
-			req.Inode, req.VerSeq, ino.getVer(), len(ino.Extents.eks), ino.Size, ino, ino.getLayerLen())
+	if status != proto.OpOk {
+		p.PacketErrorWithBody(status, reply)
+		return
+	}
 
-		if req.VerSeq > 0 && ino.getVer() > 0 && (req.VerSeq < ino.getVer() || isInitSnapVer(req.VerSeq)) {
-			mp.GetExtentByVer(ino, req, resp)
-			vIno := ino.Copy().(*Inode)
-			vIno.setVerNoCheck(req.VerSeq)
-			if vIno = mp.getInodeByVer(vIno); vIno != nil {
-				resp.Generation = vIno.Generation
-				resp.Size = vIno.Size
-			}
-		} else {
+	resp := &proto.GetExtentsResponse{}
+	log.LogInfof("action[ExtentsList] inode[%v] request verseq [%v] ino ver [%v] extent size %v ino.Size %v ino[%v] hist len %v",
+		req.Inode, req.VerSeq, ino.getVer(), len(ino.Extents.eks), ino.Size, ino, ino.getLayerLen())
+
+	resp.LeaseExpireTime = ino.LeaseExpireTime
+	if req.VerSeq > 0 && ino.getVer() > 0 && (req.VerSeq < ino.getVer() || isInitSnapVer(req.VerSeq)) {
+		mp.GetExtentByVer(ino, req, resp)
+		vIno := ino.Copy().(*Inode)
+		vIno.setVerNoCheck(req.VerSeq)
+		if vIno = mp.getInodeByVer(vIno); vIno != nil {
+			resp.Generation = vIno.Generation
+			resp.Size = vIno.Size
+		}
+	} else {
+		if req.IsCache || proto.IsStorageClassBlobStore(ino.StorageClass) {
 			ino.DoReadFunc(func() {
 				resp.Generation = ino.Generation
 				resp.Size = ino.Size
 				ino.Extents.Range(func(_ int, ek proto.ExtentKey) bool {
 					resp.Extents = append(resp.Extents, ek)
-					log.LogInfof("action[ExtentsList] append ek [%v]", ek)
+					log.LogInfof("action[ExtentsList] mp(%v) ino(%v) isCache(%v) append ek: %v",
+						mp.config.PartitionId, ino.Inode, req.IsCache, ek)
 					return true
 				})
 			})
-		}
-		if req.VerAll {
-			resp.LayerInfo = retMsg.Msg.getAllLayerEks()
-		}
-		reply, err = json.Marshal(resp)
-		if err != nil {
-			status = proto.OpErr
-			reply = []byte(err.Error())
+		} else if req.IsMigration {
+			if !proto.IsStorageClassReplica(ino.HybridCloudExtentsMigration.storageClass) {
+				// if HybridCloudExtentsMigration store no migration data, ignore this error
+				if !(ino.HybridCloudExtentsMigration.storageClass == proto.StorageClass_Unspecified &&
+					ino.HybridCloudExtentsMigration.sortedEks == nil) {
+					status = proto.OpErr
+					reply = []byte(fmt.Sprintf("ino(%v) storageClass(%v) not migrate to replica system",
+						ino.Inode, proto.StorageClassString(ino.HybridCloudExtentsMigration.storageClass)))
+					p.PacketErrorWithBody(status, reply)
+					return
+				}
+			}
+			ino.DoReadFunc(func() {
+				resp.Generation = ino.Generation
+				resp.Size = ino.Size
+				if ino.HybridCloudExtentsMigration.sortedEks != nil {
+					extents := ino.HybridCloudExtentsMigration.sortedEks.(*SortedExtents)
+					extents.Range(func(_ int, ek proto.ExtentKey) bool {
+						resp.Extents = append(resp.Extents, ek)
+						log.LogInfof("action[ExtentsList] append ek %v", ek)
+						return true
+					})
+				}
+			})
+		} else {
+			ino.DoReadFunc(func() {
+				resp.Generation = ino.Generation
+				resp.Size = ino.Size
+				if ino.HybridCloudExtents.sortedEks != nil {
+					extents := ino.HybridCloudExtents.sortedEks.(*SortedExtents)
+					extents.Range(func(_ int, ek proto.ExtentKey) bool {
+						resp.Extents = append(resp.Extents, ek)
+						log.LogInfof("action[ExtentsList] mp(%v) ino(%v) isCache(%v) append ek: %v",
+							mp.config.PartitionId, ino.Inode, req.IsCache, ek)
+						return true
+					})
+				}
+			})
 		}
 	}
+	if req.VerAll {
+		resp.LayerInfo = retMsg.Msg.getAllLayerEks()
+	}
+
+	reply, err = json.Marshal(resp)
+	if err != nil {
+		status = proto.OpErr
+		reply = []byte(err.Error())
+	} else if !req.InnerReq {
+		mp.persistInodeAccessTime(ino.Inode, p)
+	}
+	// mark inode as ForbiddenMigration
 	p.PacketErrorWithBody(status, reply)
 	return
 }
@@ -442,26 +546,44 @@ func (mp *metaPartition) ObjExtentsList(req *proto.GetExtentsRequest, p *Packet)
 		reply  []byte
 		status = retMsg.Status
 	)
-	if status == proto.OpOk {
-		resp := &proto.GetObjExtentsResponse{}
-		ino.DoReadFunc(func() {
-			resp.Generation = ino.Generation
-			resp.Size = ino.Size
-			ino.Extents.Range(func(_ int, ek proto.ExtentKey) bool {
-				resp.Extents = append(resp.Extents, ek)
-				return true
-			})
-			ino.ObjExtents.Range(func(ek proto.ObjExtentKey) bool {
+
+	if status != proto.OpOk {
+		p.PacketErrorWithBody(status, reply)
+		return
+	}
+
+	if ino.StorageClass != proto.StorageClass_BlobStore && ino.Size > 0 {
+		status = proto.OpMismatchStorageClass
+		reply = []byte(fmt.Sprintf("Dismatch storage type, current storage type is %s",
+			proto.StorageClassString(ino.StorageClass)))
+		p.PacketErrorWithBody(status, reply)
+		return
+	}
+	resp := &proto.GetObjExtentsResponse{}
+	ino.DoReadFunc(func() {
+		resp.Generation = ino.Generation
+		resp.Size = ino.Size
+		// cache ek
+		ino.Extents.Range(func(_ int, ek proto.ExtentKey) bool {
+			resp.Extents = append(resp.Extents, ek)
+			return true
+		})
+		// from SortedHybridCloudExtents
+		if ino.HybridCloudExtents.sortedEks != nil {
+			objEks := ino.HybridCloudExtents.sortedEks.(*SortedObjExtents)
+			objEks.Range(func(ek proto.ObjExtentKey) bool {
 				resp.ObjExtents = append(resp.ObjExtents, ek)
 				return true
 			})
-		})
-
-		reply, err = json.Marshal(resp)
-		if err != nil {
-			status = proto.OpErr
-			reply = []byte(err.Error())
 		}
+	})
+
+	reply, err = json.Marshal(resp)
+	if err != nil {
+		status = proto.OpErr
+		reply = []byte(err.Error())
+	} else if !req.InnerReq {
+		mp.persistInodeAccessTime(ino.Inode, p)
 	}
 	p.PacketErrorWithBody(status, reply)
 	return
@@ -489,6 +611,11 @@ func (mp *metaPartition) ExtentsTruncate(req *ExtentsTruncateReq, p *Packet, rem
 		return
 	}
 	i := item.(*Inode)
+	if !proto.IsStorageClassReplica(i.StorageClass) {
+		err = fmt.Errorf("inode %v storageClass(%v) do not support tuncate operation", req.Inode, i.StorageClass)
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
 	status := mp.isOverQuota(req.Inode, req.Size > i.Size, false)
 	if status != 0 {
 		log.LogErrorf("ExtentsTruncate fail status [%v]", status)
@@ -501,6 +628,7 @@ func (mp *metaPartition) ExtentsTruncate(req *ExtentsTruncateReq, p *Packet, rem
 	ino.Size = req.Size
 	fileSize = ino.Size
 	ino.setVer(mp.verSeq)
+	ino.StorageClass = i.StorageClass
 	val, err := ino.Marshal()
 	if err != nil {
 		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
@@ -508,6 +636,8 @@ func (mp *metaPartition) ExtentsTruncate(req *ExtentsTruncateReq, p *Packet, rem
 	}
 	resp, err := mp.submit(opFSMExtentTruncate, val)
 	if err != nil {
+		log.LogErrorf("[ExtentsTruncate] mpId(%v) ino(%v) submit fsm return err: %v",
+			mp.config.PartitionId, req.Inode, err)
 		p.PacketErrorWithBody(proto.OpAgain, []byte(err.Error()))
 		return
 	}
@@ -529,9 +659,22 @@ func (mp *metaPartition) BatchExtentAppend(req *proto.AppendExtentKeysRequest, p
 		return
 	}
 
+	// maybe from old version
+	if req.StorageClass == proto.MediaType_Unspecified {
+		req.StorageClass = ino.StorageClass
+	}
+
+	ino.StorageClass = req.StorageClass
+	if !proto.IsStorageClassReplica(ino.StorageClass) {
+		err = fmt.Errorf("ino %v storage type %v donot support BatchExtentAppend", ino.Inode, ino.StorageClass)
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
+
 	extents := req.Extents
+	ino.HybridCloudExtents.sortedEks = NewSortedExtents()
 	for _, extent := range extents {
-		ino.Extents.Append(extent)
+		ino.HybridCloudExtents.sortedEks.(*SortedExtents).Append(extent)
 	}
 	val, err := ino.Marshal()
 	if err != nil {
@@ -553,10 +696,19 @@ func (mp *metaPartition) BatchObjExtentAppend(req *proto.AppendObjExtentKeysRequ
 		log.LogErrorf("BatchObjExtentAppend fail status [%v]", err)
 		return
 	}
-
+	if ino.StorageClass != proto.StorageClass_BlobStore {
+		err = errors.New(fmt.Sprintf("ino(%v) StorageClass(%v) donot support BatchObjExtentAppend",
+			ino.Inode, ino.StorageClass))
+		log.LogErrorf("BatchObjExtentAppend fail [%v]", err)
+		p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
+		return
+	}
+	// can only be called when write into ebs
+	ino.StorageClass = proto.StorageClass_BlobStore
 	objExtents := req.Extents
+	ino.HybridCloudExtents.sortedEks = NewSortedObjExtents()
 	for _, objExtent := range objExtents {
-		err = ino.ObjExtents.Append(objExtent)
+		err = ino.HybridCloudExtents.sortedEks.(*SortedObjExtents).Append(objExtent)
 		if err != nil {
 			p.PacketErrorWithBody(proto.OpErr, []byte(err.Error()))
 			return
@@ -618,14 +770,150 @@ func (mp *metaPartition) sendExtentsToChan(eks []proto.ExtentKey) (err error) {
 	if len(eks) == 0 {
 		return
 	}
-
+	isSnap := mp.GetVerSeq() > 0
 	sortExts := NewSortedExtentsFromEks(eks)
-	val, err := sortExts.MarshalBinary(true)
+	val, err := sortExts.MarshalBinary(isSnap)
 	if err != nil {
 		return fmt.Errorf("[delExtents] marshal binary fail, %s", err.Error())
 	}
-
-	_, err = mp.submit(opFSMSentToChan, val)
+	if !isSnap {
+		_, err = mp.submit(opFSMSentToChan, val)
+	} else {
+		_, err = mp.submit(opFSMSentToChanWithVer, val)
+	}
 
 	return
+}
+
+func (mp *metaPartition) persistInodeAccessTime(inode uint64, p *Packet) {
+	if !mp.enablePersistAccessTime {
+		return
+	}
+
+	i := NewInode(inode, 0)
+	item := mp.inodeTree.Get(i)
+	if item == nil {
+		log.LogWarnf("persistInodeAccessTime inode %v is not found", inode)
+		return
+	}
+
+	ino := item.(*Inode)
+	ctime := timeutil.GetCurrentTimeUnix()
+	atime := ino.AccessTime
+	interval := mp.GetAccessTimeValidInterval()
+
+	if ctime <= atime || ctime-atime < int64(interval) {
+		log.LogDebugf("persistInodeAccessTime: no need to persit atime, ino %d, ctime %d, atime %d, interval %d",
+			inode, ctime, atime, interval)
+		return
+	}
+
+	// always update local AccessTime
+	ino.AccessTime = ctime
+	log.LogDebugf("persistInodeAccessTime ino(%v) persist at to %v", ino.Inode, atime)
+
+	leaderAddr, ok := mp.IsLeader()
+	if ok {
+		retry := 0
+		// sync AccessTime to followers, retry 3 times
+		for retry <= 3 {
+			select {
+			case mp.syncAtimeCh <- ino.Inode:
+				return
+			default:
+				log.LogWarnf("persistInodeAccessTime: inode accessTime ch maybe blocked, mp %d, ino %d, retry %d",
+					mp.config.PartitionId, ino.Inode, retry)
+				retry++
+				time.Sleep(time.Second)
+			}
+		}
+		return
+	}
+
+	if leaderAddr == "" {
+		log.LogWarnf("persistInodeAccessTime ino(%v) sync InodeAccessTime failed for no leader", ino.Inode)
+		return
+	}
+	m := mp.manager
+	mConn, err := m.connPool.GetConnect(leaderAddr)
+	if err != nil {
+		log.LogWarnf("persistInodeAccessTime ino(%v) get connect to leader failed %v", ino.Inode, err)
+		m.connPool.PutConnect(mConn, ForceClosedConnect)
+		return
+	}
+	packetCopy := p.GetCopy()
+	if err = packetCopy.WriteToConn(mConn); err != nil {
+		log.LogWarnf("persistInodeAccessTime ino(%v) write to  connect failed %v", ino.Inode, err)
+		m.connPool.PutConnect(mConn, ForceClosedConnect)
+		return
+	}
+	if err = packetCopy.ReadFromConn(mConn, proto.ReadDeadlineTime); err != nil {
+		log.LogWarnf("persistInodeAccessTime ino(%v) read from  connect failed %v", ino.Inode, err)
+		m.connPool.PutConnect(mConn, ForceClosedConnect)
+		return
+	}
+	m.connPool.PutConnect(mConn, NoClosedConnect)
+	log.LogDebugf("persistInodeAccessTime ino(%v) notify leader to %v sync accessTime", ino.Inode, leaderAddr)
+}
+
+func (mp *metaPartition) batchSyncInodeAtime() {
+	batchCount := 1024
+	maxRetryCnt := 10
+	inodes := make([]uint64, 0, batchCount)
+	bufSlice := make([]byte, 0, 8*batchCount)
+	mpId := mp.config.PartitionId
+
+	for {
+		inodes = inodes[:0]
+		retry := 0
+		bufSlice = bufSlice[:0]
+
+		select {
+		case ino := <-mp.syncAtimeCh:
+			log.LogDebugf("batchSyncInodeAtime: mp(%d) recive inode id %d", mpId, ino)
+			inodes = append(inodes, ino)
+		case <-mp.stopC:
+			log.LogWarnf("batchSyncInodeAtime: recive stop signal, exit, mp(%d), cnt(%d)", mpId, len(inodes))
+			return
+		}
+
+		// try send msgs in 10ms at time or batchCount once, avoid too many req for one mp
+		for len(inodes) < batchCount && retry < maxRetryCnt {
+			select {
+			case ino := <-mp.syncAtimeCh:
+				inodes = append(inodes, ino)
+				log.LogDebugf("batchSyncInodeAtime: mp(%d) recive inode id %d", mpId, ino)
+			case <-mp.stopC:
+				log.LogWarnf("batchSyncInodeAtime: recive stop signal, exit, mp(%d), cnt(%d)", mpId, len(inodes))
+				return
+			default:
+				retry++
+				log.LogDebugf("batchSyncInodeAtime: mp(%d) no new inode req at now, cnt(%d) retry(%d)",
+					mpId, len(inodes), retry)
+				time.Sleep(time.Millisecond)
+			}
+		}
+
+		if log.EnableDebug() {
+			log.LogDebugf("batchSyncInodeAtime: mp(%d) try to batch sync inode atime, inods %+v, retry %d",
+				mpId, len(inodes), retry)
+		}
+
+		buf := make([]byte, 8)
+		// first 8 byte is atime
+		binary.BigEndian.PutUint64(buf, uint64(timeutil.GetCurrentTimeUnix()))
+		bufSlice = append(bufSlice, buf...)
+
+		for _, ino := range inodes {
+			binary.BigEndian.PutUint64(buf, ino)
+			bufSlice = append(bufSlice, buf...)
+		}
+
+		_, err := mp.submit(opFSMBatchSyncInodeATime, bufSlice)
+		if err != nil {
+			log.LogWarnf("batchSyncInodeAtime: mp(%d) cnt (%d), opFSMBatchSyncInodeATime submit failed %v",
+				mpId, len(inodes), err)
+			continue
+		}
+	}
 }

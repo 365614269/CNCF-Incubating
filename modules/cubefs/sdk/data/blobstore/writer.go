@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/cubefs/cubefs/blockcache/bcache"
+	"github.com/cubefs/cubefs/client/blockcache/bcache"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/data/manager"
 	"github.com/cubefs/cubefs/sdk/data/stream"
@@ -207,11 +207,11 @@ func (writer *Writer) cacheLevel2(wSlice *rwSlice) {
 
 func (writer *Writer) WriteFromReader(ctx context.Context, reader io.Reader, h hash.Hash) (size uint64, err error) {
 	var (
-		tmp         = buf.ReadBufPool.Get().([]byte)
+		tmp         = buf.ClodVolWriteBufPool.Get().([]byte)
 		exec        = NewExecutor(writer.wConcurrency)
 		leftToWrite int
 	)
-	defer buf.ReadBufPool.Put(tmp) // nolint: staticcheck
+	defer buf.ClodVolWriteBufPool.Put(tmp) // nolint: staticcheck
 
 	writer.fileOffset = 0
 	writer.err = make(chan *wSliceErr)
@@ -507,8 +507,9 @@ func (writer *Writer) asyncCache(ino uint64, offset int, data []byte) {
 		stat.EndStat("write-async-cache", err, bgTime, 1)
 	}()
 
-	log.LogDebugf("TRACE asyncCache Enter,fileOffset(%v) len(%v)", offset, len(data))
-	write, err := writer.ec.Write(ino, offset, data, proto.FlagsCache, nil)
+	log.LogDebugf("TRACE asyncCache Enter,fileOffset(%v) len(%v), storageClass(%v)",
+		offset, len(data), proto.StorageClassString(writer.ec.CacheDpStorageClass))
+	write, err := writer.ec.Write(ino, offset, data, proto.FlagsCache, nil, writer.ec.CacheDpStorageClass, false)
 	log.LogDebugf("TRACE asyncCache Exit,write(%v) err(%v)", write, err)
 }
 

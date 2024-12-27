@@ -42,6 +42,31 @@ const (
 	TxAdd
 )
 
+var rbInodePool *sync.Pool
+
+func init() {
+	rbInodePool = &sync.Pool{
+		New: func() interface{} {
+			return NewTxRollbackInode(NewInode(0, 0), nil, nil, 0)
+		},
+	}
+}
+
+func GetRbInodeKey(i uint64) *TxRollbackInode {
+	ino := rbInodePool.Get().(*TxRollbackInode)
+	if ino.inode == nil {
+		ino.inode = NewInode(i, 0)
+		return ino
+	}
+
+	ino.inode.Inode = i
+	return ino
+}
+
+func PutRbInodeKey(ino *TxRollbackInode) {
+	rbInodePool.Put(ino)
+}
+
 func (i *TxRollbackInode) ToString() string {
 	content := fmt.Sprintf("{inode:[ino:%v, type:%v, nlink:%v], quotaIds:%v, rbType:%v"+
 		"txInodeInfo:[Ino:%v, MpID:%v, CreateTime:%v, Timeout:%v, TxID:%v, MpMembers:%v]}",
@@ -971,7 +996,6 @@ func (tm *TransactionManager) sendToRM(txInfo *proto.TransactionInfo, op uint8) 
 
 func (tm *TransactionManager) rollbackTx(txId string, skipSetStat bool) (status uint8, err error) {
 	status = proto.OpOk
-
 	tx := tm.getTransaction(txId)
 	if tx == nil {
 		log.LogWarnf("commitTx: tx[%v] not found, already success", txId)
@@ -1235,9 +1259,9 @@ func (tr *TransactionResource) isDentryInTransction(dentry *Dentry) (inTx bool, 
 }
 
 func (tr *TransactionResource) getTxRbInode(ino uint64) (rbInode *TxRollbackInode) {
-	keyNode := &TxRollbackInode{
-		inode: NewInode(ino, 0),
-	}
+	keyNode := GetRbInodeKey(ino)
+	defer PutRbInodeKey(keyNode)
+
 	item := tr.txRbInodeTree.Get(keyNode)
 	if item == nil {
 		return nil
@@ -1369,6 +1393,7 @@ func (tr *TransactionResource) addTxRollbackDentry(rbDentry *TxRollbackDentry) (
 	return proto.OpOk
 }
 
+// TODO support hybrid
 func (tr *TransactionResource) rollbackInodeInternal(rbInode *TxRollbackInode) (status uint8, err error) {
 	status = proto.OpOk
 	mp := tr.txProcessor.mp
@@ -1430,7 +1455,7 @@ func (tr *TransactionResource) rollbackInode(req *proto.TxInodeApplyRequest) (st
 		status = proto.OpTxRbInodeNotExistErr
 		errInfo := fmt.Sprintf("rollbackInode: roll back inode[%v] failed, txID[%v], rb inode not found", req.Inode, req.TxID)
 		err = errors.New(errInfo)
-		log.LogErrorf("%v", errInfo)
+		log.LogWarnf("%v", errInfo)
 		return
 	}
 

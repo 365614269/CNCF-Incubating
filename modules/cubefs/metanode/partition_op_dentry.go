@@ -31,7 +31,11 @@ func (mp *metaPartition) TxCreateDentry(req *proto.TxCreateDentryRequest, p *Pac
 	start := time.Now()
 	if mp.IsEnableAuditLog() {
 		defer func() {
-			auditlog.LogDentryOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.Name, req.GetFullPath(), err, time.Since(start).Milliseconds(), req.Inode, 0)
+			opMsg := p.GetOpMsg()
+			if req.TxInfo != nil {
+				opMsg = fmt.Sprintf("%s_%s", opMsg, req.TxInfo.TxID)
+			}
+			auditlog.LogDentryOp(remoteAddr, mp.GetVolName(), opMsg, req.Name, req.GetFullPath(), err, time.Since(start).Milliseconds(), req.Inode, 0)
 		}()
 	}
 	if req.ParentID == req.Inode {
@@ -193,7 +197,11 @@ func (mp *metaPartition) TxDeleteDentry(req *proto.TxDeleteDentryRequest, p *Pac
 	start := time.Now()
 	if mp.IsEnableAuditLog() {
 		defer func() {
-			auditlog.LogDentryOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.Name, req.GetFullPath(), err, time.Since(start).Milliseconds(), req.Ino, req.ParentID)
+			opMsg := p.GetOpMsg()
+			if req.TxInfo != nil {
+				opMsg = fmt.Sprintf("%s_%s", opMsg, req.TxInfo.TxID)
+			}
+			auditlog.LogDentryOp(remoteAddr, mp.GetVolName(), opMsg, req.Name, req.GetFullPath(), err, time.Since(start).Milliseconds(), req.Ino, req.ParentID)
 		}()
 	}
 	txInfo := req.TxInfo.GetCopy()
@@ -307,8 +315,8 @@ func (mp *metaPartition) DeleteDentry(req *DeleteDentryReq, p *Packet, remoteAdd
 	}
 	retMsg := r.(*DentryResponse)
 	p.ResultCode = retMsg.Status
-	dentry = retMsg.Msg
 	if p.ResultCode == proto.OpOk {
+		dentry = retMsg.Msg
 		var reply []byte
 		resp := &DeleteDentryResp{
 			Inode: dentry.Inode,
@@ -396,7 +404,11 @@ func (mp *metaPartition) TxUpdateDentry(req *proto.TxUpdateDentryRequest, p *Pac
 	start := time.Now()
 	if mp.IsEnableAuditLog() {
 		defer func() {
-			auditlog.LogDentryOp(remoteAddr, mp.GetVolName(), p.GetOpMsg(), req.Name, req.GetFullPath(), err, time.Since(start).Milliseconds(), req.Inode, req.ParentID)
+			opMsg := p.GetOpMsg()
+			if req.TxInfo != nil {
+				opMsg = fmt.Sprintf("%s_%s", opMsg, req.TxInfo.TxID)
+			}
+			auditlog.LogDentryOp(remoteAddr, mp.GetVolName(), opMsg, req.Name, req.GetFullPath(), err, time.Since(start).Milliseconds(), req.Inode, req.ParentID)
 		}()
 	}
 	if req.ParentID == req.Inode {

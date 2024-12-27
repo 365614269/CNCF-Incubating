@@ -131,6 +131,7 @@ func (mw *MetaWrapper) updateClusterInfo() (err error) {
 		info.Cluster, info.Ip, mw.volname)
 	mw.cluster = info.Cluster
 	mw.localIP = info.Ip
+	mw.IsSnapshotEnabled = info.ClusterEnableSnapshot
 	return
 }
 
@@ -158,13 +159,14 @@ const DefaultTrashInterval int64 = 10
 
 func (mw *MetaWrapper) updateVolStatInfo() (err error) {
 	var info *proto.VolStatInfo
+
 	if info, err = mw.mc.ClientAPI().GetVolumeStat(mw.volname); err != nil {
-		log.LogWarnf("updateVolStatInfo: get volume status fail: volume(%v) err(%v)", mw.volname, err)
+		log.LogWarnf("[updateVolStatInfo] get volume status fail: volume(%v) err(%v)", mw.volname, err)
 		return
 	}
 
 	if info.UsedSize > info.TotalSize {
-		log.LogInfof("volume(%v) queried usedSize(%v) is larger than totalSize(%v), force set usedSize as totalSize",
+		log.LogInfof("[updateVolStatInfo] volume(%v) queried usedSize(%v) is larger than totalSize(%v), force set usedSize as totalSize",
 			mw.volname, info.UsedSize, info.TotalSize)
 		info.UsedSize = info.TotalSize
 	}
@@ -172,7 +174,16 @@ func (mw *MetaWrapper) updateVolStatInfo() (err error) {
 	atomic.StoreUint64(&mw.totalSize, info.TotalSize)
 	atomic.StoreUint64(&mw.usedSize, info.UsedSize)
 	atomic.StoreUint64(&mw.inodeCount, info.InodeCount)
+	atomic.StoreUint32(&mw.DefaultStorageClass, info.DefaultStorageClass)
+	mw.FollowerRead = info.MetaFollowerRead
+	mw.leaderRetryTimeout = int64(info.LeaderRetryTimeOut)
+	log.LogInfof("[updateVolStatInfo]: info(%+v), defaultStorageClass(%v), followerRead(%v), timout(%v)",
+		info, proto.StorageClassString(info.DefaultStorageClass), mw.FollowerRead, mw.leaderRetryTimeout)
 	// 0 means disable trash
+	if mw.disableTrashByClient {
+		log.LogDebugf("updateVolStatInfo: trash for %v is disabled by client", mw.volname)
+		return
+	}
 	atomic.StoreInt64(&mw.TrashInterval, info.TrashInterval)
 	if info.TrashInterval == 0 {
 		mw.disableTrash = true
@@ -182,7 +193,7 @@ func (mw *MetaWrapper) updateVolStatInfo() (err error) {
 			mw.trashPolicy.UpdateDeleteInterval(info.TrashInterval)
 		}
 	}
-	log.LogInfof("VolStatInfo: info(%v), disableTrash(%v)", info, mw.disableTrash)
+	log.LogInfof("[updateVolStatInfo]: info(%+v), disableTrash(%v) ", info, mw.disableTrash)
 	return
 }
 
@@ -388,7 +399,7 @@ func (mw *MetaWrapper) parseRespWithAuth(body []byte) (resp proto.MasterAPIAcces
 
 func (mw *MetaWrapper) updateQuotaInfoTick() {
 	mw.updateQuotaInfo()
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
 	for {

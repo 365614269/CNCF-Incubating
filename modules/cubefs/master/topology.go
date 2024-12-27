@@ -30,10 +30,9 @@ import (
 )
 
 type rsManager struct {
-	// nodeType         NodeType
+	nodeType         NodeType
 	nodes            *sync.Map
 	zoneIndexForNode int
-	// zones            []*Zone
 }
 
 func (rsm *rsManager) clear() {
@@ -52,8 +51,13 @@ type topology struct {
 func newTopology() (t *topology) {
 	t = new(topology)
 	t.zoneMap = new(sync.Map)
+
+	t.dataTopology.nodeType = DataNodeType
 	t.dataTopology.nodes = new(sync.Map)
+
+	t.metaTopology.nodeType = MetaNodeType
 	t.metaTopology.nodes = new(sync.Map)
+
 	t.zones = make([]*Zone, 0)
 	return
 }
@@ -169,6 +173,42 @@ func (t *topology) putMetaNodeToCache(metaNode *MetaNode) {
 	t.metaTopology.nodes.Store(metaNode.Addr, metaNode)
 }
 
+func (t *topology) isZoneInList(zone string, zoneList []string) (inList bool) {
+	for i := 0; i < len(zoneList); i++ {
+		if zone == zoneList[i] {
+			inList = true
+			break
+		}
+	}
+
+	return
+}
+
+// dataMediaTypeSet: map[StorageClass]dataNodeCount
+func (t *topology) getDataMediaTypeCanUse(zoneNameList string) (dataMediaTypeMap map[uint32]int) {
+	dataMediaTypeMap = make(map[uint32]int)
+
+	zoneList := strings.Split(zoneNameList, ",")
+
+	t.zoneMap.Range(func(zoneName, value interface{}) bool {
+		zone := value.(*Zone)
+		if zoneNameList != "" && !t.isZoneInList(zone.name, zoneList) {
+			return true
+		}
+
+		if mediaType, zoneMediaTypeDataCount := zone.GetDataMediaTypeCanUse(); mediaType != proto.MediaType_Unspecified {
+			if count, ok := dataMediaTypeMap[mediaType]; !ok {
+				dataMediaTypeMap[mediaType] = zoneMediaTypeDataCount
+			} else {
+				dataMediaTypeMap[mediaType] = count + zoneMediaTypeDataCount
+			}
+		}
+
+		return true
+	})
+	return
+}
+
 type nodeSetCollection []*nodeSet
 
 func (nsc nodeSetCollection) Len() int {
@@ -259,36 +299,36 @@ func (nsgm *DomainManager) start() {
 	nsgm.init = true
 }
 
-func (nsgm *DomainManager) createDomain(zoneName string) (err error) {
-	if !nsgm.init {
-		return fmt.Errorf("createDomain err [%v]", err)
-	}
-	log.LogInfof("zone name [%v] createDomain", zoneName)
-	zoneList := strings.Split(zoneName, ",")
-	grpRegion := newDomainNodeSetGrpManager()
-	if grpRegion.domainId, err = nsgm.c.idAlloc.allocateCommonID(); err != nil {
-		return fmt.Errorf("createDomain err [%v]", err)
-	}
-	nsgm.Lock()
-	for i := 0; i < len(zoneList); i++ {
-		if domainId, ok := nsgm.ZoneName2DomainIdMap[zoneList[i]]; ok {
-			nsgm.Unlock()
-			return fmt.Errorf("zone name [%v] exist in domain [%v]", zoneList[i], domainId)
-		}
-	}
-	nsgm.domainNodeSetGrpVec = append(nsgm.domainNodeSetGrpVec, grpRegion)
-	for i := 0; i < len(zoneList); i++ {
-		nsgm.ZoneName2DomainIdMap[zoneList[i]] = grpRegion.domainId
-		nsgm.domainId2IndexMap[grpRegion.domainId] = len(nsgm.domainNodeSetGrpVec) - 1
-		log.LogInfof("action[createDomain] domainid [%v] zonename [%v] index [%v]", grpRegion.domainId, zoneList[i], len(nsgm.domainNodeSetGrpVec)-1)
-	}
+// func (nsgm *DomainManager) createDomain(zoneName string) (err error) {
+// 	if !nsgm.init {
+// 		return fmt.Errorf("createDomain err [%v]", err)
+// 	}
+// 	log.LogInfof("zone name [%v] createDomain", zoneName)
+// 	zoneList := strings.Split(zoneName, ",")
+// 	grpRegion := newDomainNodeSetGrpManager()
+// 	if grpRegion.domainId, err = nsgm.c.idAlloc.allocateCommonID(); err != nil {
+// 		return fmt.Errorf("createDomain err [%v]", err)
+// 	}
+// 	nsgm.Lock()
+// 	for i := 0; i < len(zoneList); i++ {
+// 		if domainId, ok := nsgm.ZoneName2DomainIdMap[zoneList[i]]; ok {
+// 			nsgm.Unlock()
+// 			return fmt.Errorf("zone name [%v] exist in domain [%v]", zoneList[i], domainId)
+// 		}
+// 	}
+// 	nsgm.domainNodeSetGrpVec = append(nsgm.domainNodeSetGrpVec, grpRegion)
+// 	for i := 0; i < len(zoneList); i++ {
+// 		nsgm.ZoneName2DomainIdMap[zoneList[i]] = grpRegion.domainId
+// 		nsgm.domainId2IndexMap[grpRegion.domainId] = len(nsgm.domainNodeSetGrpVec) - 1
+// 		log.LogInfof("action[createDomain] domainid [%v] zonename [%v] index [%v]", grpRegion.domainId, zoneList[i], len(nsgm.domainNodeSetGrpVec)-1)
+// 	}
 
-	nsgm.Unlock()
-	if err = nsgm.c.putZoneDomain(false); err != nil {
-		return fmt.Errorf("putZoneDomain err [%v]", err)
-	}
-	return
-}
+// 	nsgm.Unlock()
+// 	if err = nsgm.c.putZoneDomain(false); err != nil {
+// 		return fmt.Errorf("putZoneDomain err [%v]", err)
+// 	}
+// 	return
+// }
 
 func (nsgm *DomainManager) checkExcludeZoneState() {
 	if len(nsgm.excludeZoneListDomain) == 0 {
@@ -491,7 +531,9 @@ func (nsgm *DomainManager) buildNodeSetGrp(domainGrpManager *DomainNodeSetGrpMan
 	return nil
 }
 
-func (nsgm *DomainManager) getHostFromNodeSetGrpSpecific(domainGrpManager *DomainNodeSetGrpManager, replicaNum uint8, createType uint32) (
+// TODO:tangjingyu param mediaType not used, need keep it?
+func (nsgm *DomainManager) getHostFromNodeSetGrpSpecific(domainGrpManager *DomainNodeSetGrpManager, replicaNum uint8,
+	createType uint32, mediaType uint32) (
 	hosts []string,
 	peers []proto.Peer,
 	err error,
@@ -568,7 +610,8 @@ func (nsgm *DomainManager) getHostFromNodeSetGrpSpecific(domainGrpManager *Domai
 	return nil, nil, fmt.Errorf("action[getHostFromNodeSetGrpSpecific] cann't alloc host")
 }
 
-func (nsgm *DomainManager) getHostFromNodeSetGrp(domainId uint64, replicaNum uint8, createType uint32) (
+// TODO:tangjingyu param mediaType not used, need keep it?
+func (nsgm *DomainManager) getHostFromNodeSetGrp(domainId uint64, replicaNum uint8, createType uint32, mediaType uint32) (
 	hosts []string,
 	peers []proto.Peer,
 	err error,
@@ -587,7 +630,7 @@ func (nsgm *DomainManager) getHostFromNodeSetGrp(domainId uint64, replicaNum uin
 
 	// this scenario is abnormal  may be caused by zone unavailable in high probability
 	if domainGrpManager.status != normal {
-		return nsgm.getHostFromNodeSetGrpSpecific(domainGrpManager, replicaNum, createType)
+		return nsgm.getHostFromNodeSetGrpSpecific(domainGrpManager, replicaNum, createType, mediaType)
 	}
 
 	// grp map be build with three zone on standard,no grp if zone less than three,here will build
@@ -632,7 +675,7 @@ func (nsgm *DomainManager) getHostFromNodeSetGrp(domainId uint64, replicaNum uin
 
 		for i := 0; i < defaultMaxReplicaCnt*len(nsg.nodeSets); i++ {
 			ns := nsg.nodeSets[nsg.nsgInnerIndex]
-			log.LogInfof("action[getHostFromNodeSetGrp]  nodesetid[%v],zonename[%v], datanode len[%v],metanode len[%v],capacity[%v]",
+			log.LogInfof("action[getHostFromNodeSetGrp]  nodesetid[%v], zonename[%v], datanode len[%v],metanode len[%v],capacity[%v]",
 				ns.ID, ns.zoneName, ns.dataNodeLen(), ns.metaNodeLen(), ns.Capacity)
 			nsg.nsgInnerIndex = (nsg.nsgInnerIndex + 1) % defaultFaultDomainZoneCnt
 			if nsg.status == unavailableZone {
@@ -948,13 +991,20 @@ type nodeSet struct {
 	doneDecommissionDiskListTraverse  chan struct{}
 	startDecommissionDiskListTraverse chan struct{}
 	DecommissionDisks                 sync.Map
+	DecommissionDisksLock             sync.RWMutex
 }
 
 type nodeSetDecommissionParallelStatus struct {
-	ID          uint64
-	CurTokenNum int32
-	MaxTokenNum int32
-	RunningDp   []uint64
+	ID                          uint64
+	CurTokenNum                 int32
+	MaxTokenNum                 int32
+	RunningDp                   []uint64
+	TotalDP                     int
+	ManualDecommissionDisk      []string
+	ManualDecommissionDiskTotal int
+	AutoDecommissionDisk        []string
+	AutoDecommissionDiskTotal   int
+	RunningDisk                 []string
 }
 
 func newNodeSet(c *Cluster, id uint64, cap int, zoneName string) *nodeSet {
@@ -965,7 +1015,7 @@ func newNodeSet(c *Cluster, id uint64, cap int, zoneName string) *nodeSet {
 		zoneName:                          zoneName,
 		metaNodes:                         new(sync.Map),
 		dataNodes:                         new(sync.Map),
-		decommissionDataPartitionList:     NewDecommissionDataPartitionList(c),
+		decommissionDataPartitionList:     NewDecommissionDataPartitionList(c, id),
 		manualDecommissionDiskList:        NewDecommissionDiskList(),
 		autoDecommissionDiskList:          NewDecommissionDiskList(),
 		doneDecommissionDiskListTraverse:  make(chan struct{}, 1),
@@ -1014,6 +1064,11 @@ func (ns *nodeSet) metaNodeLen() (count int) {
 func (ns *nodeSet) startDecommissionSchedule() {
 	ns.decommissionDataPartitionList.startTraverse()
 	ns.startDecommissionDiskListTraverse <- struct{}{}
+}
+
+func (ns *nodeSet) stopDecommissionSchedule() {
+	ns.decommissionDataPartitionList.Stop()
+	ns.stopDecommissionDiskSchedule()
 }
 
 func (ns *nodeSet) dataNodeLen() (count int) {
@@ -1080,7 +1135,7 @@ func (ns *nodeSet) UpdateMaxParallel(maxParallel int32) {
 	atomic.StoreInt32(&ns.decommissionParallelLimit, maxParallel)
 }
 
-func (ns *nodeSet) getDecommissionParallelStatus() (int32, int32, []uint64) {
+func (ns *nodeSet) getDecommissionParallelStatus() (int32, int32, []uint64, int) {
 	return ns.decommissionDataPartitionList.getDecommissionParallelStatus()
 }
 
@@ -1097,7 +1152,9 @@ func (ns *nodeSet) HasDecommissionToken(id uint64) bool {
 }
 
 func (ns *nodeSet) AddDecommissionDisk(dd *DecommissionDisk) {
+	ns.DecommissionDisksLock.Lock()
 	ns.DecommissionDisks.Store(dd.GenerateKey(), dd)
+	ns.DecommissionDisksLock.Unlock()
 	if dd.IsManualDecommissionDisk() {
 		ns.addManualDecommissionDisk(dd)
 	} else {
@@ -1107,13 +1164,26 @@ func (ns *nodeSet) AddDecommissionDisk(dd *DecommissionDisk) {
 }
 
 func (ns *nodeSet) RemoveDecommissionDisk(dd *DecommissionDisk) {
+	ns.DecommissionDisksLock.Lock()
 	ns.DecommissionDisks.Delete(dd.GenerateKey())
+	ns.DecommissionDisksLock.Unlock()
 	if dd.IsManualDecommissionDisk() {
 		ns.removeManualDecommissionDisk(dd)
 	} else {
 		ns.removeAutoDecommissionDisk(dd)
 	}
 	log.LogInfof("action[RemoveDecommissionDisk] remove disk %v type %v  from  ns %v", dd.GenerateKey(), dd.Type, ns.ID)
+}
+
+func (ns *nodeSet) ClearDecommissionDisks() {
+	ns.DecommissionDisksLock.Lock()
+	ns.DecommissionDisks.Range(func(key, value interface{}) bool {
+		ns.DecommissionDisks.Delete(value.(*DecommissionDisk).GenerateKey())
+		return true
+	})
+	ns.DecommissionDisksLock.Unlock()
+	ns.autoDecommissionDiskList.Clear()
+	ns.manualDecommissionDiskList.Clear()
 }
 
 func (ns *nodeSet) addManualDecommissionDisk(dd *DecommissionDisk) {
@@ -1135,40 +1205,53 @@ func (ns *nodeSet) removeAutoDecommissionDisk(dd *DecommissionDisk) {
 func (ns *nodeSet) traverseDecommissionDisk(c *Cluster) {
 	t := time.NewTicker(DecommissionInterval)
 	// wait for loading all decommissionDisk when reload metadata
-	log.LogInfof("action[traverseDecommissionDisk]wait %v", ns.ID)
+	log.LogInfof("action[traverseDecommissionDisk]wait ns %v(%p) ", ns.ID, ns)
 	<-ns.startDecommissionDiskListTraverse
-	log.LogInfof("action[traverseDecommissionDisk] traverseDecommissionDisk start %v", ns.ID)
-	defer t.Stop()
+	log.LogInfof("action[traverseDecommissionDisk] traverseDecommissionDisk start ns %v(%p) ", ns.ID, ns)
+
+	c.wg.Add(1)
+	defer func() {
+		t.Stop()
+		c.wg.Done()
+	}()
+
 	for {
 		select {
 		case <-ns.doneDecommissionDiskListTraverse:
-			log.LogWarnf("traverse stopped")
+			log.LogWarnf("ns %v(%p)  traverse stopped", ns.ID, ns)
+			ns.ClearDecommissionDisks()
+			return
+		case <-c.stopc:
+			log.LogWarnf("ns %v(%p) Cluster stopped!", ns.ID, ns)
+			ns.ClearDecommissionDisks()
 			return
 		case <-t.C:
 			if c.partition != nil && !c.partition.IsRaftLeader() {
-				log.LogWarnf("Leader changed, stop traverse!")
-				continue
+				log.LogWarnf("ns %v(%p)  Leader changed, stop traverseDecommissionDisk!", ns.ID, ns)
+				ns.ClearDecommissionDisks()
+				return
 			}
 			runningCnt := 0
 			ns.DecommissionDisks.Range(func(key, value interface{}) bool {
 				disk := value.(*DecommissionDisk)
-				disk.updateDecommissionStatus(c, false)
+				disk.updateDecommissionStatus(c, false, true)
 				status := disk.GetDecommissionStatus()
 				if status == DecommissionRunning {
 					runningCnt++
-				} else if status == DecommissionSuccess || status == DecommissionFail || status == DecommissionPause {
+				} else if status == DecommissionSuccess || status == DecommissionFail ||
+					status == DecommissionPause || status == DecommissionCancel {
 					// remove from decommission disk list
-					log.LogWarnf("traverseDecommissionDisk remove disk %v status %v",
-						disk.GenerateKey(), disk.GetDecommissionStatus())
+					msg := fmt.Sprintf("ns %v(%p) traverseDecommissionDisk remove disk %v ", ns.ID, ns, disk.decommissionInfo())
 					ns.RemoveDecommissionDisk(disk)
+					auditlog.LogMasterOp("DiskDecommission", msg, nil)
 				}
 				return true
 			})
 			maxDiskDecommissionCnt := int(c.GetDecommissionDiskLimit())
 			if maxDiskDecommissionCnt == 0 && ns.dataNodeLen() != 0 {
 				manualCnt, manualDisks := ns.manualDecommissionDiskList.PopMarkDecommissionDisk(0)
-				log.LogDebugf("traverseDecommissionDisk traverse manualCnt %v",
-					manualCnt)
+				log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse manualCnt %v",
+					ns.ID, ns, manualCnt)
 				if manualCnt > 0 {
 					for _, disk := range manualDisks {
 						c.TryDecommissionDisk(disk)
@@ -1176,8 +1259,8 @@ func (ns *nodeSet) traverseDecommissionDisk(c *Cluster) {
 				}
 				if c.AutoDecommissionDiskIsEnabled() {
 					autoCnt, autoDisks := ns.autoDecommissionDiskList.PopMarkDecommissionDisk(0)
-					log.LogDebugf("traverseDecommissionDisk traverse autoCnt %v",
-						autoCnt)
+					log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse autoCnt %v",
+						ns.ID, ns, autoCnt)
 					if autoCnt > 0 {
 						for _, disk := range autoDisks {
 							c.TryDecommissionDisk(disk)
@@ -1186,12 +1269,12 @@ func (ns *nodeSet) traverseDecommissionDisk(c *Cluster) {
 				}
 			} else {
 				newDiskDecommissionCnt := maxDiskDecommissionCnt - runningCnt
-				log.LogDebugf("traverseDecommissionDisk traverse DiskDecommissionCnt %v",
-					newDiskDecommissionCnt)
+				log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse DiskDecommissionCnt %v",
+					ns.ID, ns, newDiskDecommissionCnt)
 				if newDiskDecommissionCnt > 0 {
 					manualCnt, manualDisks := ns.manualDecommissionDiskList.PopMarkDecommissionDisk(newDiskDecommissionCnt)
-					log.LogDebugf("traverseDecommissionDisk traverse manualCnt %v",
-						manualCnt)
+					log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse manualCnt %v",
+						ns.ID, ns, manualCnt)
 					if manualCnt > 0 {
 						for _, disk := range manualDisks {
 							c.TryDecommissionDisk(disk)
@@ -1199,8 +1282,8 @@ func (ns *nodeSet) traverseDecommissionDisk(c *Cluster) {
 					}
 					if newDiskDecommissionCnt-manualCnt > 0 && c.AutoDecommissionDiskIsEnabled() {
 						autoCnt, autoDisks := ns.autoDecommissionDiskList.PopMarkDecommissionDisk(newDiskDecommissionCnt - manualCnt)
-						log.LogDebugf("traverseDecommissionDisk traverse autoCnt %v",
-							autoCnt)
+						log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse autoCnt %v",
+							ns.ID, ns, autoCnt)
 						if autoCnt > 0 {
 							for _, disk := range autoDisks {
 								c.TryDecommissionDisk(disk)
@@ -1211,6 +1294,10 @@ func (ns *nodeSet) traverseDecommissionDisk(c *Cluster) {
 			}
 		}
 	}
+}
+
+func (ns *nodeSet) stopDecommissionDiskSchedule() {
+	ns.doneDecommissionDiskListTraverse <- struct{}{}
 }
 
 func (t *topology) isSingleZone() bool {
@@ -1237,16 +1324,55 @@ func (t *topology) getDomainExcludeZones() (zones []*Zone) {
 	return
 }
 
-func (t *topology) getAllZones() (zones []*Zone) {
+func (t *topology) getZonesByMediaType(mediaType uint32) (zones []*Zone) {
 	t.zoneLock.RLock()
 	defer t.zoneLock.RUnlock()
+
 	zones = make([]*Zone, 0)
 	t.zoneMap.Range(func(zoneName, value interface{}) bool {
 		zone := value.(*Zone)
+		if mediaType == proto.MediaType_Unspecified || zone.dataMediaType == mediaType {
+			zones = append(zones, zone)
+		}
+
+		return true
+	})
+	return
+}
+
+func (t *topology) getZonesOfNodeType(nodeType NodeType, dataMediaType uint32) (zones []*Zone) {
+	t.zoneLock.RLock()
+	defer t.zoneLock.RUnlock()
+
+	zones = make([]*Zone, 0)
+	t.zoneMap.Range(func(zoneName, value interface{}) bool {
+		zone := value.(*Zone)
+		if nodeType == DataNodeType {
+			if zone.dataNodeCount() == 0 {
+				return true
+			}
+		} else if nodeType == MetaNodeType {
+			if zone.metaNodeCount() == 0 {
+				return true
+			}
+		}
+
+		if dataMediaType != proto.MediaType_Unspecified && zone.dataMediaType != dataMediaType {
+			return true
+		}
+
+		if !zone.canWriteForNode(nodeType, 1) {
+			return true
+		}
+
 		zones = append(zones, zone)
 		return true
 	})
 	return
+}
+
+func (t *topology) getAllZones() (zones []*Zone) {
+	return t.getZonesByMediaType(proto.MediaType_Unspecified)
 }
 
 func (t *topology) getNodeSetByNodeSetId(nodeSetId uint64) (nodeSet *nodeSet, err error) {
@@ -1276,24 +1402,66 @@ func calculateDemandWriteNodes(zoneNum int, replicaNum int, isSpecialZoneName bo
 	return
 }
 
+func (t *topology) pickUpZonesByNodeType(zones []*Zone, nodeType NodeType, dataMediaType uint32) (zonesOfMediaType []*Zone) {
+	log.LogDebugf("[pickUpZonesByNodeType] zoneLen(%v) nodeType(%v) require mediaType(%v)",
+		len(zones), NodeTypeString(nodeType), proto.MediaTypeString(dataMediaType))
+
+	zonesOfMediaType = make([]*Zone, 0)
+	for _, zone := range zones {
+		if nodeType == DataNodeType && zone.dataNodeCount() == 0 {
+			log.LogDebugf("[pickUpZonesByNodeType] skip zone(%v), for no datanodes", zone.name)
+			continue
+		} else if nodeType == MetaNodeType && zone.metaNodeCount() == 0 {
+			log.LogDebugf("[pickUpZonesByNodeType] skip zone(%v), for no metanodes", zone.name)
+			continue
+		}
+
+		if dataMediaType != proto.MediaType_Unspecified && zone.dataMediaType != dataMediaType {
+			log.LogDebugf("[pickUpZonesByNodeType] skip zone(%v), zoneDataMediaType(%v), require mediaType(%v)",
+				zone.name, proto.MediaTypeString(zone.dataMediaType), proto.MediaTypeString(dataMediaType))
+			continue
+		}
+
+		log.LogDebugf("[pickUpZonesByNodeType] pick up zone(%v), dataMediaType(%v)",
+			zone.name, proto.MediaTypeString(dataMediaType))
+		zonesOfMediaType = append(zonesOfMediaType, zone)
+	}
+
+	return zonesOfMediaType
+}
+
 // Choose the zone if it is writable and adapt to the rules for classifying zones
-func (t *topology) allocZonesForNode(rsMgr *rsManager, zoneNumNeed, replicaNum int, excludeZone []string, specialZones []*Zone) (zones []*Zone, err error) {
+func (t *topology) allocZonesForNode(rsMgr *rsManager, zoneNumNeed, replicaNum int, excludeZone []string,
+	specialZones []*Zone, dataMediaType uint32,
+) (zones []*Zone, err error) {
+	log.LogInfof("[allocZonesForNode] NodeType(%v) dataMediaType(%v) zoneNumNeed(%v) replicaNum(%v) excludeZone(%v) specialZonesLen(%v) ",
+		NodeTypeString(rsMgr.nodeType), proto.MediaTypeString(dataMediaType), zoneNumNeed, replicaNum, excludeZone, len(specialZones))
+
 	if len(t.domainExcludeZones) > 0 {
 		zones = t.getDomainExcludeZones()
-		log.LogInfof("action[allocZonesForMetaNode] getDomainExcludeZones zones [%v]", t.domainExcludeZones)
+		log.LogInfof("[allocZonesForNode] getDomainExcludeZones(%v), get zoneNum: %v",
+			t.domainExcludeZones, len(zones))
 	} else if len(specialZones) > 0 {
-		zones = specialZones
-		zoneNumNeed = len(specialZones)
+		zones = t.pickUpZonesByNodeType(specialZones, rsMgr.nodeType, dataMediaType)
+		zoneNumNeed = len(zones)
+		log.LogInfof("[allocZonesForNode] pick up mediaType(%v) from specialZones, get zoneNum: %v",
+			proto.MediaTypeString(dataMediaType), zoneNumNeed)
 	} else {
 		// if domain enable, will not enter here
-		zones = t.getAllZones()
+		zones = t.getZonesOfNodeType(rsMgr.nodeType, dataMediaType)
+		log.LogInfof("[allocZonesForNode] pick up mediaType(%v) from all zone, get zoneNum: %v",
+			proto.MediaTypeString(dataMediaType), len(zones))
 	}
-	if t.isSingleZone() {
+	if len(zones) == 1 {
+		log.LogInfof("action[allocZonesForNode] pick up mediaType(%v) only one zone: %v",
+			proto.MediaTypeString(dataMediaType), zones[0].name)
 		return zones, nil
 	}
+
 	if excludeZone == nil {
 		excludeZone = make([]string, 0)
 	}
+
 	candidateZones := make([]*Zone, 0)
 	demandWriteNodesCntPerZone := calculateDemandWriteNodes(zoneNumNeed, replicaNum, len(specialZones) > 1)
 
@@ -1305,17 +1473,34 @@ func (t *topology) allocZonesForNode(rsMgr *rsManager, zoneNumNeed, replicaNum i
 			continue
 		}
 
-		if zone.canWriteForNode(rsMgr.nodes, uint8(demandWriteNodesCntPerZone)) {
+		if zone.canWriteForNode(rsMgr.nodeType, uint8(demandWriteNodesCntPerZone)) {
+			log.LogInfof("[allocZonesForNode] nodeType(%v) dataMediaType(%v), pick up candidate zone: %v",
+				NodeTypeString(rsMgr.nodeType), proto.MediaTypeString(dataMediaType), zone.name)
 			candidateZones = append(candidateZones, zone)
+		} else {
+			log.LogInfof("[allocZonesForNode] nodeType(%v) dataMediaType(%v), not enough writable node, skip zone: %v",
+				NodeTypeString(rsMgr.nodeType), proto.MediaTypeString(dataMediaType), zone.name)
 		}
 	}
+	log.LogInfof("[allocZonesForNode] nodeType(%v) dataMediaType(%v), candidate num: %v",
+		NodeTypeString(rsMgr.nodeType), proto.MediaTypeString(dataMediaType), len(candidateZones))
+	if len(candidateZones) < 1 {
+		if rsMgr.nodeType == DataNodeType {
+			err = proto.ErrNoZoneToCreateDataPartition
+		} else {
+			err = proto.ErrNoZoneToCreateMetaPartition
+		}
 
-	// if across zone,candidateZones must be larger than or equal with 2,otherwise,must have a candidate zone
-	if (zoneNumNeed >= 2 && len(candidateZones) < 2) || len(candidateZones) < 1 {
-		log.LogError(fmt.Sprintf("action[allocZonesForqa n   Node],reqZoneNum[%v],candidateZones[%v],demandWriteNodes[%v],err:%v",
-			zoneNumNeed, len(candidateZones), demandWriteNodesCntPerZone, proto.ErrNoZoneToCreateMetaPartition))
-		return nil, proto.ErrNoZoneToCreateMetaPartition
+		log.LogErrorf("[allocZonesForNode] nodeType(%v), dataMediaType(%v), reqZoneNum[%v], candidateZones[%v], demandWriteNodes[%v], err:%v",
+			NodeTypeString(rsMgr.nodeType), proto.MediaTypeString(dataMediaType), zoneNumNeed, len(candidateZones),
+			demandWriteNodesCntPerZone, err.Error())
+		return nil, err
 	}
+	if zoneNumNeed >= 2 && len(candidateZones) == 1 {
+		log.LogWarnf("[allocZonesForNode] nodeType(%v), dataMediaType(%v), demandWriteNodes[%v], reqZoneNum is [%v] but only one candidateZone",
+			NodeTypeString(rsMgr.nodeType), proto.MediaTypeString(dataMediaType), demandWriteNodesCntPerZone, zoneNumNeed)
+	}
+
 	zones = candidateZones
 	err = nil
 	return
@@ -1337,6 +1522,7 @@ type Zone struct {
 	QosIopsWLimit           uint64
 	QosFlowRLimit           uint64
 	QosFlowWLimit           uint64
+	dataMediaType           uint32
 	sync.RWMutex
 }
 
@@ -1348,9 +1534,10 @@ type zoneValue struct {
 	QosFlowWLimit       uint64
 	DataNodesetSelector string
 	MetaNodesetSelector string
+	DataMediaType       uint32
 }
 
-func newZone(name string) (zone *Zone) {
+func newZone(name string, dataMediaType uint32) (zone *Zone) {
 	zone = &Zone{name: name}
 	zone.setStatus(normalZone)
 	zone.dataNodes = new(sync.Map)
@@ -1358,6 +1545,7 @@ func newZone(name string) (zone *Zone) {
 	zone.nodeSetMap = make(map[uint64]*nodeSet)
 	zone.dataNodesetSelector = NewNodesetSelector(DefaultNodesetSelectorName, DataNodeType)
 	zone.metaNodesetSelector = NewNodesetSelector(DefaultNodesetSelectorName, MetaNodeType)
+	zone.SetDataMediaType(dataMediaType)
 	return
 }
 
@@ -1407,6 +1595,7 @@ func (zone *Zone) getFsmValue() *zoneValue {
 		QosFlowWLimit:       zone.QosFlowWLimit,
 		DataNodesetSelector: zone.GetDataNodesetSelector(),
 		MetaNodesetSelector: zone.GetMetaNodesetSelector(),
+		DataMediaType:       zone.GetDataMediaType(),
 	}
 }
 
@@ -1431,7 +1620,7 @@ func (zone *Zone) getNodeSet(setID uint64) (ns *nodeSet, err error) {
 	defer zone.nsLock.RUnlock()
 	ns, ok := zone.nodeSetMap[setID]
 	if !ok {
-		return nil, errors.NewErrorf("set %v not found", setID)
+		return nil, errors.NewErrorf("nodeset %v not found", setID)
 	}
 	return
 }
@@ -1627,22 +1816,36 @@ func (zone *Zone) allocNodeSetForMetaNode(excludeNodeSets []uint64, replicaNum u
 	return ns, nil
 }
 
-func (zone *Zone) canWriteForNode(nodes *sync.Map, replicaNum uint8) (can bool) {
+func (zone *Zone) canWriteForNode(nodeType NodeType, demandWriteNodesCntPerZone uint8) (can bool) {
 	zone.RLock()
 	defer zone.RUnlock()
+
+	var nodes *sync.Map
+	if nodeType == DataNodeType {
+		nodes = zone.dataNodes
+	} else {
+		nodes = zone.metaNodes
+	}
+
 	var leastAlive uint8
 	nodes.Range(func(addr, value interface{}) bool {
 		node := value.(Node)
 		if !node.PartitionCntLimited() {
+			log.LogDebugf("[canWriteForNode] nodeId(%v) addr(%v) zone(%v) nodeType(%v), can not write for partition count limited",
+				node.GetID(), node.GetAddr(), zone.name, NodeTypeString(nodeType))
 			return true
 		}
 		if node.IsActiveNode() && node.IsWriteAble() {
 			leastAlive++
 		}
-		if leastAlive >= replicaNum {
+		if leastAlive >= demandWriteNodesCntPerZone {
+			log.LogDebugf("[canWriteForNode] canWrite: nodeId(%v) addr(%v) zone(%v) nodeType(%v)",
+				node.GetID(), node.GetAddr(), zone.name, NodeTypeString(nodeType))
 			can = true
 			return false
 		}
+		log.LogDebugf("[canWriteForNode] nodeId(%v) addr(%v) zone(%v) nodeType(%v), can not write for no enough alive nodes",
+			node.GetID(), node.GetAddr(), zone.name, NodeTypeString(nodeType))
 		return true
 	})
 	return
@@ -1725,7 +1928,7 @@ func (zone *Zone) getAvailNodeHosts(nodeType uint32, excludeNodeSets []uint64, e
 		return
 	}
 
-	log.LogDebugf("[x] get node host, zone(%s), nodeType(%d)", zone.name, nodeType)
+	log.LogDebugf("[getAvailNodeHosts] get node host, zone(%s), nodeType(%d)", zone.name, nodeType)
 
 	if nodeType == TypeDataPartition {
 		ns, err := zone.allocNodeSetForDataNode(excludeNodeSets, uint8(replicaNum))
@@ -1815,6 +2018,22 @@ func (zone *Zone) loadDataNodeQosLimit() {
 	})
 }
 
+func (zone *Zone) dataNodeCount() (len int) {
+	zone.dataNodes.Range(func(key, value interface{}) bool {
+		len++
+		return true
+	})
+	return
+}
+
+func (zone *Zone) metaNodeCount() (len int) {
+	zone.metaNodes.Range(func(key, value interface{}) bool {
+		len++
+		return true
+	})
+	return
+}
+
 func (zone *Zone) updateDecommissionLimit(limit int32, c *Cluster) (err error) {
 	nodeSets := zone.getAllNodeSet()
 
@@ -1834,7 +2053,7 @@ func (zone *Zone) updateDecommissionLimit(limit int32, c *Cluster) (err error) {
 	return
 }
 
-func (zone *Zone) queryDecommissionParallelStatus() (err error, stats []nodeSetDecommissionParallelStatus) {
+func (zone *Zone) queryDecommissionParallelStatus(c *Cluster) (err error, stats []nodeSetDecommissionParallelStatus) {
 	nodeSets := zone.getAllNodeSet()
 
 	if nodeSets == nil {
@@ -1843,12 +2062,21 @@ func (zone *Zone) queryDecommissionParallelStatus() (err error, stats []nodeSetD
 	}
 
 	for _, ns := range nodeSets {
-		curToken, maxToken, dps := ns.getDecommissionParallelStatus()
+		curToken, maxToken, dps, total := ns.getDecommissionParallelStatus()
+		manualDisks, manualDisksTotal := ns.getDecommissionDiskParallelStatus(ManualDecommission)
+		autoDisks, autoDisksTotal := ns.getDecommissionDiskParallelStatus(AutoDecommission)
+		ns.getRunningDecommissionDisk(c)
 		stat := nodeSetDecommissionParallelStatus{
-			ID:          ns.ID,
-			CurTokenNum: curToken,
-			MaxTokenNum: maxToken,
-			RunningDp:   dps,
+			ID:                          ns.ID,
+			CurTokenNum:                 curToken,
+			MaxTokenNum:                 maxToken,
+			RunningDp:                   dps,
+			TotalDP:                     total,
+			ManualDecommissionDisk:      manualDisks,
+			ManualDecommissionDiskTotal: manualDisksTotal,
+			AutoDecommissionDisk:        autoDisks,
+			AutoDecommissionDiskTotal:   autoDisksTotal,
+			RunningDisk:                 ns.getRunningDecommissionDisk(c),
 		}
 		stats = append(stats, stat)
 	}
@@ -1872,6 +2100,32 @@ func (zone *Zone) startDecommissionListTraverse(c *Cluster) (err error) {
 	return
 }
 
+func (zone *Zone) GetDataMediaTypeString() string {
+	return proto.MediaTypeString(atomic.LoadUint32(&zone.dataMediaType))
+}
+
+func (zone *Zone) GetDataMediaType() uint32 {
+	return atomic.LoadUint32(&zone.dataMediaType)
+}
+
+func (zone *Zone) SetDataMediaType(newMediaType uint32) {
+	atomic.StoreUint32(&zone.dataMediaType, newMediaType)
+}
+
+func (zone *Zone) GetDataMediaTypeCanUse() (dataMediaType uint32, dataCount int) {
+	dataMediaType = atomic.LoadUint32(&zone.dataMediaType)
+	if !proto.IsValidMediaType(dataMediaType) {
+		return proto.MediaType_Unspecified, 0
+	}
+
+	dataCount = zone.dataNodeCount()
+	if dataCount == 0 {
+		return proto.MediaType_Unspecified, 0
+	}
+
+	return dataMediaType, dataCount
+}
+
 type DecommissionDataPartitionList struct {
 	mu               sync.Mutex
 	cacheMap         map[uint64]*list.Element
@@ -1881,6 +2135,7 @@ type DecommissionDataPartitionList struct {
 	curParallel      int32
 	start            chan struct{}
 	runningMap       map[uint64]struct{}
+	nsId             uint64
 }
 
 type DecommissionDataPartitionListValue struct {
@@ -1896,7 +2151,7 @@ type DecommissionDataPartitionCacheValue struct {
 
 const DecommissionInterval = 5 * time.Second
 
-func NewDecommissionDataPartitionList(c *Cluster) *DecommissionDataPartitionList {
+func NewDecommissionDataPartitionList(c *Cluster, nsId uint64) *DecommissionDataPartitionList {
 	l := new(DecommissionDataPartitionList)
 	l.mu = sync.Mutex{}
 	l.cacheMap = make(map[uint64]*list.Element)
@@ -1904,6 +2159,7 @@ func NewDecommissionDataPartitionList(c *Cluster) *DecommissionDataPartitionList
 	l.start = make(chan struct{}, 1)
 	l.decommissionList = list.New()
 	l.runningMap = make(map[uint64]struct{})
+	l.nsId = nsId
 	atomic.StoreInt32(&l.curParallel, 0)
 	atomic.StoreInt32(&l.parallelLimit, defaultDecommissionParallelLimit)
 	go l.traverse(c)
@@ -1981,15 +2237,24 @@ func (l *DecommissionDataPartitionList) Remove(value *DataPartition) {
 	}
 }
 
-func (l *DecommissionDataPartitionList) getDecommissionParallelStatus() (int32, int32, []uint64) {
+func (l *DecommissionDataPartitionList) Clear() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for id, elm := range l.cacheMap {
+		l.decommissionList.Remove(elm)
+		delete(l.cacheMap, id)
+	}
+}
+
+func (l *DecommissionDataPartitionList) getDecommissionParallelStatus() (int32, int32, []uint64, int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	dps := make([]uint64, 0)
 	for id := range l.runningMap {
 		dps = append(dps, id)
 	}
-
-	return atomic.LoadInt32(&l.curParallel), atomic.LoadInt32(&l.parallelLimit), dps
+	total := l.decommissionList.Len()
+	return atomic.LoadInt32(&l.curParallel), atomic.LoadInt32(&l.parallelLimit), dps, total
 }
 
 func (l *DecommissionDataPartitionList) updateMaxParallel(maxParallel int32) {
@@ -2050,65 +2315,86 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 	t := time.NewTicker(DecommissionInterval)
 	// wait for loading all ap when reload metadata
 	<-l.start
-	defer t.Stop()
+	// wait for data node heartbeat
+	time.Sleep(2 * time.Minute)
+	c.wg.Add(1)
+	defer func() {
+		t.Stop()
+		c.wg.Done()
+	}()
 	for {
 		select {
 		case <-l.done:
-			log.LogWarnf("traverse stopped!")
+			log.LogWarnf("ns %v(%p) traverse exit!", l.nsId, l)
+			l.Clear()
+			return
+		case <-c.stopc:
+			log.LogWarnf("ns %v(%p) cluster stopped! traverse exit!", l.nsId, l)
+			l.Clear()
 			return
 		case <-t.C:
 			if c.partition != nil && !c.partition.IsRaftLeader() {
-				log.LogWarnf("Leader changed, stop traverse!")
-				continue
+				// clear decommission list
+				l.Clear()
+				log.LogWarnf("ns %v(%p) Leader changed, stop traverseDataPartition!", l.nsId, l)
+				return
 			}
 			allDecommissionDP := l.GetAllDecommissionDataPartitions()
+			log.LogDebugf("[DecommissionListTraverse]ns %v(%p) traverse dp len (%v)", l.nsId, l, len(allDecommissionDP))
 			for _, dp := range allDecommissionDP {
-				log.LogDebugf("[DecommissionListTraverse] traverse dp(%v)", dp.decommissionInfo())
+				select {
+				case <-l.done:
+					log.LogWarnf("ns %v(%p) traverse exit!", l.nsId, l)
+					l.Clear()
+					return
+				default:
+					// process decommission
+				}
+				log.LogDebugf("[DecommissionListTraverse]ns %v(%p) traverse dp(%v)", l.nsId, l, dp.decommissionInfo())
 				if dp.IsDecommissionSuccess() {
+
 					l.Remove(dp)
 					dp.ReleaseDecommissionToken(c)
-					msg := fmt.Sprintf("dp %v decommission success, cost %v",
-						dp.decommissionInfo(), time.Since(dp.RecoverStartTime))
+					msg := fmt.Sprintf("ns %v(%p) dp %v decommission success, cost %v",
+						l.nsId, l, dp.decommissionInfo(), time.Since(dp.RecoverStartTime))
 					dp.ResetDecommissionStatus()
 					dp.setRestoreReplicaStop()
-
 					err := c.syncUpdateDataPartition(dp)
 					if err != nil {
-						log.LogWarnf("action[DecommissionListTraverse]Remove success dp[%v] failed for %v",
-							dp.PartitionID, err)
+						log.LogWarnf("action[DecommissionListTraverse]ns %v(%p) Remove success dp[%v] failed for %v",
+							l.nsId, l, dp.PartitionID, err)
 					} else {
-						log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for success",
-							dp.PartitionID)
+						log.LogDebugf("action[DecommissionListTraverse]ns %v(%p) Remove dp[%v] for success",
+							l.nsId, l, dp.PartitionID)
 					}
 					auditlog.LogMasterOp("TraverseDataPartition", msg, err)
 				} else if dp.IsDecommissionFailed() {
+					remove := false
 					if !dp.tryRollback(c) {
-						log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for fail",
-							dp.PartitionID)
+						log.LogDebugf("action[DecommissionListTraverse]ns %v(%p) Remove dp[%v] for fail",
+							l.nsId, l, dp.PartitionID)
 						l.Remove(dp)
 						// if dp is not removed from decommission list, do not reset RestoreReplica
 						dp.setRestoreReplicaStop()
+						remove = true
 					}
 					// rollback fail/success need release token
 					dp.ReleaseDecommissionToken(c)
-					dp.DecommissionType = InitialDecommission
 					c.syncUpdateDataPartition(dp)
-					msg := fmt.Sprintf("dp %v decommission failed", dp.decommissionInfo())
+					msg := fmt.Sprintf("ns %v(%p) dp %v decommission failed, remove %v", l.nsId, l, dp.decommissionInfo(), remove)
 					auditlog.LogMasterOp("TraverseDataPartition", msg, nil)
 				} else if dp.IsDecommissionPaused() {
-					log.LogDebugf("action[DecommissionListTraverse]Remove dp[%v] for paused ",
-						dp.PartitionID)
+					log.LogDebugf("action[DecommissionListTraverse]ns %v(%p) Remove dp[%v] for paused ",
+						l.nsId, l, dp.PartitionID)
 					dp.ReleaseDecommissionToken(c)
 					l.Remove(dp)
 					dp.setRestoreReplicaStop()
-					dp.DecommissionType = InitialDecommission
 					c.syncUpdateDataPartition(dp)
 				} else if dp.IsDecommissionInitial() { // fixed done ,not release token
 					l.Remove(dp)
 					dp.ResetDecommissionStatus()
 					c.syncUpdateDataPartition(dp)
 				} else if dp.IsMarkDecommission() && dp.TryAcquireDecommissionToken(c) {
-					// TODO: decommission in here
 					go func(dp *DataPartition) {
 						dp.TryToDecommission(c)
 					}(dp) // special replica cnt cost some time from prepare to running
@@ -2134,12 +2420,12 @@ func NewDecommissionDiskList() *DecommissionDiskList {
 
 func (l *DecommissionDiskList) Put(nsId uint64, value *DecommissionDisk) {
 	if value == nil {
-		log.LogWarnf("action[DecommissionDataPartitionListPut] ns[%v] cannot put nil value", nsId)
+		log.LogWarnf("action[DecommissionDiskList] ns[%v] cannot put nil value", nsId)
 		return
 	}
 	// can only add running or mark
 	if !value.canAddToDecommissionList() {
-		log.LogWarnf("action[DecommissionDataPartitionListPut] ns[%v] put wrong disk[%v] status[%v]",
+		log.LogWarnf("action[DecommissionDiskList] ns[%v] put wrong disk[%v] status[%v]",
 			nsId, value.GenerateKey(), value.GetDecommissionStatus())
 		return
 	}
@@ -2147,12 +2433,13 @@ func (l *DecommissionDiskList) Put(nsId uint64, value *DecommissionDisk) {
 	defer l.mu.Unlock()
 
 	if _, ok := l.cacheMap[value.GenerateKey()]; ok {
+		log.LogWarnf("action[DecommissionDiskList] ns[%v]  disk[%v] is already added", nsId, value.GenerateKey())
 		return
 	}
 	elm := l.decommissionList.PushBack(value)
 	l.cacheMap[value.GenerateKey()] = elm
 
-	log.LogDebugf("action[DecommissionDataPartitionListPut] ns[%v] add disk[%v]",
+	log.LogDebugf("action[DecommissionDiskList] ns[%v] add disk[%v]",
 		nsId, value.decommissionInfo())
 }
 
@@ -2167,6 +2454,15 @@ func (l *DecommissionDiskList) Remove(nsId uint64, value *DecommissionDisk) {
 		delete(l.cacheMap, value.GenerateKey())
 		l.decommissionList.Remove(elm)
 		log.LogDebugf("action[DecommissionDataPartitionListRemove] ns[%v] remove disk[%v]", nsId, value.GenerateKey())
+	}
+}
+
+func (l *DecommissionDiskList) Clear() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for id, elm := range l.cacheMap {
+		l.decommissionList.Remove(elm)
+		delete(l.cacheMap, id)
 	}
 }
 
@@ -2206,4 +2502,38 @@ func (l *DecommissionDataPartitionList) Has(id uint64) bool {
 
 func (ns *nodeSet) processDataPartitionDecommission(id uint64) bool {
 	return ns.decommissionDataPartitionList.Has(id)
+}
+
+func (ns *nodeSet) getDecommissionDiskParallelStatus(decommissionType uint32) ([]string, int) {
+	if decommissionType == ManualDecommission {
+		return ns.manualDecommissionDiskList.getDecommissionParallelStatus()
+	}
+	return ns.autoDecommissionDiskList.getDecommissionParallelStatus()
+}
+
+func (l *DecommissionDiskList) getDecommissionParallelStatus() ([]string, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	disks := make([]string, 0)
+	for disk := range l.cacheMap {
+		disks = append(disks, disk)
+	}
+	total := l.decommissionList.Len()
+	return disks, total
+}
+
+func (ns *nodeSet) getRunningDecommissionDisk(c *Cluster) []string {
+	ns.DecommissionDisksLock.RLock()
+	defer ns.DecommissionDisksLock.RUnlock()
+	disks := make([]string, 0)
+	ns.DecommissionDisks.Range(func(key, value interface{}) bool {
+		disk := value.(*DecommissionDisk)
+		disk.updateDecommissionStatus(c, false, false)
+		status := disk.GetDecommissionStatus()
+		if status == DecommissionRunning {
+			disks = append(disks, disk.GenerateKey())
+		}
+		return true
+	})
+	return disks
 }

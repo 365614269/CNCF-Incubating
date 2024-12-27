@@ -206,23 +206,24 @@ func (o *ObjectNode) validateAuthInfo(r *http.Request, auth Auther) (err error) 
 	mux.Vars(r)[ContextKeyAccessKey] = ak
 	mux.Vars(r)[ContextKeyRequester] = uid
 
-	if !o.signatureIgnoredActions.Contains(param.action) {
-		cred := auth.Credential()
-		if auth.IsSkewed() {
-			log.LogErrorf("validateAuthInfo: request skewed: requestID(%v) reqTime(%v) servTime(%v)",
-				GetRequestID(r), cred.TimeStamp, time.Now().UTC().Format(ISO8601Format))
-			return RequestTimeTooSkewed
-		}
-		if auth.IsExpired() {
-			log.LogErrorf("validateAuthInfo: signature has expired: requestID(%v) servTime(%v) reqDate(%v) expires(%v)",
-				GetRequestID(r), time.Now().UTC().Format(ISO8601Format), cred.Date, cred.Expires)
-			return ExpiredToken
-		}
-		if !auth.SignatureMatch(sk, o.wildcards) {
-			log.LogErrorf("validateAuthInfo: signature not match: requestID(%v) AccessKeyId(%v)\nstringToSign=(\n%v\n)\ncanonialRequest=(\n%v\n)",
-				GetRequestID(r), reqAK, auth.StringToSign(), auth.CanonicalRequest())
-			return SignatureDoesNotMatch
-		}
+	if !param.action.IsNone() && o.signatureIgnoredActions.Contains(param.action) {
+		return nil
+	}
+	cred := auth.Credential()
+	if auth.IsSkewed() {
+		log.LogErrorf("validateAuthInfo: request skewed: requestID(%v) reqTime(%v) servTime(%v)",
+			GetRequestID(r), cred.TimeStamp, time.Now().UTC().Format(ISO8601Format))
+		return RequestTimeTooSkewed
+	}
+	if auth.IsExpired() {
+		log.LogErrorf("validateAuthInfo: signature has expired: requestID(%v) servTime(%v) reqDate(%v) expires(%v)",
+			GetRequestID(r), time.Now().UTC().Format(ISO8601Format), cred.Date, cred.Expires)
+		return ExpiredToken
+	}
+	if !auth.SignatureMatch(sk, o.wildcards) {
+		log.LogErrorf("validateAuthInfo: signature not match: requestID(%v) AccessKeyId(%v)\nstringToSign=(\n%v\n)\ncanonialRequest=(\n%v\n)",
+			GetRequestID(r), reqAK, auth.StringToSign(), auth.CanonicalRequest())
+		return SignatureDoesNotMatch
 	}
 
 	if stsInfo != nil {

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -42,11 +43,12 @@ const (
 	ShiftedExtension       = ".old"
 	DefaultAuditLogBufSize = 0
 
-	F_OK                 = 0
-	DefaultCleanInterval = 1 * time.Hour
-	DefaultAuditLogSize  = 200 * 1024 * 1024 // 200M
-	DefaultHeadRoom      = 50 * 1024         // 50G
-	MaxReservedDays      = 7 * 24 * time.Hour
+	F_OK                      = 0
+	DefaultCleanInterval      = 10 * time.Second
+	DefaultAuditLogSize       = 1 * 1024 * 1024 * 1024 // 1G
+	DefaultHeadRoom           = 50 * 1024              // 50G
+	DefaultAuditLogLimitRatio = 0.05
+	MaxReservedDays           = 7 * 24 * time.Hour
 )
 
 const (
@@ -109,6 +111,7 @@ type Audit struct {
 	logModule        string
 	logMaxSize       int64
 	logFileName      string
+	headRoom         int64
 	logFile          *os.File
 	writer           *bufio.Writer
 	writerBufSize    int
@@ -250,6 +253,7 @@ func NewAudit(dir, logModule string, logMaxSize int64) (*Audit, error) {
 		logDir:           absPath,
 		logModule:        logModule,
 		logMaxSize:       logMaxSize,
+		headRoom:         DefaultHeadRoom,
 		logFileName:      logName,
 		writerBufSize:    DefaultAuditLogBufSize,
 		bufferC:          make(chan string, 100000),
@@ -375,6 +379,46 @@ func (a *Audit) LogChangeDpDecommission(oldStatus string, status string, src str
 	a.formatMasterLog("DP_DECOMMISSION_CHANGE", message, nil)
 }
 
+func (a *Audit) LogMigrationOp(clientAddr, volume, op, fullPath string, err error, latency int64, ino uint64, from, to uint32) {
+	var errStr string
+	if err != nil {
+		errStr = err.Error()
+	} else {
+		errStr = "nil"
+	}
+	curTime := time.Now()
+	curTimeStr := curTime.Format("2006-01-02 15:04:05")
+	timeZone, _ := curTime.Zone()
+	latencyStr := strconv.FormatInt(latency, 10) + " us"
+
+	entry := fmt.Sprintf("%s %s, %s, %s, %s, %v, %v, %s, %s, from %v, to %v",
+		curTimeStr, timeZone, clientAddr, volume, op, ino, fullPath, errStr, latencyStr, from, to)
+	if a.prefix != nil {
+		entry = fmt.Sprintf("%s%s", a.prefix.String(), entry)
+	}
+	a.AddLog(entry)
+}
+
+func (a *Audit) LogLcNodeOp(op, vol, name, path string, pid, inode, size, leaseExpire uint64, hasMek bool, from, to uint32, latency int64, err error) {
+	var errStr string
+	if err != nil {
+		errStr = err.Error()
+	} else {
+		errStr = "nil"
+	}
+	curTime := time.Now()
+	curTimeStr := curTime.Format("2006-01-02 15:04:05")
+	timeZone, _ := curTime.Zone()
+	latencyStr := strconv.FormatInt(latency, 10) + " ms"
+
+	entry := fmt.Sprintf("%s %s, op: %s, vol: %s, %s, %s, parentIno: %v, ino: %v, size: %v, %v, %v, from: %v, to: %v, err: %v, %v",
+		curTimeStr, timeZone, op, vol, name, path, pid, inode, size, leaseExpire, hasMek, from, to, errStr, latencyStr)
+	if a.prefix != nil {
+		entry = fmt.Sprintf("%s%s", a.prefix.String(), entry)
+	}
+	a.AddLog(entry)
+}
+
 func (a *Audit) ResetWriterBufferSize(size int) {
 	a.resetWriterBuffC <- size
 }
@@ -424,6 +468,26 @@ func InitAudit(dir, logModule string, logMaxSize int64) (*Audit, error) {
 	return gAdt, nil
 }
 
+func InitAuditWithHeadRoom(dir, logModule string, logMaxSize int64, logLeftSpaceLimitRatio float64, headRoom int64) (*Audit, error) {
+	gAdtMutex.Lock()
+	defer gAdtMutex.Unlock()
+	if gAdt == nil {
+		adt, err := NewAudit(dir, logModule, logMaxSize)
+		if err != nil {
+			return nil, err
+		}
+		gAdt = adt
+	}
+
+	fs := syscall.Statfs_t{}
+	if err := syscall.Statfs(dir, &fs); err != nil {
+		return nil, fmt.Errorf("[InitLog] stats disk space: %s", err.Error())
+	}
+	minLogLeftSpaceLimit := float64(fs.Blocks*uint64(fs.Bsize)) * logLeftSpaceLimitRatio / 1024 / 1024
+	gAdt.headRoom = int64(math.Min(minLogLeftSpaceLimit, float64(headRoom)))
+	return gAdt, nil
+}
+
 func LogClientOp(op, src, dst string, err error, latency int64, srcInode, dstInode uint64) {
 	gAdtMutex.RLock()
 	defer gAdtMutex.RUnlock()
@@ -460,13 +524,22 @@ func LogTxOp(clientAddr, volume, op, txId string, err error, latency int64) {
 	gAdt.LogTxOp(clientAddr, volume, op, txId, err, latency)
 }
 
-func LogMasterOp(op, msg string, err error) {
+func LogMigrationOp(clientAddr, volume, op, fullPath string, err error, latency int64, ino uint64, from, to uint32) {
 	gAdtMutex.RLock()
 	defer gAdtMutex.RUnlock()
 	if gAdt == nil {
 		return
 	}
-	gAdt.formatMasterLog(op, msg, err)
+	gAdt.LogMigrationOp(clientAddr, volume, op, fullPath, err, latency, ino, from, to)
+}
+
+func LogLcNodeOp(op, vol, name, path string, pid, inode, size, leaseExpire uint64, hasMek bool, from, to uint32, latency int64, err error) {
+	gAdtMutex.RLock()
+	defer gAdtMutex.RUnlock()
+	if gAdt == nil {
+		return
+	}
+	gAdt.LogLcNodeOp(op, vol, name, path, pid, inode, size, leaseExpire, hasMek, from, to, latency, err)
 }
 
 func ResetWriterBufferSize(size int) {
@@ -597,7 +670,7 @@ func (a *Audit) removeLogFile() {
 		return oldLogs[i] < oldLogs[j]
 	})
 
-	for len(oldLogs) != 0 && diskSpaceLeft < DefaultHeadRoom*1024*1024 {
+	for len(oldLogs) != 0 {
 		oldestFile := path.Join(a.logDir, oldLogs[0])
 		fileInfo, err := os.Stat(oldestFile)
 		if err != nil {
@@ -608,6 +681,7 @@ func (a *Audit) removeLogFile() {
 			log.LogDebugf("[removeLogFile] cannot delete oldest file(%v)", oldestFile)
 			return
 		}
+		diskSpaceLeft += fileInfo.Size()
 		if err = os.Remove(oldestFile); err != nil && !os.IsNotExist(err) {
 			log.LogErrorf("[removeLogFile] failed to remove file(%v), err(%v)", oldestFile, err)
 			return
@@ -620,7 +694,7 @@ func (a *Audit) removeLogFile() {
 
 func (a *Audit) shouldDelete(info os.FileInfo, diskSpaceLeft int64, module string) bool {
 	isOldAuditLogFile := info.Mode().IsRegular() && strings.HasSuffix(info.Name(), ShiftedExtension) && strings.HasPrefix(info.Name(), module)
-	if diskSpaceLeft <= 0 {
+	if diskSpaceLeft <= a.headRoom*1024*1024 {
 		return isOldAuditLogFile
 	}
 	return time.Since(info.ModTime()) > MaxReservedDays && isOldAuditLogFile
@@ -691,4 +765,42 @@ func isPathSafe(filePath string) bool {
 	safePattern := `^(/|\.{0,2}/|[a-zA-Z0-9_@.-]+\/)+([a-zA-Z0-9_@.-]+|\.{1,2})$`
 	match, _ := regexp.MatchString(safePattern, filePath)
 	return match
+}
+
+func LogMasterOp(op, msg string, err error) {
+	gAdtMutex.RLock()
+	defer gAdtMutex.RUnlock()
+	if gAdt == nil {
+		return
+	}
+	gAdt.formatMasterLog(op, msg, err)
+}
+
+func LogDataNodeOp(op, msg string, err error) {
+	gAdtMutex.RLock()
+	defer gAdtMutex.RUnlock()
+	if gAdt == nil {
+		return
+	}
+	gAdt.formatDataNodeLog(op, msg, err)
+}
+
+func (a *Audit) formatDataNodeLog(op, msg string, err error) {
+	if entry := a.formatDataNodeAudit(op, msg, err); entry != "" {
+		if a.prefix != nil {
+			entry = fmt.Sprintf("%s%s", a.prefix.String(), entry)
+		}
+		a.AddLog(entry)
+	}
+}
+
+func (a *Audit) formatDataNodeAudit(op, msg string, err error) (str string) {
+	var errStr string
+	if err != nil {
+		errStr = err.Error()
+	} else {
+		errStr = "nil"
+	}
+	str = fmt.Sprintf("%v, %v, %v, ERR: %v", a.formatCommonHeader(), op, msg, errStr)
+	return
 }

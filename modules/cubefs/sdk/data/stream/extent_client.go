@@ -24,48 +24,36 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cubefs/cubefs/depends/bazil.org/fuse"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/data/manager"
 	"github.com/cubefs/cubefs/sdk/data/wrapper"
 	"github.com/cubefs/cubefs/sdk/meta"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/errors"
+	"github.com/cubefs/cubefs/util/exporter"
 	"github.com/cubefs/cubefs/util/log"
 	"github.com/cubefs/cubefs/util/stat"
-	"github.com/prometheus/client_golang/prometheus"
 
 	"golang.org/x/time/rate"
 )
 
-var (
-	clientMetric = prometheus.NewSummaryVec(
-		prometheus.SummaryOpts{
-			Namespace:  "cubefs",
-			Subsystem:  "client",
-			Name:       "client_cost_time",
-			Help:       "time cost in cubefs sdk",
-			Objectives: map[float64]float64{0.5: 0.05, 0.75: 0.025, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001, 0.999: 0.0001, 0.9999: 0.00001},
-		}, []string{"api"})
-	readReqCountMetric = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "read_req_cnt",
-		})
-)
+var reqChanSize = defaultChanSize
 
-func init() {
-	prometheus.MustRegister(clientMetric)
-	prometheus.MustRegister(readReqCountMetric)
-}
+const defaultChanSize = 64
 
 type (
-	SplitExtentKeyFunc  func(parentInode, inode uint64, key proto.ExtentKey) error
-	AppendExtentKeyFunc func(parentInode, inode uint64, key proto.ExtentKey, discard []proto.ExtentKey) (int, error)
-	GetExtentsFunc      func(inode uint64) (uint64, uint64, []proto.ExtentKey, error)
-	TruncateFunc        func(inode, size uint64, fullPath string) error
-	EvictIcacheFunc     func(inode uint64)
-	LoadBcacheFunc      func(key string, buf []byte, offset uint64, size uint32) (int, error)
-	CacheBcacheFunc     func(key string, buf []byte) error
-	EvictBacheFunc      func(key string) error
+	SplitExtentKeyFunc            func(parentInode, inode uint64, key proto.ExtentKey, storageClass uint32) error
+	AppendExtentKeyFunc           func(parentInode, inode uint64, key proto.ExtentKey, discard []proto.ExtentKey, isCache bool, storageClass uint32, isMigration bool) (int, error)
+	GetExtentsFunc                func(inode uint64, isCache bool, openForWrite bool, isMigration bool) (uint64, uint64, []proto.ExtentKey, error)
+	TruncateFunc                  func(inode, size uint64, fullPath string) error
+	EvictIcacheFunc               func(inode uint64)
+	LoadBcacheFunc                func(key string, buf []byte, offset uint64, size uint32) (int, error)
+	CacheBcacheFunc               func(key string, buf []byte) error
+	EvictBacheFunc                func(key string) error
+	RenewalForbiddenMigrationFunc func(inode uint64) error
+	ForbiddenMigrationFunc        func(inode uint64) error
+	GetInodeInfoFunc              func(ino uint64) (*proto.InodeInfo, error)
 )
 
 const (
@@ -117,9 +105,14 @@ func init() {
 	}}
 }
 
+func SetReqChansize(size int) {
+	if size > defaultChanSize {
+		reqChanSize = size
+	}
+}
+
 type ExtentConfig struct {
 	Volume            string
-	VolumeType        int
 	Masters           []string
 	FollowerRead      bool
 	NearRead          bool
@@ -127,6 +120,7 @@ type ExtentConfig struct {
 	ReadRate          int64
 	WriteRate         int64
 	BcacheEnable      bool
+	InnerReq          bool
 	BcacheDir         string
 	MaxStreamerLimit  int64
 	VerReadSeq        uint64
@@ -141,6 +135,17 @@ type ExtentConfig struct {
 
 	DisableMetaCache             bool
 	MinWriteAbleDataPartitionCnt int
+	StreamRetryTimeout           int
+
+	OnRenewalForbiddenMigration RenewalForbiddenMigrationFunc
+	OnForbiddenMigration        ForbiddenMigrationFunc
+
+	VolStorageClass        uint32
+	VolAllowedStorageClass []uint32
+	VolCacheDpStorageClass uint32
+
+	OnGetInodeInfo      GetInodeInfoFunc
+	BcacheOnlyForNotSSD bool
 }
 
 type MultiVerMgr struct {
@@ -159,6 +164,7 @@ type ExtentClient struct {
 	readLimiter        *rate.Limiter
 	writeLimiter       *rate.Limiter
 	disableMetaCache   bool
+	streamRetryTimeout time.Duration
 	volumeType         int
 	volumeName         string
 	bcacheEnable       bool
@@ -175,9 +181,16 @@ type ExtentClient struct {
 	loadBcache         LoadBcacheFunc
 	cacheBcache        CacheBcacheFunc
 	evictBcache        EvictBacheFunc
-	inflightL1cache    sync.Map
-	inflightL1BigBlock int32
-	multiVerMgr        *MultiVerMgr
+
+	inflightL1cache           sync.Map
+	inflightL1BigBlock        int32
+	multiVerMgr               *MultiVerMgr
+	renewalForbiddenMigration RenewalForbiddenMigrationFunc
+	forbiddenMigration        ForbiddenMigrationFunc
+	CacheDpStorageClass       uint32
+	getInodeInfo              GetInodeInfoFunc
+	bcacheOnlyForNotSSD       bool
+	InnerReq                  bool
 }
 
 func (client *ExtentClient) UidIsLimited(uid uint32) bool {
@@ -191,6 +204,10 @@ func (client *ExtentClient) UidIsLimited(uid uint32) bool {
 	}
 	log.LogDebugf("uid %v is not limited", uid)
 	return false
+}
+
+func (client *ExtentClient) readLimit() bool {
+	return client.readLimiter.Limit() != rate.Inf
 }
 
 func (client *ExtentClient) evictStreamer() bool {
@@ -252,12 +269,20 @@ func (client *ExtentClient) backgroundEvictStream() {
 // NewExtentClient returns a new extent client.
 func NewExtentClient(config *ExtentConfig) (client *ExtentClient, err error) {
 	client = new(ExtentClient)
+	client.InnerReq = config.InnerReq
 	client.LimitManager = manager.NewLimitManager(client)
 	client.LimitManager.WrapperUpdate = client.UploadFlowInfo
 	limit := 0
 retry:
 
-	client.dataWrapper, err = wrapper.NewDataPartitionWrapper(client, config.Volume, config.Masters, config.Preload, config.MinWriteAbleDataPartitionCnt, config.VerReadSeq)
+	if !proto.IsValidStorageClass(config.VolStorageClass) {
+		err = fmt.Errorf("invalid config.VolStorageClass(%v)", config.VolStorageClass)
+		log.LogCriticalf("NewExtentClient: %v", err.Error())
+		return
+	}
+
+	client.dataWrapper, err = wrapper.NewDataPartitionWrapper(client, config.Volume, config.Masters, config.Preload,
+		config.MinWriteAbleDataPartitionCnt, config.VerReadSeq, config.VolStorageClass, config.VolAllowedStorageClass)
 	if err != nil {
 		log.LogErrorf("NewExtentClient: new data partition wrapper failed: volume(%v) mayRetry(%v) err(%v)",
 			config.Volume, limit, err)
@@ -286,14 +311,25 @@ retry:
 	client.loadBcache = config.OnLoadBcache
 	client.cacheBcache = config.OnCacheBcache
 	client.evictBcache = config.OnEvictBcache
-	client.volumeType = config.VolumeType
 	client.volumeName = config.Volume
 	client.bcacheEnable = config.BcacheEnable
+	client.bcacheOnlyForNotSSD = config.BcacheOnlyForNotSSD
 	client.bcacheDir = config.BcacheDir
 	client.multiVerMgr.verReadSeq = client.dataWrapper.GetReadVerSeq()
 	client.BcacheHealth = true
 	client.preload = config.Preload
 	client.disableMetaCache = config.DisableMetaCache
+	client.renewalForbiddenMigration = config.OnRenewalForbiddenMigration
+	client.CacheDpStorageClass = config.VolCacheDpStorageClass
+	client.forbiddenMigration = config.OnForbiddenMigration
+	client.getInodeInfo = config.OnGetInodeInfo
+
+	if config.StreamRetryTimeout <= 0 || config.StreamRetryTimeout >= 600 {
+		client.streamRetryTimeout = StreamSendMaxTimeout
+	} else {
+		client.streamRetryTimeout = time.Duration(config.StreamRetryTimeout) * time.Second
+	}
+	log.LogInfof("stream retry timeout %d ms", client.streamRetryTimeout.Milliseconds())
 
 	var readLimit, writeLimit rate.Limit
 	if config.ReadRate <= 0 {
@@ -326,6 +362,7 @@ retry:
 
 	log.LogInfof("max streamer limit %d", client.maxStreamerLimit)
 	client.streamerList = list.New()
+
 	go client.backgroundEvictStream()
 
 	return
@@ -390,7 +427,7 @@ func (client *ExtentClient) UpdateLatestVer(verList *proto.VolVersionInfoList) (
 			oldVer := streamer.verSeq
 			streamer.verSeq = verSeq
 			streamer.extents.verSeq = verSeq
-			if err = streamer.GetExtentsForce(); err != nil {
+			if err = streamer.GetExtentsForceRefresh(); err != nil {
 				log.LogErrorf("action[UpdateLatestVer] inode %v streamer %v", streamer.inode, streamer.verSeq)
 				streamer.verSeq = oldVer
 				streamer.extents.verSeq = oldVer
@@ -404,22 +441,53 @@ func (client *ExtentClient) UpdateLatestVer(verList *proto.VolVersionInfoList) (
 }
 
 // Open request shall grab the lock until request is sent to the request channel
-func (client *ExtentClient) OpenStream(inode uint64) error {
+func (client *ExtentClient) OpenStream(inode uint64, openForWrite, isCache bool) error {
 	client.streamerLock.Lock()
 	s, ok := client.streamers[inode]
 	if !ok {
-		s = NewStreamer(client, inode)
+		s = NewStreamer(client, inode, openForWrite, isCache)
 		client.streamers[inode] = s
+	} else {
+		// If you open a file in write mode first and then open the same file
+		// in read mode without modifying any attributes, maintaining the file's immutability status.
+		if !s.openForWrite {
+			s.openForWrite = openForWrite
+		}
+		// TODO: update isCache?
 	}
 	return s.IssueOpenRequest()
 }
 
-// Open request shall grab the lock until request is sent to the request channel
-func (client *ExtentClient) OpenStreamWithCache(inode uint64, needBCache bool) error {
+func (client *ExtentClient) OpenStreamRdonly(inode uint64, rdonly bool) error {
 	client.streamerLock.Lock()
 	s, ok := client.streamers[inode]
 	if !ok {
-		s = NewStreamer(client, inode)
+		s = NewStreamer(client, inode, false, false)
+		client.streamers[inode] = s
+		s.rdonly = rdonly
+	}
+
+	if s.rdonly {
+		defer client.streamerLock.Unlock()
+		// stream is rdonly, but open again by writable, return err
+		if !rdonly {
+			log.LogErrorf("OpenStreamRdonly: rdonly stream can't be open again for write, s %s, rdonly %v", s.String(), rdonly)
+			return fuse.EPERM
+		}
+
+		s.refcnt++
+		return nil
+	}
+
+	return s.IssueOpenRequest()
+}
+
+// Open request shall grab the lock until request is sent to the request channel
+func (client *ExtentClient) OpenStreamWithCache(inode uint64, needBCache, openForWrite, isCache bool) error {
+	client.streamerLock.Lock()
+	s, ok := client.streamers[inode]
+	if !ok {
+		s = NewStreamer(client, inode, openForWrite, isCache)
 		client.streamers[inode] = s
 		if !client.disableMetaCache && needBCache {
 			client.streamerList.PushFront(inode)
@@ -429,7 +497,7 @@ func (client *ExtentClient) OpenStreamWithCache(inode uint64, needBCache bool) e
 	if !s.isOpen && !client.disableMetaCache {
 		s.isOpen = true
 		log.LogDebugf("open stream again, ino(%v)", s.inode)
-		s.request = make(chan interface{}, 64)
+		s.request = make(chan interface{}, reqChanSize)
 		s.pendingCache = make(chan bcacheKey, 1)
 		go s.server()
 		go s.asyncBlockCache()
@@ -445,6 +513,16 @@ func (client *ExtentClient) CloseStream(inode uint64) error {
 		client.streamerLock.Unlock()
 		return nil
 	}
+
+	if log.EnableDebug() {
+		log.LogDebugf("CloseStream: stream(%s)", s.String())
+	}
+	if s.rdonly {
+		s.refcnt--
+		client.streamerLock.Unlock()
+		return nil
+	}
+
 	return s.IssueReleaseRequest()
 }
 
@@ -456,6 +534,22 @@ func (client *ExtentClient) EvictStream(inode uint64) error {
 		client.streamerLock.Unlock()
 		return nil
 	}
+
+	log.LogDebugf("EvictStream: stream(%v)", s)
+
+	if s.rdonly {
+		defer client.streamerLock.Unlock()
+		if s.refcnt > 0 || len(s.request) != 0 {
+			log.LogWarnf("evict: streamer(%v) refcnt(%v)", s.String(), s.refcnt)
+			return nil
+		}
+
+		if s.client.disableMetaCache || !s.needBCache {
+			delete(s.client.streamers, s.inode)
+		}
+		return nil
+	}
+
 	if s.isOpen {
 		err := s.IssueEvictRequest()
 		if err != nil {
@@ -467,7 +561,6 @@ func (client *ExtentClient) EvictStream(inode uint64) error {
 		delete(s.client.streamers, s.inode)
 		s.client.streamerLock.Unlock()
 	}
-
 	return nil
 }
 
@@ -477,7 +570,11 @@ func (client *ExtentClient) RefreshExtentsCache(inode uint64) error {
 	if s == nil {
 		return nil
 	}
-	return s.GetExtents()
+	isMigration := false
+	if s.isCache {
+		isMigration = true
+	}
+	return s.GetExtents(isMigration)
 }
 
 func (client *ExtentClient) ForceRefreshExtentsCache(inode uint64) error {
@@ -526,7 +623,7 @@ func (client *ExtentClient) SetFileSize(inode uint64, size int, sync bool) {
 }
 
 // Write writes the data.
-func (client *ExtentClient) Write(inode uint64, offset int, data []byte, flags int, checkFunc func() error) (write int, err error) {
+func (client *ExtentClient) Write(inode uint64, offset int, data []byte, flags int, checkFunc func() error, storageClass uint32, isMigration bool) (write int, err error) {
 	prefix := fmt.Sprintf("Write{ino(%v)offset(%v)size(%v)}", inode, offset, len(data))
 	s := client.GetStreamer(inode)
 	if s == nil {
@@ -534,12 +631,18 @@ func (client *ExtentClient) Write(inode uint64, offset int, data []byte, flags i
 		return 0, syscall.EBADF
 	}
 
+	if !client.dataWrapper.CanWriteByClass(storageClass) {
+		log.LogWarnf("Write: target storage class is alrady full, can't write more. pref %s, class %s",
+			prefix, proto.StorageClassString(storageClass))
+		return 0, syscall.EDQUOT
+	}
+
 	s.once.Do(func() {
 		// TODO unhandled error
-		s.GetExtents()
+		s.GetExtents(isMigration)
 	})
 
-	write, err = s.IssueWriteRequest(offset, data, flags, checkFunc)
+	write, err = s.IssueWriteRequest(offset, data, flags, checkFunc, storageClass, isMigration)
 	if err != nil {
 		log.LogError(errors.Stack(err))
 	}
@@ -570,7 +673,17 @@ func (client *ExtentClient) Truncate(mw *meta.MetaWrapper, parentIno uint64, ino
 		log.LogError(errors.Stack(err))
 	}
 	if mw.EnableSummary {
-		go mw.UpdateSummary_ll(parentIno, 0, 0, int64(size)-int64(oldSize))
+		var bytesHddInc, bytesSsdInc, bytesBlobStoreInc int64
+		if info.StorageClass == proto.StorageClass_Replica_HDD {
+			bytesHddInc = int64(size) - int64(oldSize)
+		}
+		if info.StorageClass == proto.StorageClass_Replica_SSD {
+			bytesSsdInc = int64(size) - int64(oldSize)
+		}
+		if info.StorageClass == proto.StorageClass_BlobStore {
+			bytesBlobStoreInc = int64(size) - int64(oldSize)
+		}
+		go mw.UpdateSummary_ll(parentIno, 0, 0, 0, bytesHddInc, bytesSsdInc, bytesBlobStoreInc, 0)
 	}
 
 	return err
@@ -585,18 +698,18 @@ func (client *ExtentClient) Flush(inode uint64) error {
 	return s.IssueFlushRequest()
 }
 
-func (client *ExtentClient) Read(inode uint64, data []byte, offset int, size int) (read int, err error) {
-	// log.LogErrorf("======> ExtentClient Read Enter, inode(%v), len(data)=(%v), offset(%v), size(%v).", inode, len(data), offset, size)
+func (client *ExtentClient) Read(inode uint64, data []byte, offset int, size int, storageClass uint32, isMigration bool) (read int, err error) {
+	// log.LogErrorf("======> ExtentClient Read Enter, inode(%v), len(data)=(%v), offset(%v), size(%v) storageClass(%v) isMigration(%v)",
+	//	inode, len(data), offset, size, storageClass, isMigration)
 	// t1 := time.Now()
-	beg := time.Now()
-	defer func() {
-		clientMetric.WithLabelValues("Read").Observe(float64(time.Since(beg).Microseconds()))
-	}()
-
-	readReqCountMetric.Inc()
 	if size == 0 {
 		return
 	}
+
+	beg := time.Now()
+	defer func() {
+		exporter.RecodCost("Read", time.Since(beg).Microseconds())
+	}()
 
 	s := client.GetStreamer(inode)
 	if s == nil {
@@ -604,28 +717,33 @@ func (client *ExtentClient) Read(inode uint64, data []byte, offset int, size int
 		return 0, syscall.EBADF
 	}
 
+	var errGetExtents error
 	s.once.Do(func() {
-		beg = time.Now()
-		s.GetExtents()
-		clientMetric.WithLabelValues("Read_GetExtents").Observe(float64(time.Since(beg).Microseconds()))
+		errGetExtents = s.GetExtents(isMigration)
+		if log.EnableDebug() {
+			log.LogDebugf("Read: ino(%v) offset(%v) size(%v) storageClass(%v) isMigration(%v) errGetExtents(%v)",
+				inode, offset, size, storageClass, isMigration, errGetExtents)
+		}
 	})
-
-	beg = time.Now()
-	err = s.IssueFlushRequest()
-	if err != nil {
-		return
+	if errGetExtents != nil {
+		err = fmt.Errorf("get extents err(%v)", errGetExtents)
+		log.LogErrorf("Read: ino(%v) offset(%v) size(%v): %v", inode, offset, size, err)
+		return 0, err
 	}
-	clientMetric.WithLabelValues("Read_Flush").Observe(float64(time.Since(beg).Microseconds()))
 
-	beg = time.Now()
-	read, err = s.read(data, offset, size)
-	clientMetric.WithLabelValues("Read_read").Observe(float64(time.Since(beg).Microseconds()))
+	if !s.rdonly || s.dirty {
+		err = s.IssueFlushRequest()
+		if err != nil {
+			return
+		}
+	}
+
+	read, err = s.read(data, offset, size, storageClass)
 	// log.LogErrorf("======> ExtentClient Read Exit, inode(%v), time[%v us].", inode, time.Since(t1).Microseconds())
-	readReqCountMetric.Dec()
 	return
 }
 
-func (client *ExtentClient) ReadExtent(inode uint64, ek *proto.ExtentKey, data []byte, offset int, size int) (read int, err error, isStream bool) {
+func (client *ExtentClient) ReadExtent(inode uint64, ek *proto.ExtentKey, data []byte, offset int, size int, storageClass uint32) (read int, err error, isStream bool) {
 	bgTime := stat.BeginStat()
 	defer func() {
 		stat.EndStat("read-extent", err, bgTime, 1)
@@ -646,7 +764,7 @@ func (client *ExtentClient) ReadExtent(inode uint64, ek *proto.ExtentKey, data [
 	if err != nil {
 		return
 	}
-	reader, err = s.GetExtentReader(ek)
+	reader, err = s.GetExtentReader(ek, storageClass)
 	if err != nil {
 		return
 	}
@@ -709,7 +827,7 @@ func (client *ExtentClient) GetStreamer(inode uint64) *Streamer {
 	}
 	if !s.isOpen {
 		s.isOpen = true
-		s.request = make(chan interface{}, 64)
+		s.request = make(chan interface{}, reqChanSize)
 		s.pendingCache = make(chan bcacheKey, 1)
 		go s.server()
 		go s.asyncBlockCache()
@@ -775,9 +893,9 @@ func (client *ExtentClient) CheckDataPartitionExsit(partitionID uint64) error {
 	return err
 }
 
-func (client *ExtentClient) GetDataPartitionForWrite() error {
+func (client *ExtentClient) GetDataPartitionForWrite(mediaType uint32) error {
 	exclude := make(map[string]struct{})
-	_, err := client.dataWrapper.GetDataPartitionForWrite(exclude)
+	_, err := client.dataWrapper.GetDataPartitionForWrite(exclude, mediaType, 0)
 	return err
 }
 
@@ -789,6 +907,6 @@ func (client *ExtentClient) IsPreloadMode() bool {
 	return client.preload
 }
 
-func (client *ExtentClient) UploadFlowInfo(clientInfo wrapper.SimpleClientInfo) error {
+func (client *ExtentClient) UploadFlowInfo(clientInfo wrapper.SimpleClientInfo) (bWork bool, err error) {
 	return client.dataWrapper.UploadFlowInfo(clientInfo, false)
 }

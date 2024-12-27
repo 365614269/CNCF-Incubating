@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	"github.com/cubefs/cubefs/depends/tiglabs/raft/proto"
@@ -51,6 +52,7 @@ type MetadataFsm struct {
 	snapshotHandler     raftApplySnapshotHandler
 	UserAppCmdHandler   raftUserCmdApplyHandler
 	onSnapshot          bool
+	raftLk              sync.Mutex
 }
 
 func newMetadataFsm(store *raftstore.RocksDBStore, retainsLog uint64, rs *raft.RaftServer) (fsm *MetadataFsm) {
@@ -105,12 +107,16 @@ func (mf *MetadataFsm) restoreApplied() {
 
 // Apply implements the interface of raft.StateMachine
 func (mf *MetadataFsm) Apply(command []byte, index uint64) (resp interface{}, err error) {
-	log.LogDebugf("[Apply] apply index(%v)", index)
+	mf.raftLk.Lock()
+	defer mf.raftLk.Unlock()
+
 	cmd := new(RaftCmd)
 	if err = cmd.Unmarshal(command); err != nil {
 		log.LogErrorf("action[fsmApply],unmarshal data:%v, err:%v", command, err.Error())
 		panic(err)
 	}
+
+	log.LogDebugf("action[Apply] apply index(%v), op %d", index, cmd.Op)
 
 	if cmd.Op == opSyncUpdateDataPartition || cmd.Op == opSyncDeleteDataPartition {
 		dpv := &dataPartitionValue{}
@@ -135,7 +141,8 @@ func (mf *MetadataFsm) Apply(command []byte, index uint64) (resp interface{}, er
 		for cmdK, cmd := range nestedCmdMap {
 			switch cmd.Op {
 			case opSyncDeleteDataNode, opSyncDeleteMetaNode, opSyncDeleteVol, opSyncDeleteDataPartition, opSyncDeleteMetaPartition,
-				opSyncDeleteUserInfo, opSyncDeleteAKUser, opSyncDeleteVolUser, opSyncDeleteQuota, opSyncDeleteLcNode, opSyncDeleteLcConf, opSyncS3QosDelete:
+				opSyncDeleteUserInfo, opSyncDeleteAKUser, opSyncDeleteVolUser, opSyncDeleteQuota, opSyncDeleteLcNode,
+				opSyncDeleteLcConf, opSyncDeleteLcTask, opSyncDeleteLcResult, opSyncS3QosDelete, opSyncDeleteDecommissionDisk:
 				deleteSet[cmdK] = util.Null{}
 			// NOTE: opSyncPutFollowerApiLimiterInfo, opSyncPutApiLimiterInfo need special handle?
 			default:
@@ -147,7 +154,8 @@ func (mf *MetadataFsm) Apply(command []byte, index uint64) (resp interface{}, er
 
 	switch cmd.Op {
 	case opSyncDeleteDataNode, opSyncDeleteMetaNode, opSyncDeleteVol, opSyncDeleteDataPartition, opSyncDeleteMetaPartition,
-		opSyncDeleteUserInfo, opSyncDeleteAKUser, opSyncDeleteVolUser, opSyncDeleteQuota, opSyncDeleteLcNode, opSyncDeleteLcConf, opSyncS3QosDelete:
+		opSyncDeleteUserInfo, opSyncDeleteAKUser, opSyncDeleteVolUser, opSyncDeleteQuota, opSyncDeleteLcNode,
+		opSyncDeleteLcConf, opSyncDeleteLcTask, opSyncDeleteLcResult, opSyncS3QosDelete, opSyncDeleteDecommissionDisk:
 		if err = mf.delKeyAndPutIndex(cmd.K, cmdMap); err != nil {
 			panic(err)
 		}
@@ -165,7 +173,7 @@ func (mf *MetadataFsm) Apply(command []byte, index uint64) (resp interface{}, er
 			panic(err)
 		}
 	}
-
+	log.LogDebugf("action[Apply],persist index[%v]", string(cmdMap[applied]))
 	mf.applied = index
 
 	if mf.applied > 0 && (mf.applied%mf.retainLogs) == 0 {
@@ -177,6 +185,9 @@ func (mf *MetadataFsm) Apply(command []byte, index uint64) (resp interface{}, er
 
 // ApplyMemberChange implements the interface of raft.StateMachine
 func (mf *MetadataFsm) ApplyMemberChange(confChange *proto.ConfChange, index uint64) (interface{}, error) {
+	mf.raftLk.Lock()
+	defer mf.raftLk.Unlock()
+
 	var err error
 	if mf.peerChangeHandler != nil {
 		err = mf.peerChangeHandler(confChange)
@@ -186,6 +197,9 @@ func (mf *MetadataFsm) ApplyMemberChange(confChange *proto.ConfChange, index uin
 
 // Snapshot implements the interface of raft.StateMachine
 func (mf *MetadataFsm) Snapshot() (proto.Snapshot, error) {
+	mf.raftLk.Lock()
+	defer mf.raftLk.Unlock()
+
 	snapshot := mf.store.RocksDBSnapshot()
 	iterator := mf.store.Iterator(snapshot)
 	iterator.SeekToFirst()

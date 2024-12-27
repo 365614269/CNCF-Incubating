@@ -31,13 +31,15 @@ import (
 const (
 	DefaultTransactionTimeout      = 1  // minutes
 	MaxTransactionTimeout          = 60 // minutes
-	DefaultTxConflictRetryNum      = 10
-	MaxTxConflictRetryNum          = 100
-	DefaultTxConflictRetryInterval = 20   // ms
+	DefaultTxConflictRetryNum      = 121
+	MaxTxConflictRetryNum          = 1000
+	DefaultTxConflictRetryInterval = 500  // ms
 	MaxTxConflictRetryInterval     = 1000 // ms
 	MinTxConflictRetryInterval     = 10   // ms
 	DefaultTxDeleteTime            = 120
 	ClearOrphanTxTime              = 3600
+	DefaultAccessTimeValidInterval = 3600 * 24
+	MinAccessTimeValidInterval     = 3600 * 12
 	MaxBufferSize                  = 1024 * 1024 * 1024 // 1GB
 )
 

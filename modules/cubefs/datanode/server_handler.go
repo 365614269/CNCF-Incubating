@@ -21,13 +21,14 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
 	"github.com/cubefs/cubefs/cmd/common"
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/depends/tiglabs/raft"
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util/config"
 	"github.com/cubefs/cubefs/util/log"
 )
@@ -78,7 +79,10 @@ func (s *DataNode) getDiskAPI(w http.ResponseWriter, r *http.Request) {
 
 func (s *DataNode) getStatAPI(w http.ResponseWriter, r *http.Request) {
 	response := &proto.DataNodeHeartbeatResponse{}
-	s.buildHeartBeatResponse(response)
+	forbiddenVols := make(map[string]struct{})
+	volDpRepairBlockSizes := make(map[string]uint64)
+
+	s.buildHeartBeatResponse(response, forbiddenVols, volDpRepairBlockSizes, "")
 
 	s.buildSuccessResp(w, response)
 }
@@ -105,7 +109,8 @@ func (s *DataNode) getRaftStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *DataNode) getPartitionsAPI(w http.ResponseWriter, r *http.Request) {
 	partitions := make([]interface{}, 0)
-	s.space.RangePartitions(func(dp *DataPartition) bool {
+	var lock sync.Mutex
+	s.space.RangePartitions(func(dp *DataPartition, testID string) bool {
 		partition := &struct {
 			ID       uint64   `json:"id"`
 			Size     int      `json:"size"`
@@ -123,9 +128,11 @@ func (s *DataNode) getPartitionsAPI(w http.ResponseWriter, r *http.Request) {
 			Replicas: dp.Replicas(),
 			Hosts:    dp.getConfigHosts(),
 		}
+		lock.Lock()
 		partitions = append(partitions, partition)
+		lock.Unlock()
 		return true
-	})
+	}, "")
 	result := &struct {
 		Partitions     []interface{} `json:"partitions"`
 		PartitionCount int           `json:"partitionCount"`
@@ -318,12 +325,13 @@ func (s *DataNode) setDiskQos(w http.ResponseWriter, r *http.Request) {
 
 	updated := false
 	for key, pVal := range map[string]*int{
-		ConfigDiskReadIocc:  &s.diskReadIocc,
-		ConfigDiskReadIops:  &s.diskReadIops,
-		ConfigDiskReadFlow:  &s.diskReadFlow,
-		ConfigDiskWriteIocc: &s.diskWriteIocc,
-		ConfigDiskWriteIops: &s.diskWriteIops,
-		ConfigDiskWriteFlow: &s.diskWriteFlow,
+		ConfigDiskReadIocc:   &s.diskReadIocc,
+		ConfigDiskReadIops:   &s.diskReadIops,
+		ConfigDiskReadFlow:   &s.diskReadFlow,
+		ConfigDiskWriteIocc:  &s.diskWriteIocc,
+		ConfigDiskWriteIops:  &s.diskWriteIops,
+		ConfigDiskWriteFlow:  &s.diskWriteFlow,
+		ConfigDiskWQueFactor: &s.diskWQueFactor,
 	} {
 		val, err, has := parser(key)
 		if err != nil {
@@ -405,10 +413,10 @@ func (s *DataNode) getMetricsDegrade(w http.ResponseWriter, r *http.Request) {
 
 func (s *DataNode) genClusterVersionFile(w http.ResponseWriter, r *http.Request) {
 	paths := make([]string, 0)
-	s.space.RangePartitions(func(partition *DataPartition) bool {
+	s.space.RangePartitions(func(partition *DataPartition, testID string) bool {
 		paths = append(paths, partition.disk.Path)
 		return true
-	})
+	}, "")
 	paths = append(paths, s.raftDir)
 
 	for _, p := range paths {

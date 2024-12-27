@@ -15,14 +15,18 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cubefs/cubefs/cli/api"
 	"github.com/cubefs/cubefs/proto"
 	"github.com/cubefs/cubefs/sdk/master"
+	"github.com/cubefs/cubefs/sdk/meta"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/strutil"
 	"github.com/spf13/cobra"
@@ -55,6 +59,9 @@ func newVolCmd(client *master.MasterClient) *cobra.Command {
 		newVolSetAuditLogCmd(client),
 		newVolSetTrashIntervalCmd(client),
 		newVolSetDpRepairBlockSize(client),
+		newVolAddAllowedStorageClassCmd(client),
+		newVolQueryOpCmd(client),
+		newVolGetInodeByIdCmd(client),
 	)
 	return cmd
 }
@@ -98,7 +105,6 @@ const (
 	cmdVolDefaultZoneName              = ""
 	cmdVolDefaultCrossZone             = "false"
 	cmdVolDefaultBusiness              = ""
-	cmdVolDefaultVolType               = 0
 	cmdVolDefaultCacheRuleKey          = ""
 	cmdVolDefaultEbsBlkSize            = 8 * 1024 * 1024
 	cmdVolDefaultCacheCapacity         = 0
@@ -109,6 +115,7 @@ const (
 	cmdVolDefaultCacheLowWater         = 60
 	cmdVolDefaultCacheLRUInterval      = 5
 	cmdVolDefaultDpReadOnlyWhenVolFull = "false"
+	cmdVolDefaultAllowedStorageClass   = ""
 )
 
 func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
@@ -120,8 +127,8 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 	var optDPCount int
 	var optReplicaNum string
 	var optDPSize int
-	var optVolType int
 	var optFollowerRead string
+	var optMetaFollowerRead string
 	var optZoneName string
 	var optCacheRuleKey string
 	var optEbsBlkSize int
@@ -140,7 +147,10 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 	var optTxConflictRetryInterval int64
 	var optDeleteLockTime int64
 	var clientIDKey string
+	var optVolStorageClass uint32
+	var optAllowedStorageClass string
 	var optYes bool
+
 	cmd := &cobra.Command{
 		Use:   cmdVolCreateUse,
 		Short: cmdVolCreateShort,
@@ -153,18 +163,33 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 				errout(err)
 			}()
 			crossZone, _ := strconv.ParseBool(optCrossZone)
+			if !crossZone && optZoneName != "" {
+				zoneList := strings.Split(optZoneName, ",")
+				if len(zoneList) > 1 {
+					crossZone = true
+					stdout("\nassigned more than one zone in param \"%v\", auto set param \"%v\" as true\n\n",
+						CliFlagZoneName, CliFlagCrossZone)
+				}
+			}
+
 			followerRead, _ := strconv.ParseBool(optFollowerRead)
 			normalZonesFirst, _ := strconv.ParseBool(optNormalZonesFirst)
 
-			if optReplicaNum == "" && optVolType == 1 {
+			if optReplicaNum == "" && proto.IsStorageClassBlobStore(optVolStorageClass) {
 				optReplicaNum = "1"
 			}
-			if optVolType != 1 && optFollowerRead == "" && (optReplicaNum == "1" || optReplicaNum == "2") {
+			if !proto.IsStorageClassBlobStore(optVolStorageClass) && optFollowerRead == "" && (optReplicaNum == "1" || optReplicaNum == "2") {
 				followerRead = true
 			}
-			if optEnableQuota != "yes" {
+
+			if optMetaFollowerRead != "true" {
+				optMetaFollowerRead = "false"
+			}
+
+			if optEnableQuota != "true" {
 				optEnableQuota = "false"
 			}
+
 			dpReadOnlyWhenVolFull, _ := strconv.ParseBool(optDpReadOnlyWhenVolFull)
 			replicaNum, _ := strconv.Atoi(optReplicaNum)
 
@@ -186,7 +211,6 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 				stdout("  dpCount                  : %v\n", optDPCount)
 				stdout("  replicaNum               : %v\n", optReplicaNum)
 				stdout("  dpSize                   : %v G\n", optDPSize)
-				stdout("  volType                  : %v\n", optVolType)
 				stdout("  followerRead             : %v\n", followerRead)
 				stdout("  readOnlyWhenFull         : %v\n", dpReadOnlyWhenVolFull)
 				stdout("  zoneName                 : %v\n", optZoneName)
@@ -203,6 +227,10 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 				stdout("  TransactionTimeout       : %v min\n", optTxTimeout)
 				stdout("  TxConflictRetryNum       : %v\n", optTxConflictRetryNum)
 				stdout("  TxConflictRetryInterval  : %v ms\n", optTxConflictRetryInterval)
+				stdout("  volStorageClass          : %v\n", optVolStorageClass)
+				stdout("  allowedStorageClass      : %v\n", optAllowedStorageClass)
+				stdout("  enableQuota              : %v\n", optEnableQuota)
+				stdout("  metaFollowerRead         : %v\n", optMetaFollowerRead)
 				stdout("\nConfirm (yes/no)[yes]: ")
 				var userConfirm string
 				_, _ = fmt.Scanln(&userConfirm)
@@ -214,11 +242,12 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 
 			err = client.AdminAPI().CreateVolName(
 				volumeName, userID, optCapacity, optDeleteLockTime, crossZone, normalZonesFirst, optBusiness,
-				optMPCount, optDPCount, int(replicaNum), optDPSize, optVolType, followerRead,
+				optMPCount, optDPCount, int(replicaNum), optDPSize, followerRead,
 				optZoneName, optCacheRuleKey, optEbsBlkSize, optCacheCap,
 				optCacheAction, optCacheThreshold, optCacheTTL, optCacheHighWater,
 				optCacheLowWater, optCacheLRUInterval, dpReadOnlyWhenVolFull,
-				optTxMask, optTxTimeout, optTxConflictRetryNum, optTxConflictRetryInterval, optEnableQuota, clientIDKey)
+				optTxMask, optTxTimeout, optTxConflictRetryNum, optTxConflictRetryInterval, optEnableQuota, clientIDKey,
+				optVolStorageClass, optAllowedStorageClass, optMetaFollowerRead)
 			if err != nil {
 				err = fmt.Errorf("Create volume failed case:\n%v\n", err)
 				return
@@ -234,8 +263,8 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 	cmd.Flags().IntVar(&optDPCount, CliFlagDPCount, cmdVolDefaultDPCount, "Specify init data partition count")
 	cmd.Flags().StringVar(&optReplicaNum, CliFlagReplicaNum, "", "Specify data partition replicas number(default 3 for normal volume,1 for low volume)")
 	cmd.Flags().IntVar(&optDPSize, CliFlagDataPartitionSize, cmdVolDefaultDPSize, "Specify data partition size[Unit: GB]")
-	cmd.Flags().IntVar(&optVolType, CliFlagVolType, cmdVolDefaultVolType, "Type of volume (default 0)")
 	cmd.Flags().StringVar(&optFollowerRead, CliFlagFollowerRead, "", "Enable read form replica follower")
+	cmd.Flags().StringVar(&optMetaFollowerRead, CliFlagMetaFollowerRead, "", "Enable read form mp follower, (true|false), default false")
 	cmd.Flags().StringVar(&optZoneName, CliFlagZoneName, cmdVolDefaultZoneName, "Specify volume zone name")
 	cmd.Flags().StringVar(&optCacheRuleKey, CliFlagCacheRuleKey, cmdVolDefaultCacheRuleKey, "Anything that match this field will be written to the cache")
 	cmd.Flags().IntVar(&optEbsBlkSize, CliFlagEbsBlkSize, cmdVolDefaultEbsBlkSize, "Specify ebsBlk Size[Unit: byte]")
@@ -250,12 +279,17 @@ func newVolCreateCmd(client *master.MasterClient) *cobra.Command {
 		"Enable volume becomes read only when it is full")
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
 	cmd.Flags().BoolVarP(&optYes, "yes", "y", false, "Answer yes for all questions")
-	cmd.Flags().StringVar(&optTxMask, CliTxMask, "", "Enable transaction for specified operation: [\"create|mkdir|remove|rename|mknod|symlink|link\"] or \"off\" or \"all\"")
+	cmd.Flags().StringVar(&optTxMask, CliTxMask, "", "Enable transaction for specified operation: \"create|mkdir|remove|rename|mknod|symlink|link\" or \"off\" or \"all\"")
 	cmd.Flags().Uint32Var(&optTxTimeout, CliTxTimeout, 1, "Specify timeout[Unit: minute] for transaction [1-60]")
 	cmd.Flags().Int64Var(&optTxConflictRetryNum, CliTxConflictRetryNum, 0, "Specify retry times for transaction conflict [1-100]")
 	cmd.Flags().Int64Var(&optTxConflictRetryInterval, CliTxConflictRetryInterval, 0, "Specify retry interval[Unit: ms] for transaction conflict [10-1000]")
 	cmd.Flags().StringVar(&optEnableQuota, CliFlagEnableQuota, "false", "Enable quota (default false)")
 	cmd.Flags().Int64Var(&optDeleteLockTime, CliFlagDeleteLockTime, 0, "Specify delete lock time[Unit: hour] for volume")
+	cmd.Flags().Uint32Var(&optVolStorageClass, CliFlagVolStorageClass, proto.StorageClass_Unspecified,
+		"Specify which StorageClass the clients mounts this vol should write to: [1:SSD | 2:HDD | 3:Blobstore]")
+	cmd.Flags().StringVar(&optAllowedStorageClass, CliFlagAllowedStorageClass, cmdVolDefaultAllowedStorageClass,
+		"Specify which StorageClasses the vol will support, \nformat is comma separated uint32:\"StorageClass1, StorageClass2\",\n"+
+			"1:SSD, 2:HDD, empty value means determine by master")
 
 	return cmd
 }
@@ -271,6 +305,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	var optCrossZone string
 	var optCapacity uint64
 	var optFollowerRead string
+	var optMetaFollowerRead string
+	var optDirectRead string
 	var optEbsBlkSize int
 	var optCacheCap string
 	var optCacheAction string
@@ -291,8 +327,17 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	var optTxOpLimitVal int
 	var optReplicaNum string
 	var optDeleteLockTime int64
+	var optLeaderRetryTime int64
 	var optEnableQuota string
 	var optEnableDpAutoMetaRepair string
+	var optTrashInterval int64
+	var optAccessTimeValidInterval int64
+	var optEnablePersistAccessTime string
+	var optVolStorageClass int
+	var optForbidWriteOpOfProtoVer0 string
+	var optVolQuotaClass int
+	var optVolQuotaOfClass int
+
 	confirmString := strings.Builder{}
 	var vv *proto.SimpleVolView
 	cmd := &cobra.Command{
@@ -309,6 +354,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 			if vv, err = client.AdminAPI().GetVolumeSimpleInfo(volumeName); err != nil {
 				return
 			}
+
 			confirmString.WriteString("Volume configuration changes:\n")
 			confirmString.WriteString(fmt.Sprintf("  Name                : %v\n", vv.Name))
 			if optDescription != "" {
@@ -318,7 +364,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 			} else {
 				confirmString.WriteString(fmt.Sprintf("  Description         : %v \n", vv.Description))
 			}
-			if "" != optZoneName {
+			if optZoneName != "" {
 				isChange = true
 				confirmString.WriteString(fmt.Sprintf("  ZoneName            : %v -> %v\n", vv.ZoneName, optZoneName))
 				vv.ZoneName = optZoneName
@@ -357,6 +403,27 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				}
 				confirmString.WriteString(fmt.Sprintf("  Allow follower read : %v\n", formatEnabledDisabled(vv.FollowerRead)))
 			}
+
+			if optMetaFollowerRead != "" {
+				isChange = true
+				var enable bool
+				if enable, err = strconv.ParseBool(optMetaFollowerRead); err != nil {
+					return
+				}
+				confirmString.WriteString(fmt.Sprintf("  Allow meta follower read : %v -> %v\n", formatEnabledDisabled(vv.MetaFollowerRead), formatEnabledDisabled(enable)))
+				vv.MetaFollowerRead = enable
+			}
+
+			if optDirectRead != "" {
+				isChange = true
+				var enable bool
+				if enable, err = strconv.ParseBool(optDirectRead); err != nil {
+					return
+				}
+				confirmString.WriteString(fmt.Sprintf("  Allow vol direct read : %v -> %v\n", formatEnabledDisabled(vv.DirectRead), formatEnabledDisabled(enable)))
+				vv.DirectRead = enable
+			}
+
 			if optCrossZone != "" {
 				isChange = true
 				var enable bool
@@ -370,10 +437,15 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 			}
 
 			if optEbsBlkSize > 0 {
-				if vv.VolType == 0 {
+				if proto.IsVolSupportStorageClass(vv.AllowedStorageClass, proto.StorageClass_BlobStore) {
+					err = fmt.Errorf("ebs-blk-size can not be set because vol not support blobstore\n")
+					return
+				} else if proto.IsHot(vv.VolType) {
+					// handle compatibility with master of versions before hybrid cloud
 					err = fmt.Errorf("ebs-blk-size not support in hot vol\n")
 					return
 				}
+
 				isChange = true
 				confirmString.WriteString(fmt.Sprintf("  EbsBlkSize          : %v byte -> %v byte\n", vv.ObjBlockSize, optEbsBlkSize))
 				vv.ObjBlockSize = optEbsBlkSize
@@ -381,8 +453,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  EbsBlkSize          : %v byte\n", vv.ObjBlockSize))
 			}
 			if optCacheCap != "" {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-capacity not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-capacity can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -419,6 +491,18 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				}
 			} else {
 				confirmString.WriteString(fmt.Sprintf("  DeleteLockTime            : %v h\n", vv.DeleteLockTime))
+			}
+
+			if optLeaderRetryTime >= 0 {
+				if optLeaderRetryTime != vv.LeaderRetryTimeOut {
+					isChange = true
+					confirmString.WriteString(fmt.Sprintf("  LeaderRetryTimeout            : %v s -> %v s\n", vv.LeaderRetryTimeOut, optLeaderRetryTime))
+					vv.LeaderRetryTimeOut = optLeaderRetryTime
+				} else {
+					confirmString.WriteString(fmt.Sprintf("  LeaderRetryTimeout            : %v s\n", vv.LeaderRetryTimeOut))
+				}
+			} else {
+				confirmString.WriteString(fmt.Sprintf("  LeaderRetryTimeout            : %v s\n", vv.LeaderRetryTimeOut))
 			}
 
 			// var maskStr string
@@ -494,8 +578,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 			}
 
 			if optCacheAction != "" {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-action not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-action can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -508,8 +592,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  CacheAction         : %v \n", vv.CacheAction))
 			}
 			if optCacheRule != "" {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-rule not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-rule can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -519,8 +603,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  CacheRule        : %v \n", vv.CacheAction))
 			}
 			if optCacheThreshold > 0 {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-threshold not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-threshold can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -530,8 +614,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  CacheThreshold      : %v byte\n", vv.CacheThreshold))
 			}
 			if optCacheTTL > 0 {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-ttl not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-ttl can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -541,8 +625,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  CacheTTL            : %v day\n", vv.CacheTtl))
 			}
 			if optCacheHighWater > 0 {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-high-water not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-high-water can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -552,8 +636,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  CacheHighWater      : %v \n", vv.CacheHighWater))
 			}
 			if optCacheLowWater > 0 {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-low-water not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-low-water can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -563,8 +647,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  CacheLowWater       : %v \n", vv.CacheLowWater))
 			}
 			if optCacheLRUInterval > 0 {
-				if vv.VolType == 0 {
-					err = fmt.Errorf("cache-lru-interval not support in hot vol\n")
+				if vv.VolStorageClass != proto.StorageClass_BlobStore {
+					err = fmt.Errorf("cache-lru-interval can not be set because vol storageClass is not blobstore\n")
 					return
 				}
 				isChange = true
@@ -586,6 +670,55 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				confirmString.WriteString(fmt.Sprintf("  Vol readonly when full : %v\n",
 					formatEnabledDisabled(vv.DpReadOnlyWhenVolFull)))
 			}
+			if optTrashInterval >= 0 {
+				if optTrashInterval != vv.TrashInterval {
+					isChange = true
+					confirmString.WriteString(fmt.Sprintf("  TrashInterval            : %v min -> %v min\n", vv.TrashInterval, optTrashInterval))
+					vv.TrashInterval = optTrashInterval
+				} else {
+					confirmString.WriteString(fmt.Sprintf("  TrashInterval            : %v min\n", vv.TrashInterval))
+				}
+			} else {
+				confirmString.WriteString(fmt.Sprintf("  TrashInterval            : %v min\n", vv.TrashInterval))
+			}
+			if optAccessTimeValidInterval >= 0 {
+				if optAccessTimeValidInterval < proto.MinAccessTimeValidInterval {
+					err = fmt.Errorf("AccessTimeValidInterval must greater than or equal to %v\n", proto.MinAccessTimeValidInterval)
+					return
+				}
+				if optAccessTimeValidInterval != vv.AccessTimeInterval {
+					isChange = true
+					confirmString.WriteString(fmt.Sprintf("  AccessTimeValidInterval            : %v s -> %v s\n", vv.AccessTimeInterval, optAccessTimeValidInterval))
+					vv.AccessTimeInterval = optAccessTimeValidInterval
+				} else {
+					confirmString.WriteString(fmt.Sprintf("  AccessTimeValidInterval            : %v s\n", vv.AccessTimeInterval))
+				}
+			} else {
+				confirmString.WriteString(fmt.Sprintf("  AccessTimeValidInterval            : %v s\n", vv.AccessTimeInterval))
+			}
+
+			if optEnablePersistAccessTime != "" {
+				enablePersistAccessTime := false
+				if optEnablePersistAccessTime == "false" {
+					if vv.EnablePersistAccessTime {
+						isChange = true
+					}
+				}
+				if optEnablePersistAccessTime == "true" {
+					if !vv.EnablePersistAccessTime {
+						isChange = true
+					}
+					enablePersistAccessTime = true
+				}
+				if isChange {
+					confirmString.WriteString(fmt.Sprintf("  EnablePersistAccessTime         : %v -> %v \n", vv.EnablePersistAccessTime, enablePersistAccessTime))
+					vv.EnablePersistAccessTime = enablePersistAccessTime
+				} else {
+					confirmString.WriteString(fmt.Sprintf("  EnablePersistAccessTime        : %v \n", vv.EnablePersistAccessTime))
+				}
+			} else {
+				confirmString.WriteString(fmt.Sprintf("  EnablePersistAccessTime        : %v \n", vv.EnablePersistAccessTime))
+			}
 			if optEnableDpAutoMetaRepair != "" {
 				enable := false
 				if enable, err = strconv.ParseBool(optEnableDpAutoMetaRepair); err != nil {
@@ -596,10 +729,67 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 					confirmString.WriteString(fmt.Sprintf("  EnableAutoDpMetaRepair : %v -> %v\n", vv.EnableAutoDpMetaRepair, enable))
 					vv.EnableAutoDpMetaRepair = enable
 				} else {
-					confirmString.WriteString(fmt.Sprintf("  EnableAutoDpMetaRepair : %v", vv.EnableAutoDpMetaRepair))
+					confirmString.WriteString(fmt.Sprintf("  EnableAutoDpMetaRepair : %v\n", vv.EnableAutoDpMetaRepair))
 				}
 			} else {
-				confirmString.WriteString(fmt.Sprintf("  EnableAutoDpMetaRepair : %v", vv.EnableAutoDpMetaRepair))
+				confirmString.WriteString(fmt.Sprintf("  EnableAutoDpMetaRepair : %v\n", vv.EnableAutoDpMetaRepair))
+			}
+
+			if optVolStorageClass != 0 {
+				if !proto.IsValidStorageClass(uint32(optVolStorageClass)) {
+					err = fmt.Errorf("invalid param volStorageClass: %v\n", optVolStorageClass)
+					return
+				}
+
+				isChange = true
+				confirmString.WriteString(fmt.Sprintf("  volStorageClass : %v -> %v\n",
+					vv.VolStorageClass, optVolStorageClass))
+				vv.VolStorageClass = uint32(optVolStorageClass)
+			} else {
+				confirmString.WriteString(fmt.Sprintf("  volStorageClass : %v\n",
+					proto.StorageClassString(vv.VolStorageClass)))
+			}
+
+			if optVolQuotaClass > 0 {
+				if !proto.IsStorageClassReplica(uint32(optVolQuotaClass)) {
+					err = fmt.Errorf("invalid param optVolQuotaClass: %v", optVolQuotaClass)
+					return
+				}
+
+				if optVolQuotaOfClass < 0 {
+					err = fmt.Errorf("invalid param optVolQuotaOfClass: %v", optVolQuotaOfClass)
+					return
+				}
+
+				old := uint64(0)
+				for _, c := range vv.QuotaOfStorageClass {
+					if c.StorageClass == uint32(optVolQuotaClass) {
+						old = c.QuotaGB
+					}
+				}
+
+				isChange = true
+				confirmString.WriteString(fmt.Sprintf("  volCapClass (%s) : %v -> %v\n",
+					proto.StorageClassString(uint32(optVolQuotaClass)), quotaLimitStr(old), quotaLimitStr(uint64(optVolQuotaOfClass))))
+
+				vv.QuotaOfStorageClass[0] = proto.NewStatOfStorageClassEx(uint32(optVolQuotaClass), uint64(optVolQuotaOfClass))
+			}
+
+			if optForbidWriteOpOfProtoVer0 != "" {
+				enable := false
+				if enable, err = strconv.ParseBool(optForbidWriteOpOfProtoVer0); err != nil {
+					err = fmt.Errorf("param forbidWriteOpOfProtoVersion0(%v) should be true or false", optForbidWriteOpOfProtoVer0)
+					return
+				}
+				if vv.ForbidWriteOpOfProtoVer0 != enable {
+					isChange = true
+					confirmString.WriteString(fmt.Sprintf("  ForbidWriteOpOfProtoVer0 : %v -> %v\n", vv.ForbidWriteOpOfProtoVer0, enable))
+					vv.ForbidWriteOpOfProtoVer0 = enable
+				} else {
+					confirmString.WriteString(fmt.Sprintf("  ForbidWriteOpOfProtoVer0 : %v\n", vv.ForbidWriteOpOfProtoVer0))
+				}
+			} else {
+				confirmString.WriteString(fmt.Sprintf("  ForbidWriteOpOfProtoVer0 : %v\n", vv.ForbidWriteOpOfProtoVer0))
 			}
 
 			if err != nil {
@@ -621,7 +811,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 				}
 			}
 			err = client.AdminAPI().UpdateVolume(vv, optTxTimeout, optTxMask, optTxForceReset, optTxConflictRetryNum,
-				optTxConflictRetryInterval, optTxOpLimitVal, clientIDKey)
+				optTxConflictRetryInterval, optTxOpLimitVal, clientIDKey, optVolQuotaClass)
 			if err != nil {
 				return
 			}
@@ -639,6 +829,8 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	cmd.Flags().StringVar(&optCrossZone, CliFlagEnableCrossZone, "", "Enable cross zone")
 	cmd.Flags().Uint64Var(&optCapacity, CliFlagCapacity, 0, "Specify volume datanode capacity [Unit: GB]")
 	cmd.Flags().StringVar(&optFollowerRead, CliFlagEnableFollowerRead, "", "Enable read form replica follower (default false)")
+	cmd.Flags().StringVar(&optMetaFollowerRead, CliFlagMetaFollowerRead, "", "Enable read form mp follower (true|false, default false)")
+	cmd.Flags().StringVar(&optDirectRead, "directRead", "", "Enable read direct from disk (true|false, default false)")
 	cmd.Flags().IntVar(&optEbsBlkSize, CliFlagEbsBlkSize, 0, "Specify ebsBlk Size[Unit: byte]")
 	cmd.Flags().StringVar(&optCacheCap, CliFlagCacheCapacity, "", "Specify low volume capacity[Unit: GB]")
 	cmd.Flags().StringVar(&optCacheAction, CliFlagCacheAction, "", "Specify low volume cacheAction (default 0)")
@@ -650,7 +842,7 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	cmd.Flags().IntVar(&optCacheLRUInterval, CliFlagCacheLRUInterval, 0, "Specify interval expiration time[Unit: min] (default 5)")
 	cmd.Flags().StringVar(&optDpReadOnlyWhenVolFull, CliDpReadOnlyWhenVolFull, "", "Enable volume becomes read only when it is full")
 	cmd.Flags().BoolVarP(&optYes, "yes", "y", false, "Answer yes for all questions")
-	cmd.Flags().StringVar(&optTxMask, CliTxMask, "", "Enable transaction for specified operation: [\"create|mkdir|remove|rename|mknod|symlink|link\"] or \"off\" or \"all\"")
+	cmd.Flags().StringVar(&optTxMask, CliTxMask, "", "Enable transaction for specified operation: \"create|mkdir|remove|rename|mknod|symlink|link\" or \"off\" or \"all\"")
 	cmd.Flags().Int64Var(&optTxTimeout, CliTxTimeout, 0, "Specify timeout[Unit: minute] for transaction (0-60]")
 	cmd.Flags().Int64Var(&optTxConflictRetryNum, CliTxConflictRetryNum, 0, "Specify retry times for transaction conflict [1-100]")
 	cmd.Flags().Int64Var(&optTxConflictRetryInterval, CliTxConflictRetryInterval, 0, "Specify retry interval[Unit: ms] for transaction conflict [10-1000]")
@@ -659,8 +851,18 @@ func newVolUpdateCmd(client *master.MasterClient) *cobra.Command {
 	cmd.Flags().StringVar(&optReplicaNum, CliFlagReplicaNum, "", "Specify data partition replicas number(default 3 for normal volume,1 for low volume)")
 	cmd.Flags().StringVar(&optEnableQuota, CliFlagEnableQuota, "", "Enable quota")
 	cmd.Flags().Int64Var(&optDeleteLockTime, CliFlagDeleteLockTime, -1, "Specify delete lock time[Unit: hour] for volume")
+	cmd.Flags().Int64Var(&optLeaderRetryTime, "leader-retry-timeout", -1, "Specify leader retry timeout for mp read [Unit: second] for volume, default 0")
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
 	cmd.Flags().StringVar(&optEnableDpAutoMetaRepair, CliFlagAutoDpMetaRepair, "", "Enable or disable dp auto meta repair")
+	cmd.Flags().IntVar(&optVolStorageClass, CliFlagVolStorageClass, 0, "specify volStorageClass")
+	cmd.Flags().IntVar(&optVolQuotaClass, CliFlagVolQuotaClass, 0, "specify target storage class for quota, 1(SSD), 2(HDD)")
+	cmd.Flags().IntVar(&optVolQuotaOfClass, CliFlagVolQuotaOfClass, -1, "specify quota of target storage class, GB")
+
+	cmd.Flags().Int64Var(&optTrashInterval, CliFlagTrashInterval, -1, "The retention period for files in trash")
+	cmd.Flags().Int64Var(&optAccessTimeValidInterval, CliFlagAccessTimeValidInterval, -1, fmt.Sprintf("Effective time interval for accesstime, at least %v [Unit: second]", proto.MinAccessTimeValidInterval))
+	cmd.Flags().StringVar(&optEnablePersistAccessTime, CliFlagEnablePersistAccessTime, "", "true/false to enable/disable persisting access time")
+	cmd.Flags().StringVar(&optForbidWriteOpOfProtoVer0, CliForbidWriteOpOfProtoVersion0, "",
+		"set volume forbid write operates of packet whose protocol version is version-0: [true | false]")
 
 	return cmd
 }
@@ -672,8 +874,9 @@ const (
 
 func newVolInfoCmd(client *master.MasterClient) *cobra.Command {
 	var (
-		optMetaDetail bool
-		optDataDetail bool
+		optMetaDetail       bool
+		optDataDetail       bool
+		opHybridCloudDetail bool
 	)
 
 	cmd := &cobra.Command{
@@ -693,6 +896,40 @@ func newVolInfoCmd(client *master.MasterClient) *cobra.Command {
 			}
 			// print summary info
 			stdout("Summary:\n%s\n", formatSimpleVolView(svv))
+
+			if opHybridCloudDetail {
+				var info *proto.VolStatInfo
+				if info, err = client.ClientAPI().GetVolumeStat(volumeName); err != nil {
+					err = fmt.Errorf("get volume hyrbid cloud detail information failed:%v", err)
+					return
+				}
+				stdout("Usage by storage class:\n")
+				stdout("%v\n", hybridCloudStorageTableHeader)
+				sort.Slice(info.StatByStorageClass, func(i, j int) bool {
+					return info.StatByStorageClass[i].StorageClass < info.StatByStorageClass[j].StorageClass
+				})
+				for _, view := range info.StatByStorageClass {
+					stdout("%v\n", formatHybridCloudStorageTableRow(view))
+				}
+
+				stdout("\nUsage by dp media type:\n")
+				stdout("%v\n", hybridCloudStorageTableHeader)
+				sort.Slice(info.StatByDpMediaType, func(i, j int) bool {
+					return info.StatByDpMediaType[i].StorageClass < info.StatByDpMediaType[j].StorageClass
+				})
+				for _, view := range info.StatByDpMediaType {
+					stdout("%v\n", formatHybridCloudStorageTableRow(view))
+				}
+
+				stdout("\nMigration Usage by storage class:\n")
+				stdout("%v\n", hybridCloudStorageTableHeader)
+				sort.Slice(info.StatMigrateStorageClass, func(i, j int) bool {
+					return info.StatMigrateStorageClass[i].StorageClass < info.StatMigrateStorageClass[j].StorageClass
+				})
+				for _, view := range info.StatMigrateStorageClass {
+					stdout("%v\n", formatHybridCloudStorageTableRow(view))
+				}
+			}
 
 			// print metadata detail
 			if optMetaDetail {
@@ -737,6 +974,7 @@ func newVolInfoCmd(client *master.MasterClient) *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&optMetaDetail, "meta-partition", "m", false, "Display meta partition detail information")
 	cmd.Flags().BoolVarP(&optDataDetail, "data-partition", "d", false, "Display data partition detail information")
+	cmd.Flags().BoolVarP(&opHybridCloudDetail, "storage-class", "s", false, "Display hybrid cloud detail information")
 	return cmd
 }
 
@@ -891,6 +1129,8 @@ const (
 
 func newVolAddDPCmd(client *master.MasterClient) *cobra.Command {
 	var clientIDKey string
+	var mediaType uint32
+
 	cmd := &cobra.Command{
 		Use:   cmdVolAddDPCmdUse,
 		Short: cmdVolAddDPCmdShort,
@@ -910,10 +1150,10 @@ func newVolAddDPCmd(client *master.MasterClient) *cobra.Command {
 				err = fmt.Errorf("number must be larger than 0")
 				return
 			}
-			if err = client.AdminAPI().CreateDataPartition(volume, count, clientIDKey); err != nil {
+			if err = client.AdminAPI().CreateDataPartition(volume, int(count), clientIDKey, mediaType); err != nil {
 				return
 			}
-			stdout("Add dp successfully.\n")
+			stdout("Add dp success.\n")
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
@@ -923,6 +1163,7 @@ func newVolAddDPCmd(client *master.MasterClient) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
+	cmd.Flags().Uint32Var(&mediaType, CliFlagMediaType, proto.MediaType_Unspecified, "Specify the mediaType of datapartition, [1(SSD) | 2(HDD)]")
 	return cmd
 }
 
@@ -1150,6 +1391,161 @@ func newVolSetTrashIntervalCmd(client *master.MasterClient) *cobra.Command {
 				return
 			}
 			stdout("Set trash interval of %v to %v successfully\n", name, interval)
+		},
+	}
+	return cmd
+}
+
+var (
+	cmdVolAddAllowedStorageClassUse   = "addAllowedStorageClass [VOLUME] [STORAGE_CLASS_TO_ADD] [flags]"
+	cmdVolAddAllowedStorageClassShort = "add a storageClass to volume's allowedStorageClass list: [1:SSD | 2:HDD | 3:Blobstore]"
+)
+
+func newVolAddAllowedStorageClassCmd(client *master.MasterClient) *cobra.Command {
+	var optClientIDKey string
+	var ascUint64 uint64
+	var addAllowedStorageClass uint32
+	var optEbsBlkSize int
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   cmdVolAddAllowedStorageClassUse,
+		Short: cmdVolAddAllowedStorageClassShort,
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			volName := args[0]
+			addAllowedStorageClassStr := args[1]
+			var err error
+			defer func() {
+				errout(err)
+			}()
+
+			ascUint64, err = strconv.ParseUint(addAllowedStorageClassStr, 10, 32)
+			if err != nil || ascUint64 > math.MaxUint32 {
+				err = fmt.Errorf("parse param[addAllowedStorageClass] is not valid uint32[%d], err %v", ascUint64, err)
+				return
+			}
+			addAllowedStorageClass = uint32(ascUint64)
+
+			if !proto.IsValidStorageClass(addAllowedStorageClass) {
+				err = fmt.Errorf("param[addAllowedStorageClass] is not valid storageClass: %v", addAllowedStorageClass)
+				return
+			}
+
+			var vv *proto.SimpleVolView
+			if vv, err = client.AdminAPI().GetVolumeSimpleInfo(volName); err != nil {
+				return
+			}
+
+			if err = client.AdminAPI().VolAddAllowedStorageClass(volName, addAllowedStorageClass, optEbsBlkSize, util.CalcAuthKey(vv.Owner), optClientIDKey, force); err != nil {
+				return
+			}
+
+			stdout("Volume add allowedStorageClass successfully\n")
+		},
+	}
+
+	cmd.Flags().StringVar(&optClientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
+	cmd.Flags().IntVar(&optEbsBlkSize, CliFlagEbsBlkSize, cmdVolDefaultEbsBlkSize, "Specify ebsBlockSize for BlobStore")
+	cmd.Flags().BoolVar(&force, "force", false, "true|false, ignore mp & dp check when true")
+	return cmd
+}
+
+var (
+	cmdVolQueryOpUse   = "volop [VOLUME] [flags]"
+	cmdVolQueryOpShort = "query op_log of vol"
+)
+
+func newVolQueryOpCmd(client *master.MasterClient) *cobra.Command {
+	var (
+		filterOp string
+		dpId     string
+		//  volName string
+		logNum    int
+		dimension string
+		addr      string
+		diskName  string
+	)
+	cmd := &cobra.Command{
+		Use:   cmdVolQueryOpUse,
+		Short: cmdVolQueryOpShort,
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dimension = proto.Vol
+			opv, err := client.AdminAPI().GetOpLog(dimension, args[0], addr, dpId, diskName)
+			if err != nil {
+				return err
+			}
+			stdoutln(fmt.Sprintf("%-15v %-15v %v", "DpId", "OpType", "Count"))
+			stdoutln(formatVolOp(opv, logNum, dpId, filterOp))
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&logNum, "num", 50, "Number of logs to display")
+	// cmd.Flags().StringVar(&volName, "volname", "", "Filter logs by vol name")
+	cmd.Flags().StringVar(&dpId, "dp", "", "Filter logs by dp id")
+	cmd.Flags().StringVar(&filterOp, "filter-op", "", "Filter logs by op type")
+	return cmd
+}
+
+var (
+	cmdVolGetInodeByIdUse   = "getInodeById [VOLUME] [INODE ID] [PORT]"
+	cmdVolGetInodeByIdShort = "get inode detail information by inode id such as StorageClass: [1:SSD | 2:HDD | 3:Blobstore]"
+)
+
+func newVolGetInodeByIdCmd(client *master.MasterClient) *cobra.Command {
+	var (
+		mpId   uint64
+		verAll bool
+		port   string
+	)
+	cmd := &cobra.Command{
+		Use:   cmdVolGetInodeByIdUse,
+		Short: cmdVolGetInodeByIdShort,
+		Args:  cobra.MinimumNArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			volName := args[0]
+			ino, err := strconv.ParseUint(args[1], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			port = "17220"
+			if len(args) == 3 {
+				port = args[2]
+			}
+
+			metaConfig := &meta.MetaConfig{
+				Volume:  volName,
+				Masters: client.Nodes(),
+			}
+			mw, err := meta.NewMetaWrapper(metaConfig)
+			if err != nil {
+				return err
+			}
+			mpId = mw.GetPartitionByInodeId_ll(ino).PartitionID
+			verAll = true
+
+			mp, err := client.ClientAPI().GetMetaPartition(mpId)
+			if err != nil {
+				return err
+			}
+			addr := strings.Split(mp.Replicas[0].Addr, ":")[0] + ":" + port
+
+			mc := api.NewMetaHttpClient(addr, false)
+			inodeDetail, err := mc.GetInodeDetail(mpId, ino, verAll)
+			if err != nil {
+				return fmt.Errorf("get inode detail failed: %v", err.Error())
+			}
+
+			jsonBytes, err := json.MarshalIndent(inodeDetail, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal inode detail to JSON: %v", err.Error())
+			}
+
+			stdoutln(string(jsonBytes))
+			return nil
 		},
 	}
 	return cmd

@@ -20,9 +20,9 @@ import (
 	"hash/crc32"
 	"sync/atomic"
 
+	"github.com/cubefs/cubefs/datanode/repl"
+	"github.com/cubefs/cubefs/datanode/storage"
 	"github.com/cubefs/cubefs/proto"
-	"github.com/cubefs/cubefs/repl"
-	"github.com/cubefs/cubefs/storage"
 	"github.com/cubefs/cubefs/util/log"
 )
 
@@ -62,7 +62,7 @@ func (s *DataNode) Prepare(p *repl.Packet) (err error) {
 	if err = s.checkPartition(p); err != nil {
 		return
 	}
-	// For certain packet, we meed to add some additional extent information.
+	// For certain packet, we need to add some additional extent information.
 	if err = s.checkPacketAndPrepare(p); err != nil {
 		return
 	}
@@ -120,7 +120,10 @@ func (s *DataNode) checkPacketAndPrepare(p *repl.Packet) error {
 		err      error
 	)
 
-	log.LogDebugf("action[prepare.checkPacketAndPrepare] pack opcode (%v) p.IsLeaderPacket(%v) p (%v)", p.Opcode, p.IsLeaderPacket(), p)
+	if log.EnableDebug() {
+		log.LogDebugf("action[prepare.checkPacketAndPrepare] pack opcode (%v) p.IsLeaderPacket(%v) p (%v)", p.Opcode,
+			p.IsLeaderPacket(), p)
+	}
 	if p.IsRandomWrite() || p.IsSnapshotModWriteAppendOperation() || p.IsNormalWriteOperation() {
 		if err = partition.CheckWriteVer(p); err != nil {
 			return err
