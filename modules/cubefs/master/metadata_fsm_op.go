@@ -35,82 +35,84 @@ import (
    transferred over the network. */
 
 type clusterValue struct {
-	Name                         string
-	CreateTime                   int64
-	Threshold                    float32
-	LoadFactor                   float32
-	DisableAutoAllocate          bool
-	ForbidMpDecommission         bool
-	DataNodeDeleteLimitRate      uint64
-	MetaNodeDeleteBatchCount     uint64
-	MetaNodeDeleteWorkerSleepMs  uint64
-	DataNodeAutoRepairLimitRate  uint64
-	MaxDpCntLimit                uint64
-	MaxMpCntLimit                uint64
-	FaultDomain                  bool
-	DiskQosEnable                bool
-	QosLimitUpload               uint64
-	DirChildrenNumLimit          uint32
-	DecommissionLimit            uint64
-	CheckDataReplicasEnable      bool
-	FileStatsEnable              bool
-	ClusterUuid                  string
-	ClusterUuidEnable            bool
-	MetaPartitionInodeIdStep     uint64
-	MaxConcurrentLcNodes         uint64
-	DpMaxRepairErrCnt            uint64
-	DpRepairTimeOut              uint64
-	DpBackupTimeOut              uint64
-	EnableAutoDecommissionDisk   bool
-	AutoDecommissionDiskInterval int64
-	DecommissionDiskLimit        uint32
-	VolDeletionDelayTimeHour     int64
-	MarkDiskBrokenThreshold      float64
-	EnableAutoDpMetaRepair       bool
-	AutoDpMetaRepairParallelCnt  uint32
-	DataPartitionTimeoutSec      int64
-	ForbidWriteOpOfProtoVer0     bool
-	LegacyDataMediaType          uint32
+	Name                                 string
+	CreateTime                           int64
+	Threshold                            float32
+	LoadFactor                           float32
+	DisableAutoAllocate                  bool
+	ForbidMpDecommission                 bool
+	DataNodeDeleteLimitRate              uint64
+	MetaNodeDeleteBatchCount             uint64
+	MetaNodeDeleteWorkerSleepMs          uint64
+	DataNodeAutoRepairLimitRate          uint64
+	MaxDpCntLimit                        uint64
+	MaxMpCntLimit                        uint64
+	FaultDomain                          bool
+	DiskQosEnable                        bool
+	QosLimitUpload                       uint64
+	DirChildrenNumLimit                  uint32
+	DecommissionLimit                    uint64
+	CheckDataReplicasEnable              bool
+	FileStatsEnable                      bool
+	ClusterUuid                          string
+	ClusterUuidEnable                    bool
+	MetaPartitionInodeIdStep             uint64
+	MaxConcurrentLcNodes                 uint64
+	DpMaxRepairErrCnt                    uint64
+	DpRepairTimeOut                      uint64
+	DpBackupTimeOut                      uint64
+	EnableAutoDecommissionDisk           bool
+	AutoDecommissionDiskInterval         int64
+	DecommissionDiskLimit                uint32
+	VolDeletionDelayTimeHour             int64
+	MarkDiskBrokenThreshold              float64
+	EnableAutoDpMetaRepair               bool
+	AutoDpMetaRepairParallelCnt          uint32
+	DataPartitionTimeoutSec              int64
+	ForbidWriteOpOfProtoVer0             bool
+	LegacyDataMediaType                  uint32
+	RaftPartitionAlreadyUseDifferentPort bool
 }
 
 func newClusterValue(c *Cluster) (cv *clusterValue) {
 	cv = &clusterValue{
-		Name:                         c.Name,
-		CreateTime:                   c.CreateTime,
-		LoadFactor:                   c.cfg.ClusterLoadFactor,
-		Threshold:                    c.cfg.MetaNodeThreshold,
-		DataNodeDeleteLimitRate:      c.cfg.DataNodeDeleteLimitRate,
-		MetaNodeDeleteBatchCount:     c.cfg.MetaNodeDeleteBatchCount,
-		MetaNodeDeleteWorkerSleepMs:  c.cfg.MetaNodeDeleteWorkerSleepMs,
-		DataNodeAutoRepairLimitRate:  c.cfg.DataNodeAutoRepairLimitRate,
-		DisableAutoAllocate:          c.DisableAutoAllocate,
-		ForbidMpDecommission:         c.ForbidMpDecommission,
-		MaxDpCntLimit:                c.cfg.MaxDpCntLimit,
-		MaxMpCntLimit:                c.cfg.MaxMpCntLimit,
-		FaultDomain:                  c.FaultDomain,
-		DiskQosEnable:                c.diskQosEnable,
-		QosLimitUpload:               uint64(c.QosAcceptLimit.Limit()),
-		DirChildrenNumLimit:          c.cfg.DirChildrenNumLimit,
-		DecommissionLimit:            c.DecommissionLimit,
-		CheckDataReplicasEnable:      c.checkDataReplicasEnable,
-		FileStatsEnable:              c.fileStatsEnable,
-		ClusterUuid:                  c.clusterUuid,
-		ClusterUuidEnable:            c.clusterUuidEnable,
-		MetaPartitionInodeIdStep:     c.cfg.MetaPartitionInodeIdStep,
-		MaxConcurrentLcNodes:         c.cfg.MaxConcurrentLcNodes,
-		DpMaxRepairErrCnt:            c.cfg.DpMaxRepairErrCnt,
-		DpRepairTimeOut:              c.cfg.DpRepairTimeOut,
-		DpBackupTimeOut:              c.cfg.DpBackupTimeOut,
-		EnableAutoDecommissionDisk:   c.EnableAutoDecommissionDisk.Load(),
-		AutoDecommissionDiskInterval: c.AutoDecommissionInterval.Load(),
-		DecommissionDiskLimit:        c.GetDecommissionDiskLimit(),
-		VolDeletionDelayTimeHour:     c.cfg.volDelayDeleteTimeHour,
-		MarkDiskBrokenThreshold:      c.getMarkDiskBrokenThreshold(),
-		EnableAutoDpMetaRepair:       c.getEnableAutoDpMetaRepair(),
-		AutoDpMetaRepairParallelCnt:  c.AutoDpMetaRepairParallelCnt.Load(),
-		DataPartitionTimeoutSec:      c.getDataPartitionTimeoutSec(),
-		ForbidWriteOpOfProtoVer0:     c.cfg.forbidWriteOpOfProtoVer0,
-		LegacyDataMediaType:          c.legacyDataMediaType,
+		Name:                                 c.Name,
+		CreateTime:                           c.CreateTime,
+		LoadFactor:                           c.cfg.ClusterLoadFactor,
+		Threshold:                            c.cfg.MetaNodeThreshold,
+		DataNodeDeleteLimitRate:              c.cfg.DataNodeDeleteLimitRate,
+		MetaNodeDeleteBatchCount:             c.cfg.MetaNodeDeleteBatchCount,
+		MetaNodeDeleteWorkerSleepMs:          c.cfg.MetaNodeDeleteWorkerSleepMs,
+		DataNodeAutoRepairLimitRate:          c.cfg.DataNodeAutoRepairLimitRate,
+		DisableAutoAllocate:                  c.DisableAutoAllocate,
+		ForbidMpDecommission:                 c.ForbidMpDecommission,
+		MaxDpCntLimit:                        c.cfg.MaxDpCntLimit,
+		MaxMpCntLimit:                        c.cfg.MaxMpCntLimit,
+		FaultDomain:                          c.FaultDomain,
+		DiskQosEnable:                        c.diskQosEnable,
+		QosLimitUpload:                       uint64(c.QosAcceptLimit.Limit()),
+		DirChildrenNumLimit:                  c.cfg.DirChildrenNumLimit,
+		DecommissionLimit:                    c.DecommissionLimit,
+		CheckDataReplicasEnable:              c.checkDataReplicasEnable,
+		FileStatsEnable:                      c.fileStatsEnable,
+		ClusterUuid:                          c.clusterUuid,
+		ClusterUuidEnable:                    c.clusterUuidEnable,
+		MetaPartitionInodeIdStep:             c.cfg.MetaPartitionInodeIdStep,
+		MaxConcurrentLcNodes:                 c.cfg.MaxConcurrentLcNodes,
+		DpMaxRepairErrCnt:                    c.cfg.DpMaxRepairErrCnt,
+		DpRepairTimeOut:                      c.cfg.DpRepairTimeOut,
+		DpBackupTimeOut:                      c.cfg.DpBackupTimeOut,
+		EnableAutoDecommissionDisk:           c.EnableAutoDecommissionDisk.Load(),
+		AutoDecommissionDiskInterval:         c.AutoDecommissionInterval.Load(),
+		DecommissionDiskLimit:                c.GetDecommissionDiskLimit(),
+		VolDeletionDelayTimeHour:             c.cfg.volDelayDeleteTimeHour,
+		MarkDiskBrokenThreshold:              c.getMarkDiskBrokenThreshold(),
+		EnableAutoDpMetaRepair:               c.getEnableAutoDpMetaRepair(),
+		AutoDpMetaRepairParallelCnt:          c.AutoDpMetaRepairParallelCnt.Load(),
+		DataPartitionTimeoutSec:              c.getDataPartitionTimeoutSec(),
+		ForbidWriteOpOfProtoVer0:             c.cfg.forbidWriteOpOfProtoVer0,
+		LegacyDataMediaType:                  c.legacyDataMediaType,
+		RaftPartitionAlreadyUseDifferentPort: c.cfg.raftPartitionAlreadyUseDifferentPort.Load(),
 	}
 	return cv
 }
@@ -451,6 +453,8 @@ type dataNodeValue struct {
 	ID                       uint64
 	NodeSetID                uint64
 	Addr                     string
+	HeartbeatPort            string
+	ReplicaPort              string
 	ZoneName                 string
 	RdOnly                   bool
 	DecommissionedDisks      []string
@@ -471,6 +475,8 @@ func newDataNodeValue(dataNode *DataNode) *dataNodeValue {
 		ID:                       dataNode.ID,
 		NodeSetID:                dataNode.NodeSetID,
 		Addr:                     dataNode.Addr,
+		HeartbeatPort:            dataNode.HeartbeatPort,
+		ReplicaPort:              dataNode.ReplicaPort,
 		ZoneName:                 dataNode.ZoneName,
 		RdOnly:                   dataNode.RdOnly,
 		DecommissionedDisks:      dataNode.getDecommissionedDisks(),
@@ -488,20 +494,24 @@ func newDataNodeValue(dataNode *DataNode) *dataNodeValue {
 }
 
 type metaNodeValue struct {
-	ID        uint64
-	NodeSetID uint64
-	Addr      string
-	ZoneName  string
-	RdOnly    bool
+	ID            uint64
+	NodeSetID     uint64
+	Addr          string
+	HeartbeatPort string
+	ReplicaPort   string
+	ZoneName      string
+	RdOnly        bool
 }
 
 func newMetaNodeValue(metaNode *MetaNode) *metaNodeValue {
 	return &metaNodeValue{
-		ID:        metaNode.ID,
-		NodeSetID: metaNode.NodeSetID,
-		Addr:      metaNode.Addr,
-		ZoneName:  metaNode.ZoneName,
-		RdOnly:    metaNode.RdOnly,
+		ID:            metaNode.ID,
+		NodeSetID:     metaNode.NodeSetID,
+		Addr:          metaNode.Addr,
+		HeartbeatPort: metaNode.HeartbeatPort,
+		ReplicaPort:   metaNode.ReplicaPort,
+		ZoneName:      metaNode.ZoneName,
+		RdOnly:        metaNode.RdOnly,
 	}
 }
 
@@ -1298,6 +1308,7 @@ func (c *Cluster) loadClusterValue() (err error) {
 		c.updateEnableAutoDpMetaRepair(cv.EnableAutoDpMetaRepair)
 		c.updateAutoDpMetaRepairParallelCnt(cv.AutoDpMetaRepairParallelCnt)
 		c.updateDataPartitionTimeoutSec(cv.DataPartitionTimeoutSec)
+		c.cfg.raftPartitionAlreadyUseDifferentPort.Store(cv.RaftPartitionAlreadyUseDifferentPort)
 		c.cfg.forbidWriteOpOfProtoVer0 = cv.ForbidWriteOpOfProtoVer0
 		c.legacyDataMediaType = cv.LegacyDataMediaType
 		log.LogInfof("action[loadClusterValue] ForbidWriteOpOfProtoVer0(%v), mediaType %d",
@@ -1519,7 +1530,7 @@ func (c *Cluster) loadDataNodes() (err error) {
 				dnv.Addr, proto.MediaTypeString(dnv.MediaType))
 		}
 
-		dataNode := newDataNode(dnv.Addr, dnv.ZoneName, c.Name, dnv.MediaType)
+		dataNode := newDataNode(dnv.Addr, dnv.HeartbeatPort, dnv.ReplicaPort, dnv.ZoneName, c.Name, dnv.MediaType)
 		dataNode.DpCntLimit = newLimitCounter(&c.cfg.MaxDpCntLimit, defaultMaxDpCntLimit)
 		dataNode.ID = dnv.ID
 		dataNode.NodeSetID = dnv.NodeSetID
@@ -1573,7 +1584,7 @@ func (c *Cluster) loadMetaNodes() (err error) {
 		if mnv.ZoneName == "" {
 			mnv.ZoneName = DefaultZoneName
 		}
-		metaNode := newMetaNode(mnv.Addr, mnv.ZoneName, c.Name)
+		metaNode := newMetaNode(mnv.Addr, mnv.HeartbeatPort, mnv.ReplicaPort, mnv.ZoneName, c.Name)
 		metaNode.MpCntLimit = newLimitCounter(&c.cfg.MaxMpCntLimit, defaultMaxMpCntLimit)
 		metaNode.ID = mnv.ID
 		metaNode.NodeSetID = mnv.NodeSetID

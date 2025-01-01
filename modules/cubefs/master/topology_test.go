@@ -1,17 +1,18 @@
 package master
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/cubefs/cubefs/proto"
-
+	"github.com/cubefs/cubefs/raftstore"
 	"github.com/cubefs/cubefs/util"
 	"github.com/stretchr/testify/require"
 )
 
 func createDataNodeForTopo(addr, zoneName string, ns *nodeSet) (dn *DataNode) {
-	dn = newDataNode(addr, zoneName, "test", proto.MediaType_HDD)
+	dn = newDataNode(addr, strconv.Itoa(raftstore.DefaultHeartbeatPort), strconv.Itoa(raftstore.DefaultReplicaPort), zoneName, "test", proto.MediaType_HDD)
 	dn.ZoneName = zoneName
 	dn.Total = 1024 * util.GB
 	dn.Used = 10 * util.GB

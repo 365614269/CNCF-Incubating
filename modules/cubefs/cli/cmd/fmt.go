@@ -62,28 +62,30 @@ func formatClusterView(cv *proto.ClusterView, cn *proto.ClusterNodeInfo, cp *pro
 			dataNodeActiveCnt += 1
 		}
 	}
-	sb.WriteString(fmt.Sprintf("  DataNode count (active/total)    : %v/%v\n", dataNodeActiveCnt, len(cv.DataNodes)))
-	sb.WriteString(fmt.Sprintf("  DataNode used                    : %v GB\n", cv.DataNodeStatInfo.UsedGB))
-	sb.WriteString(fmt.Sprintf("  DataNode available               : %v GB\n", cv.DataNodeStatInfo.AvailGB))
-	sb.WriteString(fmt.Sprintf("  DataNode total                   : %v GB\n", cv.DataNodeStatInfo.TotalGB))
+	sb.WriteString(fmt.Sprintf("  DataNode count (active/total)            : %v/%v\n", dataNodeActiveCnt, len(cv.DataNodes)))
+	sb.WriteString(fmt.Sprintf("  DataNode used                            : %v GB\n", cv.DataNodeStatInfo.UsedGB))
+	sb.WriteString(fmt.Sprintf("  DataNode available                       : %v GB\n", cv.DataNodeStatInfo.AvailGB))
+	sb.WriteString(fmt.Sprintf("  DataNode total                           : %v GB\n", cv.DataNodeStatInfo.TotalGB))
 
-	sb.WriteString(fmt.Sprintf("  Volume count                     : %v\n", len(cv.VolStatInfo)))
-	sb.WriteString(fmt.Sprintf("  Allow Mp Decomm                  : %v\n", formatEnabledDisabled(!cv.ForbidMpDecommission)))
-	sb.WriteString(fmt.Sprintf("  EbsAddr                          : %v\n", cp.EbsAddr))
-	sb.WriteString(fmt.Sprintf("  LoadFactor                       : %v\n", cn.LoadFactor))
-	sb.WriteString(fmt.Sprintf("  DpRepairTimeout                  : %v\n", cv.DpRepairTimeout))
-	sb.WriteString(fmt.Sprintf("  DataPartitionTimeout             : %v\n", cv.DpTimeout))
-	sb.WriteString(fmt.Sprintf("  volDeletionDelayTime             : %v h\n", cv.VolDeletionDelayTimeHour))
-	sb.WriteString(fmt.Sprintf("  EnableAutoDecommission           : %v\n", cv.EnableAutoDecommission))
-	sb.WriteString(fmt.Sprintf("  AutoDecommissionDiskInterval     : %v\n", cv.AutoDecommissionDiskInterval))
-	sb.WriteString(fmt.Sprintf("  EnableAutoDpMetaRepair           : %v\n", cv.EnableAutoDpMetaRepair))
-	sb.WriteString(fmt.Sprintf("  AutoDpMetaRepairParallelCnt      : %v\n", cv.AutoDpMetaRepairParallelCnt))
-	sb.WriteString(fmt.Sprintf("  MarkDiskBrokenThreshold          : %v\n", strutil.FormatPercent(cv.MarkDiskBrokenThreshold)))
-	sb.WriteString(fmt.Sprintf("  DecommissionDpLimit              : %v\n", cv.DecommissionLimit))
-	sb.WriteString(fmt.Sprintf("  DecommissionDiskLimit            : %v\n", cv.DecommissionDiskLimit))
-	sb.WriteString(fmt.Sprintf("  DpBackupTimeout                  : %v\n", cv.DpBackupTimeout))
-	sb.WriteString(fmt.Sprintf("  ForbidWriteOpOfProtoVersion0     : %v\n", cv.ForbidWriteOpOfProtoVer0))
-	sb.WriteString(fmt.Sprintf("  LegacyDataMediaType              : %v\n", cv.LegacyDataMediaType))
+	sb.WriteString(fmt.Sprintf("  Volume count                             : %v\n", len(cv.VolStatInfo)))
+	sb.WriteString(fmt.Sprintf("  Allow Mp Decomm                          : %v\n", formatEnabledDisabled(!cv.ForbidMpDecommission)))
+	sb.WriteString(fmt.Sprintf("  EbsAddr                                  : %v\n", cp.EbsAddr))
+	sb.WriteString(fmt.Sprintf("  LoadFactor                               : %v\n", cn.LoadFactor))
+	sb.WriteString(fmt.Sprintf("  DpRepairTimeout                          : %v\n", cv.DpRepairTimeout))
+	sb.WriteString(fmt.Sprintf("  DataPartitionTimeout                     : %v\n", cv.DpTimeout))
+	sb.WriteString(fmt.Sprintf("  volDeletionDelayTime                     : %v h\n", cv.VolDeletionDelayTimeHour))
+	sb.WriteString(fmt.Sprintf("  EnableAutoDecommission                   : %v\n", cv.EnableAutoDecommission))
+	sb.WriteString(fmt.Sprintf("  AutoDecommissionDiskInterval             : %v\n", cv.AutoDecommissionDiskInterval))
+	sb.WriteString(fmt.Sprintf("  EnableAutoDpMetaRepair                   : %v\n", cv.EnableAutoDpMetaRepair))
+	sb.WriteString(fmt.Sprintf("  AutoDpMetaRepairParallelCnt              : %v\n", cv.AutoDpMetaRepairParallelCnt))
+	sb.WriteString(fmt.Sprintf("  MarkDiskBrokenThreshold                  : %v\n", strutil.FormatPercent(cv.MarkDiskBrokenThreshold)))
+	sb.WriteString(fmt.Sprintf("  DecommissionDpLimit                      : %v\n", cv.DecommissionLimit))
+	sb.WriteString(fmt.Sprintf("  DecommissionDiskLimit                    : %v\n", cv.DecommissionDiskLimit))
+	sb.WriteString(fmt.Sprintf("  DpBackupTimeout                          : %v\n", cv.DpBackupTimeout))
+	sb.WriteString(fmt.Sprintf("  ForbidWriteOpOfProtoVersion0             : %v\n", cv.ForbidWriteOpOfProtoVer0))
+	sb.WriteString(fmt.Sprintf("  LegacyDataMediaType                      : %v\n", cv.LegacyDataMediaType))
+	sb.WriteString(fmt.Sprintf("  RaftPartitionCanUsingDifferentPortEnabled: %v\n", cv.RaftPartitionCanUsingDifferentPortEnabled))
+
 	return sb.String()
 }
 
@@ -638,6 +640,7 @@ func formatMetaPartitionInfo(partition *proto.MetaPartitionInfo) string {
 	}
 	sb.WriteString("\n")
 	sb.WriteString("Peers :\n")
+	sb.WriteString(fmt.Sprintf("%v\n", formatPeerTableHeader()))
 	for _, peer := range partition.Peers {
 		sb.WriteString(fmt.Sprintf("%v\n", formatPeer(peer)))
 	}
@@ -916,14 +919,14 @@ func formatMetaReplica(indentation string, replica *proto.MetaReplicaInfo, rowTa
 	return sb.String()
 }
 
-var peerTableRowPattern = "%-6v    %-18v"
+var peerTableRowPattern = "%-6v    %-18v    %-12v    %-12v"
 
 func formatPeerTableHeader() string {
-	return fmt.Sprintf(peerTableRowPattern, "ID", "PEER")
+	return fmt.Sprintf(peerTableRowPattern, "ID", "ADDR", "HEARTBEATPORT", "REPLICAPORT")
 }
 
 func formatPeer(peer proto.Peer) string {
-	return fmt.Sprintf(peerTableRowPattern, peer.ID, peer.Addr)
+	return fmt.Sprintf(peerTableRowPattern, peer.ID, peer.Addr, peer.HeartbeatPort, peer.ReplicaPort)
 }
 
 var dataNodeDetailTableRowPattern = "%-6v    %-6v    %-65v    %-6v    %-6v    %-6v    %-10v"
@@ -940,6 +943,8 @@ func formatDataNodeDetail(dn *proto.DataNodeInfo, rowTable bool) string {
 	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID                  : %v\n", dn.ID))
 	sb.WriteString(fmt.Sprintf("  Address             : %v\n", formatAddr(dn.Addr, dn.DomainAddr)))
+	sb.WriteString(fmt.Sprintf("  RaftHeartbeatPort   : %v\n", dn.RaftHeartbeatPort))
+	sb.WriteString(fmt.Sprintf("  RaftReplicaPort     : %v\n", dn.RaftReplicaPort))
 	sb.WriteString(fmt.Sprintf("  Allocated ratio     : %v\n", dn.UsageRatio))
 	sb.WriteString(fmt.Sprintf("  Allocated           : %v\n", formatSize(dn.Used)))
 	sb.WriteString(fmt.Sprintf("  Available           : %v\n", formatSize(dn.AvailableSpace)))
@@ -1026,6 +1031,8 @@ func formatMetaNodeDetail(mn *proto.MetaNodeInfo, rowTable bool) string {
 	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("  ID                  : %v\n", mn.ID))
 	sb.WriteString(fmt.Sprintf("  Address             : %v\n", formatAddr(mn.Addr, mn.DomainAddr)))
+	sb.WriteString(fmt.Sprintf("  RaftHeartbeatPort   : %v\n", mn.RaftHeartbeatPort))
+	sb.WriteString(fmt.Sprintf("  RaftReplicaPort     : %v\n", mn.RaftReplicaPort))
 	sb.WriteString(fmt.Sprintf("  Threshold           : %v\n", mn.Threshold))
 	sb.WriteString(fmt.Sprintf("  MaxMemAvailWeight   : %v\n", formatSize(mn.MaxMemAvailWeight)))
 	sb.WriteString(fmt.Sprintf("  Allocated           : %v\n", formatSize(mn.Used)))

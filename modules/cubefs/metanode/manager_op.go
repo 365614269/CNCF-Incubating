@@ -125,6 +125,10 @@ func (m *metadataManager) opMasterHeartbeat(conn net.Conn, p *Packet,
 			goto end
 		}
 		m.fileStatsEnable = req.FileStatsEnable
+
+		log.LogDebugf("metaNode.raftPartitionCanUsingDifferentPort from %v to %v", m.metaNode.raftPartitionCanUsingDifferentPort, req.RaftPartitionCanUsingDifferentPortEnabled)
+		m.metaNode.raftPartitionCanUsingDifferentPort = req.RaftPartitionCanUsingDifferentPortEnabled
+
 		if m.metaNode.nodeForbidWriteOpOfProtoVer0 != req.NotifyForbidWriteOpOfProtoVer0 {
 			log.LogWarnf("[opMasterHeartbeat] change nodeForbidWriteOpOfProtoVer0, old(%v) new(%v)",
 				m.metaNode.nodeForbidWriteOpOfProtoVer0, req.NotifyForbidWriteOpOfProtoVer0)
@@ -178,6 +182,7 @@ func (m *metadataManager) opMasterHeartbeat(conn net.Conn, p *Packet,
 				StatByStorageClass:        partition.GetStatByStorageClass(),
 				StatByMigrateStorageClass: partition.GetMigrateStatByStorageClass(),
 				ForbidWriteOpOfProtoVer0:  mpForbidWriteVer0,
+				LocalPeers:                mConf.Peers,
 			}
 			mpr.TxCnt, mpr.TxRbInoCnt, mpr.TxRbDenCnt = partition.TxGetCnt()
 

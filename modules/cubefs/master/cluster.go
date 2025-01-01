@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -856,7 +857,7 @@ func (c *Cluster) checkDataNodeHeartbeat() {
 		node.checkLiveness()
 		log.LogDebugf("checkDataNodeHeartbeat checkLiveness for data node %v  %v", node.Addr, id.String())
 		task := node.createHeartbeatTask(c.masterAddr(), c.diskQosEnable, c.GetDecommissionDataPartitionBackupTimeOut().String(),
-			c.cfg.forbidWriteOpOfProtoVer0)
+			c.cfg.forbidWriteOpOfProtoVer0, c.RaftPartitionCanUsingDifferentPortEnabled())
 		log.LogDebugf("checkDataNodeHeartbeat createHeartbeatTask for data node %v task %v %v", node.Addr,
 			task.RequestID, id.String())
 		hbReq := task.Request.(*proto.HeartBeatRequest)
@@ -892,7 +893,7 @@ func (c *Cluster) checkMetaNodeHeartbeat() {
 	c.metaNodes.Range(func(addr, metaNode interface{}) bool {
 		node := metaNode.(*MetaNode)
 		node.checkHeartbeat()
-		task := node.createHeartbeatTask(c.masterAddr(), c.fileStatsEnable, c.cfg.forbidWriteOpOfProtoVer0)
+		task := node.createHeartbeatTask(c.masterAddr(), c.fileStatsEnable, c.cfg.forbidWriteOpOfProtoVer0, c.RaftPartitionCanUsingDifferentPortEnabled())
 		hbReq := task.Request.(*proto.HeartBeatRequest)
 
 		c.volMutex.RLock()
@@ -1122,7 +1123,62 @@ func (c *Cluster) updateMetaNodeBaseInfo(nodeAddr string, id uint64) (err error)
 	return
 }
 
-func (c *Cluster) addMetaNode(nodeAddr, zoneName string, nodesetId uint64) (id uint64, err error) {
+// RaftPartitionCanUsingDifferentPortEnabled check whether raft partition can use different port or not
+func (c *Cluster) RaftPartitionCanUsingDifferentPortEnabled() bool {
+	if c.cfg.raftPartitionAlreadyUseDifferentPort.Load() {
+		// this cluster has already enabled this feature
+		return true
+	}
+
+	if !c.cfg.raftPartitionCanUseDifferentPort.Load() {
+		// user currently don't  enable this feature
+		return false
+	}
+
+	// user currently try to enable this feature
+	enabled := true
+	c.mnMutex.RLock()
+	c.metaNodes.Range(func(addr, node interface{}) bool {
+		metaNode := node.(*MetaNode)
+		if len(metaNode.HeartbeatPort) == 0 || len(metaNode.ReplicaPort) == 0 {
+			enabled = false
+			return false
+		}
+		return true
+	})
+	c.mnMutex.RUnlock()
+
+	if enabled {
+		c.dnMutex.RLock()
+		c.dataNodes.Range(func(addr, node interface{}) bool {
+			dataNode := node.(*DataNode)
+			if len(dataNode.HeartbeatPort) == 0 || len(dataNode.ReplicaPort) == 0 {
+				enabled = false
+				return false
+			}
+			return true
+		})
+
+		c.dnMutex.RUnlock()
+	}
+
+	if enabled && !c.cfg.raftPartitionAlreadyUseDifferentPort.Load() {
+		// all data nodes and meta nodes are registered with HeartbeatPort and ReplicaPort
+		// this feature now is enabled, we update cluster cfg and store
+		c.cfg.raftPartitionAlreadyUseDifferentPort.Store(true)
+		if err := c.syncPutCluster(); err != nil {
+			log.LogErrorf("error syncPutCluster when set raftPartitionAlreadyUseDifferentPort to true, err:%v", err)
+			c.cfg.raftPartitionAlreadyUseDifferentPort.Store(false) // set back to false, let syncPutCluster try again in future
+			return false
+		}
+		log.LogInfof("all data nodes and meta nodes are registered with HeartbeatPort and ReplicaPort, " +
+			"raft partition use different port feature now is enabled")
+	}
+
+	return enabled
+}
+
+func (c *Cluster) addMetaNode(nodeAddr, heartbeatPort, replicaPort, zoneName string, nodesetId uint64) (id uint64, err error) {
 	c.mnMutex.Lock()
 	defer c.mnMutex.Unlock()
 
@@ -1132,10 +1188,31 @@ func (c *Cluster) addMetaNode(nodeAddr, zoneName string, nodesetId uint64) (id u
 		if nodesetId > 0 && nodesetId != metaNode.ID {
 			return metaNode.ID, fmt.Errorf("addr already in nodeset [%v]", nodeAddr)
 		}
+
+		if len(heartbeatPort) > 0 && len(replicaPort) > 0 {
+			metaNode.Lock()
+			defer metaNode.Unlock()
+			if len(metaNode.HeartbeatPort) == 0 || len(metaNode.ReplicaPort) == 0 {
+				// compatible with old version in which raft heartbeat port and replica port did not persist
+				metaNode.HeartbeatPort = heartbeatPort
+				metaNode.ReplicaPort = replicaPort
+				if err = c.syncUpdateMetaNode(metaNode); err != nil {
+					return metaNode.ID, err
+				}
+			}
+		}
+
 		return metaNode.ID, nil
 	}
+	if c.cfg.raftPartitionCanUseDifferentPort.Load() {
+		if len(heartbeatPort) == 0 || len(replicaPort) == 0 {
+			err = fmt.Errorf("when master enable raftPartitionCanUseDifferentPort, only allow new metanode with valid heartbeatPort and replicaPort to register. "+
+				"metanode(%v, heartbeatPort:%v, replicaPort:%v) may need to upgrade", nodeAddr, heartbeatPort, replicaPort)
+			return
+		}
+	}
 
-	metaNode = newMetaNode(nodeAddr, zoneName, c.Name)
+	metaNode = newMetaNode(nodeAddr, heartbeatPort, replicaPort, zoneName, c.Name)
 	metaNode.MpCntLimit = newLimitCounter(&c.cfg.MaxMpCntLimit, defaultMaxMpCntLimit)
 	zone, err := c.t.getZone(zoneName)
 	if err != nil {
@@ -1238,7 +1315,7 @@ func (c *Cluster) checkSetZoneMediaTypePersist(zone *Zone, mediaType uint32) (ch
 	return true, nil
 }
 
-func (c *Cluster) addDataNode(nodeAddr, zoneName string, nodesetId uint64, mediaType uint32) (id uint64, err error) {
+func (c *Cluster) addDataNode(nodeAddr, raftHeartbeatPort, raftReplicaPort, zoneName string, nodesetId uint64, mediaType uint32) (id uint64, err error) {
 	c.dnMutex.Lock()
 	defer c.dnMutex.Unlock()
 	var dataNode *DataNode
@@ -1276,11 +1353,32 @@ func (c *Cluster) addDataNode(nodeAddr, zoneName string, nodesetId uint64, media
 		if mediaType != dataNode.MediaType {
 			return dataNode.ID, fmt.Errorf("mediaType not equalt old, new %v, old %v", mediaType, dataNode.MediaType)
 		}
+
+		if len(raftHeartbeatPort) > 0 && len(raftReplicaPort) > 0 {
+			dataNode.Lock()
+			defer dataNode.Unlock()
+			if len(dataNode.HeartbeatPort) == 0 || len(dataNode.ReplicaPort) == 0 {
+				// compatible with old version in which raft heartbeat port and replica port did not persist
+				dataNode.HeartbeatPort = raftHeartbeatPort
+				dataNode.ReplicaPort = raftReplicaPort
+				if err = c.syncUpdateDataNode(dataNode); err != nil {
+					return dataNode.ID, err
+				}
+			}
+		}
+
 		return dataNode.ID, nil
+	}
+	if c.cfg.raftPartitionCanUseDifferentPort.Load() {
+		if len(raftHeartbeatPort) == 0 || len(raftReplicaPort) == 0 {
+			err = fmt.Errorf("when master enable raftPartitionCanUseDifferentPort, only allow new datanode with valid heartbeatPort and replicaPort to register. "+
+				"datanode(%v, heartbeatPort:%v, replicaPort:%v) may need to upgrade", nodeAddr, raftHeartbeatPort, raftReplicaPort)
+			return
+		}
 	}
 
 	needPersistZone := false
-	dataNode = newDataNode(nodeAddr, zoneName, c.Name, mediaType)
+	dataNode = newDataNode(nodeAddr, raftHeartbeatPort, raftReplicaPort, zoneName, c.Name, mediaType)
 	dataNode.DpCntLimit = newLimitCounter(&c.cfg.MaxDpCntLimit, defaultMaxDpCntLimit)
 	if zone, _ = c.t.getZone(zoneName); zone == nil {
 		log.LogInfof("[addDataNode] create zone(%v) by datanode(%v), mediaType(%v)",
@@ -1822,6 +1920,9 @@ func (c *Cluster) createDataPartition(volName string, preload *DataPartitionPreL
 			int(dpReplicaNum), zoneNum, zoneName, mediaType); err != nil {
 			goto errHandler
 		}
+	}
+	if err = c.checkMultipleReplicasOnSameMachine(targetHosts); err != nil {
+		goto errHandler
 	}
 
 	if partitionID, err = c.idAlloc.allocateDataPartitionID(); err != nil {
@@ -2692,6 +2793,7 @@ ERR:
 func (c *Cluster) migrateDataPartition(srcAddr, targetAddr string, dp *DataPartition, raftForce bool, errMsg string) (err error) {
 	var (
 		targetHosts     []string
+		finalHosts      []string
 		newAddr         string
 		msg             string
 		dataNode        *DataNode
@@ -2744,6 +2846,19 @@ func (c *Cluster) migrateDataPartition(srcAddr, targetAddr string, dp *DataParti
 	}
 
 	if ns, err = zone.getNodeSet(dataNode.NodeSetID); err != nil {
+		goto errHandler
+	}
+
+	dp.RLock()
+	finalHosts = append(dp.Hosts, newAddr) // add new one
+	dp.RUnlock()
+	for i, host := range finalHosts {
+		if host == srcAddr {
+			finalHosts = append(finalHosts[:i], finalHosts[i+1:]...) // remove old one
+			break
+		}
+	}
+	if err = c.checkMultipleReplicasOnSameMachine(finalHosts); err != nil {
 		goto errHandler
 	}
 
@@ -2914,7 +3029,7 @@ func (c *Cluster) addDataReplica(dp *DataPartition, addr string, ignoreDecommiss
 		return
 	}
 
-	addPeer := proto.Peer{ID: targetDataNode.ID, Addr: addr}
+	addPeer := proto.Peer{ID: targetDataNode.ID, Addr: addr, HeartbeatPort: targetDataNode.HeartbeatPort, ReplicaPort: targetDataNode.ReplicaPort}
 
 	if !proto.IsNormalDp(dp.PartitionType) {
 		return fmt.Errorf("action[addDataReplica] [%d] is not normal dp, not support add or delete replica", dp.PartitionID)
@@ -3141,7 +3256,7 @@ func (c *Cluster) removeDataReplica(dp *DataPartition, addr string, validate boo
 	if !proto.IsNormalDp(dp.PartitionType) {
 		return fmt.Errorf("[%d] is not normal dp, not support add or delete replica", dp.PartitionID)
 	}
-	removePeer := proto.Peer{ID: dataNode.ID, Addr: addr}
+	removePeer := proto.Peer{ID: dataNode.ID, Addr: addr, HeartbeatPort: dataNode.HeartbeatPort, ReplicaPort: dataNode.ReplicaPort}
 	if err = c.removeDataPartitionRaftMember(dp, removePeer, raftForceDel); err != nil {
 		return
 	}
@@ -6134,4 +6249,18 @@ func (c *Cluster) getVolOpLog(volName string) proto.OpLogView {
 		})
 	}
 	return opv
+}
+
+func (c *Cluster) checkMultipleReplicasOnSameMachine(hosts []string) (err error) {
+	if !c.cfg.AllowMultipleReplicasOnSameMachine {
+		distinctIp := map[string]struct{}{}
+		for _, hostStr := range hosts {
+			ip, _, _ := net.SplitHostPort(hostStr)
+			if _, exist := distinctIp[ip]; exist {
+				return fmt.Errorf("Don't allow multiple replicas on same machine while create dp/mp. Multiple replicas locate on [%v] ", ip)
+			}
+			distinctIp[ip] = struct{}{}
+		}
+	}
+	return nil
 }

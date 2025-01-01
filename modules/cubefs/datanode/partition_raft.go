@@ -113,6 +113,15 @@ func (dp *DataPartition) StartRaft(isLoad bool) (err error) {
 		return
 	}
 	for _, peer := range dp.config.Peers {
+		if dp.dataNode.raftPartitionCanUsingDifferentPort {
+			if peerHeartbeatPort, perr := strconv.Atoi(peer.HeartbeatPort); perr == nil {
+				heartbeatPort = peerHeartbeatPort
+			}
+			if peerReplicaPort, perr := strconv.Atoi(peer.ReplicaPort); perr == nil {
+				replicaPort = peerReplicaPort
+			}
+		}
+
 		addr := strings.Split(peer.Addr, ":")[0]
 		rp := raftstore.PeerAddress{
 			Peer: raftproto.Peer{
@@ -413,6 +422,15 @@ func (dp *DataPartition) addRaftNode(req *proto.AddDataPartitionRaftMemberReques
 	if heartbeatPort, replicaPort, err = dp.raftPort(); err != nil {
 		return
 	}
+	if dp.dataNode.raftPartitionCanUsingDifferentPort {
+		if peerHeartbeatPort, perr := strconv.Atoi(req.AddPeer.HeartbeatPort); perr == nil {
+			heartbeatPort = peerHeartbeatPort
+		}
+		if peerReplicaPort, perr := strconv.Atoi(req.AddPeer.ReplicaPort); perr == nil {
+			replicaPort = peerReplicaPort
+		}
+	}
+
 	log.LogInfof("action[addRaftNode] add raft node peer [%v]", req.AddPeer)
 	found := false
 	for _, peer := range dp.config.Peers {
@@ -569,8 +587,6 @@ func (s *DataNode) parseRaftConfig(cfg *config.Config) (err error) {
 
 func (s *DataNode) startRaftServer(cfg *config.Config) (err error) {
 	log.LogInfo("Start: startRaftServer")
-
-	s.parseRaftConfig(cfg)
 
 	if s.clusterUuidEnable {
 		if err = config.CheckOrStoreClusterUuid(s.raftDir, s.clusterUuid, false); err != nil {

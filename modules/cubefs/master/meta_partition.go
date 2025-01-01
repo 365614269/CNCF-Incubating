@@ -407,7 +407,7 @@ func (mp *MetaPartition) missingReplicaAddrs() (lackAddrs []string) {
 	return
 }
 
-func (mp *MetaPartition) updateMetaPartition(mgr *proto.MetaPartitionReport, metaNode *MetaNode) {
+func (mp *MetaPartition) updateMetaPartition(mgr *proto.MetaPartitionReport, metaNode *MetaNode, c *Cluster) {
 	if !contains(mp.Hosts, metaNode.Addr) {
 		return
 	}
@@ -432,6 +432,31 @@ func (mp *MetaPartition) updateMetaPartition(mgr *proto.MetaPartitionReport, met
 	mp.setStatByStorageClass()
 	mp.setHeartBeatDone()
 	mp.SetForbidWriteOpOfProtoVer0()
+
+	if c.RaftPartitionCanUsingDifferentPortEnabled() {
+		// update old partition peers, add raft ports
+		localPeers := map[string]proto.Peer{}
+		for _, peer := range mgr.LocalPeers {
+			if len(peer.ReplicaPort) == 0 || len(peer.HeartbeatPort) == 0 {
+				peer.ReplicaPort = metaNode.ReplicaPort
+				peer.HeartbeatPort = metaNode.HeartbeatPort
+			}
+			localPeers[peer.Addr] = peer
+		}
+		needUpdate := false
+		for i, peer := range mp.Peers {
+			if len(peer.ReplicaPort) == 0 || len(peer.HeartbeatPort) == 0 {
+				if localPeer, exist := localPeers[peer.Addr]; exist {
+					mp.Peers[i].ReplicaPort = localPeer.ReplicaPort
+					mp.Peers[i].HeartbeatPort = localPeer.HeartbeatPort
+					needUpdate = true
+				}
+			}
+		}
+		if needUpdate {
+			c.syncUpdateMetaPartition(mp)
+		}
+	}
 }
 
 func (mp *MetaPartition) canBeOffline(nodeAddr string, replicaNum int) (err error) {

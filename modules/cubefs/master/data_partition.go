@@ -770,6 +770,33 @@ func (partition *DataPartition) updateMetric(vr *proto.DataPartitionReport, data
 			replica.DiskPath = oldDiskPath
 		}
 	}
+
+	if c.RaftPartitionCanUsingDifferentPortEnabled() {
+		// update old partition peers, add raft ports
+		localPeers := make(map[string]proto.Peer)
+		for _, peer := range vr.LocalPeers {
+			if len(peer.ReplicaPort) == 0 || len(peer.HeartbeatPort) == 0 {
+				peer.ReplicaPort = dataNode.ReplicaPort
+				peer.HeartbeatPort = dataNode.HeartbeatPort
+			}
+			localPeers[peer.Addr] = peer
+		}
+
+		needUpdate := false
+		for i, peer := range partition.Peers {
+			if len(peer.ReplicaPort) == 0 || len(peer.HeartbeatPort) == 0 {
+				if localPeer, exist := localPeers[peer.Addr]; exist {
+					partition.Peers[i].ReplicaPort = localPeer.ReplicaPort
+					partition.Peers[i].HeartbeatPort = localPeer.HeartbeatPort
+					needUpdate = true
+				}
+			}
+		}
+		if needUpdate {
+			c.syncUpdateDataPartition(partition)
+		}
+	}
+
 	partition.checkAndRemoveMissReplica(dataNode.Addr)
 
 	if replica.Status == proto.ReadWrite && (partition.RdOnly || replica.dataNode.RdOnly) {
@@ -1365,6 +1392,7 @@ func (partition *DataPartition) Decommission(c *Cluster) bool {
 		srcReplica           *DataReplica
 		resetDecommissionDst = true
 		begin                = time.Now()
+		finalHosts           []string
 	)
 
 	if partition.GetDecommissionStatus() == DecommissionInitial {
@@ -1380,6 +1408,20 @@ func (partition *DataPartition) Decommission(c *Cluster) bool {
 		partition.markRollbackFailed(false)
 		return false
 	}
+
+	partition.RLock()
+	finalHosts = append(partition.Hosts, targetAddr) // add new one
+	partition.RUnlock()
+	for i, host := range finalHosts {
+		if host == srcAddr {
+			finalHosts = append(finalHosts[:i], finalHosts[i+1:]...) // remove old one
+			break
+		}
+	}
+	if err = c.checkMultipleReplicasOnSameMachine(finalHosts); err != nil {
+		goto errHandler
+	}
+
 	partition.SetDecommissionStatus(DecommissionPrepare)
 	err = c.syncUpdateDataPartition(partition)
 	if err != nil {
@@ -2368,7 +2410,7 @@ func (partition *DataPartition) removeHostByForce(c *Cluster, peerAddr string) {
 			partition.PartitionID, peerAddr, err)
 		return
 	}
-	removePeer := proto.Peer{ID: dataNode.ID, Addr: peerAddr}
+	removePeer := proto.Peer{ID: dataNode.ID, Addr: peerAddr, HeartbeatPort: dataNode.HeartbeatPort, ReplicaPort: dataNode.ReplicaPort}
 	if err = c.removeHostMember(partition, removePeer); err != nil {
 		log.LogWarnf("action[removeHostByForce]dp %v remove host %v failed:%v",
 			partition.PartitionID, peerAddr, err)

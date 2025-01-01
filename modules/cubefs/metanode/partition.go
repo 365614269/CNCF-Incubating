@@ -975,10 +975,20 @@ func (mp *metaPartition) startRaft() (err error) {
 		replicaPort   int
 		peers         []raftstore.PeerAddress
 	)
+
 	if heartbeatPort, replicaPort, err = mp.getRaftPort(); err != nil {
 		return
 	}
 	for _, peer := range mp.config.Peers {
+		if mp.manager.metaNode.raftPartitionCanUsingDifferentPort {
+			if peerHeartbeatPort, perr := strconv.Atoi(peer.HeartbeatPort); perr == nil {
+				heartbeatPort = peerHeartbeatPort
+			}
+			if peerReplicaPort, perr := strconv.Atoi(peer.ReplicaPort); perr == nil {
+				replicaPort = peerReplicaPort
+			}
+		}
+
 		addr := strings.Split(peer.Addr, ":")[0]
 		rp := raftstore.PeerAddress{
 			Peer: raftproto.Peer{
@@ -1058,9 +1068,22 @@ func NewMetaPartition(conf *MetaPartitionConfig, manager *metadataManager) MetaP
 		multiVersionList: &proto.VolVersionInfoList{
 			TemporaryVerMap: make(map[uint64]*proto.VolVersionInfo),
 		},
-
 		enableAuditLog: true,
 	}
+
+	if mp.manager != nil && mp.manager.metaNode.raftPartitionCanUsingDifferentPort {
+		// during upgrade process, create partition request may lack raft ports info
+		defaultHeartbeatPort, defaultReplicaPort, err := mp.getRaftPort()
+		if err == nil {
+			for i := range mp.config.Peers {
+				if len(mp.config.Peers[i].ReplicaPort) == 0 || len(mp.config.Peers[i].HeartbeatPort) == 0 {
+					mp.config.Peers[i].ReplicaPort = strconv.FormatInt(int64(defaultReplicaPort), 10)
+					mp.config.Peers[i].HeartbeatPort = strconv.FormatInt(int64(defaultHeartbeatPort), 10)
+				}
+			}
+		}
+	}
+
 	if manager != nil {
 		mp.config.ForbidWriteOpOfProtoVer0 = manager.isVolForbidWriteOpOfProtoVer0(mp.config.VolName)
 	}

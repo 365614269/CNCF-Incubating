@@ -102,6 +102,7 @@ func (c *Cluster) migrateMetaPartition(srcAddr, targetAddr string, mp *MetaParti
 		zone            *Zone
 		ns              *nodeSet
 		excludeNodeSets []uint64
+		finalHosts      []string
 		oldHosts        []string
 		zones           []string
 	)
@@ -165,6 +166,17 @@ func (c *Cluster) migrateMetaPartition(srcAddr, targetAddr string, mp *MetaParti
 				goto errHandler
 			}
 		}
+	}
+
+	finalHosts = append(oldHosts, newPeers[0].Addr) // add new one
+	for i, host := range finalHosts {
+		if host == srcAddr {
+			finalHosts = append(finalHosts[:i], finalHosts[i+1:]...) // remove old one
+			break
+		}
+	}
+	if err = c.checkMultipleReplicasOnSameMachine(finalHosts); err != nil {
+		return err
 	}
 
 	if err = c.deleteMetaReplica(mp, srcAddr, false, false); err != nil {
@@ -349,7 +361,7 @@ func (c *Cluster) deleteMetaReplica(partition *MetaPartition, addr string, valid
 		return
 	}
 
-	removePeer := proto.Peer{ID: metaNode.ID, Addr: addr}
+	removePeer := proto.Peer{ID: metaNode.ID, Addr: addr, HeartbeatPort: metaNode.HeartbeatPort, ReplicaPort: metaNode.ReplicaPort}
 	if err = c.removeMetaPartitionRaftMember(partition, removePeer); err != nil {
 		return
 	}
@@ -465,7 +477,7 @@ func (c *Cluster) addMetaReplica(partition *MetaPartition, addr string) (err err
 	if err != nil {
 		return
 	}
-	addPeer := proto.Peer{ID: metaNode.ID, Addr: addr}
+	addPeer := proto.Peer{ID: metaNode.ID, Addr: addr, HeartbeatPort: metaNode.HeartbeatPort, ReplicaPort: metaNode.ReplicaPort}
 	if err = c.addMetaPartitionRaftMember(partition, addPeer); err != nil {
 		return
 	}
@@ -1117,7 +1129,7 @@ func (c *Cluster) updateMetaNode(metaNode *MetaNode, metaPartitions []*proto.Met
 			mp.addUpdateMetaReplicaTask(c)
 		}
 
-		mp.updateMetaPartition(mr, metaNode)
+		mp.updateMetaPartition(mr, metaNode, c)
 		vol.uidSpaceManager.pushUidMsg(mr)
 		vol.quotaManager.quotaUpdate(mr)
 		c.updateInodeIDUpperBound(mp, mr, threshold, metaNode)
