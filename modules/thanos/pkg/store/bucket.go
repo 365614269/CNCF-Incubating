@@ -35,6 +35,7 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/tsdb/encoding"
 	"github.com/prometheus/prometheus/tsdb/index"
+	"github.com/prometheus/prometheus/util/zeropool"
 	"github.com/weaveworks/common/httpgrpc"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -125,7 +126,21 @@ const (
 var (
 	errBlockSyncConcurrencyNotValid = errors.New("the block sync concurrency must be equal or greater than 1.")
 	hashPool                        = sync.Pool{New: func() interface{} { return xxhash.New() }}
+	postingsPool                    zeropool.Pool[[]storage.SeriesRef]
 )
+
+func getPostingsSlice() []storage.SeriesRef {
+	if p := postingsPool.Get(); p != nil {
+		return p
+	}
+
+	// Pre-allocate slice with initial capacity.
+	return make([]storage.SeriesRef, 0, 1024)
+}
+
+func putPostingsSlice(p []storage.SeriesRef) {
+	postingsPool.Put(p[:0])
+}
 
 type bucketStoreMetrics struct {
 	blocksLoaded          prometheus.Gauge
@@ -2549,6 +2564,10 @@ type bucketIndexReader struct {
 
 	indexVersion int
 	logger       log.Logger
+
+	// Posting slice to return to the postings pool on close.
+	// A single bucketIndexReader should have at most 1 postings slice to return.
+	postings []storage.SeriesRef
 }
 
 func newBucketIndexReader(block *bucketBlock, logger log.Logger) *bucketIndexReader {
@@ -2678,13 +2697,13 @@ func (r *bucketIndexReader) ExpandedPostings(
 
 // ExpandPostingsWithContext returns the postings expanded as a slice and considers context.
 func ExpandPostingsWithContext(ctx context.Context, p index.Postings) ([]storage.SeriesRef, error) {
-	res := make([]storage.SeriesRef, 0, 1024) // Pre-allocate slice with initial capacity
+	res := getPostingsSlice()
 	i := 0
 	for p.Next() {
 		i++
 		if i%checkContextEveryNIterations == 0 {
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return res, err
 			}
 		}
 		res = append(res, p.At())
@@ -2978,6 +2997,7 @@ func (r *bucketIndexReader) fetchExpandedPostingsFromCache(ctx context.Context, 
 	}
 
 	ps, err := ExpandPostingsWithContext(ctx, p)
+	r.postings = ps
 	if err != nil {
 		level.Error(r.logger).Log("msg", "failed to expand cached expanded postings, refetch postings", "id", r.block.meta.ULID.String(), "err", err)
 		return false, nil, nil
@@ -3030,12 +3050,14 @@ func (r *bucketIndexReader) fetchPostings(ctx context.Context, keys []labels.Lab
 
 	output := make([]index.Postings, len(keys))
 
+	var size int64
 	// Fetch postings from the cache with a single call.
 	fromCache, _ := r.block.indexCache.FetchMultiPostings(ctx, r.block.meta.ULID, keys, tenant)
 	for _, dataFromCache := range fromCache {
-		if err := bytesLimiter.ReserveWithType(uint64(len(dataFromCache)), PostingsTouched); err != nil {
-			return nil, closeFns, httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while loading postings from index cache: %s", err)
-		}
+		size += int64(len(dataFromCache))
+	}
+	if err := bytesLimiter.ReserveWithType(uint64(size), PostingsTouched); err != nil {
+		return nil, closeFns, httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while loading postings from index cache: %s", err)
 	}
 
 	// Iterate over all groups and fetch posting from cache.
@@ -3086,13 +3108,14 @@ func (r *bucketIndexReader) fetchPostings(ctx context.Context, keys []labels.Lab
 		return uint64(ptrs[i].ptr.Start), uint64(ptrs[i].ptr.End)
 	})
 
+	size = 0
 	for _, part := range parts {
 		start := int64(part.Start)
 		length := int64(part.End) - start
-
-		if err := bytesLimiter.ReserveWithType(uint64(length), PostingsFetched); err != nil {
-			return nil, closeFns, httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while fetching postings: %s", err)
-		}
+		size += length
+	}
+	if err := bytesLimiter.ReserveWithType(uint64(size), PostingsFetched); err != nil {
+		return nil, closeFns, httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while fetching postings: %s", err)
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -3263,11 +3286,13 @@ func (r *bucketIndexReader) PreloadSeries(ctx context.Context, ids []storage.Ser
 	// Load series from cache, overwriting the list of ids to preload
 	// with the missing ones.
 	fromCache, ids := r.block.indexCache.FetchMultiSeries(ctx, r.block.meta.ULID, ids, tenant)
+	var size uint64
 	for id, b := range fromCache {
 		r.loadedSeries[id] = b
-		if err := bytesLimiter.ReserveWithType(uint64(len(b)), SeriesTouched); err != nil {
-			return httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while loading series from index cache: %s", err)
-		}
+		size += uint64(len(b))
+	}
+	if err := bytesLimiter.ReserveWithType(size, SeriesTouched); err != nil {
+		return httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while loading series from index cache: %s", err)
 	}
 
 	parts := r.block.partitioner.Partition(len(ids), func(i int) (start, end uint64) {
@@ -3414,6 +3439,10 @@ func (r *bucketIndexReader) LoadSeriesForTime(ref storage.SeriesRef, lset *[]sym
 // Close released the underlying resources of the reader.
 func (r *bucketIndexReader) Close() error {
 	r.block.pendingReaders.Done()
+
+	if r.postings != nil {
+		putPostingsSlice(r.postings)
+	}
 	return nil
 }
 
@@ -3598,10 +3627,12 @@ func (r *bucketChunkReader) load(ctx context.Context, res []seriesEntry, aggrs [
 			return uint64(pIdxs[i].offset), uint64(pIdxs[i].offset) + uint64(r.block.estimatedMaxChunkSize)
 		})
 
+		var size uint64
 		for _, p := range parts {
-			if err := bytesLimiter.ReserveWithType(uint64(p.End-p.Start), ChunksFetched); err != nil {
-				return httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while fetching chunks: %s", err)
-			}
+			size += p.End - p.Start
+		}
+		if err := bytesLimiter.ReserveWithType(size, ChunksFetched); err != nil {
+			return httpgrpc.Errorf(int(codes.ResourceExhausted), "exceeded bytes limit while fetching chunks: %s", err)
 		}
 
 		for _, p := range parts {
