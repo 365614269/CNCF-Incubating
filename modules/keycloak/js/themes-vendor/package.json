@@ -20,20 +20,20 @@
     }
   },
   "dependencies": {
-    "@noble/hashes": "^1.6.1",
+    "@noble/hashes": "^1.7.0",
     "@patternfly-v5/patternfly": "npm:@patternfly/patternfly@^5.4.2",
     "@patternfly/patternfly": "^4.224.5",
     "patternfly": "^3.59.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "rfc4648": "^1.5.4",
-    "uuid": "^11.0.3"
+    "uuid": "^11.0.4"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-replace": "^6.0.2",
     "@rollup/plugin-terser": "^0.4.4",
-    "rollup": "^4.29.1"
+    "rollup": "^4.30.0"
   }
 }
