@@ -81,7 +81,7 @@ var _ = VirtctlDescribe("[sig-storage]ImageUpload", decorators.SigStorage, Seria
 		}
 	})
 
-	DescribeTable("[test_id:4621]Upload an image and start a VMI should succeed", func(resource string, validateFn func(string, string), diskFn func(string, string) libvmi.Option) {
+	DescribeTable("[test_id:4621]Upload an image and start a VMI should succeed", func(resource string, validateFn func(string, string), diskFn func(string, string, ...libvmi.DiskOption) libvmi.Option) {
 		sc, exists := libstorage.GetRWOBlockStorageClass()
 		if !exists {
 			Fail("Fail test when RWOBlock storage class is not present")
@@ -117,7 +117,7 @@ var _ = VirtctlDescribe("[sig-storage]ImageUpload", decorators.SigStorage, Seria
 			libwait.WithTimeout(180),
 		)
 	},
-		Entry("DataVolume", "dv", validateDataVolume, libvmi.WithDataVolume),
+		Entry("DataVolume", decorators.StorageCritical, "dv", validateDataVolume, libvmi.WithDataVolume),
 		Entry("PVC", "pvc", validatePVC, libvmi.WithPersistentVolumeClaim),
 	)
 
