@@ -198,12 +198,7 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 	}
 
 	var selectorPolicy policy.SelectorPolicy
-	selectorPolicy, result.policyRevision, err = e.policyGetter.GetPolicyRepository().GetSelectorPolicy(securityIdentity, skipPolicyRevision, stats)
-	if err != nil {
-		e.getLogger().WithError(err).Warning("Failed to calculate SelectorPolicy")
-		return nil, err
-	}
-
+	selectorPolicy, result.policyRevision = e.policyGetter.GetPolicyRepository().GetSelectorPolicy(securityIdentity, skipPolicyRevision, stats)
 	// selectorPolicy is nil if skipRevision was matched.
 	if selectorPolicy == nil {
 		e.getLogger().WithFields(logrus.Fields{
@@ -211,7 +206,7 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 			"policyRevision.repo": result.policyRevision,
 			"policyChanged":       e.nextPolicyRevision > e.policyRevision,
 		}).Debug("Skipping unnecessary endpoint policy recalculation")
-		return result, err
+		return result, nil
 	}
 
 	// Add new redirects before Consume() so that all required proxy ports are available for it.
@@ -245,7 +240,9 @@ func (e *Endpoint) regeneratePolicy(stats *regenerationStatistics, datapathRegen
 	e.runlock()
 
 	// DistillPolicy converts a SelectorPolicy in to an EndpointPolicy
+	stats.endpointPolicyCalculation.Start()
 	result.endpointPolicy = selectorPolicy.DistillPolicy(e, desiredRedirects)
+	stats.endpointPolicyCalculation.End(true)
 
 	return result, nil
 }
