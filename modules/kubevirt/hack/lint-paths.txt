@@ -1,3 +1,4 @@
+cmd/virtctl
 pkg/instancetype
 pkg/libvmi
 pkg/network/admitter
@@ -21,6 +22,7 @@ tests/infrastructure
 tests/instancetype
 tests/libconfigmap
 tests/libinstancetype
+tests/libkubevirt
 tests/libnet
 tests/libnode
 tests/libpod
@@ -33,3 +35,4 @@ tests/libwait
 tests/numa
 tests/scale
 tests/usb
+tests/virtctl
