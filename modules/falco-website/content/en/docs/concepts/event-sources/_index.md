@@ -4,8 +4,8 @@ description: Leverage multiple Event Sources to increase the power of Falco
 linktitle: Event Sources
 weight: 10
 aliases:
-- ../event-sources
-- ../event-sources/enable-event-sources
+- ../../event-sources
+- ../../event-sources/enable-event-sources
 ---
 ## Overview
 
@@ -54,6 +54,7 @@ This example enables only the `syscall` and `k8s_audit` sources. The `syscall` s
 {{% pageinfo color=info %}}
 The `k8s_audit` source is also available through different plugins: `k8saudit`, `k8saudit-aks`, `k8saudit-eks`, `k8saudit-gke` and `k8suadit-ovh`, choose the one fitting your environment. They all share the same set of rules.
 {{% /pageinfo %}}
+
 ### Using `--disable-source`
 
 Disables specific event sources while keeping others active. This is useful if you want to prevent Falco from consuming events from certain sources.
