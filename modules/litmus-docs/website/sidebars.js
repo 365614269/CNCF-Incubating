@@ -6,8 +6,7 @@ module.exports = {
         'introduction/features',
         'introduction/usage',
         'introduction/core-principles',
-        'introduction/community',
-        'introduction/other-links'
+        'introduction/community'
       ]
     },
     {
@@ -33,7 +32,8 @@ module.exports = {
         'concepts/projects',
         'concepts/teaming',
         'concepts/gitops',
-        'concepts/oauth-dex-concept'
+        'concepts/oauth-dex-concept',
+        'concepts/visualize-experiment'
       ]
     },
     {

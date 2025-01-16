@@ -26,6 +26,7 @@ readonly ARTIFACTS_PATH="${ARTIFACTS-$WORKSPACE/exported-artifacts}"
 readonly TEMPLATES_SERVER="gs://kubevirt-vm-images"
 readonly BAZEL_CACHE="${BAZEL_CACHE:-http://bazel-cache.kubevirt-prow.svc.cluster.local:8080/kubevirt.io/kubevirt}"
 
+source hack/config-default.sh
 
 # Skip if it's docs changes only
 # Only if we are in CI, and this is a non-batch change
@@ -64,12 +65,7 @@ elif [[ $TARGET =~ sig-network ]]; then
   export KUBEVIRT_WITH_CNAO=true
   export KUBEVIRT_DEPLOY_NET_BINDING_CNI=true
   export KUBEVIRT_DEPLOY_CDI=false
-  # FIXME: https://github.com/kubevirt/kubevirt/issues/9158
-  if [[ $TARGET =~ no-istio ]]; then
-    export KUBEVIRT_DEPLOY_ISTIO=false
-  else
-    export KUBEVIRT_DEPLOY_ISTIO=true
-  fi
+  export KUBEVIRT_DEPLOY_ISTIO=true
   export KUBEVIRT_PROVIDER=${TARGET/-sig-network*/}
 elif [[ $TARGET =~ sig-storage ]]; then
   export KUBEVIRT_PROVIDER=${TARGET/-sig-storage/}
@@ -480,6 +476,12 @@ if [[ -z ${KUBEVIRT_E2E_FOCUS} && -z ${KUBEVIRT_E2E_SKIP} && -z ${label_filter} 
   if [[ ! $TARGET =~ windows.* ]]; then
     add_to_label_filter "(!Windows)" "&&"
     add_to_label_filter "(!Sysprep)" "&&"
+  fi
+
+  rwofs_sc=$(jq -er .storageRWOFileSystem "${kubevirt_test_config}")
+  if [[ "${rwofs_sc}" == "local" ]]; then
+    # local is a primitive non CSI storage class that doesn't support expansion
+    add_to_label_filter "(!RequiresVolumeExpansion)" "&&"
   fi
 
 fi

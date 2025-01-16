@@ -110,6 +110,7 @@ func newFakeAppender(appendErr, commitErr, rollbackErr func() error) *fakeAppend
 	}
 	return &fakeAppender{
 		samples:     make(map[storage.SeriesRef][]prompb.Sample),
+		exemplars:   make(map[storage.SeriesRef][]exemplar.Exemplar),
 		appendErr:   appendErr,
 		commitErr:   commitErr,
 		rollbackErr: rollbackErr,
@@ -231,7 +232,7 @@ func newTestHandlerHashring(
 
 		ag         = addrGen{}
 		logger     = logging.NewLogger("debug", "logfmt", "receive_test")
-		limiter, _ = NewLimiter(NewNopConfig(), nil, RouterIngestor, log.NewNopLogger(), 1*time.Second)
+		limiter, _ = NewLimiter(extkingpin.NewNopConfig(), nil, RouterIngestor, log.NewNopLogger(), 1*time.Second)
 	)
 	for i := range appendables {
 		h := NewHandler(logger, &Options{
