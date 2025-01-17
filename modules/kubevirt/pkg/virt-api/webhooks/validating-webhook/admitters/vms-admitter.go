@@ -124,7 +124,9 @@ func (admitter *VMsAdmitter) Admit(ctx context.Context, ar *admissionv1.Admissio
 	if ar.Request.Operation == admissionv1.Create {
 		clusterCfg := admitter.ClusterConfig.GetConfig()
 		if devCfg := clusterCfg.DeveloperConfiguration; devCfg != nil {
-			causes = append(causes, deprecation.ValidateFeatureGates(devCfg.FeatureGates, &vm.Spec.Template.Spec)...)
+			if causes = deprecation.ValidateFeatureGates(devCfg.FeatureGates, &vm.Spec.Template.Spec); len(causes) > 0 {
+				return webhookutils.ToAdmissionResponse(causes)
+			}
 		}
 
 		netValidator := netadmitter.NewValidator(k8sfield.NewPath("spec"), &vmCopy.Spec.Template.Spec, admitter.ClusterConfig)
@@ -350,21 +352,6 @@ func validateLiveUpdateFeatures(field *k8sfield.Path, spec *v1.VirtualMachineSpe
 				Field:   field.Child("template", "spec", "domain", "memory", "guest").String(),
 			})
 		}
-	}
-
-	if spec.UpdateVolumesStrategy != nil && !config.VolumesUpdateStrategyEnabled() {
-		causes = append(causes, metav1.StatusCause{
-			Type:    metav1.CauseTypeFieldValueInvalid,
-			Message: fmt.Sprintf("%s feature gate is not enabled in kubevirt-config", virtconfig.VolumesUpdateStrategy),
-			Field:   "updateVolumesStrategy",
-		})
-	}
-	if spec.UpdateVolumesStrategy != nil && *spec.UpdateVolumesStrategy == v1.UpdateVolumesStrategyMigration && !config.VolumeMigrationEnabled() {
-		causes = append(causes, metav1.StatusCause{
-			Type:    metav1.CauseTypeFieldValueInvalid,
-			Message: fmt.Sprintf("%s feature gate is not enabled in kubevirt-config", virtconfig.VolumeMigration),
-			Field:   "updateVolumesStrategy",
-		})
 	}
 
 	return causes

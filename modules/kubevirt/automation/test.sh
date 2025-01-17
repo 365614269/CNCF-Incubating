@@ -80,6 +80,8 @@ elif [[ $TARGET =~ sig-compute-migrations ]]; then
   export KUBEVIRT_WITH_CNAO=true
   export KUBEVIRT_NUM_SECONDARY_NICS=1
   export KUBEVIRT_DEPLOY_NFS_CSI=true
+  export KUBEVIRT_TEST_CONFIG="${base_dir}/tests/sig-migrations-config.json"
+  source hack/config-default.sh
 elif [[ $TARGET =~ sig-compute-serial ]]; then
   export KUBEVIRT_PROVIDER=${TARGET/-sig-compute-serial/}
 elif [[ $TARGET =~ sig-compute-parallel ]]; then
@@ -263,7 +265,7 @@ build_images() {
 export NAMESPACE="${NAMESPACE:-kubevirt}"
 
 # Make sure that the VM is properly shut down on exit
-trap '{ make cluster-down; }' EXIT SIGINT SIGTERM SIGSTOP
+trap '{ ret=$?; make cluster-down || true; exit $ret; }' EXIT SIGINT SIGTERM SIGSTOP
 
 if [ "$CI" != "true" ]; then
   make cluster-down
@@ -482,6 +484,12 @@ if [[ -z ${KUBEVIRT_E2E_FOCUS} && -z ${KUBEVIRT_E2E_SKIP} && -z ${label_filter} 
   if [[ "${rwofs_sc}" == "local" ]]; then
     # local is a primitive non CSI storage class that doesn't support expansion
     add_to_label_filter "(!RequiresVolumeExpansion)" "&&"
+  fi
+
+  vmstate_sc=$(jq -r .storageVMState "${kubevirt_test_config}")
+  if [[ "${vmstate_sc}" == "rook-ceph-block" ]]; then
+    # ceph block doesn't do RWX FS
+    add_to_label_filter '(!RequiresRWXFsVMStateStorageClass)' '&&'
   fi
 
 fi
