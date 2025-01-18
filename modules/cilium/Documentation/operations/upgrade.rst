@@ -298,6 +298,15 @@ Removed Options
 
 * The previously deprecated high-scale mode for ipcache has been removed.
 
+Helm Options
+~~~~~~~~~~~~
+
+* The Helm options ``hubble.export.fileMaxSizeMb``, ``hubble.export.fileMaxBackups``
+  and ``hubble.export.fileCompress`` have been deprecated in favor of their corresponding exporter
+  type options and will be removed in Cilium 1.19. More specifically, the static exporter options
+  are now located under ``hubble.export.static`` and the dynamic exporter options that generate
+  a configmap containing the exporter configuration are now under ``hubble.export.dynamic.config.content``.
+
 .. _1.17_upgrade_notes:
 
 1.17 Upgrade Notes
@@ -439,6 +448,11 @@ has been renamed from ``envoy_cilium_policymap_<node-ip>_<node-id>_`` to ``envoy
 * ``doublewrite_identity_kvstore_total_count`` has been renamed to ``doublewrite_identity_kvstore_total``
 * ``doublewrite_identity_crd_only_count`` has been renamed to ``doublewrite_identity_crd_only_total``
 * ``doublewrite_identity_kvstore_only_count`` has been renamed to ``doublewrite_identity_kvstore_only_total``
+* ``lbipam_conflicting_pools_total`` has been renamed to ``lbipam_conflicting_pools``
+* ``lbipam_ips_available_total`` has been renamed to ``lbipam_ips_available``
+* ``lbipam_ips_used_total`` has been renamed to ``lbipam_ips_used``
+* ``lbipam_services_matching_total`` has been renamed to ``lbipam_services_matching``
+* ``lbipam_services_unsatisfied_total`` has been renamed to ``lbipam_services_unsatisfied``
 
 Deprecated Metrics
 ~~~~~~~~~~~~~~~~~~

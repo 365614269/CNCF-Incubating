@@ -192,6 +192,10 @@ For more details, see the [ocp-readme](https://github.com/longhorn/longhorn/blob
 | Key | Default | Description |
 |-----|---------|-------------|
 | annotations | `{}` | Annotation for the Longhorn Manager DaemonSet pods. This setting is optional. |
+| defaultBackupStore | `{"backupTarget":null,"backupTargetCredentialSecret":null,"pollInterval":null}` | Setting that allows you to update the default backupstore. |
+| defaultBackupStore.backupTarget | `""` | Endpoint used to access the default backupstore. (Options: "NFS", "CIFS", "AWS", "GCP", "AZURE") |
+| defaultBackupStore.backupTargetCredentialSecret | `""` | Name of the Kubernetes secret associated with the default backup target. |
+| defaultBackupStore.pollInterval | `""` | Number of seconds that Longhorn waits before checking the default backupstore for new backups. The default value is "300". When the value is "0", polling is disabled. |
 | enableGoCoverDir | `false` | Setting that allows Longhorn to generate code coverage profiles. |
 | enablePSP | `false` | Setting that allows you to enable pod security policies (PSPs) that allow privileged Longhorn pods to start. This setting applies only to clusters running Kubernetes 1.25 and earlier, and with the built-in Pod Security admission controller enabled. |
 | namespaceOverride | `""` | Specify override namespace, specifically this is useful for using longhorn as sub-chart and its release namespace is not the `longhorn-system`. |
@@ -217,9 +221,6 @@ During installation, you can either allow Longhorn to use the default system set
 | defaultSettings.backingImageRecoveryWaitInterval | Number of seconds that Longhorn waits before downloading a backing image file again when the status of all image disk files changes to "failed" or "unknown". |
 | defaultSettings.backupCompressionMethod | Setting that allows you to specify a backup compression method. |
 | defaultSettings.backupConcurrentLimit | Maximum number of worker threads that can concurrently run for each backup. |
-| defaultSettings.backupTarget | Endpoint used to access the backupstore. (Options: "NFS", "CIFS", "AWS", "GCP", "AZURE") |
-| defaultSettings.backupTargetCredentialSecret | Name of the Kubernetes secret associated with the backup target. |
-| defaultSettings.backupstorePollInterval | Number of seconds that Longhorn waits before checking the backupstore for new backups. The default value is "300". When the value is "0", polling is disabled. |
 | defaultSettings.concurrentAutomaticEngineUpgradePerNodeLimit | Maximum number of engines that are allowed to concurrently upgrade on each node after Longhorn Manager is upgraded. When the value is "0", Longhorn does not automatically upgrade volume engines to the new default engine image version. |
 | defaultSettings.concurrentReplicaRebuildPerNodeLimit | Maximum number of replicas that can be concurrently rebuilt on each node. |
 | defaultSettings.concurrentVolumeBackupRestorePerNodeLimit | Maximum number of volumes that can be concurrently restored on each node using a backup. When the value is "0", restoration of volumes using a backup is disabled. |
@@ -271,7 +272,7 @@ During installation, you can either allow Longhorn to use the default system set
 | defaultSettings.taintToleration | Taint or toleration for system-managed Longhorn components. Specify values using a semicolon-separated list in `kubectl taint` syntax (Example: key1=value1:effect; key2=value2:effect). |
 | defaultSettings.upgradeChecker | Upgrade Checker that periodically checks for new Longhorn versions. When a new version is available, a notification appears on the Longhorn UI. This setting is enabled by default |
 | defaultSettings.v1DataEngine | Setting that allows you to enable the V1 Data Engine. |
-| defaultSettings.v2DataEngine | Setting that allows you to enable the V2 Data Engine, which is based on the Storage Performance Development Kit (SPDK). The V2 Data Engine is a preview feature and should not be used in production environments. |
+| defaultSettings.v2DataEngine | Setting that allows you to enable the V2 Data Engine, which is based on the Storage Performance Development Kit (SPDK). The V2 Data Engine is an experimental feature and should not be used in production environments. |
 | defaultSettings.v2DataEngineGuaranteedInstanceManagerCPU | Number of millicpus on each node to be reserved for each Instance Manager pod when the V2 Data Engine is enabled. The default value is "1250". |
 | defaultSettings.v2DataEngineHugepageLimit | Setting that allows you to configure maximum huge page size (in MiB) for the V2 Data Engine. |
 | defaultSettings.v2DataEngineLogFlags | Setting that allows you to configure the log flags of the SPDK target daemon (spdk_tgt) of the V2 Data Engine. |

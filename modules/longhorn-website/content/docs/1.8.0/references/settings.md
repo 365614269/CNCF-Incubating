@@ -41,7 +41,7 @@ weight: 1
   - [Long gRPC Timeout](#long-grpc-timeout)
   - [V1 Data Engine](#v1-data-engine)
   - [RWX Volume Fast Failover (Experimental)](#rwx-volume-fast-failover-experimental)
-- [V2 Data Engine (Preview Feature)](#v2-data-engine-preview-feature)
+- [V2 Data Engine (Experimental)](#v2-data-engine-experimental)
   - [V2 Data Engine](#v2-data-engine)
   - [V2 Data Engine Hugepage Limit](#v2-data-engine-hugepage-limit)
   - [Guaranteed Instance Manager CPU for V2 Data Engine](#guaranteed-instance-manager-cpu-for-v2-data-engine)
@@ -56,9 +56,6 @@ weight: 1
   - [Orphaned Data Automatic Deletion](#orphaned-data-automatic-deletion)
 - [Backups](#backups)
   - [Allow Recurring Job While Volume Is Detached](#allow-recurring-job-while-volume-is-detached)
-  - [Backup Target](#backup-target)
-  - [Backup Target Credential Secret](#backup-target-credential-secret)
-  - [Backupstore Poll Interval](#backupstore-poll-interval)
   - [Failed Backup Time To Live](#failed-backup-time-to-live)
   - [Cronjob Failed Jobs History Limit](#cronjob-failed-jobs-history-limit)
   - [Cronjob Successful Jobs History Limit](#cronjob-successful-jobs-history-limit)
@@ -491,12 +488,12 @@ Setting that allows you to enable the V1 Data Engine.
 
 Enable improved ReadWriteMany volume HA by shortening the time it takes to recover from a node failure.
 
-### V2 Data Engine (Preview Feature)
+### V2 Data Engine (Experimental)
 #### V2 Data Engine
 
 > Default: `false`
 
-Setting that allows you to enable the V2 Data Engine, which is based on the Storage Performance Development Kit (SPDK). The V2 Data Engine is a preview feature and should not be used in production environments. For more information, see [V2 Data Engine (Preview Feature)](../../v2-data-engine).
+Setting that allows you to enable the V2 Data Engine, which is based on the Storage Performance Development Kit (SPDK). The V2 Data Engine is an experimental feature and should not be used in production environments. For more information, see [V2 Data Engine (Experimental)](../../v2-data-engine).
 
 > **Warning**
 >
@@ -603,29 +600,6 @@ This setting allows Longhorn to automatically delete the `orphan` resource and i
 If this setting is enabled, Longhorn automatically attaches the volume and takes snapshot/backup when it is the time to do recurring snapshot/backup.
 
 > **Note:** During the time the volume was attached automatically, the volume is not ready for the workload. The workload will have to wait until the recurring job finishes.
-
-#### Backup Target
-
-> Examples:
-> `s3://backupbucket@us-east-1/backupstore`
-> `nfs://longhorn-test-nfs-svc.default:/opt/backupstore`
-> `nfs://longhorn-test-nfs-svc.default:/opt/backupstore?nfsOptions=soft,timeo=330,retrans=3`
-
-Endpoint used to access a backupstore.   Longhorn supports AWS S3, Azure, GCP, CIFS and NFS.  See [Setting a Backup Target](../../snapshots-and-backups/backup-and-restore/set-backup-target) for details.
-
-#### Backup Target Credential Secret
-
-> Example: `s3-secret`
-
-The Kubernetes secret associated with the backup target. See [Setting a Backup Target](../../snapshots-and-backups/backup-and-restore/set-backup-target) for details.
-
-#### Backupstore Poll Interval
-
-> Default: `300`
-
-The interval in seconds to poll the backup store for updating volumes' **Last Backup** field. Set to 0 to disable the polling. See [Setting up Disaster Recovery Volumes](../../snapshots-and-backups/setup-disaster-recovery-volumes) for details.
-
-For more information on how the backupstore poll interval affects the recovery time objective and recovery point objective, refer to the [concepts section.](../../concepts/#34-backupstore-update-intervals-rto-and-rpo)
 
 #### Failed Backup Time To Live
 
@@ -853,7 +827,7 @@ If you do not detach all volumes before the settings are synchronized, the setti
   | [System Managed Components Node Selector](#system-managed-components-node-selector) | [Node Selector](../../advanced-resources/deploy/node-selector/) | System-managed components |
   | [Storage Network](#storage-network) | [Storage Network](../../advanced-resources/deploy/storage-network/) | Instance Manager and Backing Image components |
   | [V1 Data Engine](#v1-data-engine) || Instance Manager component |
-  | [V2 Data Engine](#v2-data-engine) | [V2 Data Engine (Preview Feature)](../../v2-data-engine/) | Instance Manager component |
+  | [V2 Data Engine](#v2-data-engine) | [V2 Data Engine (Experimental)](../../v2-data-engine/) | Instance Manager component |
   | [Guaranteed Instance Manager CPU](#guaranteed-instance-manager-cpu) || Instance Manager component |
   | [Guaranteed Instance Manager CPU for V2 Data Engine](#guaranteed-instance-manager-cpu-for-v2-data-engine) || Instance Manager component |
 
