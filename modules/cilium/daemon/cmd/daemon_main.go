@@ -388,9 +388,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableUnreachableRoutes, false, "Add unreachable routes on pod deletion")
 	option.BindEnv(vp, option.EnableUnreachableRoutes)
 
-	flags.Bool(option.EnableWellKnownIdentities, defaults.EnableWellKnownIdentities, "Enable well-known identities for known Kubernetes components")
-	option.BindEnv(vp, option.EnableWellKnownIdentities)
-
 	flags.Bool(option.EnableIPSecName, defaults.EnableIPSec, "Enable IPsec support")
 	option.BindEnv(vp, option.EnableIPSecName)
 
@@ -1372,13 +1369,6 @@ func initEnv(vp *viper.Viper) {
 	if option.Config.EnableHostFirewall {
 		if option.Config.EnableIPSec {
 			log.Fatal("IPSec cannot be used with the host firewall.")
-		}
-	}
-
-	if err := probes.HaveSKBAdjustRoomL2RoomMACSupport(); err != nil {
-		if option.Config.ServiceNoBackendResponse != option.ServiceNoBackendResponseDrop {
-			log.Warn("The kernel does not support --service-no-backend-response=reject, falling back to --service-no-backend-response=drop")
-			option.Config.ServiceNoBackendResponse = option.ServiceNoBackendResponseDrop
 		}
 	}
 

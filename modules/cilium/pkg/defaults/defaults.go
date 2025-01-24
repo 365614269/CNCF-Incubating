@@ -112,7 +112,7 @@ const (
 	// for each FQDN selector in endpoint's restored DNS rules.
 	DNSMaxIPsPerRestoredRule = 1000
 
-	// FFQDNRegexCompileLRUSize defines the maximum size for the FQDN regex
+	// FQDNRegexCompileLRUSize defines the maximum size for the FQDN regex
 	// compilation LRU used by the DNS proxy and policy validation.
 	FQDNRegexCompileLRUSize = 1024
 
@@ -456,15 +456,11 @@ const (
 	// RestoreV6Addr is used as match for cilium_host v6 (router) address
 	RestoreV6Addr = "cilium.v6.internal.raw "
 
-	// EnableWellKnownIdentities is enabled by default as this is the
-	// original behavior. New default Helm templates will disable this.
-	EnableWellKnownIdentities = true
-
 	// CertsDirectory is the default directory used to find certificates
 	// specified in the L7 policies.
 	CertsDirectory = RuntimePath + "/certs"
 
-	// IPAMExpiration is the timeout after which an IP subject to expiratio
+	// IPAMExpiration is the timeout after which an IP subject to expiration
 	// is being released again if no endpoint is being created in time.
 	IPAMExpiration = 10 * time.Minute
 
