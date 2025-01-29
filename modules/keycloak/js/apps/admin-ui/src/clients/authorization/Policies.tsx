@@ -39,6 +39,8 @@ import { DetailDescriptionLink } from "./DetailDescription";
 import { MoreLabel } from "./MoreLabel";
 import { NewPolicyDialog } from "./NewPolicyDialog";
 import { SearchDropdown, SearchForm } from "./SearchDropdown";
+import { useIsAdminPermissionsClient } from "../../utils/useIsAdminPermissionsClient";
+import { toCreatePermissionPolicy } from "../../permissions-configuration/routes/NewPermissionPolicy";
 
 type PoliciesProps = {
   clientId: string;
@@ -87,6 +89,7 @@ export const AuthorizationPolicies = ({
   const [first, setFirst] = useState(0);
   const [search, setSearch] = useState<SearchForm>({});
   const [newDialog, toggleDialog] = useToggle();
+  const isAdminPermissionsClient = useIsAdminPermissionsClient(clientId);
 
   useFetch(
     async () => {
@@ -187,7 +190,6 @@ export const AuthorizationPolicies = ({
               toggleDialog={toggleDialog}
             />
           )}
-
           <PaginatingTableToolbar
             count={policies.length}
             first={first}
@@ -211,7 +213,18 @@ export const AuthorizationPolicies = ({
                 <ToolbarItem>
                   <Button
                     data-testid="createPolicy"
-                    onClick={toggleDialog}
+                    onClick={() => {
+                      if (!isAdminPermissionsClient) {
+                        toggleDialog();
+                      } else {
+                        navigate(
+                          toCreatePermissionPolicy({
+                            realm,
+                            permissionClientId: clientId,
+                          }),
+                        );
+                      }
+                    }}
                     isDisabled={isDisabled}
                   >
                     {t("createPolicy")}
@@ -250,16 +263,20 @@ export const AuthorizationPolicies = ({
                         }}
                       />
                       <Td data-testid={`name-column-${policy.name}`}>
-                        <Link
-                          to={toPolicyDetails({
-                            realm,
-                            id: clientId,
-                            policyType: policy.type!,
-                            policyId: policy.id!,
-                          })}
-                        >
-                          {policy.name}
-                        </Link>
+                        {!isAdminPermissionsClient ? (
+                          <Link
+                            to={toPolicyDetails({
+                              realm,
+                              id: clientId,
+                              policyType: policy.type!,
+                              policyId: policy.id!,
+                            })}
+                          >
+                            {policy.name}
+                          </Link>
+                        ) : (
+                          policy.name
+                        )}
                       </Td>
                       <Td>{toUpperCase(policy.type!)}</Td>
                       <Td>
@@ -289,7 +306,7 @@ export const AuthorizationPolicies = ({
                       <Td />
                       <Td colSpan={3 + (isDisabled ? 0 : 1)}>
                         <ExpandableRowContent>
-                          {policy.isExpanded && (
+                          {policy.isExpanded && !isAdminPermissionsClient && (
                             <DescriptionList
                               isHorizontal
                               className="keycloak_resource_details"
@@ -308,6 +325,20 @@ export const AuthorizationPolicies = ({
                                 }
                               />
                             </DescriptionList>
+                          )}
+                          {policy.isExpanded && isAdminPermissionsClient && (
+                            <>
+                              <Th>{t("dependentPermission")}</Th>
+                              {policy.dependentPolicies!.map(
+                                (dependentPolicy, index) => (
+                                  <Td key={index}>
+                                    <span style={{ marginLeft: "8px" }}>
+                                      {dependentPolicy.name}
+                                    </span>
+                                  </Td>
+                                ),
+                              )}
+                            </>
                           )}
                         </ExpandableRowContent>
                       </Td>
@@ -347,7 +378,16 @@ export const AuthorizationPolicies = ({
             instructions={t("emptyPoliciesInstructions")}
             isDisabled={isDisabled}
             primaryActionText={t("createPolicy")}
-            onPrimaryAction={toggleDialog}
+            onPrimaryAction={() =>
+              !isAdminPermissionsClient
+                ? toggleDialog()
+                : navigate(
+                    toCreatePermissionPolicy({
+                      realm,
+                      permissionClientId: clientId,
+                    }),
+                  )
+            }
           />
         </>
       )}

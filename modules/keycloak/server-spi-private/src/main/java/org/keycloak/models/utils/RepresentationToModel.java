@@ -38,6 +38,7 @@ import java.util.stream.Stream;
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.OAuth2Constants;
+import org.keycloak.authorization.AdminPermissionsSchema;
 import org.keycloak.authorization.AuthorizationProvider;
 import org.keycloak.authorization.AuthorizationProviderFactory;
 import org.keycloak.authorization.model.PermissionTicket;
@@ -1230,6 +1231,7 @@ public class RepresentationToModel {
         model.setDescription(representation.getDescription());
         model.setDecisionStrategy(representation.getDecisionStrategy());
         model.setLogic(representation.getLogic());
+        model.setResourceType(representation.getResourceType());
 
         Set resources = representation.getResources();
         Set scopes = representation.getScopes();
@@ -1279,7 +1281,7 @@ public class RepresentationToModel {
 
         StoreFactory storeFactory = authorization.getStoreFactory();
 
-        updateResources(resources, model, storeFactory);
+        updateResources(resources, model, authorization);
         updateScopes(scopes, model, storeFactory);
         updateAssociatedPolicies(policies, model, storeFactory);
 
@@ -1404,14 +1406,31 @@ public class RepresentationToModel {
         policy.removeConfig("applyPolicies");
     }
 
-    private static void updateResources(Set<String> resourceIds, Policy policy, StoreFactory storeFactory) {
+    private static void updateResources(Set<String> resourceIds, Policy policy, AuthorizationProvider authorization) {
+        StoreFactory storeFactory = authorization.getStoreFactory();
+
         if (resourceIds != null) {
             if (resourceIds.isEmpty()) {
                 for (Resource resource : new HashSet<>(policy.getResources())) {
                     policy.removeResource(resource);
                 }
             }
+
             ResourceServer resourceServer = policy.getResourceServer();
+            KeycloakSession session = authorization.getKeycloakSession();
+
+            resourceIds = resourceIds.stream().map(new Function<String, String>() {
+                @Override
+                public String apply(String id) {
+                    Resource resource = AdminPermissionsSchema.SCHEMA.getOrCreateResource(session, resourceServer, policy.getResourceType(), id);
+
+                    if (resource == null) {
+                        return id;
+                    }
+
+                    return resource.getId();
+                }
+            }).collect(Collectors.toSet());;
 
             for (String resourceId : resourceIds) {
                 boolean hasResource = false;

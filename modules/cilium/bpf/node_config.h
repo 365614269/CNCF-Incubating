@@ -31,8 +31,8 @@ DECLARE_CONFIG(__u32, interface_ifindex, "ifindex of the interface the bpf progr
 DEFINE_IPV6(ROUTER_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x1, 0x0, 0x0);
 #endif
 
-#define HOST_IFINDEX 1
-#define CILIUM_IFINDEX 1
+#define CILIUM_NET_IFINDEX 1
+#define CILIUM_HOST_IFINDEX 1
 #define NATIVE_DEV_MAC_BY_IFINDEX(_) { .addr = { 0xce, 0x72, 0xa7, 0x03, 0x88, 0x56 } }
 
 #ifndef HOST_IP
@@ -73,7 +73,7 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
  * before it leaves the host.
  */
 #define ENCRYPTED_OVERLAY_ID 11
-#define HOST_IFINDEX_MAC { .addr = { 0xce, 0x72, 0xa7, 0x03, 0x88, 0x56 } }
+#define CILIUM_HOST_MAC { .addr = { 0xce, 0x72, 0xa7, 0x03, 0x88, 0x56 } }
 #define NODEPORT_PORT_MIN 30000
 #define NODEPORT_PORT_MAX 32767
 #define NODEPORT_PORT_MIN_NAT (NODEPORT_PORT_MAX + 1)
@@ -138,6 +138,10 @@ DEFINE_IPV6(HOST_IP, 0xbe, 0xef, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0xa, 0x
 #define CAPTURE6_RULES cilium_capture6_rules
 #define CAPTURE6_SIZE 16384
 #endif /* ENABLE_IPV6 */
+
+#ifdef ENABLE_NODEPORT
+#define SNAT_COLLISION_RETRIES 128
+#endif
 
 #define EGRESS_POLICY_MAP test_cilium_egress_gw_policy_v4
 #define SRV6_VRF_MAP4 test_cilium_srv6_vrf_v4

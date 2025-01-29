@@ -158,9 +158,9 @@ not_esp:
 	/* A packet entering the node from the tunnel and not going to a local
 	 * endpoint has to be going to the local host.
 	 */
-#ifdef HOST_IFINDEX
+#ifdef CILIUM_NET_IFINDEX
 	if (1) {
-		union macaddr host_mac = HOST_IFINDEX_MAC;
+		union macaddr host_mac = CILIUM_HOST_MAC;
 		union macaddr router_mac = THIS_INTERFACE_MAC;
 
 		ret = ipv6_l3(ctx, ETH_HLEN, (__u8 *)&router_mac.addr,
@@ -168,8 +168,8 @@ not_esp:
 		if (ret != CTX_ACT_OK)
 			return ret;
 
-		cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, HOST_IFINDEX);
-		return ctx_redirect(ctx, HOST_IFINDEX, 0);
+		cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, CILIUM_NET_IFINDEX);
+		return ctx_redirect(ctx, CILIUM_NET_IFINDEX, 0);
 	}
 #else
 	return CTX_ACT_OK;
@@ -195,9 +195,9 @@ int tail_handle_ipv6(struct __ctx_buff *ctx)
 #ifdef ENABLE_IPV4
 static __always_inline int ipv4_host_delivery(struct __ctx_buff *ctx, struct iphdr *ip4)
 {
-#ifdef HOST_IFINDEX
+#ifdef CILIUM_NET_IFINDEX
 	if (1) {
-		union macaddr host_mac = HOST_IFINDEX_MAC;
+		union macaddr host_mac = CILIUM_HOST_MAC;
 		union macaddr router_mac = THIS_INTERFACE_MAC;
 		int ret;
 
@@ -206,8 +206,8 @@ static __always_inline int ipv4_host_delivery(struct __ctx_buff *ctx, struct iph
 		if (ret != CTX_ACT_OK)
 			return ret;
 
-		cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, HOST_IFINDEX);
-		return ctx_redirect(ctx, HOST_IFINDEX, 0);
+		cilium_dbg_capture(ctx, DBG_CAPTURE_DELIVERY, CILIUM_NET_IFINDEX);
+		return ctx_redirect(ctx, CILIUM_NET_IFINDEX, 0);
 	}
 #else
 	return CTX_ACT_OK;

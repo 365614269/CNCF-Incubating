@@ -631,12 +631,16 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		if option.Config.EnableIPv4 {
 			cDefinesMap["SNAT_MAPPING_IPV4"] = nat.MapNameSnat4Global
 			cDefinesMap["SNAT_MAPPING_IPV4_SIZE"] = fmt.Sprintf("%d", option.Config.NATMapEntriesGlobal)
+			cDefinesMap["SNAT_ALLOC_RETRIES_IPV4"] = nat.MapNameSnat4AllocRetries
 		}
 
 		if option.Config.EnableIPv6 {
 			cDefinesMap["SNAT_MAPPING_IPV6"] = nat.MapNameSnat6Global
 			cDefinesMap["SNAT_MAPPING_IPV6_SIZE"] = fmt.Sprintf("%d", option.Config.NATMapEntriesGlobal)
+			cDefinesMap["SNAT_ALLOC_RETRIES_IPV6"] = nat.MapNameSnat6AllocRetries
 		}
+
+		cDefinesMap["SNAT_COLLISION_RETRIES"] = fmt.Sprintf("%d", nat.SnatCollisionRetries)
 
 		if option.Config.EnableBPFMasquerade {
 			if option.Config.EnableIPv4Masquerade {
@@ -736,14 +740,14 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		return fmt.Errorf("failed to look up link '%s': %w", defaults.SecondHostDevice, err)
 	}
 	cDefinesMap["CILIUM_NET_MAC"] = fmt.Sprintf("{.addr=%s}", mac.CArrayString(ciliumNetLink.Attrs().HardwareAddr))
-	cDefinesMap["HOST_IFINDEX"] = fmt.Sprintf("%d", ciliumNetLink.Attrs().Index)
+	cDefinesMap["CILIUM_NET_IFINDEX"] = fmt.Sprintf("%d", ciliumNetLink.Attrs().Index)
 
 	ciliumHostLink, err := safenetlink.LinkByName(defaults.HostDevice)
 	if err != nil {
 		return fmt.Errorf("failed to look up link '%s': %w", defaults.HostDevice, err)
 	}
-	cDefinesMap["HOST_IFINDEX_MAC"] = fmt.Sprintf("{.addr=%s}", mac.CArrayString(ciliumHostLink.Attrs().HardwareAddr))
-	cDefinesMap["CILIUM_IFINDEX"] = fmt.Sprintf("%d", ciliumHostLink.Attrs().Index)
+	cDefinesMap["CILIUM_HOST_MAC"] = fmt.Sprintf("{.addr=%s}", mac.CArrayString(ciliumHostLink.Attrs().HardwareAddr))
+	cDefinesMap["CILIUM_HOST_IFINDEX"] = fmt.Sprintf("%d", ciliumHostLink.Attrs().Index)
 
 	ephemeralMin, err := getEphemeralPortRangeMin(h.sysctl)
 	if err != nil {
