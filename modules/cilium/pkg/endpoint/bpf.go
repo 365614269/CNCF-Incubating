@@ -26,7 +26,6 @@ import (
 	"github.com/cilium/cilium/pkg/completion"
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
-	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/identity"
@@ -402,8 +401,7 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	// reverted, and execute it in case of regeneration success.
 	defer func() {
 		// Ignore finalizing of proxy state in dry mode.
-		if !e.isProperty(PropertyFakeEndpoint) &&
-			option.Config.DatapathMode != datapathOption.DatapathModeLBOnly {
+		if !e.isProperty(PropertyFakeEndpoint) {
 			e.finalizeProxyState(regenContext, reterr)
 		}
 	}()
@@ -415,8 +413,7 @@ func (e *Endpoint) regenerateBPF(regenContext *regenerationContext) (revnum uint
 	// No need to compile BPF in dry mode. Also, in lb-only mode we do not
 	// support local Pods on the worker node, hence endpoint BPF regeneration
 	// is skipped everywhere.
-	if e.isProperty(PropertyFakeEndpoint) ||
-		(option.Config.DatapathMode == datapathOption.DatapathModeLBOnly && !datapathRegenCtxt.epInfoCache.IsHost()) {
+	if e.isProperty(PropertyFakeEndpoint) {
 		return e.nextPolicyRevision, nil
 	}
 
@@ -631,8 +628,7 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext) (pr
 	// pre-existing connections using that IP are now invalid.
 	if !e.ctCleaned {
 		go func() {
-			if !e.isProperty(PropertyFakeEndpoint) &&
-				option.Config.DatapathMode != datapathOption.DatapathModeLBOnly {
+			if !e.isProperty(PropertyFakeEndpoint) {
 				ipv4 := option.Config.EnableIPv4
 				ipv6 := option.Config.EnableIPv6
 				exists := ctmap.Exists(nil, ipv4, ipv6)
@@ -1147,7 +1143,6 @@ func (e *Endpoint) applyPolicyMapChangesLocked(regenContext *regenerationContext
 
 	// Ingress endpoint has no bpf policy maps, so return before applying changes to bpf.
 	if e.isProperty(PropertySkipBPFPolicy) {
-
 		if logging.CanLogAt(log.Logger, logrus.DebugLevel) {
 			log.WithField(logfields.EndpointID, e.ID).Debug("Skipping bpf updates due to dry mode")
 		}
@@ -1160,12 +1155,19 @@ func (e *Endpoint) applyPolicyMapChangesLocked(regenContext *regenerationContext
 		return nil
 	}
 
+	if e.policyMap == nil {
+		if logging.CanLogAt(log.Logger, logrus.DebugLevel) {
+			log.WithField(logfields.EndpointID, e.ID).Debug("Skipping bpf updates due to endpoint not having policy map yet")
+		}
+		return nil
+	}
+
 	// Add policy map entries before deleting to avoid transient drops. If there
 	// isn't enough space to add all the entries before deleting some, then delete
 	// first. If e.realizedPolicy or e.policyMap is nil then the map has not been
 	// populated yet.
 	errors := 0
-	if e.realizedPolicy == nil || e.policyMap == nil ||
+	if e.realizedPolicy == nil ||
 		e.realizedPolicy.Len()+len(changes.Adds) <= int(e.policyMap.MaxEntries()) {
 		errors += e.addPolicyKeys(changes.Adds)
 		errors += e.deletePolicyKeys(changes.Deletes, changes.Adds)

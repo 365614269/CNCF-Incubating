@@ -782,7 +782,7 @@ data:
 {{- end }}
 {{- if hasKey .Values "loadBalancer" }}
 {{- if .Values.loadBalancer.standalone }}
-  datapath-mode: lb-only
+  bpf-lb-only: {{ .Values.loadBalancer.standalone | quote }}
 {{- end }}
 {{- if hasKey .Values.loadBalancer "mode" }}
   bpf-lb-mode: {{ .Values.loadBalancer.mode | quote }}
@@ -1199,9 +1199,6 @@ data:
   enable-cilium-endpoint-slice: "true"
   {{- if .Values.ciliumEndpointSlice.rateLimits }}
   ces-rate-limits: {{ .Values.ciliumEndpointSlice.rateLimits | toJson | quote }}
-  {{- end }}
-  {{- if .Values.ciliumEndpointSlice.sliceMode }}
-  ces-slice-mode: {{ .Values.ciliumEndpointSlice.sliceMode | quote }}
   {{- end }}
 {{- end }}
 

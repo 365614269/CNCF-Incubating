@@ -302,6 +302,11 @@ Removed Options
 Deprecated Options
 ~~~~~~~~~~~~~~~~~~
 
+* Operator flag ``ces-slice-mode`` has been deprecated and will be removed in Cilium 1.19.
+  CiliumEndpointSlice batching mode defaults to first-come-first-serve mode.
+* The flag value ``--datapath-mode=lb-only`` for plain Docker mode has been migrated into
+  ``--bpf-lb-only`` and will be removed in Cilium 1.19.
+
 Helm Options
 ~~~~~~~~~~~~
 
@@ -310,6 +315,7 @@ Helm Options
   type options and will be removed in Cilium 1.19. More specifically, the static exporter options
   are now located under ``hubble.export.static`` and the dynamic exporter options that generate
   a configmap containing the exporter configuration are now under ``hubble.export.dynamic.config.content``.
+* The Helm option ``ciliumEndpointSlice.sliceMode`` has been removed. The slice mode defaults to first-come-first-serve mode.
 
 Agent Options
 ~~~~~~~~~~~~~
