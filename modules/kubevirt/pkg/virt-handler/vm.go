@@ -67,11 +67,13 @@ import (
 	netcache "kubevirt.io/kubevirt/pkg/network/cache"
 	"kubevirt.io/kubevirt/pkg/network/domainspec"
 	neterrors "kubevirt.io/kubevirt/pkg/network/errors"
+	netsetup "kubevirt.io/kubevirt/pkg/network/setup"
 	netvmispec "kubevirt.io/kubevirt/pkg/network/vmispec"
 	"kubevirt.io/kubevirt/pkg/pointer"
 	"kubevirt.io/kubevirt/pkg/safepath"
 	"kubevirt.io/kubevirt/pkg/storage/reservation"
 	pvctypes "kubevirt.io/kubevirt/pkg/storage/types"
+	storagetypes "kubevirt.io/kubevirt/pkg/storage/types"
 	"kubevirt.io/kubevirt/pkg/util"
 	virtutil "kubevirt.io/kubevirt/pkg/util"
 	"kubevirt.io/kubevirt/pkg/util/hardware"
@@ -1550,10 +1552,6 @@ func (c *VirtualMachineController) calculateLiveMigrationCondition(vmi *v1.Virtu
 		return newNonMigratableCondition(err.Error(), v1.VirtualMachineInstanceReasonCPUModeNotMigratable), isBlockMigration
 	}
 
-	if util.IsVMIVirtiofsEnabled(vmi) {
-		return newNonMigratableCondition("VMI uses virtiofs", v1.VirtualMachineInstanceReasonVirtIOFSNotMigratable), isBlockMigration
-	}
-
 	if vmiContainsPCIHostDevice(vmi) {
 		return newNonMigratableCondition("VMI uses a PCI host devices", v1.VirtualMachineInstanceReasonHostDeviceNotMigratable), isBlockMigration
 	}
@@ -1635,10 +1633,6 @@ func (c *VirtualMachineController) calculateLiveStorageMigrationCondition(vmi *v
 
 	if err := c.isHostModelMigratable(vmi); err != nil {
 		multiCond.addNonMigratableCondition(v1.VirtualMachineInstanceReasonCPUModeNotMigratable, err.Error())
-	}
-
-	if util.IsVMIVirtiofsEnabled(vmi) {
-		multiCond.addNonMigratableCondition(v1.VirtualMachineInstanceReasonVirtIOFSNotMigratable, "VMI uses virtiofs")
 	}
 
 	if vmiContainsPCIHostDevice(vmi) {
@@ -2498,6 +2492,8 @@ func (c *VirtualMachineController) checkVolumesForMigration(vmi *v1.VirtualMachi
 		blockMigrate = true
 	}
 
+	filesystems := storagetypes.GetFilesystemsFromVolumes(vmi)
+
 	// Check if all VMI volumes can be shared between the source and the destination
 	// of a live migration. blockMigrate will be returned as false, only if all volumes
 	// are shared and the VMI has no local disks
@@ -2528,6 +2524,11 @@ func (c *VirtualMachineController) checkVolumesForMigration(vmi *v1.VirtualMachi
 				return true, fmt.Errorf("cannot migrate VMI with non-shared HostDisk")
 			}
 		} else {
+			if _, ok := filesystems[volume.Name]; ok {
+				log.Log.Object(vmi).Infof("Volume %s is shared with virtiofs, allow live migration", volume.Name)
+				continue
+			}
+
 			isVolumeUsedByReadOnlyDisk := false
 			for _, disk := range vmi.Spec.Domain.Devices.Disks {
 				if isReadOnlyDisk(&disk) && disk.Name == volume.Name {
@@ -2811,7 +2812,7 @@ func (c *VirtualMachineController) vmUpdateHelperMigrationTarget(origVMI *v1.Vir
 	}
 
 	// configure network inside virt-launcher compute container
-	if err := c.setupNetwork(vmi, vmi.Spec.Networks); err != nil {
+	if err := c.setupNetwork(vmi, netsetup.FilterNetsForMigrationTarget(vmi)); err != nil {
 		return fmt.Errorf("failed to configure vmi network for migration target: %w", err)
 	}
 
@@ -3027,12 +3028,7 @@ func (c *VirtualMachineController) vmUpdateHelperDefault(origVMI *v1.VirtualMach
 			return err
 		}
 
-		nonAbsentIfaces := netvmispec.FilterInterfacesSpec(vmi.Spec.Domain.Devices.Interfaces, func(iface v1.Interface) bool {
-			return iface.State != v1.InterfaceStateAbsent
-		})
-		nonAbsentNets := netvmispec.FilterNetworksByInterfaces(vmi.Spec.Networks, nonAbsentIfaces)
-
-		if err := c.setupNetwork(vmi, nonAbsentNets); err != nil {
+		if err := c.setupNetwork(vmi, netsetup.FilterNetsForVMStartup(vmi)); err != nil {
 			return fmt.Errorf("failed to configure vmi network: %w", err)
 		}
 
@@ -3125,19 +3121,7 @@ func (c *VirtualMachineController) vmUpdateHelperDefault(origVMI *v1.VirtualMach
 			return err
 		}
 
-		netsToHotplug := netvmispec.NetworksToHotplugWhosePodIfacesAreReady(vmi)
-		nonAbsentIfaces := netvmispec.FilterInterfacesSpec(vmi.Spec.Domain.Devices.Interfaces, func(iface v1.Interface) bool {
-			return iface.State != v1.InterfaceStateAbsent
-		})
-		netsToHotplug = netvmispec.FilterNetworksByInterfaces(netsToHotplug, nonAbsentIfaces)
-
-		ifacesToHotunplug := netvmispec.FilterInterfacesSpec(vmi.Spec.Domain.Devices.Interfaces, func(iface v1.Interface) bool {
-			return iface.State == v1.InterfaceStateAbsent
-		})
-		netsToHotunplug := netvmispec.FilterNetworksByInterfaces(vmi.Spec.Networks, ifacesToHotunplug)
-
-		setupNets := append(netsToHotplug, netsToHotunplug...)
-		if err := c.setupNetwork(vmi, setupNets); err != nil {
+		if err := c.setupNetwork(vmi, netsetup.FilterNetsForLiveUpdate(vmi)); err != nil {
 			log.Log.Object(vmi).Error(err.Error())
 			c.recorder.Event(vmi, k8sv1.EventTypeWarning, "NicHotplug", err.Error())
 			errorTolerantFeaturesError = append(errorTolerantFeaturesError, err)
