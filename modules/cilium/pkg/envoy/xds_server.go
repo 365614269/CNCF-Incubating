@@ -177,6 +177,8 @@ type xdsServer struct {
 	// Exported for testing only!
 	NetworkPolicyMutator xds.AckingResourceMutator
 
+	resourceConfig map[string]*xds.ResourceTypeConfiguration
+
 	// stopFunc contains the function which stops the xDS gRPC server.
 	stopFunc context.CancelFunc
 
@@ -215,8 +217,8 @@ type xdsServerConfig struct {
 }
 
 // newXDSServer creates a new xDS GRPC server.
-func newXDSServer(restorerPromise promise.Promise[endpointstate.Restorer], ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig, secretManager certificatemanager.SecretManager) (*xdsServer, error) {
-	return &xdsServer{
+func newXDSServer(restorerPromise promise.Promise[endpointstate.Restorer], ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig, secretManager certificatemanager.SecretManager) *xdsServer {
+	xdsServer := &xdsServer{
 		restorerPromise:    restorerPromise,
 		listenerCount:      make(map[string]uint),
 		ipCache:            ipCache,
@@ -226,24 +228,25 @@ func newXDSServer(restorerPromise promise.Promise[endpointstate.Restorer], ipCac
 		accessLogPath: getAccessLogSocketPath(config.envoySocketDir),
 		config:        config,
 		secretManager: secretManager,
-	}, nil
+	}
+
+	xdsServer.initializeXdsConfigs()
+
+	return xdsServer
 }
 
-// start configures and starts the xDS GRPC server.
 func (s *xdsServer) start() error {
 	socketListener, err := s.newSocketListener()
 	if err != nil {
 		return fmt.Errorf("failed to create socket listener: %w", err)
 	}
 
-	resourceConfig := s.initializeXdsConfigs()
-
-	s.stopFunc = s.startXDSGRPCServer(socketListener, resourceConfig)
+	s.stopFunc = s.startXDSGRPCServer(socketListener, s.resourceConfig)
 
 	return nil
 }
 
-func (s *xdsServer) initializeXdsConfigs() map[string]*xds.ResourceTypeConfiguration {
+func (s *xdsServer) initializeXdsConfigs() {
 	ldsCache := xds.NewCache()
 	ldsMutator := xds.NewAckingResourceMutatorWrapper(ldsCache)
 	ldsConfig := &xds.ResourceTypeConfiguration{
@@ -300,7 +303,7 @@ func (s *xdsServer) initializeXdsConfigs() map[string]*xds.ResourceTypeConfigura
 	s.networkPolicyCache = npdsCache
 	s.NetworkPolicyMutator = npdsMutator
 
-	resourceConfig := map[string]*xds.ResourceTypeConfiguration{
+	s.resourceConfig = map[string]*xds.ResourceTypeConfiguration{
 		ListenerTypeURL:           ldsConfig,
 		RouteTypeURL:              rdsConfig,
 		ClusterTypeURL:            cdsConfig,
@@ -309,7 +312,6 @@ func (s *xdsServer) initializeXdsConfigs() map[string]*xds.ResourceTypeConfigura
 		NetworkPolicyTypeURL:      npdsConfig,
 		NetworkPolicyHostsTypeURL: nphdsConfig,
 	}
-	return resourceConfig
 }
 
 func (s *xdsServer) newSocketListener() (*net.UnixListener, error) {
