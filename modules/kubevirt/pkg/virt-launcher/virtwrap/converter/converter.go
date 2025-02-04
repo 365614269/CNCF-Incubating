@@ -1177,7 +1177,7 @@ func Convert_v1_Firmware_To_related_apis(vmi *v1.VirtualMachineInstance, domain 
 		},
 	}
 
-	if util.IsEFIVMI(vmi) {
+	if isEFIVMI(vmi) {
 		domain.Spec.OS.BootLoader = &api.Loader{
 			Path:     c.EFIConfiguration.EFICode,
 			ReadOnly: "yes",
@@ -1202,7 +1202,7 @@ func Convert_v1_Firmware_To_related_apis(vmi *v1.VirtualMachineInstance, domain 
 	if len(firmware.Serial) > 0 {
 		domain.Spec.SysInfo.System = append(domain.Spec.SysInfo.System, api.Entry{
 			Name:  "serial",
-			Value: string(firmware.Serial),
+			Value: firmware.Serial,
 		})
 	}
 
@@ -1406,14 +1406,14 @@ func Convert_v1_VirtualMachineInstance_To_api_Domain(vmi *v1.VirtualMachineInsta
 	}
 
 	kvmPath := "/dev/kvm"
-	if softwareEmulation, err := util.UseSoftwareEmulationForDevice(kvmPath, c.AllowEmulation); err != nil {
-		return err
-	} else if softwareEmulation {
-		logger := log.DefaultLogger()
-		logger.Infof("Hardware emulation device '%s' not present. Using software emulation.", kvmPath)
-		domain.Spec.Type = "qemu"
-	} else if _, err := os.Stat(kvmPath); errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("hardware emulation device '%s' not present", kvmPath)
+	if _, err := os.Stat(kvmPath); errors.Is(err, os.ErrNotExist) {
+		if c.AllowEmulation {
+			logger := log.DefaultLogger()
+			logger.Infof("Hardware emulation device '%s' not present. Using software emulation.", kvmPath)
+			domain.Spec.Type = "qemu"
+		} else {
+			return fmt.Errorf("hardware emulation device '%s' not present", kvmPath)
+		}
 	} else if err != nil {
 		return err
 	}
@@ -1483,23 +1483,23 @@ func Convert_v1_VirtualMachineInstance_To_api_Domain(vmi *v1.VirtualMachineInsta
 		domain.Spec.SysInfo.Chassis = []api.Entry{
 			{
 				Name:  "manufacturer",
-				Value: string(vmi.Spec.Domain.Chassis.Manufacturer),
+				Value: vmi.Spec.Domain.Chassis.Manufacturer,
 			},
 			{
 				Name:  "version",
-				Value: string(vmi.Spec.Domain.Chassis.Version),
+				Value: vmi.Spec.Domain.Chassis.Version,
 			},
 			{
 				Name:  "serial",
-				Value: string(vmi.Spec.Domain.Chassis.Serial),
+				Value: vmi.Spec.Domain.Chassis.Serial,
 			},
 			{
 				Name:  "asset",
-				Value: string(vmi.Spec.Domain.Chassis.Asset),
+				Value: vmi.Spec.Domain.Chassis.Asset,
 			},
 			{
 				Name:  "sku",
-				Value: string(vmi.Spec.Domain.Chassis.Sku),
+				Value: vmi.Spec.Domain.Chassis.Sku,
 			},
 		}
 	}
@@ -1809,7 +1809,7 @@ func Convert_v1_VirtualMachineInstance_To_api_Domain(vmi *v1.VirtualMachineInsta
 	}
 
 	if vmi.Spec.Domain.Devices.AutoattachGraphicsDevice == nil || *vmi.Spec.Domain.Devices.AutoattachGraphicsDevice {
-		c.Architecture.AddGraphicsDevice(vmi, domain, c.BochsForEFIGuests && util.IsEFIVMI(vmi))
+		c.Architecture.AddGraphicsDevice(vmi, domain, c.BochsForEFIGuests && isEFIVMI(vmi))
 		domain.Spec.Devices.Graphics = []api.Graphics{
 			{
 				Listen: &api.GraphicsListen{
@@ -2043,7 +2043,7 @@ func domainVCPUTopologyForHotplug(vmi *v1.VirtualMachineInstance, domain *api.Do
 		// There should not be fewer vCPU than cores and threads within a single socket
 		isHotpluggable := id >= minEnabledCpuCount
 		vcpu := api.VCPUsVCPU{
-			ID:           uint32(id),
+			ID:           id,
 			Enabled:      boolToYesNo(&isEnabled, true),
 			Hotpluggable: boolToYesNo(&isHotpluggable, false),
 		}
@@ -2056,4 +2056,10 @@ func domainVCPUTopologyForHotplug(vmi *v1.VirtualMachineInstance, domain *api.Do
 		Placement: "static",
 		CPUs:      cpuCount,
 	}
+}
+
+func isEFIVMI(vmi *v1.VirtualMachineInstance) bool {
+	return vmi.Spec.Domain.Firmware != nil &&
+		vmi.Spec.Domain.Firmware.Bootloader != nil &&
+		vmi.Spec.Domain.Firmware.Bootloader.EFI != nil
 }

@@ -85,8 +85,6 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
     private Process keycloak;
     private int exitCode = -1;
     private final Path distPath;
-    private final List<String> outputStream = Collections.synchronizedList(new ArrayList<>());
-    private final List<String> errorStream = Collections.synchronizedList(new ArrayList<>());
     private boolean manualStop;
     private String relativePath;
     private int httpPort;
@@ -115,7 +113,7 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
         this.distPath = prepareDistribution();
         this.outputConsumer = outputConsumer;
     }
-    
+
     public CLIResult kcadm(String... arguments) throws IOException {
     	return kcadm(Arrays.asList(arguments));
     }
@@ -628,6 +626,14 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
             Files.copy(Maven.resolveArtifact(groupId, artifactId), distPath.resolve("providers").resolve(artifactId + ".jar"));
         } catch (IOException cause) {
             throw new RuntimeException("Failed to copy JAR file to 'providers' directory", cause);
+        }
+    }
+
+    public void copyConfigFile(Path configFilePath) {
+        try {
+            Files.copy(configFilePath, distPath.resolve("conf").resolve(configFilePath.getFileName()));
+        } catch (IOException cause) {
+            throw new RuntimeException("Failed to copy config file [" + configFilePath + "] to 'conf' directory", cause);
         }
     }
 
