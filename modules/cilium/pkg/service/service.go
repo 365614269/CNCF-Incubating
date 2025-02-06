@@ -861,10 +861,10 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 		return false, lb.ID(0), err
 	}
 
-	// Update managed neighbor entries of the LB
-	if option.Config.LoadBalancerOnly {
-		s.upsertBackendNeighbors(newBackends, obsoleteBackends)
-	}
+	// Update managed neighbor entries of the LB, this is needed so that
+	// neighbor entries for the backends are always up to date if they
+	// reside in the same L2. In particular XDP cannot resolve on-demand.
+	s.upsertBackendNeighbors(newBackends, obsoleteBackends)
 
 	// Only add a HealthCheckNodePort server if this is a service which may
 	// only contain local backends (i.e. it has externalTrafficPolicy=Local)
@@ -1994,9 +1994,7 @@ func (s *Service) deleteServiceLocked(svc *svcInfo) error {
 	}
 
 	// Delete managed neighbor entries of the LB
-	if option.Config.LoadBalancerOnly {
-		s.deleteBackendNeighbors(obsoleteBackends)
-	}
+	s.deleteBackendNeighbors(obsoleteBackends)
 
 	if svc.healthcheckFrontendHash != "" {
 		healthSvc := s.svcByHash[svc.healthcheckFrontendHash]
@@ -2313,6 +2311,9 @@ func backendToNode(b *lb.Backend) *nodeTypes.Node {
 }
 
 func (s *Service) upsertBackendNeighbors(newBackends, oldBackends []*lb.Backend) {
+	if s.backendDiscovery == nil {
+		return
+	}
 	for _, b := range newBackends {
 		s.backendDiscovery.InsertMiscNeighbor(backendToNode(b))
 	}
@@ -2320,6 +2321,9 @@ func (s *Service) upsertBackendNeighbors(newBackends, oldBackends []*lb.Backend)
 }
 
 func (s *Service) deleteBackendNeighbors(obsoleteBackends []*lb.Backend) {
+	if s.backendDiscovery == nil {
+		return
+	}
 	for _, b := range obsoleteBackends {
 		s.backendDiscovery.DeleteMiscNeighbor(backendToNode(b))
 	}
