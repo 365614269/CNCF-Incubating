@@ -439,13 +439,11 @@ app.MapPost("/orders", (Order order) =>
 In the Program.cs file for the `checkout` service, you'll notice there's no need to rewrite your app code to use Dapr's service invocation. You can enable service invocation by simply adding the `dapr-app-id` header, which specifies the ID of the target service.
 
 ```csharp
-var client = new HttpClient();
-client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+var client = DaprClient.CreateInvokeHttpClient(appId: "order-processor");
+var cts = new CancellationTokenSource();
 
-client.DefaultRequestHeaders.Add("dapr-app-id", "order-processor");
-
-var response = await client.PostAsync($"{baseURL}/orders", content);
-    Console.WriteLine("Order passed: " + order);
+var response = await client.PostAsJsonAsync("/orders", order, cts.Token);
+Console.WriteLine("Order passed: " + order);
 ```
 
 {{% /codetab %}}
@@ -1089,13 +1087,11 @@ dapr run --app-id checkout --app-protocol http --dapr-http-port 3500 -- dotnet r
 In the Program.cs file for the `checkout` service, you'll notice there's no need to rewrite your app code to use Dapr's service invocation. You can enable service invocation by simply adding the `dapr-app-id` header, which specifies the ID of the target service.
 
 ```csharp
-var client = new HttpClient();
-client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+var client = DaprClient.CreateInvokeHttpClient(appId: "order-processor");
+var cts = new CancellationTokenSource();
 
-client.DefaultRequestHeaders.Add("dapr-app-id", "order-processor");
-
-var response = await client.PostAsync($"{baseURL}/orders", content);
-    Console.WriteLine("Order passed: " + order);
+var response = await client.PostAsJsonAsync("/orders", order, cts.Token);
+Console.WriteLine("Order passed: " + order);
 ```
 
 ### Step 5: Use with Multi-App Run
