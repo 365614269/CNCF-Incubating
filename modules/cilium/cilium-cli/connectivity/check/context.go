@@ -923,7 +923,7 @@ func (ct *ConnectivityTest) DetectMinimumCiliumVersion(ctx context.Context) (*se
 func (ct *ConnectivityTest) CurlCommand(peer TestPeer, ipFam features.IPFamily, opts ...string) []string {
 	cmd := []string{
 		"curl",
-		"-w", "%{local_ip}:%{local_port} -> %{remote_ip}:%{remote_port} = %{response_code}",
+		"-w", "%{local_ip}:%{local_port} -> %{remote_ip}:%{remote_port} = %{response_code}\n",
 		"--silent", "--fail", "--show-error",
 		"--output", "/dev/null",
 	}
@@ -936,6 +936,13 @@ func (ct *ConnectivityTest) CurlCommand(peer TestPeer, ipFam features.IPFamily, 
 	}
 	if ct.params.CurlInsecure {
 		cmd = append(cmd, "--insecure")
+	}
+
+	switch ipFam {
+	case features.IPFamilyV4:
+		cmd = append(cmd, "-4")
+	case features.IPFamilyV6:
+		cmd = append(cmd, "-6")
 	}
 
 	if host := peer.Address(ipFam); strings.HasSuffix(host, ".") {
