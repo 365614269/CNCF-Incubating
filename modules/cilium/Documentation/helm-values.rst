@@ -948,6 +948,10 @@
      - commonLabels allows users to add common labels for all Cilium resources.
      - object
      - ``{}``
+   * - :spelling:ignore:`connectivityProbeFrequencyRatio`
+     - Ratio of the connectivity probe frequency vs resource usage, a float in [0, 1]. 0 will give more frequent probing, 1 will give less frequent probing. Probing frequency is dynamically adjusted based on the cluster size.
+     - float64
+     - ``0.5``
    * - :spelling:ignore:`conntrackGCInterval`
      - Configure how frequently garbage collection should occur for the datapath connection tracking table.
      - string
@@ -1311,7 +1315,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:0a62df4ef2e56b428414cc9b68404ec5edb6fab3f590371a614238ab9d82b408","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.32.3-1737536179-7717128c4e264aa4ec7e43f6bb795ab854340b16","useDigest":true}``
+     - ``{"digest":"sha256:ced8a89d642d10d648471afc2d8737238f1479c368955e6f2553ded58029ac88","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.32.3-1739240299-e85e926b0fa4cec519cefff54b60bd7942d7871b","useDigest":true}``
    * - :spelling:ignore:`envoy.initialFetchTimeoutSeconds`
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
@@ -2496,6 +2500,22 @@
      - requireIPv6PodCIDR enables waiting for Kubernetes to provide the PodCIDR range via the Kubernetes node resource
      - bool
      - ``false``
+   * - :spelling:ignore:`k8sClientExponentialBackoff`
+     - Configure exponential backoff for client-go in Cilium agent.
+     - object
+     - ``{"backoffBaseSeconds":1,"backoffMaxDurationSeconds":120,"enabled":true}``
+   * - :spelling:ignore:`k8sClientExponentialBackoff.backoffBaseSeconds`
+     - Configure base (in seconds) for exponential backoff.
+     - int
+     - ``1``
+   * - :spelling:ignore:`k8sClientExponentialBackoff.backoffMaxDurationSeconds`
+     - Configure maximum duration (in seconds) for exponential backoff.
+     - int
+     - ``120``
+   * - :spelling:ignore:`k8sClientExponentialBackoff.enabled`
+     - Enable exponential backoff for client-go in Cilium agent.
+     - bool
+     - ``true``
    * - :spelling:ignore:`k8sClientRateLimit`
      - Configure the client side rate limit for the agent  If the amount of requests to the Kubernetes API server exceeds the configured rate limit, the agent will start to throttle requests by delaying them until there is budget or the request times out.
      - object
@@ -3341,7 +3361,7 @@
      - object
      - ``{"enabled":null}``
    * - :spelling:ignore:`tls.secretSync.enabled`
-     - Enable synchronization of Secrets for TLS Interception. If disabled and tls.secretsBackend is set to 'k8s', then secrets will be read directly by the agent.
+     - Enable synchronization of Secrets for TLS Interception. If disabled and tls.readSecretsOnlyFromSecretsNamespace is set to 'false', then secrets will be read directly by the agent.
      - string
      - ``nil``
    * - :spelling:ignore:`tls.secretsBackend`

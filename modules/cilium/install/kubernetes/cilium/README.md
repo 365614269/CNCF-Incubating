@@ -287,6 +287,7 @@ contributors across the globe, there is almost always someone available to help.
 | cni.resources | object | `{"requests":{"cpu":"100m","memory":"10Mi"}}` | Specifies the resources for the cni initContainer |
 | cni.uninstall | bool | `false` | Remove the CNI configuration and binary files on agent shutdown. Enable this if you're removing Cilium from the cluster. Disable this to prevent the CNI configuration file from being removed during agent upgrade, which can cause nodes to go unmanageable. |
 | commonLabels | object | `{}` | commonLabels allows users to add common labels for all Cilium resources. |
+| connectivityProbeFrequencyRatio | float64 | `0.5` | Ratio of the connectivity probe frequency vs resource usage, a float in [0, 1]. 0 will give more frequent probing, 1 will give less frequent probing. Probing frequency is dynamically adjusted based on the cluster size. |
 | conntrackGCInterval | string | `"0s"` | Configure how frequently garbage collection should occur for the datapath connection tracking table. |
 | conntrackGCMaxInterval | string | `""` | Configure the maximum frequency for the garbage collection of the connection tracking table. Only affects the automatic computation for the frequency and has no effect when 'conntrackGCInterval' is set. This can be set to more frequently clean up unused identities created from ToFQDN policies. |
 | crdWaitTimeout | string | `"5m"` | Configure timeout in which Cilium will exit if CRDs are not available |
@@ -377,7 +378,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.httpRetryCount | int | `3` | Maximum number of retries for each HTTP request |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:0a62df4ef2e56b428414cc9b68404ec5edb6fab3f590371a614238ab9d82b408","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.32.3-1737536179-7717128c4e264aa4ec7e43f6bb795ab854340b16","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:ced8a89d642d10d648471afc2d8737238f1479c368955e6f2553ded58029ac88","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.32.3-1739240299-e85e926b0fa4cec519cefff54b60bd7942d7871b","useDigest":true}` | Envoy container image. |
 | envoy.initialFetchTimeoutSeconds | int | `30` | Time in seconds after which the initial fetch on an xDS stream is considered timed out |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
@@ -674,6 +675,10 @@ contributors across the globe, there is almost always someone available to help.
 | k8s | object | `{"requireIPv4PodCIDR":false,"requireIPv6PodCIDR":false}` | Configure Kubernetes specific configuration |
 | k8s.requireIPv4PodCIDR | bool | `false` | requireIPv4PodCIDR enables waiting for Kubernetes to provide the PodCIDR range via the Kubernetes node resource |
 | k8s.requireIPv6PodCIDR | bool | `false` | requireIPv6PodCIDR enables waiting for Kubernetes to provide the PodCIDR range via the Kubernetes node resource |
+| k8sClientExponentialBackoff | object | `{"backoffBaseSeconds":1,"backoffMaxDurationSeconds":120,"enabled":true}` | Configure exponential backoff for client-go in Cilium agent. |
+| k8sClientExponentialBackoff.backoffBaseSeconds | int | `1` | Configure base (in seconds) for exponential backoff. |
+| k8sClientExponentialBackoff.backoffMaxDurationSeconds | int | `120` | Configure maximum duration (in seconds) for exponential backoff. |
+| k8sClientExponentialBackoff.enabled | bool | `true` | Enable exponential backoff for client-go in Cilium agent. |
 | k8sClientRateLimit | object | `{"burst":null,"operator":{"burst":null,"qps":null},"qps":null}` | Configure the client side rate limit for the agent  If the amount of requests to the Kubernetes API server exceeds the configured rate limit, the agent will start to throttle requests by delaying them until there is budget or the request times out. |
 | k8sClientRateLimit.burst | int | 20 | The burst request rate in requests per second. The rate limiter will allow short bursts with a higher rate. |
 | k8sClientRateLimit.operator | object | `{"burst":null,"qps":null}` | Configure the client side rate limit for the Cilium Operator |
@@ -885,7 +890,7 @@ contributors across the globe, there is almost always someone available to help.
 | tls.caBundle.useSecret | bool | `false` | Use a Secret instead of a ConfigMap. |
 | tls.readSecretsOnlyFromSecretsNamespace | string | `nil` | Configure if the Cilium Agent will only look in `tls.secretsNamespace` for    CiliumNetworkPolicy relevant Secrets.    If false, the Cilium Agent will be granted READ (GET/LIST/WATCH) access    to _all_ secrets in the entire cluster. This is not recommended and is    included for backwards compatibility.    This value obsoletes `tls.secretsBackend`, with `true` == `local` in the old    setting, and `false` == `k8s`. |
 | tls.secretSync | object | `{"enabled":null}` | Configures settings for synchronization of TLS Interception Secrets |
-| tls.secretSync.enabled | string | `nil` | Enable synchronization of Secrets for TLS Interception. If disabled and tls.secretsBackend is set to 'k8s', then secrets will be read directly by the agent. |
+| tls.secretSync.enabled | string | `nil` | Enable synchronization of Secrets for TLS Interception. If disabled and tls.readSecretsOnlyFromSecretsNamespace is set to 'false', then secrets will be read directly by the agent. |
 | tls.secretsBackend | string | `nil` | This configures how the Cilium agent loads the secrets used TLS-aware CiliumNetworkPolicies (namely the secrets referenced by terminatingTLS and originatingTLS). This value is DEPRECATED and will be removed in a future version. Use `tls.readSecretsOnlyFromSecretsNamespace` instead. Possible values:   - local   - k8s |
 | tls.secretsNamespace | object | `{"create":true,"name":"cilium-secrets"}` | Configures where secrets used in CiliumNetworkPolicies will be looked for |
 | tls.secretsNamespace.create | bool | `true` | Create secrets namespace for TLS Interception secrets. |

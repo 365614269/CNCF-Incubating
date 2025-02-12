@@ -1492,6 +1492,12 @@
         "object"
       ]
     },
+    "connectivityProbeFrequencyRatio": {
+      "type": [
+        "null",
+        "number"
+      ]
+    },
     "conntrackGCInterval": {
       "type": "string"
     },
@@ -3888,6 +3894,20 @@
           "type": "boolean"
         },
         "requireIPv6PodCIDR": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "k8sClientExponentialBackoff": {
+      "properties": {
+        "backoffBaseSeconds": {
+          "type": "integer"
+        },
+        "backoffMaxDurationSeconds": {
+          "type": "integer"
+        },
+        "enabled": {
           "type": "boolean"
         }
       },

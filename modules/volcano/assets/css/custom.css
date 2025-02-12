@@ -313,7 +313,7 @@ ul.share li i {
 }
 
 .carousel.slide {
-    pointer-events: none;
+    pointer-events: auto;
 }
 
 .carousel-item {
@@ -526,4 +526,8 @@ ul.share li i {
     font-weight: bold;
     padding-bottom: 40px;
     color: #252b3a;
+}
+
+.navbar-nav .dropdown-menu {
+    height: auto !important;
 }

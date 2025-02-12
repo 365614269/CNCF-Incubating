@@ -37,7 +37,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/net v0.34.0
 	golang.org/x/sync v0.10.0
-	golang.org/x/time v0.9.0
+	golang.org/x/time v0.10.0
 	google.golang.org/grpc v1.69.4
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.32.1
@@ -52,7 +52,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/controller-runtime v0.20.1
-	sigs.k8s.io/controller-tools v0.17.1
+	sigs.k8s.io/controller-tools v0.17.2
 )
 
 require (

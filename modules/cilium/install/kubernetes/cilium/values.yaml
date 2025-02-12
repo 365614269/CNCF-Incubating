@@ -103,6 +103,14 @@ k8sClientRateLimit:
     # The rate limiter will allow short bursts with a higher rate.
     # @default -- 200
     burst:
+# -- Configure exponential backoff for client-go in Cilium agent.
+k8sClientExponentialBackoff:
+  # -- Enable exponential backoff for client-go in Cilium agent.
+  enabled: true
+  # -- Configure base (in seconds) for exponential backoff.
+  backoffBaseSeconds: 1
+  # -- Configure maximum duration (in seconds) for exponential backoff.
+  backoffMaxDurationSeconds: 120
 cluster:
   # -- Name of the cluster. Only required for Cluster Mesh and mutual authentication with SPIRE.
   # It must respect the following constraints:
@@ -713,6 +721,14 @@ cni:
       memory: 10Mi
   # -- Enable route MTU for pod netns when CNI chaining is used
   enableRouteMTUForCNIChaining: false
+# @schema
+# type: [null, number]
+# @schema
+# -- (float64) Ratio of the connectivity probe frequency vs resource usage, a float in
+# [0, 1]. 0 will give more frequent probing, 1 will give less frequent probing. Probing
+# frequency is dynamically adjusted based on the cluster size.
+# @default -- `0.5`
+connectivityProbeFrequencyRatio: ~
 # -- (string) Configure how frequently garbage collection should occur for the datapath
 # connection tracking table.
 # @default -- `"0s"`
@@ -2356,9 +2372,9 @@ envoy:
     # @schema
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.32.3-1737536179-7717128c4e264aa4ec7e43f6bb795ab854340b16"
+    tag: "v1.32.3-1739240299-e85e926b0fa4cec519cefff54b60bd7942d7871b"
     pullPolicy: "Always"
-    digest: "sha256:0a62df4ef2e56b428414cc9b68404ec5edb6fab3f590371a614238ab9d82b408"
+    digest: "sha256:ced8a89d642d10d648471afc2d8737238f1479c368955e6f2553ded58029ac88"
     useDigest: true
   # -- Additional containers added to the cilium Envoy DaemonSet.
   extraContainers: []
@@ -2601,7 +2617,7 @@ tls:
   secretsBackend: ~
   # @schema
   # type: [null, boolean]
-  # @schema  
+  # @schema
   # -- Configure if the Cilium Agent will only look in `tls.secretsNamespace` for
   #    CiliumNetworkPolicy relevant Secrets.
   #    If false, the Cilium Agent will be granted READ (GET/LIST/WATCH) access
@@ -2622,7 +2638,7 @@ tls:
     # type: [null, boolean]
     # @schema
     # -- Enable synchronization of Secrets for TLS Interception. If disabled and
-    # tls.secretsBackend is set to 'k8s', then secrets will be read directly by the agent.
+    # tls.readSecretsOnlyFromSecretsNamespace is set to 'false', then secrets will be read directly by the agent.
     enabled: ~
   # -- Base64 encoded PEM values for the CA certificate and private key.
   # This can be used as common CA to generate certificates used by hubble and clustermesh components.
