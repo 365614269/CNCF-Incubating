@@ -612,6 +612,10 @@
      - TCP port for the KVStoreMesh health API.
      - int
      - ``9881``
+   * - :spelling:ignore:`clustermesh.apiserver.kvstoremesh.kvstoreMode`
+     - Specify the KVStore mode when running KVStoreMesh Supported values: - "internal": remote cluster identities are cached in etcd that runs as a sidecar within ``clustermesh-apiserver`` pod. - "external": ``clustermesh-apiserver`` will sync remote cluster information to the etcd used as kvstore. This can't be enabled with crd identity allocation mode.
+     - string
+     - ``"internal"``
    * - :spelling:ignore:`clustermesh.apiserver.kvstoremesh.lifecycle`
      - lifecycle setting for the KVStoreMesh container
      - object
@@ -3228,6 +3232,10 @@
      - Enable SCTP support. NOTE: Currently, SCTP support does not support rewriting ports or multihoming.
      - bool
      - ``false``
+   * - :spelling:ignore:`secretsNamespaceAnnotations`
+     - Annotations to be added to all cilium-secret namespaces (resources under templates/cilium-secrets-namespace)
+     - object
+     - ``{}``
    * - :spelling:ignore:`securityContext.capabilities.applySysctlOverwrites`
      - capabilities for the ``apply-sysctl-overwrites`` init container
      - list
@@ -3285,9 +3293,9 @@
      - bool
      - ``false``
    * - :spelling:ignore:`startupProbe.failureThreshold`
-     - failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s)
+     - failure threshold of startup probe. Allow Cilium to take up to 600s to start up (300 attempts with 2s between attempts).
      - int
-     - ``105``
+     - ``300``
    * - :spelling:ignore:`startupProbe.periodSeconds`
      - interval between checks of the startup probe
      - int

@@ -991,6 +991,9 @@
                 "healthPort": {
                   "type": "integer"
                 },
+                "kvstoreMode": {
+                  "type": "string"
+                },
                 "lifecycle": {
                   "type": "object"
                 },
@@ -5071,6 +5074,9 @@
           "type": "boolean"
         }
       },
+      "type": "object"
+    },
+    "secretsNamespaceAnnotations": {
       "type": "object"
     },
     "securityContext": {
