@@ -68,7 +68,7 @@ func TestRaftWal(t *testing.T) {
 		entries = append(entries, entry)
 	}
 
-	err = wal.SaveEntries(entries)
+	err = wal.Save(pb.HardState{}, entries)
 	require.Nil(t, err)
 
 	err = wal.Truncate(1000)
@@ -124,7 +124,7 @@ func TestRaftWal(t *testing.T) {
 		}
 		entries = append(entries, entry)
 	}
-	err = wal.SaveEntries(entries)
+	err = wal.Save(pb.HardState{}, entries)
 	require.Nil(t, err)
 	lastIndex = wal.LastIndex()
 	require.Equal(t, uint64(10989), lastIndex)
@@ -139,11 +139,11 @@ func TestRaftWal(t *testing.T) {
 	lastIndex = wal.LastIndex()
 	require.Equal(t, uint64(100), lastIndex)
 
-	err = wal.SaveHardState(pb.HardState{
+	err = wal.Save(pb.HardState{
 		Term:   3,
 		Vote:   1,
 		Commit: 100,
-	})
+	}, nil)
 	require.Nil(t, err)
 
 	hs := wal.InitialState()
@@ -151,11 +151,11 @@ func TestRaftWal(t *testing.T) {
 	require.Equal(t, uint64(1), hs.Vote)
 	require.Equal(t, uint64(100), hs.Commit)
 
-	err = wal.SaveHardState(pb.HardState{
+	err = wal.Save(pb.HardState{
 		Term:   5,
 		Vote:   1,
 		Commit: 200,
-	})
+	}, nil)
 	require.Nil(t, err)
 	wal.Close()
 

@@ -171,7 +171,7 @@ public class BruteForceTest extends AbstractTestRealmKeycloakTest {
 
     public String getAdminToken() throws Exception {
         String clientId = Constants.ADMIN_CLI_CLIENT_ID;
-        return oauth.doGrantAccessTokenRequest("master", "admin", "admin", clientId, null).getAccessToken();
+        return oauth.realm("master").doGrantAccessTokenRequest( "admin", "admin", clientId, null).getAccessToken();
     }
 
     public AccessTokenResponse getTestToken(String password, String totp) {
@@ -590,6 +590,7 @@ public class BruteForceTest extends AbstractTestRealmKeycloakTest {
     public void testPermanentLockout() throws Exception {
         testingClient.testing().addEventsToEmailEventListenerProvider(Collections.singletonList(EventType.USER_DISABLED_BY_PERMANENT_LOCKOUT));
         try (RealmAttributeUpdater updater = new RealmAttributeUpdater(testRealm()).setPermanentLockout(true)
+                .setQuickLoginCheckMilliSeconds(0L)
                 .addEventsListener(EmailEventListenerProviderFactory.ID).update()) {
             // act
             loginInvalidPassword("test-user@localhost");
