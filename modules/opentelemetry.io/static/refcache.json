@@ -3807,6 +3807,10 @@
     "StatusCode": 206,
     "LastSeen": "2025-01-16T11:37:59.089327-05:00"
   },
+  "https://github.com/gruebel": {
+    "StatusCode": 206,
+    "LastSeen": "2025-02-13T13:55:15.419751095Z"
+  },
   "https://github.com/gyliu513": {
     "StatusCode": 200,
     "LastSeen": "2024-11-06T19:17:42.7738Z"
@@ -16363,6 +16367,10 @@
     "StatusCode": 206,
     "LastSeen": "2025-01-30T16:54:34.700688-05:00"
   },
+  "https://training.linuxfoundation.org/training/getting-started-with-opentelemetry-lfs148/": {
+    "StatusCode": 200,
+    "LastSeen": "2025-02-13T18:03:48.96079-05:00"
+  },
   "https://trino.io/": {
     "StatusCode": 206,
     "LastSeen": "2025-01-24T14:37:24.899284-05:00"
@@ -16739,6 +16747,10 @@
     "StatusCode": 200,
     "LastSeen": "2025-01-04T17:12:03.120768-05:00"
   },
+  "https://www.cncf.io/blog/2025/01/20/opentelemetry-for-generative-ai/": {
+    "StatusCode": 200,
+    "LastSeen": "2025-02-14T12:23:38.590496-05:00"
+  },
   "https://www.cncf.io/enduser/": {
     "StatusCode": 200,
     "LastSeen": "2025-01-15T13:49:20.913378-05:00"
@@ -16755,9 +16767,17 @@
     "StatusCode": 200,
     "LastSeen": "2025-02-01T07:10:37.011069-05:00"
   },
+  "https://www.cncf.io/training/certification/": {
+    "StatusCode": 200,
+    "LastSeen": "2025-02-13T18:03:45.587221-05:00"
+  },
   "https://www.cncf.io/training/certification/otca/": {
     "StatusCode": 200,
     "LastSeen": "2025-02-10T11:01:19.113808689-08:00"
+  },
+  "https://www.cncf.io/training/courses/": {
+    "StatusCode": 200,
+    "LastSeen": "2025-02-13T18:03:45.853996-05:00"
   },
   "https://www.cockroachlabs.com/": {
     "StatusCode": 200,
