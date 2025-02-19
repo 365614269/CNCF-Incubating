@@ -323,7 +323,6 @@ Makefile* @cilium/build
 /cilium-cli/connectivity/tests/encryption.go @cilium/sig-encryption
 /cilium-cli/connectivity/tests/encryption_v2.go @cilium/sig-encryption
 /cilium-cli/connectivity/tests/errors.go @cilium/sig-agent @cilium/sig-datapath
-/cilium-cli/connectivity/tests/externalworkload.go @cilium/sig-clustermesh
 /cilium-cli/connectivity/tests/from-cidr.go @cilium/sig-policy
 /cilium-cli/connectivity/tests/health.go @cilium/sig-agent
 /cilium-cli/connectivity/tests/host.go @cilium/sig-agent
@@ -651,9 +650,7 @@ Makefile* @cilium/build
 /test/k8s/fqdn.go @cilium/fqdn @cilium/ci-structure
 /test/k8s/kafka_policies.go @cilium/envoy @cilium/ci-structure
 /test/runtime/fqdn.go @cilium/fqdn @cilium/ci-structure
-# Standalone L4LB tests
-/test/l4lb @cilium/sig-lb @cilium/ci-structure
-/test/nat46x64 @cilium/sig-lb @cilium/ci-structure
+# BIG TCP tests
 /test/bigtcp @cilium/sig-datapath @cilium/ci-structure
 # Misc. tests
 /test/runtime/kvstore.go @cilium/kvstore @cilium/ci-structure

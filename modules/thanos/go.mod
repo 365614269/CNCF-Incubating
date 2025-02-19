@@ -1,6 +1,6 @@
 module github.com/thanos-io/thanos
 
-go 1.23.0
+go 1.24
 
 require (
 	capnproto.org/go/capnp/v3 v3.0.0-alpha.30
@@ -117,7 +117,7 @@ require (
 )
 
 require (
-	github.com/tjhop/slog-gokit v0.1.2
+	github.com/tjhop/slog-gokit v0.1.3
 	go.opentelemetry.io/collector/pdata v1.22.0
 	go.opentelemetry.io/collector/semconv v0.116.0
 )

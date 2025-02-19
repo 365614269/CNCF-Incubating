@@ -96,7 +96,7 @@ import (
 )
 
 type netconf interface {
-	Setup(vmi *v1.VirtualMachineInstance, networks []v1.Network, launcherPid int, preSetup func() error) error
+	Setup(vmi *v1.VirtualMachineInstance, networks []v1.Network, launcherPid int) error
 	Teardown(vmi *v1.VirtualMachineInstance) error
 }
 
@@ -555,35 +555,6 @@ func (c *VirtualMachineController) teardownNetwork(vmi *v1.VirtualMachineInstanc
 	c.netStat.Teardown(vmi)
 }
 
-func (c *VirtualMachineController) setupNetwork(vmi *v1.VirtualMachineInstance, networks []v1.Network) error {
-	if len(networks) == 0 {
-		return nil
-	}
-
-	isolationRes, err := c.podIsolationDetector.Detect(vmi)
-	if err != nil {
-		return fmt.Errorf(failedDetectIsolationFmt, err)
-	}
-	rootMount, err := isolationRes.MountRoot()
-	if err != nil {
-		return err
-	}
-
-	return c.netConf.Setup(vmi, networks, isolationRes.Pid(), func() error {
-		if virtutil.WantVirtioNetDevice(vmi) {
-			if err := c.claimDeviceOwnership(rootMount, "vhost-net"); err != nil {
-				return neterrors.CreateCriticalNetworkError(fmt.Errorf("failed to set up vhost-net device, %s", err))
-			}
-		}
-		if virtutil.NeedTunDevice(vmi) {
-			if err := c.claimDeviceOwnership(rootMount, "/net/tun"); err != nil {
-				return neterrors.CreateCriticalNetworkError(fmt.Errorf("failed to set up tun device, %s", err))
-			}
-		}
-		return nil
-	})
-}
-
 func domainPausedFailedPostCopy(domain *api.Domain) bool {
 	return domain != nil && domain.Status.Status == api.Paused && domain.Status.Reason == api.ReasonPausedPostcopyFailed
 }
@@ -885,99 +856,6 @@ func (c *VirtualMachineController) updateHotplugVolumeStatus(vmi *v1.VirtualMach
 		volumeStatus.Reason = VolumeReadyReason
 	}
 	return volumeStatus, needsRefresh
-}
-
-func needToComputeChecksums(vmi *v1.VirtualMachineInstance) bool {
-	containerDisks := map[string]*v1.Volume{}
-	for _, volume := range vmi.Spec.Volumes {
-		if volume.VolumeSource.ContainerDisk != nil {
-			containerDisks[volume.Name] = &volume
-		}
-	}
-
-	for i := range vmi.Status.VolumeStatus {
-		_, isContainerDisk := containerDisks[vmi.Status.VolumeStatus[i].Name]
-		if !isContainerDisk {
-			continue
-		}
-
-		if vmi.Status.VolumeStatus[i].ContainerDiskVolume == nil ||
-			vmi.Status.VolumeStatus[i].ContainerDiskVolume.Checksum == 0 {
-			return true
-		}
-	}
-
-	if util.HasKernelBootContainerImage(vmi) {
-		if vmi.Status.KernelBootStatus == nil {
-			return true
-		}
-
-		kernelBootContainer := vmi.Spec.Domain.Firmware.KernelBoot.Container
-
-		if kernelBootContainer.KernelPath != "" &&
-			(vmi.Status.KernelBootStatus.KernelInfo == nil ||
-				vmi.Status.KernelBootStatus.KernelInfo.Checksum == 0) {
-			return true
-
-		}
-
-		if kernelBootContainer.InitrdPath != "" &&
-			(vmi.Status.KernelBootStatus.InitrdInfo == nil ||
-				vmi.Status.KernelBootStatus.InitrdInfo.Checksum == 0) {
-			return true
-
-		}
-	}
-
-	return false
-}
-
-func (c *VirtualMachineController) updateChecksumInfo(vmi *v1.VirtualMachineInstance, syncError error) error {
-
-	if syncError != nil || vmi.DeletionTimestamp != nil || !needToComputeChecksums(vmi) {
-		return nil
-	}
-
-	diskChecksums, err := c.containerDiskMounter.ComputeChecksums(vmi)
-	if goerror.Is(err, container_disk.ErrDiskContainerGone) {
-		log.Log.Errorf("cannot compute checksums as containerdisk/kernelboot containers seem to have been terminated")
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	// containerdisks
-	for i := range vmi.Status.VolumeStatus {
-		checksum, exists := diskChecksums.ContainerDiskChecksums[vmi.Status.VolumeStatus[i].Name]
-		if !exists {
-			// not a containerdisk
-			continue
-		}
-
-		vmi.Status.VolumeStatus[i].ContainerDiskVolume = &v1.ContainerDiskInfo{
-			Checksum: checksum,
-		}
-	}
-
-	// kernelboot
-	if util.HasKernelBootContainerImage(vmi) {
-		vmi.Status.KernelBootStatus = &v1.KernelBootStatus{}
-
-		if diskChecksums.KernelBootChecksum.Kernel != nil {
-			vmi.Status.KernelBootStatus.KernelInfo = &v1.KernelInfo{
-				Checksum: *diskChecksums.KernelBootChecksum.Kernel,
-			}
-		}
-
-		if diskChecksums.KernelBootChecksum.Initrd != nil {
-			vmi.Status.KernelBootStatus.InitrdInfo = &v1.InitrdInfo{
-				Checksum: *diskChecksums.KernelBootChecksum.Initrd,
-			}
-		}
-	}
-
-	return nil
 }
 
 func (c *VirtualMachineController) updateVolumeStatusesFromDomain(vmi *v1.VirtualMachineInstance, domain *api.Domain) bool {
@@ -1429,11 +1307,6 @@ func (c *VirtualMachineController) updateVMIStatus(origVMI *v1.VirtualMachineIns
 	// Update conditions on VMI Status
 	err = c.updateVMIConditions(vmi, domain, condManager)
 	if err != nil {
-		return err
-	}
-
-	// Store containerdisks and kernelboot checksums
-	if err := c.updateChecksumInfo(vmi, syncError); err != nil {
 		return err
 	}
 
@@ -2780,20 +2653,6 @@ func (c *VirtualMachineController) vmUpdateHelperMigrationTarget(origVMI *v1.Vir
 		return nil
 	}
 
-	// Verify container disks checksum
-	err = container_disk.VerifyChecksums(c.containerDiskMounter, vmi)
-	switch {
-	case goerror.Is(err, container_disk.ErrChecksumMissing):
-		// wait for checksum to be computed by the source virt-handler
-		return err
-	case goerror.Is(err, container_disk.ErrChecksumMismatch):
-		log.Log.Object(vmi).Infof("Containerdisk checksum mismatch, terminating target pod: %s", err)
-		c.recorder.Event(vmi, k8sv1.EventTypeNormal, "ContainerDiskFailedChecksum", "Aborting migration as the source and target containerdisks/kernelboot do not match")
-		return client.SignalTargetPodCleanup(vmi)
-	case err != nil:
-		return err
-	}
-
 	// Mount container disks
 	disksInfo, err := c.containerDiskMounter.MountAndVerify(vmi)
 	if err != nil {
@@ -2811,15 +2670,15 @@ func (c *VirtualMachineController) vmUpdateHelperMigrationTarget(origVMI *v1.Vir
 		}
 	}
 
-	// configure network inside virt-launcher compute container
-	if err := c.setupNetwork(vmi, netsetup.FilterNetsForMigrationTarget(vmi)); err != nil {
-		return fmt.Errorf("failed to configure vmi network for migration target: %w", err)
-	}
-
 	isolationRes, err := c.podIsolationDetector.Detect(vmi)
 	if err != nil {
 		return fmt.Errorf(failedDetectIsolationFmt, err)
 	}
+
+	if err := c.netConf.Setup(vmi, netsetup.FilterNetsForMigrationTarget(vmi), isolationRes.Pid()); err != nil {
+		return fmt.Errorf("failed to configure vmi network for migration target: %w", err)
+	}
+
 	virtLauncherRootMount, err := isolationRes.MountRoot()
 	if err != nil {
 		return err
@@ -3059,7 +2918,7 @@ func (c *VirtualMachineController) handleRunningVMI(vmi *v1.VirtualMachineInstan
 		return err
 	}
 
-	if err := c.setupNetwork(vmi, netsetup.FilterNetsForLiveUpdate(vmi)); err != nil {
+	if err := c.netConf.Setup(vmi, netsetup.FilterNetsForLiveUpdate(vmi), isolationRes.Pid()); err != nil {
 		log.Log.Object(vmi).Error(err.Error())
 		c.recorder.Event(vmi, k8sv1.EventTypeWarning, "NicHotplug", err.Error())
 		*errorTolerantFeaturesError = append(*errorTolerantFeaturesError, err)
@@ -3094,13 +2953,13 @@ func (c *VirtualMachineController) handleStartingVMI(
 		return false, err
 	}
 
-	if err := c.setupNetwork(vmi, netsetup.FilterNetsForVMStartup(vmi)); err != nil {
-		return false, fmt.Errorf("failed to configure vmi network: %w", err)
-	}
-
 	isolationRes, err := c.podIsolationDetector.Detect(vmi)
 	if err != nil {
 		return false, fmt.Errorf(failedDetectIsolationFmt, err)
+	}
+
+	if err := c.netConf.Setup(vmi, netsetup.FilterNetsForVMStartup(vmi), isolationRes.Pid()); err != nil {
+		return false, fmt.Errorf("failed to configure vmi network: %w", err)
 	}
 
 	if err := c.setupDevicesOwnerships(vmi, isolationRes); err != nil {

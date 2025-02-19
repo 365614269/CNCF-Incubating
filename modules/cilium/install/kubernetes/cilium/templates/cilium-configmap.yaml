@@ -1,4 +1,4 @@
-{{- if and ( or (.Values.agent) (.Values.operator.enabled) .Values.externalWorkloads.enabled .Values.clustermesh.useAPIServer) (not .Values.preflight.enabled) }}
+{{- if and ( or (.Values.agent) (.Values.operator.enabled) .Values.clustermesh.useAPIServer) (not .Values.preflight.enabled) }}
 {{- /*  Default values with backwards compatibility */ -}}
 {{- $defaultBpfMapDynamicSizeRatio := 0.0 -}}
 {{- $defaultBpfMasquerade := "false" -}}
@@ -911,6 +911,12 @@ data:
 {{- end }}
   enable-node-selector-labels: {{ .Values.nodeSelectorLabels | quote }}
 
+{{- if hasKey .Values "nodeLabels" }}
+  # To include or exclude matched resources from cilium node identity evaluation
+  # List of labels just like --labels flag (.Values.labels)
+  node-labels: {{ .Values.nodeLabels | quote }}
+{{- end }}
+
 {{- if hasKey .Values "synchronizeK8sNodes" }}
   synchronize-k8s-nodes: {{ .Values.synchronizeK8sNodes | quote }}
 {{- end }}
@@ -1040,7 +1046,7 @@ data:
 {{- else }}
   ipam: {{ $ipam | quote }}
 {{- end }}
-{{- if hasKey .Values.ipam "multiPoolPreAllocation" }}
+{{- if .Values.ipam.multiPoolPreAllocation }}
   ipam-multi-pool-pre-allocation: {{ .Values.ipam.multiPoolPreAllocation | quote }}
 {{- end }}
 
