@@ -267,7 +267,7 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
                     forbiddenIfClientIsNotTokenHolder(disallowOnHolderOfTokenMismatch, tokenHolder);
                 } else if (!client.equals(tokenHolder)) {
                     // confidential clients can only exchange to themselves if they are within the token audience
-                    forbiddenIfClientIsNotWithinTokenAudience(token, tokenHolder);
+                    forbiddenIfClientIsNotWithinTokenAudience(token);
                 }
             } else {
                 if (client.isPublicClient()) {
@@ -294,12 +294,10 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
 
         try {
             setClientToContext(targetAudienceClients);
-            switch (requestedTokenType) {
-                case OAuth2Constants.ACCESS_TOKEN_TYPE:
-                case OAuth2Constants.REFRESH_TOKEN_TYPE:
-                    return exchangeClientToOIDCClient(targetUser, targetUserSession, requestedTokenType, targetAudienceClients, scope);
-                case OAuth2Constants.SAML2_TOKEN_TYPE:
-                    return exchangeClientToSAML2Client(targetUser, targetUserSession, requestedTokenType, targetAudienceClients);
+            if (getSupportedOAuthResponseTokenTypes().contains(requestedTokenType))
+                return exchangeClientToOIDCClient(targetUser, targetUserSession, requestedTokenType, targetAudienceClients, scope);
+            else if (OAuth2Constants.SAML2_TOKEN_TYPE.equals(requestedTokenType)) {
+                return exchangeClientToSAML2Client(targetUser, targetUserSession, requestedTokenType, targetAudienceClients);
             }
         } finally {
             session.getContext().setClient(client);
@@ -308,7 +306,7 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
         throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, "requested_token_type unsupported", Response.Status.BAD_REQUEST);
     }
 
-    protected void forbiddenIfClientIsNotWithinTokenAudience(AccessToken token, ClientModel tokenHolder) {
+    protected void forbiddenIfClientIsNotWithinTokenAudience(AccessToken token) {
         if (token != null && !token.hasAudience(client.getClientId())) {
             event.detail(Details.REASON, "client is not within the token audience");
             event.error(Errors.NOT_ALLOWED);
@@ -322,6 +320,10 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
             event.error(Errors.NOT_ALLOWED);
             throw new CorsErrorResponseException(cors, OAuthErrorException.ACCESS_DENIED, "Client is not the holder of the token", Response.Status.FORBIDDEN);
         }
+    }
+
+    protected List<String> getSupportedOAuthResponseTokenTypes() {
+        return Arrays.asList(OAuth2Constants.ACCESS_TOKEN_TYPE, OAuth2Constants.REFRESH_TOKEN_TYPE);
     }
 
     protected AuthenticationSessionModel createSessionModel(UserSessionModel targetUserSession, RootAuthenticationSessionModel rootAuthSession, UserModel targetUser, ClientModel client, String scope) {
