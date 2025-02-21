@@ -21,12 +21,14 @@ package org.keycloak.testsuite.oauth.tokenexchange;
 
 import jakarta.ws.rs.core.Response;
 import org.hamcrest.MatcherAssert;
+import org.jboss.arquillian.graphene.page.Page;
 import org.junit.Rule;
 import org.junit.Test;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
 import org.keycloak.admin.client.resource.ClientResource;
+import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.common.Profile;
 import org.keycloak.protocol.oidc.OIDCConfigAttributes;
 import org.keycloak.representations.AccessToken;
@@ -34,12 +36,14 @@ import org.keycloak.representations.IDToken;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.testsuite.AbstractKeycloakTest;
-import org.keycloak.testsuite.Assert;
 import org.keycloak.testsuite.AssertEvents;
 import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
 import org.keycloak.testsuite.arquillian.annotation.UncaughtServerErrorExpected;
+import org.keycloak.testsuite.pages.ConsentPage;
+import org.keycloak.testsuite.updaters.ClientAttributeUpdater;
 import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
+import org.keycloak.testsuite.util.oauth.TokenExchangeRequest;
 import org.keycloak.util.TokenUtil;
 
 import java.util.Collections;
@@ -62,6 +66,9 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
     @Rule
     public AssertEvents events = new AssertEvents(this);
 
+    @Page
+    protected ConsentPage consentPage;
+
     @Override
     public void addTestRealms(List<RealmRepresentation> testRealms) {
         RealmRepresentation testRealm = loadJson(getClass().getResourceAsStream("/token-exchange/testrealm-token-exchange-v2.json"), RealmRepresentation.class);
@@ -81,13 +88,102 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
         oauth.scope(null);
         oauth.openid(false);
         AccessTokenResponse response = oauth.doGrantAccessTokenRequest(username, password);
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatusCode());
         TokenVerifier<AccessToken> accessTokenVerifier = TokenVerifier.create(response.getAccessToken(), AccessToken.class);
-        AccessToken token = accessTokenVerifier.parse().getToken();
+        accessTokenVerifier.parse();
+        return response.getAccessToken();
+    }
+
+    private String loginWithConsents(String username, String password, String clientId, String secret) throws Exception {
+        oauth.client(clientId, secret).doLogin(username, password);
+        consentPage.assertCurrent();
+        consentPage.confirm();
+        assertNotNull(oauth.getCurrentQuery().get(OAuth2Constants.CODE));
+        AccessTokenResponse response = oauth.doAccessTokenRequest(oauth.getCurrentQuery().get(OAuth2Constants.CODE));
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatusCode());
+        TokenVerifier<AccessToken> accessTokenVerifier = TokenVerifier.create(response.getAccessToken(), AccessToken.class);
+        accessTokenVerifier.parse();
         return response.getAccessToken();
     }
 
     private AccessTokenResponse tokenExchange(String subjectToken, String clientId, String secret, List<String> audience, Map<String, String> additionalParams) {
         return oauth.tokenExchangeRequest(subjectToken).client(clientId, secret).audience(audience).additionalParams(additionalParams).send();
+    }
+
+    @Test
+    @UncaughtServerErrorExpected
+    public void testSubjectTokenType() throws Exception {
+        oauth.realm(TEST);
+        String accessToken = resourceOwnerLogin("john", "password", "subject-client", "secret");
+
+        TokenExchangeRequest request = oauth.tokenExchangeRequest(accessToken, OAuth2Constants.ACCESS_TOKEN_TYPE);
+        AccessTokenResponse response = request.send();
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatusCode());
+
+        request = oauth.tokenExchangeRequest(accessToken, OAuth2Constants.REFRESH_TOKEN_TYPE);
+        response = request.send();
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+
+        request = oauth.tokenExchangeRequest(accessToken, OAuth2Constants.ID_TOKEN_TYPE);
+        response = request.send();
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+
+        request = oauth.tokenExchangeRequest(accessToken, OAuth2Constants.SAML2_TOKEN_TYPE);
+        response = request.send();
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+
+        request = oauth.tokenExchangeRequest(accessToken, OAuth2Constants.JWT_TOKEN_TYPE);
+        response = request.send();
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+
+        request = oauth.tokenExchangeRequest(accessToken, "WRONG_TOKEN_TYPE");
+        response = request.send();
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+    }
+
+    @Test
+    @UncaughtServerErrorExpected
+    public void testRequestedTokenType() throws Exception {
+        oauth.realm(TEST);
+        String accessToken = resourceOwnerLogin("john", "password", "subject-client", "secret");
+
+        AccessTokenResponse response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.ACCESS_TOKEN_TYPE));
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatusCode());
+        assertNotNull(response.getAccessToken());
+        assertEquals(TokenUtil.TOKEN_TYPE_BEARER, response.getTokenType());
+        assertEquals(OAuth2Constants.ACCESS_TOKEN_TYPE, response.getIssuedTokenType());
+
+        response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.REFRESH_TOKEN_TYPE));
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatusCode());
+        assertNotNull(response.getAccessToken());
+        assertEquals(TokenUtil.TOKEN_TYPE_BEARER, response.getTokenType());
+        assertEquals(OAuth2Constants.REFRESH_TOKEN_TYPE, response.getIssuedTokenType());
+
+        response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.ID_TOKEN_TYPE));
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatusCode());
+        assertNotNull(response.getAccessToken());
+        assertEquals(TokenUtil.TOKEN_TYPE_NA, response.getTokenType());
+        assertEquals(OAuth2Constants.ID_TOKEN_TYPE, response.getIssuedTokenType());
+
+        response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.JWT_TOKEN_TYPE));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+        assertEquals("requested_token_type unsupported", response.getErrorDescription());
+
+        response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.SAML2_TOKEN_TYPE));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+        assertEquals("requested_token_type unsupported", response.getErrorDescription());
+
+        response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, "WRONG_TOKEN_TYPE"));
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+        assertEquals("requested_token_type unsupported", response.getErrorDescription());
     }
 
     @Test
@@ -138,7 +234,7 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
                 .parse().getToken();
         assertEquals(TokenUtil.TOKEN_TYPE_BEARER, exchangedToken.getType());
 
-        Assert.assertNotNull("ID Token is null, but was expected to be present", response.getIdToken());
+        assertNotNull("ID Token is null, but was expected to be present", response.getIdToken());
         IDToken exchangedIdToken = TokenVerifier.create(response.getIdToken(), IDToken.class)
                 .parse().getToken();
         assertEquals(TokenUtil.TOKEN_TYPE_ID, exchangedIdToken.getType());
@@ -150,15 +246,15 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
         oauth.scope(null);
         response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.ACCESS_TOKEN_TYPE));
         assertEquals(OAuth2Constants.ACCESS_TOKEN_TYPE, response.getIssuedTokenType());
-        Assert.assertNotNull(response.getAccessToken());
-        Assert.assertNull("ID Token was present, but should not be present", response.getIdToken());
+        assertNotNull(response.getAccessToken());
+        assertNull("ID Token was present, but should not be present", response.getIdToken());
 
         // Exchange request requesting id-token. ID Token should be issued inside "access_token" parameter (as per token-exchange specification https://datatracker.ietf.org/doc/html/rfc8693#name-successful-response - parameter "access_token")
         response = tokenExchange(accessToken, "requester-client", "secret", null, Map.of(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.ID_TOKEN_TYPE));
         assertEquals(OAuth2Constants.ID_TOKEN_TYPE, response.getIssuedTokenType());
         assertEquals(TokenUtil.TOKEN_TYPE_NA, response.getTokenType());
-        Assert.assertNotNull(response.getAccessToken());
-        Assert.assertNull("ID Token was present, but should not be present", response.getIdToken());
+        assertNotNull(response.getAccessToken());
+        assertNull("ID Token was present, but should not be present", response.getIdToken());
 
         exchangedIdToken = TokenVerifier.create(response.getAccessToken(), IDToken.class)
                 .parse().getToken();
@@ -176,13 +272,13 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
         String accessToken = response.getAccessToken();
         TokenVerifier<AccessToken> accessTokenVerifier = TokenVerifier.create(accessToken, AccessToken.class);
         AccessToken token = accessTokenVerifier.parse().getToken();
-        Assert.assertNull(token.getSessionId());
+        assertNull(token.getSessionId());
         response = tokenExchange(accessToken, "requester-client", "secret", null, null);
         assertEquals(OAuth2Constants.ACCESS_TOKEN_TYPE, response.getIssuedTokenType());
         String exchangedTokenString = response.getAccessToken();
         TokenVerifier<AccessToken> verifier = TokenVerifier.create(exchangedTokenString, AccessToken.class);
         AccessToken exchangedToken = verifier.parse().getToken();
-        Assert.assertNull(exchangedToken.getSessionId());
+        assertNull(exchangedToken.getSessionId());
         assertEquals("requester-client", exchangedToken.getIssuedFor());
 
     }
@@ -234,31 +330,27 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
         oauth.realm(TEST);
         String accessToken = resourceOwnerLogin("john", "password","subject-client", "secret");
 
-        ClientResource client = ApiUtil.findClientByClientId(adminClient.realm(TEST), "subject-client");
-        ClientRepresentation clientRepresentation = client.toRepresentation();
-        clientRepresentation.setConsentRequired(Boolean.TRUE);
-        client.update(clientRepresentation);
+        try (ClientAttributeUpdater clientUpdater = ClientAttributeUpdater.forClient(adminClient, TEST, "subject-client")
+                .setConsentRequired(Boolean.TRUE)
+                .update()) {
+            AccessTokenResponse response = tokenExchange(accessToken, "subject-client", "secret", null, null);
+            assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+            assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
+            assertEquals("Missing consents for Token Exchange in client subject-client", response.getErrorDescription());
 
-        AccessTokenResponse response = tokenExchange(accessToken, "subject-client", "secret", null, null);
-        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
-        assertEquals(OAuthErrorException.INVALID_CLIENT, response.getError());
-        assertEquals("Client requires user consent", response.getErrorDescription());
-
-        response = tokenExchange(accessToken, "subject-client", "secret", List.of("subject-client"), null);
-        assertEquals(OAuthErrorException.INVALID_CLIENT, response.getError());
-        assertEquals("Client requires user consent", response.getErrorDescription());
-
-        clientRepresentation.setConsentRequired(Boolean.FALSE);
-        client.update(clientRepresentation);
+            response = tokenExchange(accessToken, "subject-client", "secret", List.of("subject-client"), null);
+            assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
+            assertEquals("Missing consents for Token Exchange in client subject-client", response.getErrorDescription());
+        }
     }
 
     @Test
     public void testExchangeWithPublicClient() throws Exception {
         String accessToken = resourceOwnerLogin("john", "password","subject-client", "secret");
         AccessTokenResponse response = tokenExchange(accessToken, "requester-client-public", null,  null, null);
-        org.junit.Assert.assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
-        org.junit.Assert.assertEquals(OAuthErrorException.INVALID_CLIENT, response.getError());
-        org.junit.Assert.assertEquals("Public client is not allowed to exchange token", response.getErrorDescription());
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_CLIENT, response.getError());
+        assertEquals("Public client is not allowed to exchange token", response.getErrorDescription());
     }
 
     @Test
@@ -281,14 +373,14 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
         String accessToken = resourceOwnerLogin("john", "password","subject-client", "secret");
         // request invalid client audience
         AccessTokenResponse response = tokenExchange(accessToken, "requester-client", "secret",  List.of("target-client1", "invalid-client"), null);
-        org.junit.Assert.assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
-        org.junit.Assert.assertEquals(OAuthErrorException.INVALID_CLIENT, response.getError());
-        org.junit.Assert.assertEquals("Audience not found", response.getErrorDescription());
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_CLIENT, response.getError());
+        assertEquals("Audience not found", response.getErrorDescription());
         // The "target-client3" is valid client, but audience unavailable to the user. Request not allowed
         response = tokenExchange(accessToken, "requester-client", "secret",  List.of("target-client1", "target-client3"), null);
-        org.junit.Assert.assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
-        org.junit.Assert.assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
-        org.junit.Assert.assertEquals("Requested audience not available: target-client3", response.getErrorDescription());
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+        assertEquals("Requested audience not available: target-client3", response.getErrorDescription());
     }
 
     @Test
@@ -299,24 +391,24 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
         oauth.scope("optional-scope3");
         AccessTokenResponse response = tokenExchange(accessToken, "requester-client", "secret",  List.of("target-client1", "target-client3"), null);
         assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
-        org.junit.Assert.assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
-        org.junit.Assert.assertEquals("Invalid scopes: optional-scope3", response.getErrorDescription());
+        assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
+        assertEquals("Invalid scopes: optional-scope3", response.getErrorDescription());
 
         //scope that doesn't exist
         oauth.scope("bad-scope");
         response = tokenExchange(accessToken, "requester-client", "secret",  List.of("target-client1", "target-client3"), null);
         assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
-        org.junit.Assert.assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
-        org.junit.Assert.assertEquals("Invalid scopes: bad-scope", response.getErrorDescription());
+        assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
+        assertEquals("Invalid scopes: bad-scope", response.getErrorDescription());
     }
 
     @Test
     public void testScopeFilter() throws Exception {
-        String accessToken = resourceOwnerLogin("john", "password","subject-client", "secret");
+        String accessToken = resourceOwnerLogin("john", "password", "subject-client", "secret");
         AccessTokenResponse response = tokenExchange(accessToken, "requester-client", "secret",  List.of("target-client2"), null);
-        org.junit.Assert.assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
-        org.junit.Assert.assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
-        org.junit.Assert.assertEquals("Requested audience not available: target-client2", response.getErrorDescription());
+        assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+        assertEquals("Requested audience not available: target-client2", response.getErrorDescription());
 
         oauth.scope("optional-scope2");
         response = tokenExchange(accessToken, "requester-client", "secret",  List.of("target-client2"), null);
@@ -340,11 +432,11 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
 
     @Test
     public void testScopeParamIncludedAudienceIncludedRefreshToken() throws Exception {
-        String accessToken = resourceOwnerLogin("mike", "password","subject-client", "secret");
+        String accessToken = resourceOwnerLogin("mike", "password", "subject-client", "secret");
         oauth.scope("optional-scope2");
         AccessTokenResponse response = tokenExchange(accessToken, "requester-client", "secret",  List.of("target-client1"), Collections.singletonMap(OAuth2Constants.REQUESTED_TOKEN_TYPE, OAuth2Constants.REFRESH_TOKEN_TYPE));
         assertAudiencesAndScopes(response, List.of("target-client1"), List.of("default-scope1", "optional-scope2"));
-        org.junit.Assert.assertNotNull(response.getRefreshToken());
+        assertNotNull(response.getRefreshToken());
 
         oauth.client("requester-client", "secret");
         response = oauth.doRefreshTokenRequest(response.getRefreshToken());
@@ -363,6 +455,44 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
         testingClient.disableFeature(Profile.Feature.DYNAMIC_SCOPES);
     }
 
+    @Test
+    public void testConsents() throws Exception {
+        try (ClientAttributeUpdater clientUpdater = ClientAttributeUpdater.forClient(adminClient, TEST, "requester-client")
+                .setConsentRequired(Boolean.TRUE)
+                .update()) {
+            // initial TE without any consent should fail
+            String accessToken = resourceOwnerLogin("mike", "password", "subject-client", "secret");
+            AccessTokenResponse response = tokenExchange(accessToken, "requester-client", "secret",  null, null);
+            assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+            assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
+            assertEquals("Missing consents for Token Exchange in client requester-client", response.getErrorDescription());
+
+            // logout
+            UserResource mike = ApiUtil.findUserByUsernameId(adminClient.realm(TEST), "mike");
+            mike.logout();
+
+            // perform a login and allow consent for default scopes, TE should work now
+            accessToken = loginWithConsents("mike", "password", "requester-client", "secret");
+            response = tokenExchange(accessToken, "requester-client", "secret",  null, null);
+            assertAudiencesAndScopes(response,  List.of("target-client1"), List.of("default-scope1"));
+
+            // request TE with optional-scope2 whose consent is missing, should fail
+            oauth.scope("optional-scope2");
+            response = tokenExchange(accessToken, "requester-client", "secret",  null, null);
+            assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatusCode());
+            assertEquals(OAuthErrorException.INVALID_SCOPE, response.getError());
+            assertEquals("Missing consents for Token Exchange in client requester-client", response.getErrorDescription());
+
+            // logout
+            mike.logout();
+
+            // consent the additional scope, TE should work now
+            accessToken = loginWithConsents("mike", "password", "requester-client", "secret");
+            response = tokenExchange(accessToken, "requester-client", "secret",  null, null);
+            assertAudiencesAndScopes(response,  List.of("target-client1"), List.of("default-scope1", "optional-scope2"));
+        }
+    }
+
     private void assertAudiences(AccessToken token, List<String> expectedAudiences) {
         MatcherAssert.assertThat("Incompatible audiences", token.getAudience() == null ? List.of() : List.of(token.getAudience()), containsInAnyOrder(expectedAudiences.toArray()));
         MatcherAssert.assertThat("Incompatible resource access", token.getResourceAccess().keySet(), containsInAnyOrder(expectedAudiences.toArray()));
@@ -373,10 +503,11 @@ public class StandardTokenExchangeV2Test extends AbstractKeycloakTest {
     }
 
     private void assertAudiencesAndScopes(AccessTokenResponse tokenExchangeResponse, List<String> expectedAudiences, List<String> expectedScopes) throws Exception {
+        assertEquals(Response.Status.OK.getStatusCode(), tokenExchangeResponse.getStatusCode());
         TokenVerifier<AccessToken> accessTokenVerifier = TokenVerifier.create(tokenExchangeResponse.getAccessToken(), AccessToken.class);
         AccessToken token = accessTokenVerifier.parse().getToken();
         if (expectedAudiences == null) {
-            org.junit.Assert.assertNull("Expected token to not contain audience", token.getAudience());
+            assertNull("Expected token to not contain audience", token.getAudience());
         } else {
             assertAudiences(token, expectedAudiences);
         }

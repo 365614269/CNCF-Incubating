@@ -139,9 +139,27 @@ public class StandardTokenExchangeProvider extends AbstractTokenExchangeProvider
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_CLIENT, errorMessage, Response.Status.BAD_REQUEST);
         }
 
+        for (ClientModel targetClient : targetAudienceClients) {
+            if (!targetClient.isEnabled()) {
+                event.detail(Details.REASON, "audience client disabled");
+                event.detail(Details.AUDIENCE, targetClient.getClientId());
+                event.error(Errors.CLIENT_DISABLED);
+                throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_CLIENT, "Client disabled", Response.Status.BAD_REQUEST);
+            }
+        }
+
         //reject if the requester-client is not in the audience of the subject token
         if (!client.equals(tokenHolder)) {
             forbiddenIfClientIsNotWithinTokenAudience(token);
+        }
+    }
+
+    protected void validateConsents(UserModel targetUser, ClientSessionContext clientSessionCtx) {
+        if (!TokenManager.verifyConsentStillAvailable(session, targetUser, client, clientSessionCtx.getClientScopesStream())) {
+            event.detail(Details.REASON, "Missing consents for Token Exchange in client " + client.getClientId());
+            event.error(Errors.CONSENT_DENIED);
+            throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_SCOPE,
+                    "Missing consents for Token Exchange in client " + client.getClientId(), Response.Status.BAD_REQUEST);
         }
     }
 
@@ -196,6 +214,8 @@ public class StandardTokenExchangeProvider extends AbstractTokenExchangeProvider
             clientSessionCtx.setAttribute(Constants.REQUESTED_AUDIENCE_CLIENTS, targetAudienceClients.toArray(ClientModel[]::new));
         }
 
+        validateConsents(targetUser, clientSessionCtx);
+
         TokenManager.AccessTokenResponseBuilder responseBuilder = tokenManager.responseBuilder(realm, client, event, this.session, targetUserSession, clientSessionCtx)
                 .generateAccessToken();
 
@@ -247,6 +267,13 @@ public class StandardTokenExchangeProvider extends AbstractTokenExchangeProvider
         return cors.add(Response.ok(res, MediaType.APPLICATION_JSON_TYPE));
     }
 
+    @Override
+    protected Response exchangeClientToSAML2Client(UserModel targetUser, UserSessionModel targetUserSession, String requestedTokenType, List<ClientModel> targetAudienceClients) {
+        event.detail(Details.REASON, "requested_token_type unsupported");
+        event.error(Errors.INVALID_REQUEST);
+        throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, "requested_token_type unsupported", Response.Status.BAD_REQUEST);
+    }
+
     protected void checkRequestedAudiences(TokenManager.AccessTokenResponseBuilder responseBuilder) {
         if (params.getAudience() != null && (responseBuilder.getAccessToken().getAudience() == null ||
                 responseBuilder.getAccessToken().getAudience().length < params.getAudience().size())) {
@@ -277,7 +304,7 @@ public class StandardTokenExchangeProvider extends AbstractTokenExchangeProvider
         } else if (!requestedTokenType.equals(OAuth2Constants.ACCESS_TOKEN_TYPE) &&
                 !requestedTokenType.equals(OAuth2Constants.REFRESH_TOKEN_TYPE) &&
                 !requestedTokenType.equals(OAuth2Constants.ID_TOKEN_TYPE) &&
-                !requestedTokenType.equals(OAuth2Constants.SAML2_TOKEN_TYPE)) { // TODO: SAML probably won't be supported?
+                !requestedTokenType.equals(OAuth2Constants.SAML2_TOKEN_TYPE)) {
             event.detail(Details.REASON, "requested_token_type unsupported");
             event.error(Errors.INVALID_REQUEST);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, "requested_token_type unsupported", Response.Status.BAD_REQUEST);
