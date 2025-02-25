@@ -52,6 +52,18 @@ iptablesRandomFully: false
 # -- (string) Kubernetes config path
 # @default -- `"~/.kube/config"`
 kubeConfigPath: ""
+# -- Configure the Kubernetes service endpoint dynamically using a ConfigMap. Mutually exclusive with `k8sServiceHost`.
+k8sServiceHostRef:
+  # @schema
+  # type: [string, null]
+  # @schema
+  # -- (string) name of the ConfigMap containing the Kubernetes service endpoint
+  name:
+  # @schema
+  # type: [string, null] 
+  # @schema
+  # -- (string) Key in the ConfigMap containing the Kubernetes service endpoint
+  key:
 # -- (string) Kubernetes service host - use "auto" for automatic lookup from the cluster-info ConfigMap
 k8sServiceHost: ""
 # @schema
@@ -2361,6 +2373,11 @@ envoy:
   xffNumTrustedHopsL7PolicyIngress: 0
   # -- Number of trusted hops regarding the x-forwarded-for and related HTTP headers for the egress L7 policy enforcement Envoy listeners.
   xffNumTrustedHopsL7PolicyEgress: 0
+  # @schema
+  # type: [null, string]
+  # @schema
+  # -- Max duration to wait for endpoint policies to be restored on restart. Default "3m".
+  policyRestoreTimeoutDuration: null
   # -- Envoy container image.
   image:
     # @schema

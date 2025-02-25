@@ -1384,6 +1384,10 @@
      - AppArmorProfile options for the ``cilium-agent`` and init containers
      - object
      - ``{"type":"Unconfined"}``
+   * - :spelling:ignore:`envoy.policyRestoreTimeoutDuration`
+     - Max duration to wait for endpoint policies to be restored on restart. Default "3m".
+     - string
+     - ``nil``
    * - :spelling:ignore:`envoy.priorityClassName`
      - The priority class to use for cilium-envoy.
      - string
@@ -2540,6 +2544,18 @@
      - Kubernetes service host - use "auto" for automatic lookup from the cluster-info ConfigMap
      - string
      - ``""``
+   * - :spelling:ignore:`k8sServiceHostRef`
+     - Configure the Kubernetes service endpoint dynamically using a ConfigMap. Mutually exclusive with ``k8sServiceHost``.
+     - object
+     - ``{"key":null,"name":null}``
+   * - :spelling:ignore:`k8sServiceHostRef.key`
+     - Key in the ConfigMap containing the Kubernetes service endpoint
+     - string
+     - ``nil``
+   * - :spelling:ignore:`k8sServiceHostRef.name`
+     - name of the ConfigMap containing the Kubernetes service endpoint
+     - string
+     - ``nil``
    * - :spelling:ignore:`k8sServiceLookupConfigMapName`
      - When ``k8sServiceHost=auto``\ , allows to customize the configMap name. It defaults to ``cluster-info``.
      - string
