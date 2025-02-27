@@ -20,7 +20,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
 
-import jakarta.ws.rs.core.HttpHeaders;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -61,9 +60,6 @@ import org.keycloak.testsuite.util.TokenSignatureUtil;
 import org.keycloak.util.BasicAuthHelper;
 import org.keycloak.util.JsonSerialization;
 import org.keycloak.util.TokenUtil;
-
-import jakarta.ws.rs.core.UriBuilder;
-import org.keycloak.utils.MediaType;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -152,7 +148,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testConfidentialClientCredentialsBasicAuthentication() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         oauth.client("confidential-cli", "secret1");
         String tokenResponse = oauth.doIntrospectionAccessTokenRequest(accessTokenResponse.getAccessToken());
@@ -194,7 +190,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testInvalidClientCredentials() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         oauth.client("confidential-cli", "bad_credential");
         String tokenResponse = oauth.doIntrospectionAccessTokenRequest(accessTokenResponse.getAccessToken());
@@ -207,7 +203,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectRefreshToken() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         EventRepresentation loginEvent = events.expectLogin().assertEvent();
         String sessionId = loginEvent.getSessionId();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
@@ -257,7 +253,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
 
         Assert.assertFalse(loginPage.isCurrent());
 
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse tokenResponse2 = oauth.doAccessTokenRequest(code);
 
         oauth.client("confidential-cli", "secret1");
@@ -278,7 +274,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     public void testPublicClientCredentialsNotAllowed() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
 
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         oauth.client("public-cli");
         String tokenResponse = oauth.doIntrospectionAccessTokenRequest(accessTokenResponse.getAccessToken());
@@ -329,7 +325,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectAccessToken() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         EventRepresentation loginEvent = events.expectLogin().assertEvent();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         oauth.client("confidential-cli", "secret1");
@@ -348,7 +344,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectAccessTokenWithoutScope() throws Exception {
         oauth.client("no-scope", "password").openid(false).doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         RealmRepresentation testRealm = adminClient.realm("test").toRepresentation();
         List<ClientScopeRepresentation> preExistingClientScopes = testRealm.getClientScopes();
         testRealm.setClientScopes(List.of());
@@ -373,7 +369,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectAccessTokenReturnedAsJwt() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         EventRepresentation loginEvent = events.expectLogin().assertEvent();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
 
@@ -409,7 +405,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
             TokenSignatureUtil.changeClientAccessTokenSignatureProvider(ApiUtil.findClientByClientId(adminClient.realm("test"), "test-app"), jwaAlgorithm);
 
             oauth.doLogin("test-user@localhost", "password");
-            String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+            String code = oauth.parseLoginResponse().getCode();
             EventRepresentation loginEvent = events.expectLogin().assertEvent();
             AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
 
@@ -436,7 +432,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectAccessTokenSessionInvalid() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         oauth.doLogout(accessTokenResponse.getRefreshToken(), "password");
 
@@ -455,7 +451,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     public void testIntrospectAccessTokenOfflineAccess() throws Exception {
         oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
 
         setTimeOffset(86400);
@@ -487,7 +483,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectDoesntExtendTokenLifespan() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         accessTokenResponse = oauth.doRefreshTokenRequest(accessTokenResponse.getRefreshToken());
 
@@ -513,7 +509,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectAccessTokenUserDisabled() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
 
         EventRepresentation loginEvent = events.expectLogin().assertEvent();
@@ -540,7 +536,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectAccessTokenExpired() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
 
         setTimeOffset(adminClient.realm(oauth.getRealm()).toRepresentation().getAccessTokenLifespan() + 1);
@@ -561,7 +557,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectWithSamlClient() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         events.expectLogin().assertEvent();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         oauth.client("saml-client", "secret2");
@@ -575,16 +571,16 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     private AccessTokenResponse loginAndForceNewLoginPage() {
         oauth.doLogin("test-user@localhost", "password");
 
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         oauth.clientSessionState("client-session");
 
         AccessTokenResponse tokenResponse = oauth.doAccessTokenRequest(code);
 
         setTimeOffset(1);
 
-        String loginFormUri = UriBuilder.fromUri(oauth.getLoginFormUrl())
-                .queryParam(OIDCLoginProtocol.PROMPT_PARAM, OIDCLoginProtocol.PROMPT_VALUE_LOGIN)
-                .build().toString();
+        String loginFormUri = oauth.loginForm()
+                .param(OIDCLoginProtocol.PROMPT_PARAM, OIDCLoginProtocol.PROMPT_VALUE_LOGIN)
+                .build();
         driver.navigate().to(loginFormUri);
 
         loginPage.assertCurrent();
@@ -596,7 +592,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
     @Test
     public void testIntrospectionRequestParamsMoreThanOnce() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
 
         accessTokenResponse = oauth.doRefreshTokenRequest(accessTokenResponse.getRefreshToken(), "password");
@@ -644,7 +640,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
         adminClient.realm(oauth.getRealm()).update(realm);
         try {
             oauth.doLogin("test-user@localhost", "password");
-            String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+            String code = oauth.parseLoginResponse().getCode();
             AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
             String oldRefreshToken = accessTokenResponse.getRefreshToken();
 
@@ -700,7 +696,7 @@ public class TokenIntrospectionTest extends AbstractTestRealmKeycloakTest {
 
     private JsonNode introspectRevokedToken() throws Exception {
         oauth.doLogin("test-user@localhost", "password");
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(code);
         String stringRefreshToken = accessTokenResponse.getRefreshToken();
 

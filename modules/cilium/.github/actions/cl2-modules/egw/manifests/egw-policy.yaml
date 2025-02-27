@@ -1,0 +1,15 @@
+apiVersion: cilium.io/v2
+kind: CiliumEgressGatewayPolicy
+metadata:
+  name: {{.Name}}
+spec:
+  selectors:
+  - podSelector:
+      matchLabels:
+        app.kubernetes.io/name: egw-client
+  destinationCIDRs:
+  - "{{.ExternalTarget}}/32"
+  egressGateway:
+    nodeSelector:
+      matchLabels:
+        role.scaffolding/egw-node: "true"

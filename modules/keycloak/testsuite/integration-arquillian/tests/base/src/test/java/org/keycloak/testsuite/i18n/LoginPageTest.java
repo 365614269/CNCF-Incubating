@@ -27,7 +27,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.common.util.KeycloakUriBuilder;
 import org.keycloak.cookie.CookieType;
@@ -208,7 +207,7 @@ public class LoginPageTest extends AbstractI18NTest {
         changePasswordPage.changePassword("password", "password");
 
         assertEquals(AppPage.RequestType.AUTH_RESPONSE, appPage.getRequestType());
-        Assert.assertNotNull(oauth.getCurrentQuery().get(OAuth2Constants.CODE));
+        Assert.assertNotNull(oauth.parseLoginResponse().getCode());
     }
 
 
@@ -232,7 +231,7 @@ public class LoginPageTest extends AbstractI18NTest {
         grantPage.accept();
 
         assertEquals(AppPage.RequestType.AUTH_RESPONSE, appPage.getRequestType());
-        Assert.assertNotNull(oauth.getCurrentQuery().get(OAuth2Constants.CODE));
+        Assert.assertNotNull(oauth.parseLoginResponse().getCode());
 
         // Revert client
         oauth.client("test-app", "password");
@@ -265,7 +264,7 @@ public class LoginPageTest extends AbstractI18NTest {
         UserRepresentation userRep = user.toRepresentation();
         assertEquals("de", userRep.getAttributes().get("locale").get(0));
 
-        String code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        String code = oauth.parseLoginResponse().getCode();
         String idTokenHint = oauth.doAccessTokenRequest(code).getIdToken();
         appPage.logout(idTokenHint);
 
@@ -283,7 +282,7 @@ public class LoginPageTest extends AbstractI18NTest {
         userRep = user.toRepresentation();
         Assert.assertNull(userRep.getAttributes());
 
-        code = oauth.getCurrentQuery().get(OAuth2Constants.CODE);
+        code = oauth.parseLoginResponse().getCode();
         idTokenHint = oauth.doAccessTokenRequest(code).getIdToken();
         appPage.logout(idTokenHint);
 
@@ -383,7 +382,7 @@ public class LoginPageTest extends AbstractI18NTest {
         final String realmLocalizationMessageValue = "We are really sorry...";
 
         saveLocalizationText(locale, realmLocalizationMessageKey, realmLocalizationMessageValue);
-        String nonExistingUrl = oauth.getLoginFormUrl().split("protocol")[0] + "incorrect-path";
+        String nonExistingUrl = oauth.loginForm().build().split("protocol")[0] + "incorrect-path";
         driver.navigate().to(nonExistingUrl);
 
         assertThat(driver.getPageSource(), containsString(realmLocalizationMessageValue));

@@ -819,9 +819,8 @@ public class ParTest extends AbstractClientPoliciesTest {
         oauth.requestUri(IMAGINARY_REQUEST_URI);
         String state = oauth.stateParamRandom().getState();
         oauth.stateParamHardcoded(state);
-        UriBuilder b = UriBuilder.fromUri(oauth.getLoginFormUrl());
-        driver.navigate().to(b.build().toURL());
-        AuthorizationEndpointResponse errorResponse = new AuthorizationEndpointResponse(oauth);
+        oauth.openLoginForm();
+        AuthorizationEndpointResponse errorResponse = oauth.parseLoginResponse();
         Assert.assertFalse(errorResponse.isRedirected());
     }
 
@@ -867,9 +866,8 @@ public class ParTest extends AbstractClientPoliciesTest {
         // use same redirect_uri
         state = oauth.stateParamRandom().getState();
         oauth.stateParamHardcoded(state);
-        UriBuilder b = UriBuilder.fromUri(oauth.getLoginFormUrl());
-        driver.navigate().to(b.build().toURL());
-        AuthorizationEndpointResponse errorResponse = new AuthorizationEndpointResponse(oauth);
+        oauth.openLoginForm();
+        AuthorizationEndpointResponse errorResponse = oauth.parseLoginResponse();
         Assert.assertFalse(errorResponse.isRedirected());
     }
 
@@ -915,9 +913,8 @@ public class ParTest extends AbstractClientPoliciesTest {
         oauth.requestUri(requestUri);
         String state = oauth.stateParamRandom().getState();
         oauth.stateParamHardcoded(state);
-        UriBuilder b = UriBuilder.fromUri(oauth.getLoginFormUrl());
-        driver.navigate().to(b.build().toURL());
-        AuthorizationEndpointResponse errorResponse = new AuthorizationEndpointResponse(oauth);
+        oauth.openLoginForm();
+        AuthorizationEndpointResponse errorResponse = oauth.parseLoginResponse();
         Assert.assertFalse(errorResponse.isRedirected());
     }
 
@@ -934,8 +931,8 @@ public class ParTest extends AbstractClientPoliciesTest {
 
         oauth.client(clientId, clientSecret);
         oauth.openLoginForm();
-        assertEquals(OAuthErrorException.INVALID_REQUEST, oauth.getCurrentQuery().get(OAuth2Constants.ERROR));
-        assertEquals("Pushed Authorization Request is only allowed.", oauth.getCurrentQuery().get(OAuth2Constants.ERROR_DESCRIPTION));
+        assertEquals(OAuthErrorException.INVALID_REQUEST, oauth.parseLoginResponse().getError());
+        assertEquals("Pushed Authorization Request is only allowed.", oauth.parseLoginResponse().getErrorDescription());
 
         updateClientDynamically(clientId, (OIDCClientRepresentation clientRep) -> {
             clientRep.setRequirePushedAuthorizationRequests(Boolean.FALSE);
@@ -980,9 +977,8 @@ public class ParTest extends AbstractClientPoliciesTest {
         oauth.requestUri(requestUri);
         String state = oauth.stateParamRandom().getState();
         oauth.stateParamHardcoded(state);
-        UriBuilder b = UriBuilder.fromUri(oauth.getLoginFormUrl());
-        driver.navigate().to(b.build().toURL());
-        AuthorizationEndpointResponse errorResponse = new AuthorizationEndpointResponse(oauth);
+        oauth.openLoginForm();
+        AuthorizationEndpointResponse errorResponse = oauth.parseLoginResponse();
         Assert.assertFalse(errorResponse.isRedirected());
     }
 

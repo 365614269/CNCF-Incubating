@@ -268,7 +268,7 @@ public class ConsentsTest extends AbstractKeycloakTest {
     public void testConsents() {
         oauth.realm(consumerRealmName());
         oauth.redirectUri(oauth.SERVER_ROOT + "/auth/realms/" + consumerRealmName() + "/app/auth");
-        driver.navigate().to(oauth.getLoginFormUrl());
+        oauth.openLoginForm();
 
         log.debug("Clicking social " + getIDPAlias());
         accountLoginPage.clickSocial(getIDPAlias());
@@ -416,7 +416,7 @@ public class ConsentsTest extends AbstractKeycloakTest {
         oauth.realm(providerRealmName());
 
         // navigate to account console and login
-        driver.navigate().to(oauth.getLoginFormUrl());
+        oauth.openLoginForm();
         loginPage.form().login(getUserLogin(), getUserPassword());
 
         consentPage.assertCurrent();
@@ -426,7 +426,7 @@ public class ConsentsTest extends AbstractKeycloakTest {
         assertTrue(driver.getTitle().contains("AUTH_RESPONSE"));
         assertTrue(driver.getCurrentUrl().contains("error=access_denied"));
 
-        driver.navigate().to(oauth.getLoginFormUrl());
+        oauth.openLoginForm();
         loginPage.form().login(getUserLogin(), getUserPassword());
         consentPage.confirm();
 
@@ -442,7 +442,7 @@ public class ConsentsTest extends AbstractKeycloakTest {
         AccessTokenResponse accessTokenResponse = oauth.doAccessTokenRequest(response.getCode());
 
         Assert.assertEquals(AppPage.RequestType.AUTH_RESPONSE, appPage.getRequestType());
-        Assert.assertNotNull(oauth.getCurrentQuery().get(OAuth2Constants.CODE));
+        Assert.assertNotNull(oauth.parseLoginResponse().getCode());
 
         EventRepresentation loginEvent = events.expectLogin().detail(Details.USERNAME, "test-user@localhost").assertEvent();
         String sessionId = loginEvent.getSessionId();
@@ -484,7 +484,7 @@ public class ConsentsTest extends AbstractKeycloakTest {
         oauth.realm(providerRealmName());
 
         // navigate to account console and login
-        driver.navigate().to(oauth.getLoginFormUrl());
+        oauth.openLoginForm();
         loginPage.form().login(getUserLogin(), getUserPassword());
 
         consentPage.assertCurrent();
