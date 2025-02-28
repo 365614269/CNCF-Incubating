@@ -13,11 +13,11 @@ The jobs API is currently in alpha.
 With the jobs API, you can schedule jobs and tasks in the future.
 
 > The HTTP APIs are intended for development and testing only. For production scenarios, the use of the SDKs is strongly
-> recommended as they implement the gRPC APIs providing higher performance and capability than the HTTP APIs.
+> recommended as they implement the gRPC APIs providing higher performance and capability than the HTTP APIs. This is because HTTP does JSON marshalling which can be expensive, while with gRPC, the data is transmitted over the wire and stored as-is being more performant.
 
 ## Schedule a job
 
-Schedule a job with a name.
+Schedule a job with a name. Jobs are scheduled based on the clock of the server where the Scheduler service is running. The timestamp is not converted to UTC. You can provide the timezone with the timestamp in RFC3339 format to specify which timezone you'd like the job to adhere to. If no timezone is provided, the server's local time is used.
 
 ```
 POST http://localhost:3500/v1.0-alpha1/jobs/<name>

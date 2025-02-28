@@ -8,7 +8,7 @@ description: "Overview of the jobs API building block"
 
 Many applications require job scheduling, or the need to take an action in the future. The jobs API is an orchestrator for scheduling these future jobs, either at a specific time or for a specific interval. 
 
-Not only does the jobs API help you with scheduling jobs, but internally, Dapr uses the scheduler service to schedule actor reminders.
+Not only does the jobs API help you with scheduling jobs, but internally, Dapr uses the Scheduler service to schedule actor reminders.
 
 Jobs in Dapr consist of:
 - [The jobs API building block]({{< ref jobs_api.md >}})
@@ -57,11 +57,9 @@ The jobs API provides several features to make it easy for you to schedule jobs.
 
 ### Schedule jobs across multiple replicas
 
-The Scheduler service enables the scheduling of jobs to scale across multiple replicas, while guaranteeing that a job is only triggered by 1 scheduler service instance.
+When you create a job, it replaces any existing job with the same name. This means that every time a job is created, it resets the count and only keeps 1 record in the embedded etcd for that job. Therefore, you don't need to worry about multiple jobs being created and firing off — only the most recent job is recorded and executed, even if all your apps schedule the same job on startup. 
 
-### Actor reminders
-
-Actors have actor reminders, but present some limitations involving scalability using the Placement service implementation. You can make reminders more scalable by using [`SchedulerReminders`]({{< ref support-preview-features.md >}}).  This is set in the configuration for your actor application. 
+The Scheduler service enables the scheduling of jobs to scale across multiple replicas, while guaranteeing that a job is only triggered by 1 Scheduler service instance. 
 
 ## Try out the jobs API
 

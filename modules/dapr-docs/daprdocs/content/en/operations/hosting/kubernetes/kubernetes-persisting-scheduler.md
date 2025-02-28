@@ -172,8 +172,8 @@ helm upgrade --install dapr dapr/dapr \
 
 ## Ephemeral Storage
 
-Scheduler can be optionally made to use Ephemeral storage, which is in-memory storage which is **not** resilient to restarts, i.e. all Job data will be lost after a Scheduler restart.
-This is useful for deployments where storage is not available or required, or for testing purposes.
+When running in non-HA mode, the Scheduler can be optionally made to use ephemeral storage, which is in-memory storage that is **not** resilient to restarts. For example, all jobs data is lost after a Scheduler restart.
+This is useful in non-production deployments or for testing where storage is not available or required.
 
 {{% alert title="Note" color="primary" %}}
 If Dapr is already installed, the control plane needs to be completely [uninstalled]({{< ref dapr-uninstall.md >}}) in order for the Scheduler `StatefulSet` to be recreated without the persistent volume.

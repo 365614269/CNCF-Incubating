@@ -124,8 +124,8 @@ jobs:
       fail-fast: false
       matrix:
         test_type:
-          - md-bs # Abbreviated "masquerade delay - baseline"
-          - md
+          - baseline
+          - egw
     steps:
       - name: Checkout context ref (trusted)
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -173,7 +173,58 @@ jobs:
             --set-string=extraConfig.enable-stale-cilium-endpoint-cleanup=false \
             --set=image.override=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci:${SHA} \
             --set=operator.image.override=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/operator-aws-ci:${SHA} \
+            --values=values-dummy-health-server.yaml \
             --nodes-without-cilium"
+
+          # We create a bunch of synthetic nodes during the test, to artificially
+          # increase the testbed scale. In order to pretend that these nodes are
+          # actually ready, let's start a dummy server locally, and redirect
+          # health probes to it.
+          cat<<EOF > values-dummy-health-server.yaml
+          extraInitContainers:
+          - name: iptables-config
+            image: quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci:${SHA}
+            command:
+            - /bin/bash
+            - -c
+            - \$(SCRIPT)
+            env:
+            - name: SCRIPT
+              value: |
+                set -o errexit
+                set -o pipefail
+                set -o nounset
+
+                iptables -t nat -A OUTPUT -d 10.128.0.0/10 -p tcp --dport 4240 -j REDIRECT --to-ports 4241
+                iptables -t nat -A OUTPUT -d 10.128.0.0/10 -p icmp -j REDIRECT
+                iptables -t nat -vnL OUTPUT
+            securityContext:
+              capabilities:
+                add:
+                - NET_ADMIN
+                drop:
+                - ALL
+            volumeMounts:
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+
+          extraContainers:
+          - name: dummy-health-server
+            image: node:18.20.7-alpine3.21@sha256:e0340f26173b41066d68e3fe9bfbdb6571ab3cad0a4272919a52e36f4ae56925
+            command:
+            - /usr/local/bin/node
+            - -e
+            - \$(SCRIPT)
+            env:
+            - name: SCRIPT
+              value: |
+                // Credit: https://stackoverflow.com/a/72638075
+                const http = require('http');
+                http.createServer(function (req, res) {
+                    res.writeHead(200);
+                    res.end();
+                }).listen(4241);
+          EOF
 
           OWNER="${{ github.ref_name }}"
           OWNER="${OWNER//[.\/]/-}"
@@ -186,7 +237,7 @@ jobs:
             CLIENT_QPS="20"
           fi
 
-          NODE_INSTANCE_TYPE="m5.large"
+          NODE_INSTANCE_TYPE="m5.xlarge"
           TARGET_CLIENT_PODS_PER_NODE=25
 
           # Poor's man round up to derive the number of desired nodes
@@ -210,6 +261,8 @@ jobs:
           echo client_qps=${CLIENT_QPS} >> $GITHUB_OUTPUT
           echo eks_version=${EKS_VERSION} >> $GITHUB_OUTPUT
           echo eks_region=${EKS_REGION} >> $GITHUB_OUTPUT
+          echo eks_zone_1=${EKS_REGION}b >> $GITHUB_OUTPUT
+          echo eks_zone_2=${EKS_REGION}c >> $GITHUB_OUTPUT
 
       - name: Ensure EGW scale utils image is available
         shell: bash
@@ -297,6 +350,7 @@ jobs:
         with:
           cluster_name: ${{ steps.vars.outputs.cluster_name }}
           region: ${{ steps.vars.outputs.eks_region }}
+          zones: "${{ steps.vars.outputs.eks_zone_1 }} ${{ steps.vars.outputs.eks_zone_2 }}"
           owner: "${{ steps.vars.outputs.owner }}"
           version: "${{ steps.vars.outputs.eks_version }}"
           addons: "coredns"
@@ -356,6 +410,8 @@ jobs:
           - name: ng-amd64-client
             instanceTypes:
             - ${{ steps.vars.outputs.node_instance_type }}
+            availabilityZones:
+            - ${{ steps.vars.outputs.eks_zone_1 }}
             desiredCapacity: ${{ steps.vars.outputs.num_client_nodes }}
             spot: false
             privateNetworking: true
@@ -371,6 +427,8 @@ jobs:
           - name: ng-amd64-egw-node
             instanceTypes:
             - ${{ steps.vars.outputs.node_instance_type }}
+            availabilityZones:
+            - ${{ steps.vars.outputs.eks_zone_1 }}
             desiredCapacity: 1
             spot: false
             privateNetworking: true
@@ -386,6 +444,8 @@ jobs:
           - name: ng-amd64-heapster
             instanceTypes:
             - ${{ steps.vars.outputs.node_instance_type }}
+            availabilityZones:
+            - ${{ steps.vars.outputs.eks_zone_1 }}
             desiredCapacity: 1
             spot: false
             privateNetworking: true
@@ -401,6 +461,8 @@ jobs:
           - name: ng-amd64-no-cilium
             instanceTypes:
             - ${{ steps.vars.outputs.node_instance_type }}
+            availabilityZones:
+            - ${{ steps.vars.outputs.eks_zone_2 }}
             desiredCapacity: 1
             spot: false
             privateNetworking: true
@@ -420,7 +482,7 @@ jobs:
             - "echo '{ \"cniVersion\": \"0.3.1\", \"name\": \"dummy\", \"type\": \"dummy-cni\", \"log-file\": \"/var/run/dummy.log\" }' > /etc/cni/net.d/05-dummy.conf"
           EOF
 
-          eksctl create nodegroup -f ./eks-nodegroup.yaml
+          eksctl create nodegroup -f ./eks-nodegroup.yaml --timeout=10m
 
       - name: Wait for Cilium status to be ready
         run: |
@@ -451,39 +513,31 @@ jobs:
           CL2_PROMETHEUS_SCRAPE_CILIUM_OPERATOR: "true"
           CL2_PROMETHEUS_SCRAPE_CILIUM_AGENT: "true"
           CL2_PROMETHEUS_MEMORY_SCALE_FACTOR: "2.0"
+          CL2_PROMETHEUS_SCRAPE_CILIUM_AGENT_INTERVAL: "10s"
           CL2_PROMETHEUS_NODE_SELECTOR: 'role.scaffolding/monitoring: "true"'
           CL2_EGW_TEST_IMAGE: quay.io/cilium/egw-scale-utils:${{ env.egw_utils_ref }}
           CL2_NUM_EGW_CLIENTS: "${{ steps.vars.outputs.num_client_pods }}"
           CL2_EGW_CLIENTS_QPS: "${{ steps.vars.outputs.client_qps }}"
           CL2_MEDIAN_BOOTSTRAP_THRESHOLD: "80" # Takes a bit for ENI interfaces to be added
-          CL2_EGW_CREATE_POLICY: ${{ matrix.test_type == 'md' }}
+          CL2_EGW_CREATE_POLICY: ${{ matrix.test_type == 'egw' }}
           CL2_EGW_MANIFESTS_DIR: ../../.github/actions/cl2-modules/egw/manifests
         run: |
           echo "CL2-related environment variables"
           printenv | grep CL2_
 
           mkdir ./report
-
-          # CL2 hardcodes module paths to live in next to the config, even
-          # if the path given is relative.
-          cp ../../.github/actions/cl2-modules/cilium-agent-pprofs.yaml ../../.github/actions/cl2-modules/egw
-          cp ../../.github/actions/cl2-modules/cilium-metrics.yaml ../../.github/actions/cl2-modules/egw
-          echo \
-            '{"CL2_ADDITIONAL_MEASUREMENT_MODULES": ["./cilium-agent-pprofs.yaml", "./cilium-metrics.yaml"]}' \
-            > modules.yaml
-
           go run ./cmd/clusterloader.go \
             -v=2 \
             --testconfig=../../.github/actions/cl2-modules/egw/config.yaml \
             --prometheus-additional-monitors-path=../../.github/actions/cl2-modules/egw/prom-extra-podmons \
             --provider=aws \
             --enable-prometheus-server \
+            --prometheus-scrape-kubelets \
             --tear-down-prometheus-server=false \
             --report-dir=./report \
             --experimental-prometheus-snapshot-to-report-dir=true \
             --kubeconfig=$HOME/.kube/config \
             --testoverrides=./testing/prometheus/not-scrape-kube-proxy.yaml \
-            --testoverrides=./modules.yaml \
             2>&1 | tee cl2-output.txt
 
       - name: Features tested

@@ -6,10 +6,6 @@ weight: 1000
 description: "Overview of Dapr Workflow"
 ---
 
-{{% alert title="Note" color="primary" %}}
-Dapr Workflow is currently in beta. [See known limitations]({{< ref "#limitations" >}}).
-{{% /alert %}}
-
 Dapr workflow makes it easy for developers to write business logic and integrations in a reliable way. Since Dapr workflows are stateful, they support long-running and fault-tolerant applications, ideal for orchestrating microservices. Dapr workflow works seamlessly with other Dapr building blocks, such as service invocation, pub/sub, state management, and bindings.
 
 The durable, resilient Dapr Workflow capability:
@@ -94,7 +90,7 @@ Want to put workflows to the test? Walk through the following quickstart and tut
 | Quickstart/tutorial | Description |
 | ------------------- | ----------- |
 | [Workflow quickstart]({{< ref workflow-quickstart.md >}}) | Run a workflow application with four workflow activities to see Dapr Workflow in action  |
-| [Workflow Python SDK example](https://github.com/dapr/python-sdk/tree/master/examples/demo_workflow) | Learn how to create a Dapr Workflow and invoke it using the Python `DaprClient` package. |
+| [Workflow Python SDK example](https://github.com/dapr/python-sdk/tree/master/examples/demo_workflow) | Learn how to create a Dapr Workflow and invoke it using the Python `dapr-ext-workflow` package. |
 | [Workflow JavaScript SDK example](https://github.com/dapr/js-sdk/tree/main/examples/workflow) | Learn how to create a Dapr Workflow and invoke it using the JavaScript SDK. |
 | [Workflow .NET SDK example](https://github.com/dapr/dotnet-sdk/tree/master/examples/Workflow) | Learn how to create a Dapr Workflow and invoke it using ASP.NET Core web APIs. |
 | [Workflow Java SDK example](https://github.com/dapr/java-sdk/tree/master/examples/src/main/java/io/dapr/examples/workflows) | Learn how to create a Dapr Workflow and invoke it using the Java `io.dapr.workflows` package. |
@@ -107,24 +103,6 @@ Want to skip the quickstarts? Not a problem. You can try out the workflow buildi
 ## Limitations
 
 - **State stores:** Due to underlying limitations in some database choices, more commonly NoSQL databases, you might run into limitations around storing internal states. For example, CosmosDB has a maximum single operation item limit of only 100 states in a single request.
-- **Horizontal scaling:** As of the 1.12.0 beta release of Dapr Workflow, it is recommended to use a maximum of two instances of Dapr per workflow application. This limitation is resolved in Dapr 1.14.x when enabling the scheduler service.
-
-To enable the scheduler service to work for Dapr Workflows, make sure you're using Dapr 1.14.x or later and assign the following configuration to your app:
-
-```yaml
-apiVersion: dapr.io/v1alpha1
-kind: Configuration
-metadata:
-  name: schedulerconfig
-spec:
-  tracing:
-    samplingRate: "1"
-  features:
-    - name: SchedulerReminders
-      enabled: true
-```
-
-See more info about [enabling preview features]({{<ref preview-features>}}).
 
 ## Watch the demo
 

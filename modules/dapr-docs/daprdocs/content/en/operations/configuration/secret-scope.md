@@ -4,10 +4,15 @@ title: "How-To: Limit the secrets that can be read from secret stores"
 linkTitle: "Limit secret store access"
 weight: 3000
 description: "Define secret scopes by augmenting the existing configuration resource with restrictive permissions."
+description: "Define secret scopes by augmenting the existing configuration resource with restrictive permissions."
 ---
 
 In addition to [scoping which applications can access a given component]({{< ref "component-scopes.md">}}), you can also scop a named secret store component to one or more secrets for an application. By defining `allowedSecrets` and/or `deniedSecrets` lists, you restrict applications to access only specific secrets.
+In addition to [scoping which applications can access a given component]({{< ref "component-scopes.md">}}), you can also scop a named secret store component to one or more secrets for an application. By defining `allowedSecrets` and/or `deniedSecrets` lists, you restrict applications to access only specific secrets.
 
+For more information about configuring a Configuration resource:
+- [Configuration overview]({{< ref configuration-overview.md >}})
+- [Configuration schema]({{< ref configuration-schema.md >}})
 For more information about configuring a Configuration resource:
 - [Configuration overview]({{< ref configuration-overview.md >}})
 - [Configuration schema]({{< ref configuration-schema.md >}})
@@ -40,7 +45,7 @@ When an `allowedSecrets` list is present with at least one element, only those s
 
 ## Permission priority
 
-The `allowedSecrets` and `deniedSecrets` list values take priorty over the `defaultAccess`. See how this works in the following example scenarios:
+The `allowedSecrets` and `deniedSecrets` list values take priority over the `defaultAccess`. See how this works in the following example scenarios:
 
 |  | Scenarios | `defaultAccess` | `allowedSecrets` | `deniedSecrets` | `permission`
 |--| ----- | ------- | -----------| ----------| ------------
@@ -56,9 +61,22 @@ The `allowedSecrets` and `deniedSecrets` list values take priorty over the `defa
 ### Scenario 1: Deny access to all secrets for a secret store
 
 In a Kubernetes cluster, the native Kubernetes secret store is added to your Dapr application by default. In some scenarios, it may be necessary to deny access to Dapr secrets for a given application. To add this configuration: 
+In a Kubernetes cluster, the native Kubernetes secret store is added to your Dapr application by default. In some scenarios, it may be necessary to deny access to Dapr secrets for a given application. To add this configuration: 
 
 1. Define the following `appconfig.yaml`. 
+1. Define the following `appconfig.yaml`. 
 
+   ```yaml
+   apiVersion: dapr.io/v1alpha1
+   kind: Configuration
+   metadata:
+     name: appconfig
+   spec:
+     secrets:
+       scopes:
+         - storeName: kubernetes
+           defaultAccess: deny
+   ```
    ```yaml
    apiVersion: dapr.io/v1alpha1
    kind: Configuration
@@ -78,6 +96,13 @@ In a Kubernetes cluster, the native Kubernetes secret store is added to your Dap
    ```
 
 For applications that you need to deny access to the Kubernetes secret store, follow [the Kubernetes instructions]({{< ref kubernetes-overview >}}), adding the following annotation to the application pod.
+1. Apply it to the Kubernetes cluster using the following command:
+
+   ```bash
+   kubectl apply -f appconfig.yaml`.
+   ```
+
+For applications that you need to deny access to the Kubernetes secret store, follow [the Kubernetes instructions]({{< ref kubernetes-overview >}}), adding the following annotation to the application pod.
 
 ```yaml
 dapr.io/config: appconfig
@@ -85,6 +110,7 @@ dapr.io/config: appconfig
 
 With this defined, the application no longer has access to Kubernetes secret store.
 
+### Scenario 2: Allow access to only certain secrets in a secret store
 ### Scenario 2: Allow access to only certain secrets in a secret store
 
 To allow a Dapr application to have access to only certain secrets, define the following `config.yaml`:
@@ -102,6 +128,7 @@ spec:
         allowedSecrets: ["secret1", "secret2"]
 ```
 
+This example defines configuration for secret store named `vault`. The default access to the secret store is `deny`. Meanwhile, some secrets are accessible by the application based on the `allowedSecrets` list. Follow [the Sidecar configuration instructions]({{< ref "configuration-overview.md#sidecar-configuration" >}}) to apply configuration to the sidecar.
 This example defines configuration for secret store named `vault`. The default access to the secret store is `deny`. Meanwhile, some secrets are accessible by the application based on the `allowedSecrets` list. Follow [the Sidecar configuration instructions]({{< ref "configuration-overview.md#sidecar-configuration" >}}) to apply configuration to the sidecar.
 
 ### Scenario 3: Deny access to certain sensitive secrets in a secret store
@@ -121,6 +148,11 @@ spec:
         deniedSecrets: ["secret1", "secret2"]
 ```
 
+This configuration explicitly denies access to `secret1` and `secret2` from the secret store named `vault,` while allowing access to all other secrets. Follow [the Sidecar configuration instructions]({{< ref "configuration-overview.md#sidecar-configuration" >}}) to apply configuration to the sidecar.
+
+## Next steps
+
+{{< button text="Service invocation access control" page="invoke-allowlist" >}}
 This configuration explicitly denies access to `secret1` and `secret2` from the secret store named `vault,` while allowing access to all other secrets. Follow [the Sidecar configuration instructions]({{< ref "configuration-overview.md#sidecar-configuration" >}}) to apply configuration to the sidecar.
 
 ## Next steps

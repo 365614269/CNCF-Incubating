@@ -120,7 +120,11 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 		return err
 	}
 
-	params.Logger.Info("Checking for required and optional GatewayAPI resources", "requiredGVK", requiredGVKs, "optionalGVK", optionalGVKs)
+	params.Logger.Info(
+		"Checking for required and optional GatewayAPI resources",
+		logfields.RequiredGVK, requiredGVKs,
+		logfields.OptionalGVK, optionalGVKs,
+	)
 	installedKinds, err := checkCRDs(context.Background(), params.K8sClient, params.Logger, requiredGVKs, optionalGVKs)
 	if err != nil {
 		params.Logger.Error("Required GatewayAPI resources are not found, please refer to docs for installation instructions", logfields.Error, err)
@@ -149,8 +153,9 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 			IPv6Enabled: params.AgentConfig.EnableIPv6,
 		},
 		ListenerConfig: translation.ListenerConfig{
-			UseProxyProtocol: params.GatewayApiConfig.EnableGatewayAPIProxyProtocol,
-			UseAlpn:          params.GatewayApiConfig.EnableGatewayAPIAlpn,
+			UseProxyProtocol:         params.GatewayApiConfig.EnableGatewayAPIProxyProtocol,
+			UseAlpn:                  params.GatewayApiConfig.EnableGatewayAPIAlpn,
+			StreamIdleTimeoutSeconds: params.OperatorConfig.ProxyStreamIdleTimeoutSeconds,
 		},
 		ClusterConfig: translation.ClusterConfig{
 			IdleTimeoutSeconds: params.OperatorConfig.ProxyIdleTimeoutSeconds,
@@ -251,7 +256,7 @@ func checkCRDs(ctx context.Context, clientset k8sClient.Clientset, logger *slog.
 
 	for _, optionalGVK := range optionalGVKs {
 		if err := checkCRD(ctx, clientset, optionalGVK); err != nil {
-			logger.Debug("CRD is not present, will not handle it", "optionalGVK", optionalGVK.String())
+			logger.Debug("CRD is not present, will not handle it", logfields.OptionalGVK, optionalGVK)
 			continue
 		}
 		// note that the .Kind field contains the _resource_ name -

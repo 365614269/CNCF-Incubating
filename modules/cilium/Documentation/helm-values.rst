@@ -424,6 +424,10 @@
      - Configure the maximum number of entries in endpoint policy map (per endpoint). @schema type: [null, integer] @schema
      - int
      - ``16384``
+   * - :spelling:ignore:`bpf.policyStatsMapMax`
+     - Configure the maximum number of entries in global policy stats map. @schema type: [null, integer] @schema
+     - int
+     - ``65536``
    * - :spelling:ignore:`bpf.preallocateMaps`
      - Enables pre-allocation of eBPF map values. This increases memory usage but can reduce latency.
      - bool
@@ -1488,6 +1492,10 @@
      - interval between checks of the startup probe
      - int
      - ``2``
+   * - :spelling:ignore:`envoy.streamIdleTimeoutDurationSeconds`
+     - Set Envoy the amount of time that the connection manager will allow a stream to exist with no upstream or downstream activity. default 5 minutes
+     - int
+     - ``300``
    * - :spelling:ignore:`envoy.terminationGracePeriodSeconds`
      - Configure termination grace period for cilium-envoy DaemonSet.
      - int

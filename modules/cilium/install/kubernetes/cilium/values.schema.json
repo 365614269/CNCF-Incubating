@@ -639,6 +639,12 @@
             "integer"
           ]
         },
+        "policyStatsMapMax": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
         "preallocateMaps": {
           "type": "boolean"
         },
@@ -2297,6 +2303,9 @@
             }
           },
           "type": "object"
+        },
+        "streamIdleTimeoutDurationSeconds": {
+          "type": "integer"
         },
         "terminationGracePeriodSeconds": {
           "type": "integer"

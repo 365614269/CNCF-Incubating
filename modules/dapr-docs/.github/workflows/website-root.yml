@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - v1.14
+      - v1.15
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
-      - v1.14
+      - v1.15
 
 concurrency:
   # Cancel the previously triggered build for only PR build.
@@ -97,7 +97,7 @@ jobs:
         with:
           submodules: false
       - name: Download Hugo artifacts
-        uses: actions/download-artifact@v4.1.7
+        uses: actions/download-artifact@v3
         with:
           name: hugo_build
           path: site/
