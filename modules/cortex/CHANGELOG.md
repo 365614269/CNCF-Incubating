@@ -12,6 +12,7 @@
 * [ENHANCEMENT] Querier: Apply bytes limiter to LabelNames and LabelValuesForLabelNames. #6568
 * [ENHANCEMENT] Query Frontend: Add a `too_many_tenants` reason label value to `cortex_rejected_queries_total` metric to track the rejected query count due to the # of tenant limits. #6569
 * [ENHANCEMENT] Alertmanager: Add receiver validations for msteamsv2 and rocketchat. #6606
+* [ENHANCEMENT] OTLP: Support otlp metadata ingestion. #6617
 * [BUGFIX] Ingester: Avoid error or early throttling when READONLY ingesters are present in the ring #6517
 * [BUGFIX] Ingester: Fix labelset data race condition. #6573
 * [BUGFIX] Compactor: Cleaner should not put deletion marker for blocks with no-compact marker. #6576
@@ -20,7 +21,7 @@
 * [BUGFIX] Query Frontend: Fix samples scanned and peak samples query stats when query hits results cache. #6591
 * [BUGFIX] Query Frontend: Fix panic caused by nil pointer dereference. #6609
 
-## 1.19.0 in progress
+## 1.19.0 2025-02-27
 
 * [CHANGE] Deprecate `-blocks-storage.tsdb.wal-compression-enabled` flag (use `blocks-storage.tsdb.wal-compression-type` instead). #6529
 * [CHANGE] OTLP: Change OTLP handler to be consistent with the Prometheus OTLP handler. #6272
