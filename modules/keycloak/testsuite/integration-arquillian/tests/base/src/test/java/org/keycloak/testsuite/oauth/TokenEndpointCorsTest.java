@@ -76,21 +76,21 @@ public class TokenEndpointCorsTest extends AbstractKeycloakTest {
         assertCors(response);
 
         // Refresh request
-        response = oauth.doRefreshTokenRequest(response.getRefreshToken(), null);
+        response = oauth.doRefreshTokenRequest(response.getRefreshToken());
 
         assertEquals(200, response.getStatusCode());
         assertCors(response);
 
         // Invalid origin
         oauth.origin(INVALID_CORS_URL);
-        response = oauth.doRefreshTokenRequest(response.getRefreshToken(), "password");
+        response = oauth.doRefreshTokenRequest(response.getRefreshToken());
         assertEquals(200, response.getStatusCode());
         assertNotCors(response);
         oauth.origin(VALID_CORS_URL);
 
         // No session
         oauth.idTokenHint(response.getIdToken()).openLogout();
-        response = oauth.doRefreshTokenRequest(response.getRefreshToken(), null);
+        response = oauth.doRefreshTokenRequest(response.getRefreshToken());
         assertEquals(400, response.getStatusCode());
         assertCors(response);
         assertEquals("invalid_grant", response.getError());
@@ -104,13 +104,13 @@ public class TokenEndpointCorsTest extends AbstractKeycloakTest {
         oauth.origin(VALID_CORS_URL);
 
         // Token request
-        AccessTokenResponse response = oauth.doGrantAccessTokenRequest("test-user@localhost", "password");
+        AccessTokenResponse response = oauth.doPasswordGrantRequest("test-user@localhost", "password");
 
         assertEquals(200, response.getStatusCode());
         assertCors(response);
 
         // Invalid password
-        response = oauth.doGrantAccessTokenRequest("test-user@localhost", "invalid");
+        response = oauth.doPasswordGrantRequest("test-user@localhost", "invalid");
 
         assertEquals(401, response.getStatusCode());
         assertCors(response);
@@ -123,14 +123,14 @@ public class TokenEndpointCorsTest extends AbstractKeycloakTest {
         oauth.origin(VALID_CORS_URL);
 
         // Successful token request with correct origin - cors should work
-        AccessTokenResponse response = oauth.doGrantAccessTokenRequest("test-user@localhost", "password");
+        AccessTokenResponse response = oauth.doPasswordGrantRequest("test-user@localhost", "password");
         assertEquals(200, response.getStatusCode());
         assertCors(response);
 
         oauth.client("direct-grant", "invalid");
 
         // Invalid client authentication with correct origin - cors should work
-        response = oauth.doGrantAccessTokenRequest("test-user@localhost", "password");
+        response = oauth.doPasswordGrantRequest("test-user@localhost", "password");
         assertEquals(401, response.getStatusCode());
         assertCors(response);
 
@@ -138,7 +138,7 @@ public class TokenEndpointCorsTest extends AbstractKeycloakTest {
 
         // Successful token request with bad origin - cors should NOT work
         oauth.origin(INVALID_CORS_URL);
-        response = oauth.doGrantAccessTokenRequest("test-user@localhost", "password");
+        response = oauth.doPasswordGrantRequest("test-user@localhost", "password");
         assertEquals(200, response.getStatusCode());
         assertNotCors(response);
     }

@@ -175,6 +175,7 @@ import org.keycloak.testsuite.util.ClientPoliciesUtil.ClientPolicyBuilder;
 import org.keycloak.testsuite.util.ClientPoliciesUtil.ClientProfileBuilder;
 import org.keycloak.testsuite.util.ClientPoliciesUtil.ClientProfilesBuilder;
 import org.keycloak.testsuite.util.MutualTLSUtils;
+import org.keycloak.testsuite.util.SignatureSignerUtil;
 import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 import org.keycloak.testsuite.util.oauth.AuthorizationEndpointResponse;
 import org.keycloak.testsuite.util.ServerURLs;
@@ -494,7 +495,7 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
     protected String createSignedRequestToken(String clientId, PrivateKey privateKey, PublicKey publicKey, String algorithm) {
         JsonWebToken jwt = createRequestToken(clientId, getRealmInfoUrl());
         String kid = KeyUtils.createKeyId(publicKey);
-        SignatureSignerContext signer = oauth.createSigner(privateKey, kid, algorithm);
+        SignatureSignerContext signer = SignatureSignerUtil.createSigner(privateKey, kid, algorithm);
         return new JWSBuilder().kid(kid).jsonContent(jwt).sign(signer);
     }
 
@@ -662,11 +663,11 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
     }
 
     protected void doTokenRevoke(String refreshToken, String clientId, String clientSecret, String userId, String sessionId, boolean isOfflineAccess) throws IOException {
-        oauth.clientId(clientId);
-        oauth.doTokenRevoke(refreshToken, "refresh_token", clientSecret);
+        oauth.client(clientId, clientSecret);
+        oauth.doTokenRevoke(refreshToken, "refresh_token");
 
         // confirm revocation
-        AccessTokenResponse tokenRes = oauth.doRefreshTokenRequest(refreshToken, clientSecret);
+        AccessTokenResponse tokenRes = oauth.doRefreshTokenRequest(refreshToken);
         assertEquals(400, tokenRes.getStatusCode());
         assertEquals(OAuthErrorException.INVALID_GRANT, tokenRes.getError());
         if (isOfflineAccess) assertEquals("Offline user session not found", tokenRes.getErrorDescription());
@@ -785,7 +786,7 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
 
     private String getToken(String username, String password) {
         try {
-            return oauth.client(Constants.ADMIN_CLI_CLIENT_ID).doGrantAccessTokenRequest(username, password).getAccessToken();
+            return oauth.client(Constants.ADMIN_CLI_CLIENT_ID).doPasswordGrantRequest(username, password).getAccessToken();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -1322,7 +1323,7 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
         AccessTokenResponse accessTokenResponseRefreshed;
         try (CloseableHttpClient client = MutualTLSUtils.newCloseableHttpClientWithDefaultKeyStoreAndTrustStore()) {
             oauth.httpClient().set(client);
-            accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(accessTokenResponse.getRefreshToken(), TEST_CLIENT_SECRET);
+            accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(accessTokenResponse.getRefreshToken());
         } catch (IOException ioe) {
             throw new RuntimeException(ioe);
         } finally {

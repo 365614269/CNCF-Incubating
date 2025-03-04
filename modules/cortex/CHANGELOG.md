@@ -12,6 +12,7 @@
 * [ENHANCEMENT] Querier: Apply bytes limiter to LabelNames and LabelValuesForLabelNames. #6568
 * [ENHANCEMENT] Query Frontend: Add a `too_many_tenants` reason label value to `cortex_rejected_queries_total` metric to track the rejected query count due to the # of tenant limits. #6569
 * [ENHANCEMENT] Alertmanager: Add receiver validations for msteamsv2 and rocketchat. #6606
+* [ENHANCEMENT] Query Frontend: Add a `-frontend.enabled-ruler-query-stats` flag to configure whether to report the query stats log for queries coming from the Ruler. #6504
 * [ENHANCEMENT] OTLP: Support otlp metadata ingestion. #6617
 * [BUGFIX] Ingester: Avoid error or early throttling when READONLY ingesters are present in the ring #6517
 * [BUGFIX] Ingester: Fix labelset data race condition. #6573
@@ -20,6 +21,7 @@
 * [BUGFIX] Querier: Fix marshal native histogram with empty bucket when protobuf codec is enabled. #6595
 * [BUGFIX] Query Frontend: Fix samples scanned and peak samples query stats when query hits results cache. #6591
 * [BUGFIX] Query Frontend: Fix panic caused by nil pointer dereference. #6609
+* [BUGFIX] Ingester: Add check to avoid query 5xx when closing tsdb. #6616
 
 ## 1.19.0 2025-02-27
 

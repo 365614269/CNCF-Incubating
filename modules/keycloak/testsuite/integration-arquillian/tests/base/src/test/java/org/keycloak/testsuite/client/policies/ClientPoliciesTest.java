@@ -640,7 +640,7 @@ public class ClientPoliciesTest extends AbstractClientPoliciesTest {
             AccessTokenResponse accessTokenResponseRefreshed;
             try (CloseableHttpClient client = MutualTLSUtils.newCloseableHttpClientWithDefaultKeyStoreAndTrustStore()) {
                 oauth.httpClient().set(client);
-                accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(accessTokenResponse.getRefreshToken(), TEST_CLIENT_SECRET);
+                accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(accessTokenResponse.getRefreshToken());
             } catch (IOException ioe) {
                 throw new RuntimeException(ioe);
             } finally {
@@ -988,7 +988,7 @@ public class ClientPoliciesTest extends AbstractClientPoliciesTest {
         updatePolicies(json);
 
         oauth.client(clientId, clientSecret);
-        AccessTokenResponse response = oauth.doGrantAccessTokenRequest(TEST_USER_NAME, TEST_USER_PASSWORD);
+        AccessTokenResponse response = oauth.doPasswordGrantRequest(TEST_USER_NAME, TEST_USER_PASSWORD);
 
         assertEquals(400, response.getStatusCode());
         assertEquals(OAuthErrorException.INVALID_GRANT, response.getError());

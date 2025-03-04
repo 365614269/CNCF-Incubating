@@ -468,7 +468,7 @@ public class ClientPoliciesExtendedEventTest extends AbstractClientPoliciesTest 
         updatePolicies(json);
 
         String refreshTokenString = res.getRefreshToken();
-        AccessTokenResponse accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(refreshTokenString, clientSecret);
+        AccessTokenResponse accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(refreshTokenString);
         assertEquals(200, accessTokenResponseRefreshed.getStatusCode());
         assertEquals(null, accessTokenResponseRefreshed.getRefreshToken());
 
@@ -481,7 +481,7 @@ public class ClientPoliciesExtendedEventTest extends AbstractClientPoliciesTest 
         ).toString();
         updatePolicies(json);
 
-        accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(refreshTokenString, clientSecret);
+        accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(refreshTokenString);
         assertEquals(200, accessTokenResponseRefreshed.getStatusCode());
         RefreshToken refreshedRefreshToken = oauth.parseRefreshToken(accessTokenResponseRefreshed.getRefreshToken());
         assertEquals(sessionId, refreshedRefreshToken.getSessionState());
@@ -538,7 +538,7 @@ public class ClientPoliciesExtendedEventTest extends AbstractClientPoliciesTest 
         Assert.assertEquals(404, nfe.getResponse().getStatus());
 
         String refreshTokenString = res.getRefreshToken();
-        AccessTokenResponse accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(refreshTokenString, clientSecret);
+        AccessTokenResponse accessTokenResponseRefreshed = oauth.doRefreshTokenRequest(refreshTokenString);
         assertEquals(200, accessTokenResponseRefreshed.getStatusCode());
         assertNull(accessTokenResponseRefreshed.getRefreshToken());
     }
@@ -576,17 +576,12 @@ public class ClientPoliciesExtendedEventTest extends AbstractClientPoliciesTest 
         updatePolicies(json);
 
 
-        String origClientId = oauth.getClientId();
-        oauth.clientId("service-account-app");
+        oauth.client("service-account-app", "app-secret");
         oauth.scope("offline_access");
-        try {
-            AccessTokenResponse response = oauth.doClientCredentialsGrantAccessTokenRequest("app-secret");
-            assertEquals(400, response.getStatusCode());
-            assertEquals(ClientPolicyEvent.SERVICE_ACCOUNT_TOKEN_RESPONSE.toString(), response.getError());
-            assertEquals("Exception thrown intentionally", response.getErrorDescription());
-        } finally {
-            oauth.clientId(origClientId);
-        }
+        AccessTokenResponse response = oauth.doClientCredentialsGrantAccessTokenRequest();
+        assertEquals(400, response.getStatusCode());
+        assertEquals(ClientPolicyEvent.SERVICE_ACCOUNT_TOKEN_RESPONSE.toString(), response.getError());
+        assertEquals("Exception thrown intentionally", response.getErrorDescription());
     }
 
     @Test
@@ -622,7 +617,7 @@ public class ClientPoliciesExtendedEventTest extends AbstractClientPoliciesTest 
         updatePolicies(json);
 
         oauth.client(clientId, clientSecret);
-        AccessTokenResponse response = oauth.doGrantAccessTokenRequest(TEST_USER_NAME, TEST_USER_PASSWORD);
+        AccessTokenResponse response = oauth.doPasswordGrantRequest(TEST_USER_NAME, TEST_USER_PASSWORD);
 
         assertEquals(400, response.getStatusCode());
         assertEquals(ClientPolicyEvent.RESOURCE_OWNER_PASSWORD_CREDENTIALS_RESPONSE.toString(), response.getError());
