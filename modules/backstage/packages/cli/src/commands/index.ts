@@ -25,6 +25,7 @@ import {
   registerRepoCommands as registerRepoBuildCommands,
   registerCommands as registerBuildCommands,
 } from '../modules/build';
+import { registerCommands as registerInfoCommands } from '../modules/info';
 import { registerCommands as registerMigrateCommand } from '../modules/migrate';
 import {
   registerRepoCommands as registerRepoTestCommands,
@@ -128,7 +129,7 @@ export function registerScriptCommand(program: Command) {
     .option('--fix', 'Attempt to automatically fix violations')
     .option(
       '--max-warnings <number>',
-      'Fail if more than this number of warnings. -1 allows warnings. (default: 0)',
+      'Fail if more than this number of warnings. -1 allows warnings. (default: -1)',
     )
     .description('Lint a package')
     .action(lazy(() => import('./lint'), 'default'));
@@ -191,16 +192,12 @@ export function registerCommands(program: Command) {
   registerScriptCommand(program);
   registerMigrateCommand(program);
   registerBuildCommands(program);
+  registerInfoCommands(program);
 
   program
     .command('create-github-app <github-org>')
     .description('Create new GitHub App in your organization.')
     .action(lazy(() => import('./create-github-app'), 'default'));
-
-  program
-    .command('info')
-    .description('Show helpful information for debugging and reporting bugs')
-    .action(lazy(() => import('./info'), 'default'));
 
   // Notifications for removed commands
   program
