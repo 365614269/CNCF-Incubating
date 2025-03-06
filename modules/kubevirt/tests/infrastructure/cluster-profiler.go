@@ -13,14 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright 2017-2023 Red Hat, Inc.
+ * Copyright The KubeVirt Authors.
  *
  */
 
 package infrastructure
 
 import (
-	"kubevirt.io/kubevirt/tests/decorators"
 	"kubevirt.io/kubevirt/tests/framework/kubevirt"
 	"kubevirt.io/kubevirt/tests/libkubevirt"
 	"kubevirt.io/kubevirt/tests/libkubevirt/config"
@@ -31,7 +30,7 @@ import (
 	"kubevirt.io/client-go/kubecli"
 )
 
-var _ = DescribeSerialInfra("cluster profiler for pprof data aggregation", func() {
+var _ = Describe(SIGSerial("cluster profiler for pprof data aggregation", func() {
 	var virtClient kubecli.KubevirtClient
 	var kvConfig v1.KubeVirtConfiguration
 
@@ -59,7 +58,7 @@ var _ = DescribeSerialInfra("cluster profiler for pprof data aggregation", func(
 			_, err = virtClient.ClusterProfiler().Dump(&v1.ClusterProfilerRequest{})
 			Expect(err).To(HaveOccurred())
 		})
-		It("[QUARANTINE]is enabled it should allow subresource access", decorators.Quarantine, func() {
+		It("is enabled it should allow subresource access", func() {
 			kvConfig.DeveloperConfiguration.ClusterProfiler = true
 			config.UpdateKubeVirtConfigValueAndWait(kvConfig)
 
@@ -73,4 +72,4 @@ var _ = DescribeSerialInfra("cluster profiler for pprof data aggregation", func(
 			Expect(err).ToNot(HaveOccurred())
 		})
 	})
-})
+}))

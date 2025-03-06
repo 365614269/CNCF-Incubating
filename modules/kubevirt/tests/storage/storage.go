@@ -65,7 +65,6 @@ import (
 	"kubevirt.io/kubevirt/tests/libvmops"
 	"kubevirt.io/kubevirt/tests/libwait"
 	"kubevirt.io/kubevirt/tests/testsuite"
-	"kubevirt.io/kubevirt/tests/util"
 	"kubevirt.io/kubevirt/tests/watcher"
 )
 
@@ -87,7 +86,7 @@ const (
 
 type VMICreationFunc func(string) *v1.VirtualMachineInstance
 
-var _ = SIGDescribe("Storage", func() {
+var _ = Describe(SIG("Storage", func() {
 	var err error
 	var virtClient kubecli.KubevirtClient
 
@@ -1355,7 +1354,7 @@ var _ = SIGDescribe("Storage", func() {
 			})
 		})
 	})
-})
+}))
 
 func waitForPodToDisappearWithTimeout(podName string, seconds int) {
 	virtClient := kubevirt.Client()
@@ -1379,14 +1378,16 @@ func deletePvAndPvc(name string) {
 	virtCli := kubevirt.Client()
 
 	err := virtCli.CoreV1().PersistentVolumes().Delete(context.Background(), name, metav1.DeleteOptions{})
-	if !errors.IsNotFound(err) {
-		util.PanicOnError(err)
-	}
+	Expect(err).To(Or(
+		Not(HaveOccurred()),
+		MatchError(errors.IsNotFound, "errors.IsNotFound"),
+	))
 
 	err = virtCli.CoreV1().PersistentVolumeClaims(testsuite.GetTestNamespace(nil)).Delete(context.Background(), name, metav1.DeleteOptions{})
-	if !errors.IsNotFound(err) {
-		util.PanicOnError(err)
-	}
+	Expect(err).To(Or(
+		Not(HaveOccurred()),
+		MatchError(errors.IsNotFound, "errors.IsNotFound"),
+	))
 }
 
 func runPodAndExpectPhase(pod *k8sv1.Pod, phase k8sv1.PodPhase) *k8sv1.Pod {
