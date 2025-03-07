@@ -77,7 +77,7 @@ env:
   # Hosted under quay.io/cilium/egw-scale-utils and built by
   # a workflow in cilium/scaffolding.
   # renovate: datasource=git-refs depName=https://github.com/cilium/scaffolding branch=main
-  egw_utils_ref: 2857ed459734365bfd3ee94815fd74e986a79e12
+  egw_utils_ref: affdf829a14afbfd4f4a524726bb2fca2ecbf08a
   test_name: egw
   cluster_name: ${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -172,6 +172,7 @@ jobs:
             --set=k8sClientRateLimit.qps=100 \
             --set=extraConfig.cilium-endpoint-gc-interval=24h \
             --set-string=extraConfig.enable-stale-cilium-endpoint-cleanup=false \
+            --set=prometheus.metrics="{+cilium_datapath_nat_gc_entries}" \
             --set=image.override=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/cilium-ci:${SHA} \
             --set=operator.image.override=quay.io/${{ env.QUAY_ORGANIZATION_DEV }}/operator-aws-ci:${SHA} \
             --values=values-dummy-health-server.yaml \
@@ -250,6 +251,17 @@ jobs:
           eks_version_and_region=$(yq '.include | sort_by(.version) | reverse | .[0] | "\(.version),\(.region)"' .github/actions/eks/k8s-versions.yaml)
           EKS_VERSION=$(echo $eks_version_and_region | cut -d',' -f1)
           EKS_REGION=$(echo $eks_version_and_region | cut -d',' -f2)
+
+          # Currently, ClusterLoader2 does not play well with EKS 1.32, because
+          # anonymous authentication to the API Server metrics endpoint is no
+          # longer possible [1]. Let's ensure we use a supported version until
+          # the issue gets addressed upstream [2].
+          #
+          # [1]: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions-standard.html#kubernetes-1-32
+          # [2]: https://github.com/kubernetes/perf-tests/pull/3214
+          if [[ "$EKS_VERSION" == "1.32" ]]; then
+            EKS_VERSION=1.31
+          fi
 
           echo sha=${SHA} >> $GITHUB_OUTPUT
           echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
@@ -380,10 +392,24 @@ jobs:
           K8S_API_SRV_ADDR=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}' | sed 's|https://||')
           echo "Retrieved Kubernetes API Server address: '${K8S_API_SRV_ADDR}'"
 
+          # Retrieve the CIDR associated with the availability zone where the cluster
+          # is deployed, and configure it as native routing CIDR. Otherwise, Cilium
+          # would default to the VPC CIDR, but we want to masquerade traffic towards
+          # the external destination (which is located in the same VPC, but different
+          # availability zone), to reflect the most common type of real deployments.
+          NATIVE_CIDR_BLOCK=$(aws ec2 describe-subnets --region ${{ steps.vars.outputs.eks_region }} \
+            --filters Name=availability-zone,Values=${{ steps.vars.outputs.eks_zone_1 }} \
+                Name=tag:alpha.eksctl.io/cluster-name,Values=${{ steps.vars.outputs.cluster_name }} \
+                Name=map-public-ip-on-launch,Values=false \
+            --query 'Subnets[*].CidrBlock' --output text)
+          echo "Retrieved native routing CIDR: '${NATIVE_CIDR_BLOCK}'"
+
           cilium install --dry-run-helm-values ${{ steps.vars.outputs.cilium_install_defaults }} \
-            --set=k8sServiceHost="${K8S_API_SRV_ADDR}" --set=k8sServicePort=443
+            --set=k8sServiceHost="${K8S_API_SRV_ADDR}" --set=k8sServicePort=443 \
+            --set=ipv4NativeRoutingCIDR="${NATIVE_CIDR_BLOCK}"
           cilium install ${{ steps.vars.outputs.cilium_install_defaults }} \
-            --set=k8sServiceHost="${K8S_API_SRV_ADDR}" --set=k8sServicePort=443
+            --set=k8sServiceHost="${K8S_API_SRV_ADDR}" --set=k8sServicePort=443 \
+            --set=ipv4NativeRoutingCIDR="${NATIVE_CIDR_BLOCK}"
 
       - name: Delete context ref
         run: |
@@ -585,6 +611,14 @@ jobs:
           results_bucket: ${{ env.GCP_PERF_RESULTS_BUCKET }}
           artifacts: ./perf-tests/clusterloader2/report/*
           other_files: cilium-sysdump-final.zip ./perf-tests/clusterloader2/cl2-output.txt
+
+      # Refresh credentials
+      - name: Set up AWS CLI credentials
+        if:  ${{ always() && steps.deploy-cluster.outcome != 'skipped' }}
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_PR_ASSUME_ROLE }}
+          aws-region: ${{ steps.vars.outputs.eks_region }}
 
       - name: Cleanup cluster
         if: ${{ always() && steps.deploy-cluster.outcome != 'skipped' }}

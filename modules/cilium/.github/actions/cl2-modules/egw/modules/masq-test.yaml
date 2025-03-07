@@ -4,6 +4,7 @@ steps:
     params:
       action: start
       instance: {{ .instance }}
+      replicas: {{ .replicas }}
       metricsSuffix: {{ .metricsSuffix }}
 
 - name: Create EGW client Pods
@@ -20,7 +21,9 @@ steps:
         Image: {{ .image }}
         Instance: {{ .instance }}
         ExternalTarget: {{ .externalTarget }}
+        ExternalTargetPort: 1337
         ClientConnectTimeout: "295s"
+        Stress: false
 
 - name: Wait for EGW Client pods to be running
   measurements:
@@ -33,7 +36,7 @@ steps:
 
 - name: Sleep to allow scraping
   measurements:
-  - Identifier: SleepTwiceScrapeInterval
+  - Identifier: Sleep
     Method: Sleep
     Params:
       duration: 30s
@@ -43,4 +46,5 @@ steps:
     params:
       action: gather
       instance: {{ .instance }}
+      replicas: {{ .replicas }}
       metricsSuffix: {{ .metricsSuffix }}
