@@ -7,6 +7,8 @@ import org.keycloak.representations.AuthorizationResponseToken;
 import org.keycloak.representations.IDToken;
 import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.RefreshToken;
+import org.keycloak.testsuite.util.oauth.ciba.CibaClient;
+import org.keycloak.testsuite.util.oauth.device.DeviceClient;
 import org.openqa.selenium.WebDriver;
 
 import java.util.Map;
@@ -33,7 +35,6 @@ public abstract class AbstractOAuthClient<T> {
     protected String prompt;
     protected StateParamProvider state;
     protected String nonce;
-    protected String idTokenHint;
 
     private final KeyManager keyManager = new KeyManager(this);
     private final TokensManager tokensManager = new TokensManager(keyManager);
@@ -116,6 +117,30 @@ public abstract class AbstractOAuthClient<T> {
         return refreshRequest(refreshToken).send();
     }
 
+    public LogoutUrlBuilder logoutForm() {
+        return new LogoutUrlBuilder(this);
+    }
+
+    public void openLogoutForm() {
+        logoutForm().open();
+    }
+
+    public LogoutRequest logoutRequest(String refreshToken) {
+        return new LogoutRequest(refreshToken, this);
+    }
+
+    public LogoutResponse doLogout(String refreshToken) {
+        return logoutRequest(refreshToken).send();
+    }
+
+    public BackchannelLogoutRequest backchannelLogoutRequest(String logoutToken) {
+        return new BackchannelLogoutRequest(logoutToken, this);
+    }
+
+    public BackchannelLogoutResponse doBackchannelLogout(String logoutToken) {
+        return backchannelLogoutRequest(logoutToken).send();
+    }
+
     public OpenIDProviderConfigurationRequest wellknownRequest() {
         return new OpenIDProviderConfigurationRequest(this);
     }
@@ -154,6 +179,14 @@ public abstract class AbstractOAuthClient<T> {
 
     public TokenRevocationResponse doTokenRevoke(String token) {
         return tokenRevocationRequest(token).send();
+    }
+
+    public CibaClient ciba() {
+        return new CibaClient(this);
+    }
+
+    public DeviceClient device() {
+        return new DeviceClient(this);
     }
 
     public <J extends JsonWebToken> J parseToken(String token, Class<J> clazz) {
@@ -222,15 +255,15 @@ public abstract class AbstractOAuthClient<T> {
         return clientSessionHost;
     }
 
-    String getCodeChallenge() {
+    public String getCodeChallenge() {
         return codeChallenge;
     }
 
-    String getCodeChallengeMethod() {
+    public String getCodeChallengeMethod() {
         return codeChallengeMethod;
     }
 
-    String getCodeVerifier() {
+    public String getCodeVerifier() {
         return codeVerifier;
     }
 
@@ -246,15 +279,15 @@ public abstract class AbstractOAuthClient<T> {
         return dpopProof;
     }
 
-    String getRequestUri() {
+    public String getRequestUri() {
         return requestUri;
     }
 
-    String getRequest() {
+    public String getRequest() {
         return request;
     }
 
-    String getClaims() {
+    public String getClaims() {
         return claims;
     }
 
@@ -270,7 +303,7 @@ public abstract class AbstractOAuthClient<T> {
         return state != null ? state.getState() : null;
     }
 
-    String getNonce() {
+    public String getNonce() {
         return nonce;
     }
 

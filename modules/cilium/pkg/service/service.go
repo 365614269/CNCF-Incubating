@@ -90,6 +90,7 @@ type svcInfo struct {
 	svcName                   lb.ServiceName
 	loadBalancerAlgorithm     lb.SVCLoadBalancingAlgorithm
 	svcSourceRangesPolicy     lb.SVCSourceRangesPolicy
+	svcProxyDelegation        lb.SVCProxyDelegation
 	loadBalancerSourceRanges  []*cidr.CIDR
 	l7LBProxyPort             uint16 // Non-zero for egress L7 LB services
 	LoopbackHostport          bool
@@ -121,6 +122,7 @@ func (svc *svcInfo) deepCopyToLBSVC() *lb.SVC {
 		NatPolicy:             svc.svcNatPolicy,
 		SourceRangesPolicy:    svc.svcSourceRangesPolicy,
 		HealthCheckNodePort:   svc.svcHealthCheckNodePort,
+		ProxyDelegation:       svc.svcProxyDelegation,
 		Annotations:           svc.annotations,
 		Name:                  svc.svcName,
 		L7LBProxyPort:         svc.l7LBProxyPort,
@@ -830,11 +832,21 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 
 	backendsCopy := []*lb.Backend{}
 	for _, b := range params.Backends {
-		// Local redirect services or services with trafficPolicy=Local may
-		// only use node-local backends for external scope. We implement this by
-		// filtering out all backend IPs which are not a local endpoint.
-		if filterBackends && len(b.NodeName) > 0 && b.NodeName != nodeTypes.GetName() {
-			continue
+		// Local redirect services or services with externalTrafficPolicy=Local
+		// may only use node-local backends for external scope. We implement
+		// this by filtering out all backend IPs which are not a local endpoint.
+		//
+		// In case a backend name could not be resolved, check for local IPs if
+		// they match the criteria (for the case of proxy delegation).
+		if filterBackends {
+			if len(b.NodeName) > 0 && b.NodeName != nodeTypes.GetName() {
+				continue
+			}
+			if params.ProxyDelegation != lb.SVCProxyDelegationNone {
+				if node.IsNodeIP(b.L3n4Addr.AddrCluster.Addr()) == "" {
+					continue
+				}
+			}
 		}
 		backendsCopy = append(backendsCopy, b.DeepCopy())
 	}
@@ -1012,6 +1024,7 @@ func (s *Service) upsertNodePortHealthService(svc *svcInfo, nodeMeta NodeMetaCol
 		Backends:              healthCheckBackends,
 		LoopbackHostport:      true,
 		LoadBalancerAlgorithm: svc.loadBalancerAlgorithm,
+		ProxyDelegation:       svc.svcProxyDelegation,
 	}
 
 	_, _, err := s.upsertService(healthCheckSvc)
@@ -1114,6 +1127,7 @@ func (s *Service) UpdateBackendsStateMultiple(svcMapping map[lb.ID]*svcInfo, bac
 						SessionAffinity:           info.sessionAffinity,
 						SessionAffinityTimeoutSec: info.sessionAffinityTimeoutSec,
 						SourceRangesPolicy:        info.svcSourceRangesPolicy,
+						ProxyDelegation:           info.svcProxyDelegation,
 						CheckSourceRange:          info.checkLBSourceRange(),
 						UseMaglev:                 info.useMaglev(),
 						Name:                      info.svcName,
@@ -1489,6 +1503,7 @@ func (s *Service) createSVCInfoIfNotExist(p *lb.SVC) (*svcInfo, bool, bool,
 			svcNatPolicy:             p.NatPolicy,
 			svcHealthCheckNodePort:   p.HealthCheckNodePort,
 			svcSourceRangesPolicy:    p.SourceRangesPolicy,
+			svcProxyDelegation:       p.ProxyDelegation,
 			loadBalancerSourceRanges: p.LoadBalancerSourceRanges,
 			loadBalancerAlgorithm:    p.LoadBalancerAlgorithm,
 			l7LBProxyPort:            p.L7LBProxyPort,
@@ -1525,6 +1540,7 @@ func (s *Service) createSVCInfoIfNotExist(p *lb.SVC) (*svcInfo, bool, bool,
 		svc.sessionAffinity = p.SessionAffinity
 		svc.sessionAffinityTimeoutSec = p.SessionAffinityTimeoutSec
 		svc.svcSourceRangesPolicy = p.SourceRangesPolicy
+		svc.svcProxyDelegation = p.ProxyDelegation
 		svc.loadBalancerSourceRanges = p.LoadBalancerSourceRanges
 		svc.annotations = p.Annotations
 		svc.loadBalancerAlgorithm = p.LoadBalancerAlgorithm
@@ -1707,6 +1723,7 @@ func (s *Service) upsertServiceIntoLBMaps(svc *svcInfo, isExtLocal, isIntLocal b
 		SessionAffinity:           svc.sessionAffinity,
 		SessionAffinityTimeoutSec: svc.sessionAffinityTimeoutSec,
 		SourceRangesPolicy:        svc.svcSourceRangesPolicy,
+		ProxyDelegation:           svc.svcProxyDelegation,
 		CheckSourceRange:          checkLBSrcRange,
 		UseMaglev:                 svc.useMaglev(),
 		L7LBProxyPort:             svc.l7LBProxyPort,

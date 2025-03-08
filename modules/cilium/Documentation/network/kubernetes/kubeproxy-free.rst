@@ -391,6 +391,40 @@ corresponding ``NodePort`` and ``ClusterIP`` services. If the annotation
 would be set to e.g. ``service.cilium.io/type: NodePort``, then only the
 ``NodePort`` service would be installed.
 
+Host Proxy Delegation
+*********************
+
+If the selected service backend IP for a given service matches the local
+node IP, the annotation ``service.cilium.io/proxy-delegation: delegate-if-local``
+will pass the received packet unmodified to the upper stack, so that a
+L7 proxy such as Envoy (if present) can handle the request in the host
+namespace.
+
+If the selected service backend is a remote IP, then the received packet
+is not pushed to the upper stack and instead the BPF code forwards the
+packet natively with the configured forwarding method to the remote IP.
+
+.. code-block:: yaml
+
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: example-service
+    annotations:
+      service.cilium.io/proxy-delegation: delegate-if-local
+  spec:
+    ports:
+      - port: 80
+        targetPort: 80
+    type: LoadBalancer
+
+In combination with ``externalTrafficPolicy=Local`` this mechanism also allows
+for pushing all traffic to the upper proxy.
+
+Non-presence of the ``service.cilium.io/proxy-delegation`` annotation leaves
+all forwarding to BPF natively which is also the default for the kube-proxy
+replacement case.
+
 Selective Service Node Exposure
 *******************************
 
@@ -1734,6 +1768,21 @@ External Access To ClusterIP Services
 As per `k8s Service <https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types>`__,
 Cilium's eBPF kube-proxy replacement by default disallows access to a ClusterIP service from outside the cluster.
 This can be allowed by setting ``bpf.lbExternalClusterIP=true``.
+
+Kubernetes API server high availability
+***************************************
+
+If you are running multiple instances of Kubernetes API servers in your cluster, you can set the ``k8s-api-server-urls`` flag
+so that Cilium can fail over to an active instance. Cilium switches to the ``kubernetes`` service address so that
+API requests are load-balanced to API server endpoints during runtime. However, if the initially configured API servers
+are rotated while the agent is down, you can update the ``k8s-api-server-urls`` flag with the updated API servers.
+
+.. parsed-literal::
+
+    helm install cilium |CHART_RELEASE| \\
+        --namespace kube-system \\
+        --set kubeProxyReplacement=true \\
+        --set k8s.apiServerURLs="https://172.21.0.4:6443 https://172.21.0.5:6443 https://172.21.0.6:6443"
 
 Observability
 *************

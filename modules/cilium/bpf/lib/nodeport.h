@@ -1238,7 +1238,7 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 		return DROP_IS_CLUSTER_IP;
 
 #if defined(ENABLE_L7_LB)
-	if (lb6_svc_is_l7loadbalancer(svc) && svc->l7_lb_proxy_port > 0) {
+	if (lb6_svc_is_l7_loadbalancer(svc)) {
 # if !defined(IS_BPF_XDP)
 		__be16 proxy_port = (__be16)svc->l7_lb_proxy_port;
 
@@ -1256,13 +1256,18 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 		*punt_to_stack = true;
 #  endif /* ENABLE_TPROXY */
 # endif /* IS_BPF_XDP */
-
 		return CTX_ACT_OK;
 	}
 #endif
 	ret = lb6_local(get_ct_map6(tuple), ctx, l3_off, l4_off,
 			key, tuple, svc, &ct_state_svc,
 			nodeport_xlate6(svc, tuple), ext_err, 0);
+#ifdef ENABLE_L7_LB
+	if (ret == LB_PUNT_TO_STACK) {
+		*punt_to_stack = true;
+		return CTX_ACT_OK;
+	}
+#endif
 #ifdef SERVICE_NO_BACKEND_RESPONSE
 	if (ret == DROP_NO_SERVICE) {
 		edt_set_aggregate(ctx, 0);
@@ -2531,7 +2536,7 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 		return DROP_IS_CLUSTER_IP;
 
 #if defined(ENABLE_L7_LB)
-	if (lb4_svc_is_l7loadbalancer(svc) && svc->l7_lb_proxy_port > 0) {
+	if (lb4_svc_is_l7_loadbalancer(svc)) {
 		/* We cannot redirect from the XDP layer to cilium_host.
 		 * Therefore, let the bpf_host to handle the L7 ingress
 		 * request.
@@ -2556,7 +2561,6 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 		*punt_to_stack = true;
 #  endif /* ENABLE_TPROXY */
 # endif /* IS_BPF_XDP */
-
 		return CTX_ACT_OK;
 	}
 #endif
@@ -2568,6 +2572,12 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 		ret = lb4_local(get_ct_map4(tuple), ctx, is_fragment, l3_off, l4_off,
 				key, tuple, svc, &ct_state_svc, has_l4_header,
 				nodeport_xlate4(svc, tuple), &cluster_id, ext_err, 0);
+#ifdef ENABLE_L7_LB
+		if (ret == LB_PUNT_TO_STACK) {
+			*punt_to_stack = true;
+			return CTX_ACT_OK;
+		}
+#endif
 #ifdef SERVICE_NO_BACKEND_RESPONSE
 		if (ret == DROP_NO_SERVICE) {
 			/* Packet is TX'ed back out, avoid EDT false-positives: */

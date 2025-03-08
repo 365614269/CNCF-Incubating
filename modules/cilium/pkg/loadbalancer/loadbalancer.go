@@ -117,6 +117,13 @@ const (
 	SVCSourceRangesPolicyDeny  = SVCSourceRangesPolicy("deny")
 )
 
+type SVCProxyDelegation string
+
+const (
+	SVCProxyDelegationNone            = SVCProxyDelegation("none")
+	SVCProxyDelegationDelegateIfLocal = SVCProxyDelegation("delegate-if-local")
+)
+
 // ServiceFlags is the datapath representation of the service flags that can be
 // used (lb{4,6}_service.flags)
 type ServiceFlags uint16
@@ -173,9 +180,6 @@ func NewSvcFlag(p *SvcFlagParam) ServiceFlags {
 		flags |= serviceFlagLoadBalancer
 	case SVCTypeHostPort:
 		flags |= serviceFlagHostPort
-		if p.LoopbackHostport {
-			flags |= serviceFlagLoopback
-		}
 	case SVCTypeLocalRedirect:
 		flags |= serviceFlagLocalRedirect
 	}
@@ -216,6 +220,9 @@ func NewSvcFlag(p *SvcFlagParam) ServiceFlags {
 	}
 	if p.SvcFwdModeDSR {
 		flags |= serviceFlagFwdModeDSR
+	}
+	if p.LoopbackHostport {
+		flags |= serviceFlagLoopback
 	}
 
 	return flags
@@ -320,7 +327,11 @@ func (s ServiceFlags) String() string {
 		str = append(str, "l7-load-balancer")
 	}
 	if s&serviceFlagLoopback != 0 {
-		str = append(str, "loopback")
+		if s.SVCType() == SVCTypeHostPort {
+			str = append(str, "loopback")
+		} else {
+			str = append(str, "delegate-if-local")
+		}
 	}
 	if !seenDeny && s&serviceFlagQuarantined != 0 {
 		str = append(str, "quarantined")
@@ -556,6 +567,7 @@ type SVC struct {
 	IntTrafficPolicy          SVCTrafficPolicy  // Service internal traffic policy
 	NatPolicy                 SVCNatPolicy      // Service NAT 46/64 policy
 	SourceRangesPolicy        SVCSourceRangesPolicy
+	ProxyDelegation           SVCProxyDelegation
 	SessionAffinity           bool
 	SessionAffinityTimeoutSec uint32
 	HealthCheckNodePort       uint16                    // Service health check node port
@@ -1122,6 +1134,12 @@ func (l *L3n4Addr) ProtocolsEqual(o *L3n4Addr) bool {
 	return l.Protocol == o.Protocol &&
 		(l.AddrCluster.Is4() && o.AddrCluster.Is4() ||
 			l.AddrCluster.Is6() && o.AddrCluster.Is6())
+}
+
+func (l *L3n4Addr) AddrString() string {
+	str := l.AddrCluster.Addr().String() + ":" + strconv.FormatUint(uint64(l.Port), 10)
+
+	return str
 }
 
 // Bytes returns the address as a byte slice for indexing purposes.

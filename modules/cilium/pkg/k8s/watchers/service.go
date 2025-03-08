@@ -20,6 +20,7 @@ import (
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/ip"
 	"github.com/cilium/cilium/pkg/k8s"
+	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	k8sSynced "github.com/cilium/cilium/pkg/k8s/synced"
@@ -433,6 +434,7 @@ func (k *K8sServiceWatcher) datapathSVCs(svc *k8s.Service, endpoints *k8s.Endpoi
 		svcs[i].SessionAffinityTimeoutSec = svc.SessionAffinityTimeoutSec
 		svcs[i].Annotations = svc.Annotations
 		svcs[i].SourceRangesPolicy = svc.SourceRangesPolicy
+		svcs[i].ProxyDelegation = svc.ProxyDelegation
 		if configureWithSourceRanges(svcs[i].Type) {
 			svcs[i].LoadBalancerSourceRanges = lbSrcRanges
 		}
@@ -582,6 +584,7 @@ func (k *K8sServiceWatcher) addK8sSVCs(svcID k8s.ServiceID, oldSvc, svc *k8s.Ser
 			HealthCheckNodePort:       dpSvc.HealthCheckNodePort,
 			Annotations:               dpSvc.Annotations,
 			SourceRangesPolicy:        dpSvc.SourceRangesPolicy,
+			ProxyDelegation:           dpSvc.ProxyDelegation,
 			LoadBalancerSourceRanges:  dpSvc.LoadBalancerSourceRanges,
 			LoadBalancerAlgorithm:     dpSvc.LoadBalancerAlgorithm,
 			Name: loadbalancer.ServiceName{
@@ -597,7 +600,25 @@ func (k *K8sServiceWatcher) addK8sSVCs(svcID k8s.ServiceID, oldSvc, svc *k8s.Ser
 				scopedLog.WithError(err).Error("Error while inserting service in LB map")
 			}
 		}
+		k.updateK8sAPIServiceMappings(p)
 	}
+}
+
+// updateK8sAPIServiceMappings updates service to endpoints mapping.
+// This is currently used for supporting high availability for kubeapi-server.
+func (k *K8sServiceWatcher) updateK8sAPIServiceMappings(svc *loadbalancer.SVC) {
+	if svc.Name.Name != "kubernetes" || svc.Name.Namespace != "default" {
+		return
+	}
+
+	var mapping client.K8sServiceEndpointMapping
+	mapping.Endpoints = make([]string, len(svc.Backends))
+	mapping.Service = svc.Frontend.L3n4Addr.AddrString()
+	for i := range mapping.Endpoints {
+		mapping.Endpoints[i] = svc.Backends[i].AddrString()
+	}
+	log.WithField("entry", mapping).Info("writing kubernetes service mapping")
+	client.UpdateK8sAPIServerEntry(mapping)
 }
 
 // k8sServiceEventProcessed is called to do metrics accounting the duration to program the service.

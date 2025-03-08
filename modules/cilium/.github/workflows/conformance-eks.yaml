@@ -222,7 +222,6 @@ jobs:
             --helm-set=cluster.name=${{ env.clusterName }} \
             --helm-set=hubble.relay.enabled=true \
             --helm-set loadBalancer.l7.backend=envoy \
-            --helm-set=bpf.monitorAggregation=none \
             --wait=false"
           if [[ "${{ matrix.ipsec }}" == "true" ]]; then
             CILIUM_INSTALL_DEFAULTS+=" --helm-set encryption.enabled=true --helm-set encryption.type=ipsec"
@@ -276,7 +275,7 @@ jobs:
           addons: "coredns kube-proxy"
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@1ea75a067eb7c4ba11a9f082a365f97a14c331db # v0.18.0
+        uses: cilium/cilium-cli@45a3879a8cb769c9e41b912635e03a38849c9242 # v0.18.1
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
