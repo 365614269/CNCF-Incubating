@@ -43,6 +43,12 @@ Please see [here](https://github.com/longhorn/longhorn/releases/tag/v{{< current
 
 The functionality of the [environment check script](https://github.com/longhorn/longhorn/blob/master/scripts/environment_check.sh) (`environment_check.sh`) overlaps with that of the Longhorn CLI, which is available starting with v1.7.0. Because of this, the script is deprecated in v1.7.0 and is scheduled for removal in v1.9.0.
 
+### Deprecate `longhorn.io/v1beta1` API
+
+The `v1beta1` version of the Longhorn API is deprecated in v1.9.0 and will be removed in v1.10.0. During Longhorn system upgrades, custom resources using `longhorn.io/v1beta1` are automatically migrated to `longhorn.io/v1beta2`.
+
+Deprecated APIs are no longer served and may therefore cause unexpected or unwanted behavior. Avoid using longhorn.io/v1beta1 in new code and, if possible, rewrite existing code to exclude this version.
+
 ## General
 
 ### Kubernetes Version Requirement
@@ -82,7 +88,7 @@ Longhorn v1.8.0 and later versions support usage of V2 volumes in Talos Linux cl
 
 Starting with v1.8.0, Longhorn supports usage of multiple backupstores. You can configure backup targets to access backupstores on the **Setting/Backup Target** page of the Longhorn UI. v1.8.0 improves on earlier Longhorn versions, which only allow you to use a single backup target for accessing a backupstore. Earlier versions also require you to configure the settings `backup-target`, `backup-target-credential-secret`, and `backupstore-poll-interval` for backup target management.
 
-> **IMPORTANT:**  
+> **IMPORTANT:**
 > The settings `backup-target`, `backup-target-credential-secret`, and `backupstore-poll-interval` were removed from the global settings because backup targets can be configured on the **Setting/Backup Target** page of the Longhorn UI. Longhorn also creates a default backup target (`default`) during installation and upgrades.
 
 Longhorn creates a default backup target (`default`) during installation and upgrades. The default backup target is used for the following:
@@ -146,7 +152,7 @@ For more information, see [#10053](https://github.com/longhorn/longhorn/issues/1
 
 ### Resolved Potential Volume and Backup Data Corruption Issue
 
-A data corruption [issue](https://github.com/longhorn/longhorn/issues/10135) that affects earlier Longhorn releases has been resolved in v1.8.0. The issue involves potential continual changes to the checksum of files in a V2 volume with multiple replicas. This occurs because SPDK allocates clusters without initialization, leading to data inconsistencies across replicas. The varying data read from the volume can result in data corruption and broken backups. 
+A data corruption [issue](https://github.com/longhorn/longhorn/issues/10135) that affects earlier Longhorn releases has been resolved in v1.8.0. The issue involves potential continual changes to the checksum of files in a V2 volume with multiple replicas. This occurs because SPDK allocates clusters without initialization, leading to data inconsistencies across replicas. The varying data read from the volume can result in data corruption and broken backups.
 
 ### Support for Configurable CPU Cores
 
