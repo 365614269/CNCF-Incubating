@@ -20,16 +20,10 @@ public abstract class AbstractOAuthClient<T> {
     protected OAuthClientConfig config;
 
     protected Map<String, String> customParameters;
-    protected String codeChallenge;
-    protected String codeChallengeMethod;
-    protected String codeVerifier;
     protected String clientSessionState;
     protected String clientSessionHost;
-    protected String dpopJkt;
-    protected String dpopProof;
     protected String request;
     protected String requestUri;
-    protected String claims;
 
     private final KeyManager keyManager = new KeyManager(this);
     private final TokensManager tokensManager = new TokensManager(keyManager);
@@ -270,28 +264,8 @@ public abstract class AbstractOAuthClient<T> {
         return clientSessionHost;
     }
 
-    public String getCodeChallenge() {
-        return codeChallenge;
-    }
-
-    public String getCodeChallengeMethod() {
-        return codeChallengeMethod;
-    }
-
-    public String getCodeVerifier() {
-        return codeVerifier;
-    }
-
     Map<String, String> getCustomParameters() {
         return customParameters;
-    }
-
-    String getDpopJkt() {
-        return dpopJkt;
-    }
-
-    String getDpopProof() {
-        return dpopProof;
     }
 
     public String getRequestUri() {
@@ -300,10 +274,6 @@ public abstract class AbstractOAuthClient<T> {
 
     public String getRequest() {
         return request;
-    }
-
-    public String getClaims() {
-        return claims;
     }
 
 }

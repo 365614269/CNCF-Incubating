@@ -95,9 +95,14 @@ func RunE(hooks api.Hooks) func(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		owners, err := owners_util.Load(params.CodeOwners)
-		if err != nil {
-			return fmt.Errorf("❗ Failed to load code owners: %w", err)
+		var owners codeowners.Ruleset
+		if params.LogCodeOwners {
+			var err error
+
+			owners, err = owners_util.Load(params.CodeOwners)
+			if err != nil {
+				return fmt.Errorf("❗ Failed to load code owners: %w", err)
+			}
 		}
 
 		logger := check.NewConcurrentLogger(params.Writer, params.TestConcurrency)
@@ -256,7 +261,9 @@ func newCmdConnectivityPerf(hooks api.Hooks) *cobra.Command {
 	cmd.Flags().BoolVar(&params.PerfParameters.RR, "rr", true, "Run RR test")
 	cmd.Flags().BoolVar(&params.PerfParameters.UDP, "udp", false, "Run UDP tests")
 	cmd.Flags().BoolVar(&params.PerfParameters.Throughput, "throughput", true, "Run throughput test")
+	cmd.Flags().BoolVar(&params.PerfParameters.ThroughputMulti, "throughput-multi", true, "Run throughput test with multiple streams")
 	cmd.Flags().IntVar(&params.PerfParameters.Samples, "samples", 1, "Number of Performance samples to capture (how many times to run each test)")
+	cmd.Flags().UintVar(&params.PerfParameters.Streams, "streams", 4, "The parallelism of tests with multiple streams")
 	cmd.Flags().BoolVar(&params.PerfParameters.HostNet, "host-net", true, "Test host network")
 	cmd.Flags().BoolVar(&params.PerfParameters.PodNet, "pod-net", true, "Test pod network")
 	cmd.Flags().BoolVar(&params.PerfParameters.PodToHost, "pod-to-host", false, "Test pod-to-host traffic")

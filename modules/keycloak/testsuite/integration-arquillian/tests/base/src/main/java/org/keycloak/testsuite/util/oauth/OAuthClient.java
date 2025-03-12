@@ -19,18 +19,11 @@ package org.keycloak.testsuite.util.oauth;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.keycloak.OAuth2Constants;
-import org.keycloak.representations.ClaimsRepresentation;
 import org.keycloak.testsuite.pages.LoginPage;
-import org.keycloak.util.JsonSerialization;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.support.PageFactory;
 
-import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.keycloak.testsuite.util.ServerURLs.getAuthServerContextRoot;
 import static org.keycloak.testsuite.util.ServerURLs.removeDefaultPorts;
@@ -89,12 +82,6 @@ public class OAuthClient extends AbstractOAuthClient<OAuthClient> {
         clientSessionHost = null;
         request = null;
         requestUri = null;
-        claims = null;
-        codeVerifier = null;
-        codeChallenge = null;
-        codeChallengeMethod = null;
-        dpopProof = null;
-        dpopJkt = null;
         customParameters = null;
     }
 
@@ -178,46 +165,8 @@ public class OAuthClient extends AbstractOAuthClient<OAuthClient> {
         return this;
     }
 
-    public OAuthClient claims(ClaimsRepresentation claims) {
-        if (claims == null) {
-            this.claims = null;
-        } else {
-            try {
-                this.claims = URLEncoder.encode(JsonSerialization.writeValueAsString(claims), StandardCharsets.UTF_8);
-            } catch (IOException ioe) {
-                throw new RuntimeException(ioe);
-            }
-        }
-        return this;
-    }
-
-    public OAuthClient codeVerifier(String codeVerifier) {
-        this.codeVerifier = codeVerifier;
-        return this;
-    }
-
-    public OAuthClient codeChallenge(String codeChallenge) {
-        this.codeChallenge = codeChallenge;
-        return this;
-    }
-
-    public OAuthClient codeChallengeMethod(String codeChallengeMethod) {
-        this.codeChallengeMethod = codeChallengeMethod;
-        return this;
-    }
-
     public OAuthClient origin(String origin) {
         config.origin(origin);
-        return this;
-    }
-
-    public OAuthClient dpopProof(String dpopProof) {
-        this.dpopProof = dpopProof;
-        return this;
-    }
-
-    public OAuthClient dpopJkt(String dpopJkt) {
-        this.dpopJkt = dpopJkt;
         return this;
     }
 

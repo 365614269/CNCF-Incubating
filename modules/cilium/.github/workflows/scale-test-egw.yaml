@@ -161,7 +161,7 @@ jobs:
             --set=pprof.enabled=true \
             --set=prometheus.enabled=true \
             --set=cluster.name=${{ env.cluster_name }} \
-            ${{ env.EGRESS_GATEWAY_HELM_VALUES }} \
+            ${{ matrix.test_type == 'egw' && env.EGRESS_GATEWAY_HELM_VALUES || '' }} \
             --set=bpf.masquerade=true \
             --set=kubeProxyReplacement=true \
             --set=l7Proxy=false \
@@ -239,7 +239,8 @@ jobs:
             CLIENT_QPS="20"
           fi
 
-          NODE_INSTANCE_TYPE="m5.xlarge"
+          # m5n.xlarge instances support up to 25Gbps burst bandwidth.
+          NODE_INSTANCE_TYPE="m5n.xlarge"
           TARGET_CLIENT_PODS_PER_NODE=25
 
           # Poor's man round up to derive the number of desired nodes
@@ -368,12 +369,19 @@ jobs:
           version: "${{ steps.vars.outputs.eks_version }}"
           addons: "coredns"
 
+      - name: Generate cilium-cli kubeconfig
+        id: gen-kubeconfig
+        uses: ./.github/actions/get-cloud-kubeconfig
+        with:
+          kubeconfig: "~/.kube/config"
+
       - name: Install Cilium CLI
         uses: cilium/cilium-cli@45a3879a8cb769c9e41b912635e03a38849c9242 # v0.18.1
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
           image-tag: ${{ inputs.SHA || github.sha }}
+          kubeconfig: ${{ steps.gen-kubeconfig.outputs.kubeconfig_path }}
 
       # Warning: since this is a privileged workflow, subsequent workflow job
       # steps must take care not to execute untrusted code.

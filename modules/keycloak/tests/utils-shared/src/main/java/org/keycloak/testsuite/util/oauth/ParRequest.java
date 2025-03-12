@@ -34,6 +34,29 @@ public class ParRequest extends AbstractHttpPostRequest<ParRequest, ParResponse>
         return this;
     }
 
+    public ParRequest dpopJkt(String dpopJkt) {
+        parameter(OIDCLoginProtocol.DPOP_JKT, dpopJkt);
+        return this;
+    }
+
+    public ParRequest codeChallenge(PkceGenerator pkceGenerator) {
+        if (pkceGenerator != null) {
+            codeChallenge(pkceGenerator.getCodeChallenge(), pkceGenerator.getCodeChallengeMethod());
+        }
+        return this;
+    }
+
+    public ParRequest codeChallenge(String codeChallenge, String codeChallengeMethod) {
+        parameter(OAuth2Constants.CODE_CHALLENGE, codeChallenge);
+        parameter(OAuth2Constants.CODE_CHALLENGE_METHOD, codeChallengeMethod);
+        return this;
+    }
+
+    public ParRequest dpopProof(String dpopProof) {
+        header(TokenUtil.TOKEN_TYPE_DPOP, dpopProof);
+        return this;
+    }
+
     @Override
     protected void initRequest() {
         parameter(OAuth2Constants.RESPONSE_TYPE, client.config().getResponseType());
@@ -42,11 +65,6 @@ public class ParRequest extends AbstractHttpPostRequest<ParRequest, ParResponse>
         parameter(OAuth2Constants.SCOPE, client.config().getScope());
         parameter(OIDCLoginProtocol.REQUEST_PARAM, client.getRequest());
         parameter(OIDCLoginProtocol.REQUEST_URI_PARAM, client.getRequestUri());
-        parameter(OIDCLoginProtocol.CLAIMS_PARAM, client.getClaims());
-        parameter(OAuth2Constants.CODE_CHALLENGE, client.getCodeChallenge());
-        parameter(OAuth2Constants.CODE_CHALLENGE_METHOD, client.getCodeChallengeMethod());
-        parameter(OIDCLoginProtocol.DPOP_JKT, client.getDpopJkt());
-        header(TokenUtil.TOKEN_TYPE_DPOP, client.getDpopProof());
     }
 
     @Override
