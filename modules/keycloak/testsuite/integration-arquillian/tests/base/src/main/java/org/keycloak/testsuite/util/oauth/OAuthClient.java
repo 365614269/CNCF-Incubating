@@ -23,8 +23,6 @@ import org.keycloak.testsuite.pages.LoginPage;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.support.PageFactory;
 
-import java.util.HashMap;
-
 import static org.keycloak.testsuite.util.ServerURLs.getAuthServerContextRoot;
 import static org.keycloak.testsuite.util.ServerURLs.removeDefaultPorts;
 
@@ -77,12 +75,6 @@ public class OAuthClient extends AbstractOAuthClient<OAuthClient> {
                 .redirectUri(APP_ROOT + "/auth")
                 .postLogoutRedirectUri(APP_ROOT + "/auth")
                 .responseType(OAuth2Constants.CODE);
-
-        clientSessionState = null;
-        clientSessionHost = null;
-        request = null;
-        requestUri = null;
-        customParameters = null;
     }
 
     public void setDriver(WebDriver driver) {
@@ -95,21 +87,6 @@ public class OAuthClient extends AbstractOAuthClient<OAuthClient> {
         loginPage.login(username, password);
     }
 
-
-
-    public String getClientId() {
-        return config.getClientId();
-    }
-
-    public String getScope() {
-        return config.getScope();
-    }
-
-    public OAuthClient realm(String realm) {
-        config.realm(realm);
-        return this;
-    }
-
     /**
      * @deprecated This method is deprecated, use {@link OAuthClient#client(String)} for public clients,
      * or {@link OAuthClient#client(String, String)} for confidential clients
@@ -117,71 +94,6 @@ public class OAuthClient extends AbstractOAuthClient<OAuthClient> {
     @Deprecated
     public OAuthClient clientId(String clientId) {
         config.clientId(clientId);
-        return this;
-    }
-
-    public OAuthClient redirectUri(String redirectUri) {
-        config.redirectUri(redirectUri);
-        return this;
-    }
-
-    public OAuthClient scope(String scope) {
-        config.scope(scope);
-        return this;
-    }
-
-    public OAuthClient openid(boolean openid) {
-        config.openid(openid);
-        return this;
-    }
-
-    public OAuthClient clientSessionState(String client_session_state) {
-        this.clientSessionState = client_session_state;
-        return this;
-    }
-
-    public OAuthClient clientSessionHost(String client_session_host) {
-        this.clientSessionHost = client_session_host;
-        return this;
-    }
-
-    public OAuthClient responseType(String responseType) {
-        config.responseType(responseType);
-        return this;
-    }
-
-    public OAuthClient responseMode(String responseMode) {
-        config.responseMode(responseMode);
-        return this;
-    }
-
-    public OAuthClient request(String request) {
-        this.request = request;
-        return this;
-    }
-
-    public OAuthClient requestUri(String requestUri) {
-        this.requestUri = requestUri;
-        return this;
-    }
-
-    public OAuthClient origin(String origin) {
-        config.origin(origin);
-        return this;
-    }
-
-    public OAuthClient addCustomParameter(String key, String value) {
-        if (customParameters == null) {
-            customParameters = new HashMap<>();
-        }
-        customParameters.put(key, value);
-        return this;
-    }
-
-    public OAuthClient removeCustomParameter(String key) {
-        if (customParameters != null) {
-            customParameters.remove(key);
-        }
         return this;
     }
 

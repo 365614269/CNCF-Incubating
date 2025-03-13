@@ -125,7 +125,7 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 	__uint(max_entries, SNAT_MAPPING_IPV4_SIZE);
 	__uint(map_flags, LRU_MEM_FLAVOR);
-} SNAT_MAPPING_IPV4 __section_maps_btf;
+} cilium_snat_v4_external __section_maps_btf;
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -133,7 +133,7 @@ struct {
 	__type(value, __u32);
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 	__uint(max_entries, SNAT_COLLISION_RETRIES + 1);
-} SNAT_ALLOC_RETRIES_IPV4 __section_maps_btf;
+} cilium_snat_v4_alloc_retries __section_maps_btf;
 
 #ifdef ENABLE_CLUSTER_AWARE_ADDRESSING
 struct per_cluster_snat_mapping_ipv4_inner_map {
@@ -156,9 +156,9 @@ struct {
 	__uint(max_entries, 256);
 	__array(values, struct per_cluster_snat_mapping_ipv4_inner_map);
 #ifndef BPF_TEST
-} PER_CLUSTER_SNAT_MAPPING_IPV4 __section_maps_btf;
+} cilium_per_cluster_snat_v4_external __section_maps_btf;
 #else
-} PER_CLUSTER_SNAT_MAPPING_IPV4 __section_maps_btf = {
+} cilium_per_cluster_snat_v4_external __section_maps_btf = {
 	.values = {
 		[1] = &per_cluster_snat_mapping_ipv4_1,
 		[2] = &per_cluster_snat_mapping_ipv4_2,
@@ -175,7 +175,7 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 	__uint(max_entries, 16384);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
-} IP_MASQ_AGENT_IPV4 __section_maps_btf;
+} cilium_ipmasq_v4 __section_maps_btf;
 #endif
 
 static __always_inline void *
@@ -183,15 +183,15 @@ get_cluster_snat_map_v4(__u32 cluster_id __maybe_unused)
 {
 #if defined(ENABLE_CLUSTER_AWARE_ADDRESSING) && defined(ENABLE_INTER_CLUSTER_SNAT)
 	if (cluster_id != 0 && cluster_id != CLUSTER_ID)
-		return map_lookup_elem(&PER_CLUSTER_SNAT_MAPPING_IPV4, &cluster_id);
+		return map_lookup_elem(&cilium_per_cluster_snat_v4_external, &cluster_id);
 #endif
-	return &SNAT_MAPPING_IPV4;
+	return &cilium_snat_v4_external;
 }
 
 static __always_inline
 struct ipv4_nat_entry *snat_v4_lookup(const struct ipv4_ct_tuple *tuple)
 {
-	return __snat_lookup(&SNAT_MAPPING_IPV4, tuple);
+	return __snat_lookup(&cilium_snat_v4_external, tuple);
 }
 
 static __always_inline void
@@ -255,7 +255,7 @@ static __always_inline int snat_v4_new_mapping(struct __ctx_buff *ctx, void *map
 					       (__u16)get_prandom_u32());
 	}
 
-	retries_hist = map_lookup_elem(&SNAT_ALLOC_RETRIES_IPV4, &(__u32){retries});
+	retries_hist = map_lookup_elem(&cilium_snat_v4_alloc_retries, &(__u32){retries});
 	if (retries_hist)
 		++*retries_hist;
 
@@ -264,7 +264,7 @@ static __always_inline int snat_v4_new_mapping(struct __ctx_buff *ctx, void *map
 	goto out;
 
 create_nat_entry:
-	retries_hist = map_lookup_elem(&SNAT_ALLOC_RETRIES_IPV4, &(__u32){retries});
+	retries_hist = map_lookup_elem(&cilium_snat_v4_alloc_retries, &(__u32){retries});
 	if (retries_hist)
 		++*retries_hist;
 
@@ -543,7 +543,7 @@ snat_v4_create_dsr(const struct ipv4_ct_tuple *tuple,
 	state.to_saddr = to_saddr;
 	state.to_sport = to_sport;
 
-	ret = map_update_elem(&SNAT_MAPPING_IPV4, &tmp, &state, 0);
+	ret = map_update_elem(&cilium_snat_v4_external, &tmp, &state, 0);
 	if (ret) {
 		*ext_err = (__s8)ret;
 		return DROP_NAT_NO_MAPPING;
@@ -698,7 +698,7 @@ snat_v4_needs_masquerade(struct __ctx_buff *ctx __maybe_unused,
 
 		pfx.lpm.prefixlen = 32;
 		memcpy(pfx.lpm.data, &tuple->daddr, sizeof(pfx.addr));
-		if (map_lookup_elem(&IP_MASQ_AGENT_IPV4, &pfx))
+		if (map_lookup_elem(&cilium_ipmasq_v4, &pfx))
 			return NAT_PUNT_TO_STACK;
 	}
 #endif
@@ -1128,14 +1128,14 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 	__uint(max_entries, SNAT_MAPPING_IPV6_SIZE);
 	__uint(map_flags, LRU_MEM_FLAVOR);
-} SNAT_MAPPING_IPV6 __section_maps_btf;
+} cilium_snat_v6_external __section_maps_btf;
 
 struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
 	__type(key, __u32);
 	__type(value, __u32);
 	__uint(max_entries, SNAT_COLLISION_RETRIES + 1);
-} SNAT_ALLOC_RETRIES_IPV6 __section_maps_btf;
+} cilium_snat_v6_alloc_retries __section_maps_btf;
 
 #ifdef ENABLE_CLUSTER_AWARE_ADDRESSING
 struct {
@@ -1150,7 +1150,7 @@ struct {
 		__type(value, struct ipv6_nat_entry);
 		__uint(max_entries, SNAT_MAPPING_IPV6_SIZE);
 	});
-} PER_CLUSTER_SNAT_MAPPING_IPV6 __section_maps_btf;
+} cilium_per_cluster_snat_v6_external __section_maps_btf;
 #endif
 
 #ifdef ENABLE_IP_MASQ_AGENT_IPV6
@@ -1161,7 +1161,7 @@ struct {
 	__uint(pinning, LIBBPF_PIN_BY_NAME);
 	__uint(max_entries, 16384);
 	__uint(map_flags, BPF_F_NO_PREALLOC);
-} IP_MASQ_AGENT_IPV6 __section_maps_btf;
+} cilium_ipmasq_v6 __section_maps_btf;
 #endif
 
 static __always_inline void *
@@ -1169,15 +1169,15 @@ get_cluster_snat_map_v6(__u32 cluster_id __maybe_unused)
 {
 #if defined(ENABLE_CLUSTER_AWARE_ADDRESSING) && defined(ENABLE_INTER_CLUSTER_SNAT)
 	if (cluster_id != 0 && cluster_id != CLUSTER_ID)
-		return map_lookup_elem(&PER_CLUSTER_SNAT_MAPPING_IPV6, &cluster_id);
+		return map_lookup_elem(&cilium_per_cluster_snat_v6_external, &cluster_id);
 #endif
-	return &SNAT_MAPPING_IPV6;
+	return &cilium_snat_v6_external;
 }
 
 static __always_inline
 struct ipv6_nat_entry *snat_v6_lookup(const struct ipv6_ct_tuple *tuple)
 {
-	return __snat_lookup(&SNAT_MAPPING_IPV6, tuple);
+	return __snat_lookup(&cilium_snat_v6_external, tuple);
 }
 
 static __always_inline void
@@ -1230,7 +1230,7 @@ static __always_inline int snat_v6_new_mapping(struct __ctx_buff *ctx,
 	for (retries = 0; retries < SNAT_COLLISION_RETRIES; retries++) {
 		rtuple.dport = bpf_htons(port);
 
-		if (__snat_create(&SNAT_MAPPING_IPV6, &rtuple, &rstate) == 0)
+		if (__snat_create(&cilium_snat_v6_external, &rtuple, &rstate) == 0)
 			goto create_nat_entry;
 
 		port = __snat_clamp_port_range(target->min_port,
@@ -1239,7 +1239,7 @@ static __always_inline int snat_v6_new_mapping(struct __ctx_buff *ctx,
 					       (__u16)get_prandom_u32());
 	}
 
-	retries_hist = map_lookup_elem(&SNAT_ALLOC_RETRIES_IPV6, &(__u32){retries});
+	retries_hist = map_lookup_elem(&cilium_snat_v6_alloc_retries, &(__u32){retries});
 	if (retries_hist)
 		++*retries_hist;
 
@@ -1247,16 +1247,16 @@ static __always_inline int snat_v6_new_mapping(struct __ctx_buff *ctx,
 	goto out;
 
 create_nat_entry:
-	retries_hist = map_lookup_elem(&SNAT_ALLOC_RETRIES_IPV6, &(__u32){retries});
+	retries_hist = map_lookup_elem(&cilium_snat_v6_alloc_retries, &(__u32){retries});
 	if (retries_hist)
 		++*retries_hist;
 
 	ostate->to_sport = rtuple.dport;
 	ostate->common.created = rstate.common.created;
 
-	ret = __snat_create(&SNAT_MAPPING_IPV6, otuple, ostate);
+	ret = __snat_create(&cilium_snat_v6_external, otuple, ostate);
 	if (ret < 0) {
-		map_delete_elem(&SNAT_MAPPING_IPV6, &rtuple); /* rollback */
+		map_delete_elem(&cilium_snat_v6_external, &rtuple); /* rollback */
 		if (ext_err)
 			*ext_err = (__s8)ret;
 		ret = DROP_NAT_NO_MAPPING;
@@ -1327,7 +1327,7 @@ snat_v6_nat_handle_mapping(struct __ctx_buff *ctx,
 				rstate.to_dport = tuple->sport;
 				rstate.common.needs_ct = needs_ct;
 				rstate.common.created = bpf_mono_now();
-				ret = __snat_create(&SNAT_MAPPING_IPV6, &rtuple, &rstate);
+				ret = __snat_create(&cilium_snat_v6_external, &rtuple, &rstate);
 				if (ret < 0) {
 					if (ext_err)
 						*ext_err = (__s8)ret;
@@ -1339,13 +1339,13 @@ snat_v6_nat_handle_mapping(struct __ctx_buff *ctx,
 		}
 
 		/* See comment in snat_v4_nat_handle_mapping */
-		ret = __snat_delete(&SNAT_MAPPING_IPV6, tuple);
+		ret = __snat_delete(&cilium_snat_v6_external, tuple);
 		if (IS_ERR(ret))
 			return ret;
 
 		*state = snat_v6_lookup(&rtuple);
 		if (*state)
-			__snat_delete(&SNAT_MAPPING_IPV6, &rtuple);
+			__snat_delete(&cilium_snat_v6_external, &rtuple);
 	}
 
 	*state = tmp;
@@ -1471,7 +1471,7 @@ snat_v6_create_dsr(const struct ipv6_ct_tuple *tuple, union v6addr *to_saddr,
 	ipv6_addr_copy(&state.to_saddr, to_saddr);
 	state.to_sport = to_sport;
 
-	ret = map_update_elem(&SNAT_MAPPING_IPV6, &tmp, &state, 0);
+	ret = map_update_elem(&cilium_snat_v6_external, &tmp, &state, 0);
 	if (ret) {
 		*ext_err = (__s8)ret;
 		return DROP_NAT_NO_MAPPING;
@@ -1561,7 +1561,7 @@ snat_v6_needs_masquerade(struct __ctx_buff *ctx __maybe_unused,
 		memcpy(pfx.lpm.data + 4, &tuple->daddr.p2, 4);
 		memcpy(pfx.lpm.data + 8, &tuple->daddr.p3, 4);
 		memcpy(pfx.lpm.data + 12, &tuple->daddr.p4, 4);
-		if (map_lookup_elem(&IP_MASQ_AGENT_IPV6, &pfx))
+		if (map_lookup_elem(&cilium_ipmasq_v6, &pfx))
 			return NAT_PUNT_TO_STACK;
 	}
 #endif

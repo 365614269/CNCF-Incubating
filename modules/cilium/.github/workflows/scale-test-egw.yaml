@@ -253,17 +253,6 @@ jobs:
           EKS_VERSION=$(echo $eks_version_and_region | cut -d',' -f1)
           EKS_REGION=$(echo $eks_version_and_region | cut -d',' -f2)
 
-          # Currently, ClusterLoader2 does not play well with EKS 1.32, because
-          # anonymous authentication to the API Server metrics endpoint is no
-          # longer possible [1]. Let's ensure we use a supported version until
-          # the issue gets addressed upstream [2].
-          #
-          # [1]: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions-standard.html#kubernetes-1-32
-          # [2]: https://github.com/kubernetes/perf-tests/pull/3214
-          if [[ "$EKS_VERSION" == "1.32" ]]; then
-            EKS_VERSION=1.31
-          fi
-
           echo sha=${SHA} >> $GITHUB_OUTPUT
           echo cilium_install_defaults=${CILIUM_INSTALL_DEFAULTS} >> $GITHUB_OUTPUT
           echo owner=${OWNER} >> $GITHUB_OUTPUT
@@ -353,7 +342,7 @@ jobs:
           # all updates to the default branch and (2) continually
           # updating CL2 may impact the stability of the scale test
           # results.
-          ref: ce821d6232cee6719dd86e7e68eee361e337e92a
+          ref: d51da38a445d653c6f7cd039728d313cb31290b9
           persist-credentials: false
           sparse-checkout: clusterloader2
           path: perf-tests
