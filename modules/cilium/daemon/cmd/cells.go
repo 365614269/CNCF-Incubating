@@ -67,6 +67,7 @@ import (
 	policyK8s "github.com/cilium/cilium/pkg/policy/k8s"
 	"github.com/cilium/cilium/pkg/pprof"
 	"github.com/cilium/cilium/pkg/proxy"
+	"github.com/cilium/cilium/pkg/proxy/defaultdns"
 	"github.com/cilium/cilium/pkg/recorder"
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
@@ -140,6 +141,10 @@ var (
 
 		// Shell for inspecting the agent. Listens on the 'shell.sock' UNIX socket.
 		shellCell,
+
+		// DNSProxy provides the DefaultDNSProxy singleton which is used by different
+		// pacakges.
+		defaultdns.Cell,
 	)
 
 	// ControlPlane implement the per-node control functions. These are pure
@@ -379,16 +384,19 @@ func allResourceGroups(cfg watchers.WatcherConfiguration) (resourceGroups, waitF
 		// To perform the service translation and have the BPF LB datapath
 		// with the right service -> backend (k8s endpoints) translation.
 		resources.K8sAPIGroupServiceV1Core,
-
-		// Namespaces can contain labels which are essential for
-		// endpoints being restored to have the right identity.
-		resources.K8sAPIGroupNamespaceV1Core,
 		// Pods can contain labels which are essential for endpoints
 		// being restored to have the right identity.
 		resources.K8sAPIGroupPodV1Core,
 		// To perform the service translation and have the BPF LB datapath
 		// with the right service -> backend (k8s endpoints) translation.
 		resources.K8sAPIGroupEndpointSliceOrEndpoint,
+	}
+
+	if option.NetworkPolicyEnabled(option.Config) {
+		// Namespaces can contain labels which are essential for
+		// endpoints being restored to have the right identity.
+		// Namespaces are only used when network policies are enabled.
+		k8sGroups = append(k8sGroups, resources.K8sAPIGroupNamespaceV1Core)
 	}
 
 	if cfg.K8sNetworkPolicyEnabled() {

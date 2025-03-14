@@ -32,6 +32,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
+	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/k8s/watchers"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labelsfilter"
@@ -40,7 +41,6 @@ import (
 	"github.com/cilium/cilium/pkg/mac"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
 	"github.com/cilium/cilium/pkg/option"
-	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/resiliency"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -224,6 +224,15 @@ type cachedEndpointMetadataFetcher struct {
 }
 
 func (cemf *cachedEndpointMetadataFetcher) FetchNamespace(nsName string) (*slim_corev1.Namespace, error) {
+	// If network policies are disabled, labels are not needed, the namespace
+	// watcher is not running, and a namespace containing only the name is returned.
+	if !option.NetworkPolicyEnabled(option.Config) {
+		return &slim_corev1.Namespace{
+			ObjectMeta: slim_metav1.ObjectMeta{
+				Name: nsName,
+			},
+		}, nil
+	}
 	return cemf.k8sWatcher.GetCachedNamespace(nsName)
 }
 
@@ -1179,14 +1188,15 @@ func (d *Daemon) QueueEndpointBuild(ctx context.Context, epID uint64) (func(), e
 }
 
 func (d *Daemon) GetDNSRules(epID uint16) restore.DNSRules {
-	if proxy.DefaultDNSProxy == nil {
+	dnsProxy := d.dnsProxy.Get()
+	if dnsProxy == nil {
 		return nil
 	}
 
 	// We get the latest consistent view on the DNS rules by getting handle to the latest
 	// coherent state of the selector cache
 	version := d.policy.GetSelectorCache().GetVersionHandle()
-	rules, err := proxy.DefaultDNSProxy.GetRules(version, epID)
+	rules, err := dnsProxy.GetRules(version, epID)
 	version.Close()
 
 	if err != nil {
@@ -1197,9 +1207,10 @@ func (d *Daemon) GetDNSRules(epID uint16) restore.DNSRules {
 }
 
 func (d *Daemon) RemoveRestoredDNSRules(epID uint16) {
-	if proxy.DefaultDNSProxy == nil {
+	dnsProxy := d.dnsProxy.Get()
+	if dnsProxy == nil {
 		return
 	}
 
-	proxy.DefaultDNSProxy.RemoveRestoredRules(epID)
+	dnsProxy.RemoveRestoredRules(epID)
 }
