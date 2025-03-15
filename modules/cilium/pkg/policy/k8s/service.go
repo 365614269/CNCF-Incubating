@@ -6,6 +6,8 @@ package k8s
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/cilium/stream"
@@ -193,12 +195,7 @@ func hasToServices(cnp *types.SlimCNP) bool {
 	if specHasToServices(cnp.Spec) {
 		return true
 	}
-	for _, spec := range cnp.Specs {
-		if specHasToServices(spec) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(cnp.Specs, specHasToServices)
 }
 
 // specHasToServices returns true if the rule contains a ToServices rule
@@ -283,10 +280,7 @@ func appendEndpoints(toCIDRSet *api.CIDRRuleSlice, endpoints []api.CIDR) {
 
 // appendSelector appends the service selector as a generated EndpointSelector
 func appendSelector(toEndpoints *[]api.EndpointSelector, svcSelector map[string]string, namespace string) {
-	selector := make(map[string]string)
-	for k, v := range svcSelector {
-		selector[k] = v
-	}
+	selector := maps.Clone(svcSelector)
 	selector[labels.LabelSourceK8sKeyPrefix+k8sConst.PodNamespaceLabel] = namespace
 	endpointSelector := api.NewESFromMatchRequirements(selector, nil)
 	endpointSelector.Generated = true

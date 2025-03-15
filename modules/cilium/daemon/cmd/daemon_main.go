@@ -99,8 +99,8 @@ import (
 	policyDirectory "github.com/cilium/cilium/pkg/policy/directory"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/proxy/defaultdns"
-	"github.com/cilium/cilium/pkg/proxy/logger"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/service"
@@ -505,10 +505,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Duration(option.KVstoreConnectivityTimeout, defaults.KVstoreConnectivityTimeout, "Time after which an incomplete kvstore operation  is considered failed")
 	option.BindEnv(vp, option.KVstoreConnectivityTimeout)
-
-	flags.Bool(option.KVstorePodNetworkSupport, defaults.KVstorePodNetworkSupport, "Enable the support for running the Cilium KVstore in pod network")
-	flags.MarkHidden(option.KVstorePodNetworkSupport)
-	option.BindEnv(vp, option.KVstorePodNetworkSupport)
 
 	flags.Var(option.NewNamedMapOptions(option.KVStoreOpt, &option.Config.KVStoreOpt, nil),
 		option.KVStoreOpt, "Key-value store options e.g. etcd.address=127.0.0.1:4001")
@@ -1459,7 +1455,7 @@ func (d *Daemon) initKVStore(resolver *dial.ServiceResolver) {
 		controller.ControllerParams{
 			Group: cg,
 			DoFunc: func(ctx context.Context) error {
-				kvstore.RunLockGC()
+				kvstore.RunLockGC(logging.DefaultSlogLogger)
 				return nil
 			},
 			RunInterval: defaults.KVStoreStaleLockTimeout,
@@ -1477,7 +1473,7 @@ func (d *Daemon) initKVStore(resolver *dial.ServiceResolver) {
 		}
 	}
 
-	if err := kvstore.Setup(context.TODO(), option.Config.KVStore, option.Config.KVStoreOpt, goopts); err != nil {
+	if err := kvstore.Setup(context.TODO(), logging.DefaultSlogLogger, option.Config.KVStore, option.Config.KVStoreOpt, goopts); err != nil {
 		addrkey := fmt.Sprintf("%s.address", option.Config.KVStore)
 		addr := option.Config.KVStoreOpt[addrkey]
 
@@ -1549,7 +1545,7 @@ type daemonParams struct {
 	L2Announcer         *l2announcer.L2Announcer
 	ServiceManager      service.ServiceManager
 	L7Proxy             *proxy.Proxy
-	ProxyAccessLogger   logger.ProxyAccessLogger
+	ProxyAccessLogger   accesslog.ProxyAccessLogger
 	EnvoyXdsServer      envoy.XDSServer
 	DB                  *statedb.DB
 	APILimiterSet       *rate.APILimiterSet

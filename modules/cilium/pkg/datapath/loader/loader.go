@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/netip"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -230,13 +231,7 @@ func isObsoleteDev(dev string, devices []string) bool {
 	}
 
 	// exclude devices that will still be managed going forward.
-	for _, d := range devices {
-		if dev == d {
-			return false
-		}
-	}
-
-	return true
+	return !slices.Contains(devices, dev)
 }
 
 // removeObsoleteNetdevPrograms removes cil_to_netdev and cil_from_netdev from devices
@@ -482,7 +477,12 @@ func attachNetworkDevices(cfg *datapath.LocalNodeConfiguration, ep datapath.Endp
 		devices = append(devices, wgTypes.IfaceName)
 	}
 
-	if option.Config.EnableIPIPTermination {
+	// Selectively attach bpf_host to cilium_ipip{4,6} in order to have a
+	// service lookup after IPIP termination. Do not attach in case of the
+	// devices being created via health datapath (see Reinitialize()) since
+	// it can push packets up the local stack which should be handled by
+	// the host instead.
+	if option.Config.EnableIPIPTermination && !option.Config.EnableHealthDatapath {
 		if option.Config.IPv4Enabled() {
 			devices = append(devices, defaults.IPIPv4Device)
 		}

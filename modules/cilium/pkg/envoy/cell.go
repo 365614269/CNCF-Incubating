@@ -16,6 +16,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
+	envoypolicy "github.com/cilium/cilium/pkg/envoy/policy"
 	"github.com/cilium/cilium/pkg/envoy/xds"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s/client"
@@ -26,8 +27,8 @@ import (
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/proxy/endpoint"
-	"github.com/cilium/cilium/pkg/proxy/logger"
 	"github.com/cilium/cilium/pkg/shortener"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -44,6 +45,7 @@ var Cell = cell.Module(
 	cell.Config(secretSyncConfig{}),
 	cell.Provide(newEnvoyXDSServer),
 	cell.Provide(newEnvoyAdminClient),
+	cell.Provide(envoypolicy.NewEnvoyL7RulesTranslator),
 	cell.ProvidePrivate(newEnvoyAccessLogServer),
 	cell.ProvidePrivate(newLocalEndpointStore),
 	cell.ProvidePrivate(newArtifactCopier),
@@ -230,7 +232,7 @@ type accessLogServerParams struct {
 
 	Lifecycle          cell.Lifecycle
 	Logger             *slog.Logger
-	AccessLogger       logger.ProxyAccessLogger
+	AccessLogger       accesslog.ProxyAccessLogger
 	LocalEndpointStore *LocalEndpointStore
 	EnvoyProxyConfig   ProxyConfig
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/node"
-	"github.com/cilium/cilium/pkg/proxy/logger"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 )
 
 func TestParseURL(t *testing.T) {
@@ -37,7 +37,7 @@ type testNotifier struct {
 	l7    []string
 }
 
-func (n *testNotifier) NewProxyLogRecord(l *logger.LogRecord) error {
+func (n *testNotifier) NewProxyLogRecord(l *accesslog.LogRecord) error {
 	if l.HTTP != nil {
 		jsn, _ := json.Marshal(l.HTTP)
 		n.http = append(n.http, string(jsn))
@@ -112,7 +112,7 @@ func TestKafkaLogMultipleTopics(t *testing.T) {
 	})
 }
 
-func newTestAccessLogServer(t *testing.T, notifier logger.LogRecordNotifier) *AccessLogServer {
-	accessLogger := logger.NewProcyAccessLogger(hivetest.Logger(t), logger.ProxyAccessLoggerConfig{}, notifier, nil)
+func newTestAccessLogServer(t *testing.T, notifier accesslog.LogRecordNotifier) *AccessLogServer {
+	accessLogger := accesslog.NewProxyAccessLogger(hivetest.Logger(t), accesslog.ProxyAccessLoggerConfig{}, notifier, nil)
 	return newAccessLogServer(hivetest.Logger(t), accessLogger, "", 0, nil, 0)
 }

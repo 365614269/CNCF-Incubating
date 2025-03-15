@@ -382,11 +382,7 @@ bool __lb4_svc_is_l7_loadbalancer(const struct lb4_service *svc __maybe_unused)
 static __always_inline
 bool lb4_svc_is_l7_punt_proxy(const struct lb4_service *svc __maybe_unused)
 {
-#ifdef ENABLE_L7_LB
 	return !lb4_svc_is_hostport(svc) && (svc->flags2 & SVC_FLAG_L7_DELEGATE);
-#else
-	return false;
-#endif
 }
 
 static __always_inline
@@ -413,11 +409,7 @@ bool __lb6_svc_is_l7_loadbalancer(const struct lb6_service *svc __maybe_unused)
 static __always_inline
 bool lb6_svc_is_l7_punt_proxy(const struct lb6_service *svc __maybe_unused)
 {
-#ifdef ENABLE_L7_LB
 	return !lb6_svc_is_hostport(svc) && (svc->flags2 & SVC_FLAG_L7_DELEGATE);
-#else
-	return false;
-#endif
 }
 
 static __always_inline
@@ -1107,6 +1099,7 @@ static __always_inline int lb6_local(const void *map, struct __ctx_buff *ctx,
 
 	if (lb6_svc_is_l7_punt_proxy(svc)) {
 		if (__lookup_ip6_endpoint(&backend->address)) {
+			ctx_skip_nodeport_set(ctx);
 			ret = LB_PUNT_TO_STACK;
 			goto drop_err;
 		}
@@ -1900,6 +1893,7 @@ static __always_inline int lb4_local(const void *map, struct __ctx_buff *ctx,
 
 	if (lb4_svc_is_l7_punt_proxy(svc)) {
 		if (__lookup_ip4_endpoint(backend->address)) {
+			ctx_skip_nodeport_set(ctx);
 			ret = LB_PUNT_TO_STACK;
 			goto drop_err;
 		}

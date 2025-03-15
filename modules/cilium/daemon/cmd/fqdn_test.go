@@ -32,7 +32,6 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/proxy/accesslog"
-	"github.com/cilium/cilium/pkg/proxy/logger"
 	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 	testpolicy "github.com/cilium/cilium/pkg/testutils/policy"
@@ -82,7 +81,7 @@ func setupDaemonFQDNSuite(tb testing.TB) *DaemonFQDNSuite {
 	})
 	d.dnsNameManager.CompleteBootstrap()
 	d.policy.GetSelectorCache().SetLocalIdentityNotifier(d.dnsNameManager)
-	d.proxyAccessLogger = logger.NewProcyAccessLogger(hivetest.Logger(tb), logger.ProxyAccessLoggerConfig{}, &noopNotifier{}, &dummyInfoRegistry{})
+	d.proxyAccessLogger = accesslog.NewProxyAccessLogger(hivetest.Logger(tb), accesslog.ProxyAccessLoggerConfig{}, &noopNotifier{}, &dummyInfoRegistry{})
 
 	ds.d = d
 
@@ -91,7 +90,7 @@ func setupDaemonFQDNSuite(tb testing.TB) *DaemonFQDNSuite {
 
 type noopNotifier struct{}
 
-func (*noopNotifier) NewProxyLogRecord(l *logger.LogRecord) error { return nil }
+func (*noopNotifier) NewProxyLogRecord(l *accesslog.LogRecord) error { return nil }
 
 type dummyInfoRegistry struct{}
 

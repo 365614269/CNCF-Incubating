@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"sync/atomic"
 
 	"k8s.io/client-go/tools/cache"
@@ -532,9 +534,7 @@ func (n *Node) releaseNeeded() (needed bool) {
 func (n *Node) Pool() (pool ipamTypes.AllocationMap) {
 	pool = ipamTypes.AllocationMap{}
 	n.mutex.RLock()
-	for k, allocationIP := range n.ipv4Alloc.available {
-		pool[k] = allocationIP
-	}
+	maps.Copy(pool, n.ipv4Alloc.available)
 	n.mutex.RUnlock()
 	return
 }
@@ -830,13 +830,7 @@ func (n *Node) handleIPRelease(ctx context.Context, a *maintenanceAction) (insta
 
 	for markedIP, ts := range n.ipv4Alloc.ipsMarkedForRelease {
 		// Determine which IPs are still marked for release.
-		stillMarkedForRelease := false
-		for _, ip := range a.release.IPsToRelease {
-			if markedIP == ip {
-				stillMarkedForRelease = true
-				break
-			}
-		}
+		stillMarkedForRelease := slices.Contains(a.release.IPsToRelease, markedIP)
 		if !stillMarkedForRelease {
 			// n.determineMaintenanceAction() only returns the IPs on the interface with maximum number of IPs that
 			// can be freed up. If the selected interface changes or if this IP is not excess anymore, remove entry
