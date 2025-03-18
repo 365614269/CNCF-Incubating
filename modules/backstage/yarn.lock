@@ -5883,11 +5883,13 @@ __metadata:
     "@backstage/config": "workspace:^"
     "@backstage/errors": "workspace:^"
     "@backstage/integration": "workspace:^"
+    "@backstage/plugin-catalog-common": "workspace:^"
     "@backstage/plugin-catalog-node": "workspace:^"
     "@types/fs-extra": ^11.0.0
     fs-extra: ^11.2.0
     luxon: ^3.0.0
     msw: ^1.0.0
+    p-limit: ^3.1.0
     uuid: ^11.0.0
   languageName: unknown
   linkType: soft
@@ -8055,7 +8057,6 @@ __metadata:
   resolution: "@backstage/plugin-search-backend-module-explore@workspace:plugins/search-backend-module-explore"
   dependencies:
     "@backstage-community/plugin-explore-common": ^0.0.7
-    "@backstage/backend-common": ^0.25.0
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/cli": "workspace:^"
@@ -8101,7 +8102,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-search-backend-module-techdocs@workspace:plugins/search-backend-module-techdocs"
   dependencies:
-    "@backstage/backend-common": ^0.25.0
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
     "@backstage/catalog-client": "workspace:^"
@@ -8145,7 +8145,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-search-backend@workspace:plugins/search-backend"
   dependencies:
-    "@backstage/backend-common": ^0.25.0
     "@backstage/backend-defaults": "workspace:^"
     "@backstage/backend-openapi-utils": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
@@ -8415,7 +8414,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@backstage/plugin-techdocs-backend@workspace:plugins/techdocs-backend"
   dependencies:
-    "@backstage/backend-common": ^0.25.0
     "@backstage/backend-defaults": "workspace:^"
     "@backstage/backend-plugin-api": "workspace:^"
     "@backstage/backend-test-utils": "workspace:^"
@@ -9260,8 +9258,8 @@ __metadata:
   linkType: hard
 
 "@codemirror/language@npm:^6.0.0":
-  version: 6.10.8
-  resolution: "@codemirror/language@npm:6.10.8"
+  version: 6.11.0
+  resolution: "@codemirror/language@npm:6.11.0"
   dependencies:
     "@codemirror/state": ^6.0.0
     "@codemirror/view": ^6.23.0
@@ -9269,16 +9267,16 @@ __metadata:
     "@lezer/highlight": ^1.0.0
     "@lezer/lr": ^1.0.0
     style-mod: ^4.0.0
-  checksum: 679b69d69faa94f028f996a7005d0c6c2a2e4cd7a7a2614f615c23d7b642c31fc1837915248e864cb1ad59a2f032d1a7a8ef486b5f9904e5f6fbe6f7d2882c38
+  checksum: 5556dc163d5bd1d771a4f64e2750d3d1dc1f39030bc6e4b9a4704e4de7501e8d3511002e0f8f96cd8deef782730e0b49b576e30f0ea820e1c632995bd75caddd
   languageName: node
   linkType: hard
 
 "@codemirror/legacy-modes@npm:^6.1.0":
-  version: 6.4.3
-  resolution: "@codemirror/legacy-modes@npm:6.4.3"
+  version: 6.5.0
+  resolution: "@codemirror/legacy-modes@npm:6.5.0"
   dependencies:
     "@codemirror/language": ^6.0.0
-  checksum: 2534946d2f3c1dbde4e7bc16c9c8ce595ab217b0a5b509a15b04b3b74fcabf307c11457a80fd2fb0d352822e70eda5ad993eb48cd5b33d50cd712e4e20714f2b
+  checksum: a7579e95ca0db80f9e07aa99c207bab7e073299aa5463ab6f2f24a42d3e433f8444d5ee3a950bd228ac2f6bd1547156aaa4082dbbc8b1d4e0cc39877e09ed6e0
   languageName: node
   linkType: hard
 
@@ -12574,9 +12572,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@node-saml/node-saml@npm:^5.0.0":
-  version: 5.0.0
-  resolution: "@node-saml/node-saml@npm:5.0.0"
+"@node-saml/node-saml@npm:^5.0.1":
+  version: 5.0.1
+  resolution: "@node-saml/node-saml@npm:5.0.1"
   dependencies:
     "@types/debug": ^4.1.12
     "@types/qs": ^6.9.11
@@ -12585,26 +12583,26 @@ __metadata:
     "@xmldom/is-dom-node": ^1.0.1
     "@xmldom/xmldom": ^0.8.10
     debug: ^4.3.4
-    xml-crypto: ^6.0.0
+    xml-crypto: ^6.0.1
     xml-encryption: ^3.0.2
     xml2js: ^0.6.2
     xmlbuilder: ^15.1.1
     xpath: ^0.0.34
-  checksum: 6a9ff9d922befc8ccb3338fe8f989eba66d3f781a3d1f39c4bd1d5c58fc1acd74ae05d94a08ef9c4ff1990ad38d0ca97135de52bbfe79196594e76f75e7b7e13
+  checksum: 2cd0e0fd714e9f00ce42aa58549954bc2fb211480e2e74c08e91be4ffe581fa9ec964baf5192608e89dc32160f68f870487909c58adc486b0c2329e2fdfa246a
   languageName: node
   linkType: hard
 
 "@node-saml/passport-saml@npm:^5.0.0":
-  version: 5.0.0
-  resolution: "@node-saml/passport-saml@npm:5.0.0"
+  version: 5.0.1
+  resolution: "@node-saml/passport-saml@npm:5.0.1"
   dependencies:
-    "@node-saml/node-saml": ^5.0.0
+    "@node-saml/node-saml": ^5.0.1
     "@types/express": ^4.17.21
     "@types/passport": ^1.0.16
     "@types/passport-strategy": ^0.2.38
     passport: ^0.7.0
     passport-strategy: ^1.0.0
-  checksum: f5a5e3f731decd7cc3fa5effdd462e3265fa9da4455014041c62e678212b86200ec07e34083f6107c2db79157334e8f6af8658220bb865ad579317ca9465b05b
+  checksum: 6d82e8c45fd3b559b62436bb80e0f3ed7ad137beaa6ea133e1e95a2b3d8b7f28bb35be8dce19882ca6030d68aa0ebf0276edbfc402f96252df6fc8781d807794
   languageName: node
   linkType: hard
 
@@ -18891,90 +18889,90 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@swc/core-darwin-arm64@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-darwin-arm64@npm:1.11.9"
+"@swc/core-darwin-arm64@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-darwin-arm64@npm:1.11.10"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@swc/core-darwin-x64@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-darwin-x64@npm:1.11.9"
+"@swc/core-darwin-x64@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-darwin-x64@npm:1.11.10"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@swc/core-linux-arm-gnueabihf@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-linux-arm-gnueabihf@npm:1.11.9"
+"@swc/core-linux-arm-gnueabihf@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-linux-arm-gnueabihf@npm:1.11.10"
   conditions: os=linux & cpu=arm
   languageName: node
   linkType: hard
 
-"@swc/core-linux-arm64-gnu@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-linux-arm64-gnu@npm:1.11.9"
+"@swc/core-linux-arm64-gnu@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-linux-arm64-gnu@npm:1.11.10"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@swc/core-linux-arm64-musl@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-linux-arm64-musl@npm:1.11.9"
+"@swc/core-linux-arm64-musl@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-linux-arm64-musl@npm:1.11.10"
   conditions: os=linux & cpu=arm64 & libc=musl
   languageName: node
   linkType: hard
 
-"@swc/core-linux-x64-gnu@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-linux-x64-gnu@npm:1.11.9"
+"@swc/core-linux-x64-gnu@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-linux-x64-gnu@npm:1.11.10"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@swc/core-linux-x64-musl@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-linux-x64-musl@npm:1.11.9"
+"@swc/core-linux-x64-musl@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-linux-x64-musl@npm:1.11.10"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"@swc/core-win32-arm64-msvc@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-win32-arm64-msvc@npm:1.11.9"
+"@swc/core-win32-arm64-msvc@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-win32-arm64-msvc@npm:1.11.10"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"@swc/core-win32-ia32-msvc@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-win32-ia32-msvc@npm:1.11.9"
+"@swc/core-win32-ia32-msvc@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-win32-ia32-msvc@npm:1.11.10"
   conditions: os=win32 & cpu=ia32
   languageName: node
   linkType: hard
 
-"@swc/core-win32-x64-msvc@npm:1.11.9":
-  version: 1.11.9
-  resolution: "@swc/core-win32-x64-msvc@npm:1.11.9"
+"@swc/core-win32-x64-msvc@npm:1.11.10":
+  version: 1.11.10
+  resolution: "@swc/core-win32-x64-msvc@npm:1.11.10"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
 "@swc/core@npm:^1.10.8, @swc/core@npm:^1.3.46":
-  version: 1.11.9
-  resolution: "@swc/core@npm:1.11.9"
+  version: 1.11.10
+  resolution: "@swc/core@npm:1.11.10"
   dependencies:
-    "@swc/core-darwin-arm64": 1.11.9
-    "@swc/core-darwin-x64": 1.11.9
-    "@swc/core-linux-arm-gnueabihf": 1.11.9
-    "@swc/core-linux-arm64-gnu": 1.11.9
-    "@swc/core-linux-arm64-musl": 1.11.9
-    "@swc/core-linux-x64-gnu": 1.11.9
-    "@swc/core-linux-x64-musl": 1.11.9
-    "@swc/core-win32-arm64-msvc": 1.11.9
-    "@swc/core-win32-ia32-msvc": 1.11.9
-    "@swc/core-win32-x64-msvc": 1.11.9
+    "@swc/core-darwin-arm64": 1.11.10
+    "@swc/core-darwin-x64": 1.11.10
+    "@swc/core-linux-arm-gnueabihf": 1.11.10
+    "@swc/core-linux-arm64-gnu": 1.11.10
+    "@swc/core-linux-arm64-musl": 1.11.10
+    "@swc/core-linux-x64-gnu": 1.11.10
+    "@swc/core-linux-x64-musl": 1.11.10
+    "@swc/core-win32-arm64-msvc": 1.11.10
+    "@swc/core-win32-ia32-msvc": 1.11.10
+    "@swc/core-win32-x64-msvc": 1.11.10
     "@swc/counter": ^0.1.3
     "@swc/types": ^0.1.19
   peerDependencies:
@@ -19003,7 +19001,7 @@ __metadata:
   peerDependenciesMeta:
     "@swc/helpers":
       optional: true
-  checksum: 2c89cc4630f569f9b6e2e0dcc29b168d3c14c730d5f04b2923b4eb0d517be327b22bf8b64eb50fb0412e2960f43ab0ccb4e99f6792ec409a9d24e7a2a85fa12f
+  checksum: 5715c65946d10eb1caf91479b51130918f85dced4ffc7a7de2975de1b25b8a288973b5482698899e9edce09b0c01efe33efe0d5713de0e7c440d90e0414cd008
   languageName: node
   linkType: hard
 
@@ -37084,7 +37082,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mkdirp@npm:^0.5.1, mkdirp@npm:^0.5.4, mkdirp@npm:^0.5.5, mkdirp@npm:^0.5.6":
+"mkdirp@npm:^0.5.1, mkdirp@npm:^0.5.4, mkdirp@npm:^0.5.5":
   version: 0.5.6
   resolution: "mkdirp@npm:0.5.6"
   dependencies:
@@ -39555,9 +39553,9 @@ __metadata:
   linkType: hard
 
 "photoswipe@npm:^5.3.7":
-  version: 5.4.2
-  resolution: "photoswipe@npm:5.4.2"
-  checksum: 4d74b189ede377d17868cc3ebf066fb549642387b387dd922d7714d8cc0ede7e74f8313ded15def42c6ad3b15c6800e2ce92b4034cfc815655fa2bb6433037b4
+  version: 5.4.4
+  resolution: "photoswipe@npm:5.4.4"
+  checksum: 9e1ee1278d1472e390c486f6ef5d5e13a3e55f660fde15360ce266bd31dcdce8feb08d406f8ccc9c35277ddf67b6d5ca8f028977d02033261647c0a54e7a17ea
   languageName: node
   linkType: hard
 
@@ -39803,13 +39801,12 @@ __metadata:
   linkType: hard
 
 "portfinder@npm:^1.0.28, portfinder@npm:^1.0.32":
-  version: 1.0.34
-  resolution: "portfinder@npm:1.0.34"
+  version: 1.0.35
+  resolution: "portfinder@npm:1.0.35"
   dependencies:
     async: ^3.2.6
     debug: ^4.3.6
-    mkdirp: ^0.5.6
-  checksum: 76834bf45c39408d51906f6c12a8a04e9065e6182c3db9b485408ff9f07bb40eca43371088ae32311359d560029879c1ddf495e138956a68833f83cb011686bf
+  checksum: 928fd99f5b41edf231ab2bd76f1062d52eccb53e41d76c11dadd8439a935968884b6e26090b9010c8a161613328322cc41185586a7f85edd8940408cb9ced2ed
   languageName: node
   linkType: hard
 
@@ -47817,14 +47814,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"xml-crypto@npm:^6.0.0":
-  version: 6.0.0
-  resolution: "xml-crypto@npm:6.0.0"
+"xml-crypto@npm:^6.0.1":
+  version: 6.0.1
+  resolution: "xml-crypto@npm:6.0.1"
   dependencies:
     "@xmldom/is-dom-node": ^1.0.1
     "@xmldom/xmldom": ^0.8.10
     xpath: ^0.0.33
-  checksum: 1c679ed66e4cea6309602cf8d536973f7832b69bd400310802365af972c9a0261c9a456c64015e0e92b8c93f168f9f13a355bbbd04d1219ca61c2a3f544d1208
+  checksum: c5fa8e47f3baa52744f0bc53a2efd9e72670fa3ccb10860670f5ceaa2db6146b2635b575ab4f5e662cff79a2bccfe18986b1e92d557043df83680876657d716e
   languageName: node
   linkType: hard
 

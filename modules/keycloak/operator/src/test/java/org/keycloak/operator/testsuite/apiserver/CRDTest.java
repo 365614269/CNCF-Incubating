@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package org.keycloak.operator.testsuite.integration;
+package org.keycloak.operator.testsuite.apiserver;
 
-import io.fabric8.junit.jupiter.api.KubernetesTest;
+import io.fabric8.kubeapitest.junit.EnableKubeAPIServer;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
@@ -26,6 +26,7 @@ import io.fabric8.kubernetes.client.dsl.Resource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.keycloak.operator.crds.v2alpha1.deployment.Keycloak;
+import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakBuilder;
 import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakStatusAggregator;
 import org.keycloak.operator.crds.v2alpha1.realmimport.KeycloakRealmImport;
 
@@ -33,12 +34,14 @@ import java.io.FileNotFoundException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.keycloak.operator.crds.v2alpha1.realmimport.KeycloakRealmImportBuilder;
+import org.keycloak.operator.testsuite.integration.BaseOperatorTest;
 import org.keycloak.operator.testsuite.utils.K8sUtils;
+import org.keycloak.operator.upgrade.UpdateStrategy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@KubernetesTest
+@EnableKubeAPIServer
 public class CRDTest {
 
     static KubernetesClient client;
@@ -89,6 +92,23 @@ public class CRDTest {
         kc.getSpec().setInstances(null);
 
         assertThat(client.resource(kc).create().getSpec().getInstances()).isNull();
+    }
+
+    @Test
+    public void testUpdateSpecValidation() {
+        var cr = new KeycloakBuilder()
+                .withNewMetadata()
+                .withName("invalid-keycloak")
+                .endMetadata()
+                .withNewSpec()
+                .withNewUpdateSpec()
+                .withStrategy(UpdateStrategy.EXPLICIT)
+                .endUpdateSpec()
+                .endSpec()
+                .build();
+
+        var eMsg = assertThrows(KubernetesClientException.class, () -> client.resource(cr).create()).getMessage();
+        assertThat(eMsg).contains("spec.update: Invalid value: \"object\": The 'revision' field is required when 'Explicit' strategy is used.");
     }
 
     private <T extends HasMetadata> void roundTrip(String resourceFile, Class<T> type) {
