@@ -84,6 +84,24 @@ static __always_inline int nodeport_snat_fwd_ipv6(struct __ctx_buff *ctx,
 	if (IS_ERR(ret))
 		goto out;
 
+#if defined(ENABLE_EGRESS_GATEWAY_COMMON) && defined(IS_BPF_HOST)
+	if (target.egress_gateway) {
+		/* Stay on the desired egress interface: */
+		if (target.ifindex && target.ifindex == THIS_INTERFACE_IFINDEX)
+			goto apply_snat;
+
+		/* Send packet to the correct egress interface, and SNAT it there. */
+		ret = egress_gw_fib_lookup_and_redirect_v6(ctx, &target.addr,
+							   &tuple.daddr, target.ifindex,
+							   ext_err);
+		if (ret != CTX_ACT_OK)
+			return ret;
+
+		if (!revalidate_data(ctx, &data, &data_end, &ip6))
+			return DROP_INVALID;
+	}
+#endif
+
 apply_snat:
 	ipv6_addr_copy(saddr, &tuple.saddr);
 	ret = snat_v6_nat(ctx, &tuple, l4_off, &target, trace, ext_err);
@@ -117,17 +135,15 @@ int tail_handle_snat_fwd_ipv6(struct __ctx_buff *ctx)
 	if (IS_ERR(ret))
 		return send_drop_notify_error_ext(ctx, src_id, ret, ext_err, METRIC_EGRESS);
 
-	/* contrary to tail_handle_snat_fwd_ipv4, we don't check for
-	 *
-	 *     ret == CTX_ACT_OK
-	 *
-	 * in order to emit the event, as egress gateway is not yet supported
-	 * for IPv6, and so it's not possible yet for masqueraded traffic to get
-	 * redirected to another interface
+	/* Don't emit a trace event if the packet has been redirected to another
+	 * interface.
+	 * This can happen for egress gateway traffic that needs to egress from
+	 * the interface to which the egress IP is assigned to.
 	 */
-	send_trace_notify6(ctx, NODEPORT_OBS_POINT_EGRESS, src_id, UNKNOWN_ID,
-			   &saddr, TRACE_EP_ID_UNKNOWN, THIS_INTERFACE_IFINDEX,
-			   trace.reason, trace.monitor);
+	if (ret == CTX_ACT_OK)
+		send_trace_notify6(ctx, NODEPORT_OBS_POINT_EGRESS, src_id, UNKNOWN_ID,
+				   &saddr, TRACE_EP_ID_UNKNOWN, THIS_INTERFACE_IFINDEX,
+				   trace.reason, trace.monitor);
 
 	return ret;
 }
@@ -142,6 +158,7 @@ nodeport_rev_dnat_fwd_ipv6(struct __ctx_buff *ctx, bool *snat_done,
 	struct ipv6_ct_tuple tuple __align_stack_8 = {};
 	void *data, *data_end;
 	struct ipv6hdr *ip6;
+	__u32 monitor = 0;
 	int ret, l4_off;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip6))
@@ -178,9 +195,10 @@ skip_fib:
 
 	ret = ct_lazy_lookup6(get_ct_map6(&tuple), &tuple, ctx, l4_off, CT_INGRESS,
 			      SCOPE_REVERSE, CT_ENTRY_NODEPORT | CT_ENTRY_DSR,
-			      NULL, &trace->monitor);
+			      NULL, &monitor);
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
+		trace->monitor = monitor;
 
 		ret = __lb6_rev_nat(ctx, l4_off, &tuple, nat_info);
 		if (IS_ERR(ret))
@@ -323,11 +341,12 @@ static __always_inline int nodeport_snat_fwd_ipv4(struct __ctx_buff *ctx,
 			 * Check if its a reply packet, if it is, redirect it to the
 			 * parent interface.
 			 */
-			if (ipv4_load_l4_ports(ctx, ip4, l4_off, CT_EGRESS,
-					       (__be16 *)&tuple.dport, NULL) < 0)
-				return DROP_INVALID;
+			ret = ct_extract_ports4(ctx, ip4, l4_off, CT_EGRESS, &tuple, NULL);
+			if (ret < 0 && ret != DROP_CT_UNKNOWN_PROTO)
+				return ret;
 
-			if (ct_is_reply4(get_ct_map4(&tuple), &tuple)) {
+			if (ret != DROP_CT_UNKNOWN_PROTO &&
+			    ct_is_reply4(get_ct_map4(&tuple), &tuple)) {
 				/* Look up the parent interface's MAC address and set it as the
 				 * source MAC address of the packet. We will assume the destination
 				 * MAC address is still correct. This assumption only holds if the
@@ -441,6 +460,7 @@ nodeport_rev_dnat_fwd_ipv4(struct __ctx_buff *ctx, bool *snat_done,
 	void *data, *data_end;
 	bool has_l4_header, is_fragment;
 	struct iphdr *ip4;
+	__u32 monitor = 0;
 
 	if (!revalidate_data(ctx, &data, &data_end, &ip4))
 		return DROP_INVALID;
@@ -483,13 +503,14 @@ skip_fib:
 	ret = ct_lazy_lookup4(get_ct_map4(&tuple), &tuple, ctx, is_fragment,
 			      l4_off, has_l4_header, CT_INGRESS, SCOPE_REVERSE,
 			      CT_ENTRY_NODEPORT | CT_ENTRY_DSR,
-			      &ct_state, &trace->monitor);
+			      &ct_state, &monitor);
 
 	/* nodeport_rev_dnat_get_info_ipv4() just checked that such a
 	 * CT entry exists:
 	 */
 	if (ret == CT_REPLY) {
 		trace->reason = TRACE_REASON_CT_REPLY;
+		trace->monitor = monitor;
 
 		ret = __lb4_rev_nat(ctx, l3_off, l4_off, &tuple,
 				    nat_info, false, has_l4_header);
@@ -723,10 +744,12 @@ handle_nat_fwd(struct __ctx_buff *ctx, __u32 cluster_id, __u32 src_id,
 #endif /* ENABLE_IPV4 */
 #ifdef ENABLE_IPV6
 	case bpf_htons(ETH_P_IPV6):
-		ret = invoke_traced_tailcall_if(__or(__and(is_defined(ENABLE_IPV4),
-							   is_defined(ENABLE_IPV6)),
-						     __and(is_defined(ENABLE_HOST_FIREWALL),
-							   is_defined(IS_BPF_HOST))),
+		ret = invoke_traced_tailcall_if(__or3(__and(is_defined(ENABLE_IPV4),
+							    is_defined(ENABLE_IPV6)),
+						      __and(is_defined(ENABLE_HOST_FIREWALL),
+							    is_defined(IS_BPF_HOST)),
+						      __and(is_defined(ENABLE_EGRESS_GATEWAY_COMMON),
+							    is_defined(IS_BPF_HOST))),
 						CILIUM_CALL_IPV6_NODEPORT_NAT_FWD,
 						handle_nat_fwd_ipv6, trace, ext_err);
 		break;

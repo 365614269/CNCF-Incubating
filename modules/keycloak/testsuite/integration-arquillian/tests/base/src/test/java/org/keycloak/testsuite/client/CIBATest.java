@@ -2476,7 +2476,7 @@ public class CIBATest extends AbstractClientPoliciesTest {
             // user Backchannel Authentication Request
             AuthenticationRequestAcknowledgement response = oauth.ciba().backchannelAuthenticationRequest(username).bindingMessage(bindingMessage).send();
             assertThat(response.getStatusCode(), is(equalTo(400)));
-            assertThat(response.getError(), is(OAuthErrorException.INVALID_REQUEST));
+            assertThat(response.getError(), is(OAuthErrorException.INVALID_SCOPE));
             assertThat(response.getErrorDescription(), is("Invalid scopes: " + OAuth2Constants.SCOPE_OPENID + " " + invalidScope));
 
         } finally {
@@ -2830,14 +2830,14 @@ public class CIBATest extends AbstractClientPoliciesTest {
         assertThat(rep.isActive(), is(equalTo(true)));
         assertThat(rep.getClientId(), is(equalTo(TEST_CLIENT_NAME)));
         assertThat(rep.getIssuedFor(), is(equalTo(TEST_CLIENT_NAME)));
-        events.expect(EventType.INTROSPECT_TOKEN).user((String) null).session(accessToken.getSessionId()).clearDetails().assertEvent();
+        events.expect(EventType.INTROSPECT_TOKEN).user(AssertEvents.isUUID()).session(accessToken.getSessionId()).clearDetails().assertEvent();
 
         rep = oauth.doIntrospectionAccessTokenRequest(tokenRes.getRefreshToken()).asTokenMetadata();
         assertThat(rep.isActive(), is(equalTo(true)));
         assertThat(rep.getClientId(), is(equalTo(TEST_CLIENT_NAME)));
         assertThat(rep.getIssuedFor(), is(equalTo(TEST_CLIENT_NAME)));
         assertThat(rep.getAudience()[0], is(equalTo(rep.getIssuer())));
-        events.expect(EventType.INTROSPECT_TOKEN).user((String) null).session(accessToken.getSessionId()).clearDetails().assertEvent();
+        events.expect(EventType.INTROSPECT_TOKEN).user(AssertEvents.isUUID()).session(accessToken.getSessionId()).clearDetails().assertEvent();
 
         rep = oauth.doIntrospectionAccessTokenRequest(tokenRes.getIdToken()).asTokenMetadata();
         assertThat(rep.isActive(), is(equalTo(true)));
@@ -2846,7 +2846,7 @@ public class CIBATest extends AbstractClientPoliciesTest {
         assertThat(rep.getIssuedFor(), is(equalTo(TEST_CLIENT_NAME)));
         assertThat(rep.getPreferredUsername(), is(equalTo(username)));
         assertThat(rep.getAudience()[0], is(equalTo(rep.getIssuedFor())));
-        events.expect(EventType.INTROSPECT_TOKEN).user((String) null).session(accessToken.getSessionId()).clearDetails().assertEvent();
+        events.expect(EventType.INTROSPECT_TOKEN).user(AssertEvents.isUUID()).session(accessToken.getSessionId()).clearDetails().assertEvent();
     }
 
     private AccessTokenResponse doRefreshTokenRequest(String oldRefreshToken, String username, String sessionId, boolean isOfflineAccess) {
