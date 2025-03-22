@@ -94,7 +94,8 @@ type Parameters struct {
 	CiliumPodSelector      string
 	NodeSelector           map[string]string
 	DeploymentAnnotations  annotationsMap
-	NamespaceAnnotations   annotations
+	NamespaceLabels        map[string]string
+	NamespaceAnnotations   map[string]string
 	ExternalTarget         string
 	ExternalOtherTarget    string
 	ExternalCIDR           string
@@ -114,12 +115,13 @@ type Parameters struct {
 	ImpersonateGroups      []string
 	IPFamilies             []string
 
-	IncludeConnDisruptTest          bool
-	IncludeConnDisruptTestNSTraffic bool
-	ConnDisruptTestSetup            bool
-	ConnDisruptTestRestartsPath     string
-	ConnDisruptTestXfrmErrorsPath   string
-	ConnDisruptDispatchInterval     time.Duration
+	IncludeConnDisruptTest              bool
+	IncludeConnDisruptTestNSTraffic     bool
+	IncludeConnDisruptTestEgressGateway bool
+	ConnDisruptTestSetup                bool
+	ConnDisruptTestRestartsPath         string
+	ConnDisruptTestXfrmErrorsPath       string
+	ConnDisruptDispatchInterval         time.Duration
 
 	ExpectedDropReasons []string
 	ExpectedXFRMErrors  []string
