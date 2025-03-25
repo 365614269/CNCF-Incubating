@@ -1343,7 +1343,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:3f0969d751f780c65e7388ce8927854c2d0b1a50dd2c93e825ff715f4b301811","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.33.1-1742558646-8b0b9457d174fe9cc137e273a547535d79a7bb1f","useDigest":true}``
+     - ``{"digest":"sha256:062e832f5cbbacf7690e8fe669db6abe12ba45e5b53fbffee37762713d5ab51e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.33.1-1742784275-e76b29a8d9694b2a6a015b6b9bb82a450bf51451","useDigest":true}``
    * - :spelling:ignore:`envoy.initialFetchTimeoutSeconds`
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
@@ -1832,6 +1832,10 @@
      - Name of the ConfigMap containing the CA to validate client certificates against. If mTLS is enabled and this is unspecified, it will default to the same CA used for Hubble metrics server certificates.
      - string
      - ``nil``
+   * - :spelling:ignore:`hubble.networkPolicyCorrelation`
+     - Enables network policy correlation of Hubble flows, i.e. populating ``egress_allowed_by``\ , ``ingress_denied_by`` fields with policy information.
+     - object
+     - ``{"enabled":true}``
    * - :spelling:ignore:`hubble.peerService.clusterDomain`
      - The cluster domain to use to query the Hubble Peer service. It should be the local cluster.
      - string
@@ -2279,9 +2283,13 @@
    * - :spelling:ignore:`hubble.ui.service`
      - hubble-ui service configuration.
      - object
-     - ``{"annotations":{},"nodePort":31235,"type":"ClusterIP"}``
+     - ``{"annotations":{},"labels":{},"nodePort":31235,"type":"ClusterIP"}``
    * - :spelling:ignore:`hubble.ui.service.annotations`
      - Annotations to be added for the Hubble UI service
+     - object
+     - ``{}``
+   * - :spelling:ignore:`hubble.ui.service.labels`
+     - Labels to be added for the Hubble UI service
      - object
      - ``{}``
    * - :spelling:ignore:`hubble.ui.service.nodePort`

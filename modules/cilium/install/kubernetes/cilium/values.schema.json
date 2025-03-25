@@ -2871,6 +2871,14 @@
           },
           "type": "object"
         },
+        "networkPolicyCorrelation": {
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
         "peerService": {
           "properties": {
             "clusterDomain": {
@@ -3589,6 +3597,9 @@
             "service": {
               "properties": {
                 "annotations": {
+                  "type": "object"
+                },
+                "labels": {
                   "type": "object"
                 },
                 "nodePort": {
