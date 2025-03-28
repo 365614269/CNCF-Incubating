@@ -1,28 +1,41 @@
 ---
-title: Falco Metrics 
-description: Leverage continuous metrics for valuable insights into Falco's performance
-linktitle: Falco Metrics
-weight: 10
+title: Metrics
+description: Leverage continuous metrics for valuable insights into Falco's performance.
+weight: 50
+aliases:
+- ../metrics
+- ../metrics/falco-metrics
 ---
 
-Falco's optional native metrics framework helps you verify that Falco is running smoothly in production. It lets you check if Falco is working as expected, track the progress and stability of rollouts, and review internal metrics for potential configuration improvements. This way, you can confirm Falco's performance and make adjustments as needed for optimal operation.
+## Overview
 
-To explore the metrics functionality in more detail, refer to the [falco.yaml](https://github.com/falcosecurity/falco/blob/master/falco.yaml) config file and read the advanced Falco logging, alerting, and metrics sections (e.g. `metrics`).
+Falco’s native metrics framework provides real-time insights into your deployment’s performance. With these metrics, you can:
 
-Read [Prometheus Support](/docs/metrics/falco-metrics/#prometheus-support) to learn how to consume metrics via Prometheus.
+- **Monitor Health:** Verify that Falco is running smoothly in production.
+- **Track Performance:** Observe event rates, resource usage, and more.
+- **Troubleshoot Issues:** Identify potential configuration improvements based on detailed internal metrics.
+- **Detections Metrics:** Get insights into rules matching abnormal behavior, potential security threats, and compliance violations.
 
-Falco metrics are not enabled by default. The following are all the metrics config options available in the [falco.yaml](https://github.com/falcosecurity/falco/blob/master/falco.yaml) config file:
+{{% pageinfo color="info" %}}
+As a real-world example of the potential these metrics can offer, we invite you to examine the Grafana dashboards of live Falco deployments for our testing infrastructure at [monitoring.prow.falco.org](https://monitoring.prow.falco.org/).
+{{% /pageinfo %}}
+
+{{% pageinfo color="info" %}}
+For performance-related guidance, take a look at our [troubleshooting section](/docs/troubleshooting/performance).
+{{% /pageinfo %}}
+
+## Configuration {#configuration}
+
+Falco metrics are disabled by default. To start using them, you must enable the `metrics` option in your configuration (defined in the [falco.yaml](https://github.com/falcosecurity/falco/blob/master/falco.yaml). Further options allow you to customize the metrics functionality to meet your monitoring needs.
 
 ```yaml
 metrics:
-  enabled: true
-  interval: 15m
+  enabled: false
+  interval: 1h
   # Typically, in production, you only use `output_rule` or `output_file`, but not both. 
   # However, if you have a very unique use case, you can use both together.
-  # Set `webserver.prometheus_metrics_enabled` for Prometheus output. This can be used alongside 
-  # or as an alternative to `output_rule` or `output_file`.
+  # Set `webserver.prometheus_metrics_enabled` for Prometheus output.
   output_rule: true
-  # Set a non-empty `output_file` to enable this option.
   # output_file: /tmp/falco_stats.jsonl
   rules_counters_enabled: true
   resource_utilization_enabled: true
@@ -32,11 +45,62 @@ metrics:
   kernel_event_counters_per_cpu_enabled: false
   libbpf_stats_enabled: true
   plugins_metrics_enabled: true
+  jemalloc_stats_enabled: false
   convert_memory_to_mb: true
-  include_empty_values: true
+  include_empty_values: false
 ```
 
-Here is a brief glossary of the currently supported metrics for both the `json` rule format and [Prometheus](/docs/metrics/falco-metrics/#prometheus-support):
+### Plugins Metrics {#plugins-metrics}
+
+Falco allows plugins to provide their own set of [custom metrics](/docs/reference/plugins/plugin-api-reference/#get-metrics).
+
+In order to enable plugins metrics, the following configuration elements must be set in the `falco.yaml`:
+
+```yaml
+metrics:
+  enabled: true
+  ...
+  plugins_metrics_enabled: true
+  ...
+```
+
+Please note that this doesn't provide default metrics about the plugin itself, and it will show metrics only if the plugin is providing them.
+
+_Note that none of the officially maintained plugins currently provide any metrics._
+
+
+### Prometheus Support {#prometheus-support}
+
+You can expose Falco metrics to Prometheus to:
+
+- **Visualize Metrics:** Graph and alert on key performance indicators.
+- **Integrate with Dashboards:** Seamlessly connect with Grafana or other visualization tools.
+
+
+To enable Prometheus support, the following configuration elements must be set in the `falco.yaml`:
+
+- Metrics must be enabled, along with the specific metrics sub-categories you wish to consume (see above).
+
+```yaml
+metrics:
+  enabled: true
+  ...
+```
+
+- The web server must be enabled
+- The Prometheus metrics endpoint must be enabled
+
+```yaml
+webserver:
+  enabled: true
+  prometheus_metrics_enabled: true
+```
+
+Once configured, the `/metrics` endpoint will be served on the same port as the health endpoint.
+
+## Examples {#examples}
+
+The following sections provide example outputs of Falco metrics in both JSON and Prometheus formats. Click on each section to view detailed examples.
 
 <details>
   <summary> Show Base / Wrapper Fields
@@ -1820,73 +1884,3 @@ falcosecurity_scap_n_containers_total 0
   
 </details>
 
-## Prometheus Support
-
-Since version 0.39.0, you can also use Falco's web server to expose Falco's metrics. A new `/metrics` endpoint has been added which provides metrics information that can be collected by [Prometheus][2].
-
-In order to activate this endpoint, three configuration elements must be set in the [falco.yaml][1]:
-
-- Metrics must be enabled, along with the specific metrics sub-categories you wish to consume (see above).
-
-```yaml
-metrics:
-  enabled: true
-  ...
-```
-
-- The web server must be enabled
-- The Prometheus metrics endpoint must be enabled
-
-```yaml
-webserver:
-  enabled: true
-  prometheus_metrics_enabled: true
-```
-
-This endpoint will allow observation of the internal state of Falco providing the same data as configured for the metrics outputs. It will be served on the same port as the health endpoint.
-
-### Limitations and Additional Information
-
-Expand the example outputs dropdowns above (for both JSON and Prometheus formats) to explore all supported metrics fields, including their naming conventions and units.
-
-The Prometheus text format documentation can be found [here][3].
-
-The OpenMetrics specification can be found [here][4].
-{{% pageinfo color=info %}}
-The `num_evts` and `host_netinfo` wrapper / base field are currently not available for Prometheus metrics; otherwise, there is 1:1 support across all output channels.
-
-However, following the Prometheus recommendations, there might be some slight differences with regard to some metrics fields. Typically calculated fields will not be returned as Prometheus provides the facilities to compute them as part of their queries (e.g. event or drop rates can be calculated in Prometheus).
-
-Starting with Falco 0.39.0, several sub-metrics now use [labels](https://prometheus.io/docs/practices/naming/#labels) to align with Prometheus best practices and support groupBy queries.
-{{% /pageinfo %}}
-
-[1]: https://github.com/falcosecurity/falco/blob/master/falco.yaml
-[2]: https://prometheus.io
-[3]: https://prometheus.io/docs/instrumenting/exposition_formats/
-[4]: https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md
-
-## Plugins Metrics
-
-Since version 0.38.1, Falco allows plugins to provide their own set of [custom metrics](/docs/reference/plugins/plugin-api-reference/#get-metrics).
-
-In order to enable plugins metrics, the following configuration elements must be set in the [falco.yaml][1]:
-
-```yaml
-metrics:
-  enabled: true
-  ...
-  plugins_metrics_enabled: true
-  ...
-```
-
-Please note that this doesn't provide default metrics about the plugin itself, and it will show metrics only if the plugin is providing them.
-
-Currently, none of the officially maintained plugins provides any metric, but this will change in the future. 
-
-Please keep in mind that many of the metrics categories are specific to the syscalls source, such as `libbpf_stats_enabled`, `kernel_event_counters_enabled`, `kernel_event_counters_per_cpu_enabled`, or `state_counters_enabled`.
-
-## Breaking Changes
-
-{{% pageinfo color=info %}}
-Several metric output field names have changed in Falco 0.39.0 compared to earlier versions. This is a global breaking change, so please refer to the updated documentation for the current metric names, especially for Prometheus metrics.
-{{% /pageinfo %}}

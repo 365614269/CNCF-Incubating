@@ -4,7 +4,7 @@
 #include <bpf/ctx/skb.h>
 #include <bpf/api.h>
 
-#include <node_config.h>
+#include <bpf/config/node.h>
 #include <bpf/config/global.h>
 #include <netdev_config.h>
 #include "lib/mcast.h"
@@ -167,7 +167,7 @@ not_esp:
 			if (unlikely(ret != CTX_ACT_OK))
 				return ret;
 
-			ctx_egw_done_set(ctx);
+			set_identity_mark(ctx, *identity, MARK_MAGIC_EGW_DONE);
 
 			/* to-netdev@bpf_host handles SNAT, so no need to do it here. */
 			ret = egress_gw_fib_lookup_and_redirect_v6(ctx, &snat_addr,
@@ -477,7 +477,7 @@ not_esp:
 			if (unlikely(ret != CTX_ACT_OK))
 				return ret;
 
-			ctx_egw_done_set(ctx);
+			set_identity_mark(ctx, *identity, MARK_MAGIC_EGW_DONE);
 
 			/* to-netdev@bpf_host handles SNAT, so no need to do it here. */
 			ret = egress_gw_fib_lookup_and_redirect(ctx, snat_addr,

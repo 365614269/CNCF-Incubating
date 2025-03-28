@@ -4,26 +4,17 @@
 #pragma once
 
 /*
+ *   **** WARNING, THIS FILE IS DEPRECATED, DO NOT ADD NEW CONFIG HERE ****
  *
+ * For adding new configuration to the datapath, see the documentation at
+ * https://docs.cilium.io/en/latest/contributing/development/datapath_config.
  *
- *                     **** WARNING ****
- * This is just a dummy header with dummy values to allow for test
- * compilation without the full code generation engine backend.
- *
- *
- *
+ * Variables in this file will gradually be migrated to the new format, and this
+ * file will eventually be removed.
  */
-#include "lib/utils.h"
+#include <lib/static_data.h>
 
 #define CLUSTER_ID 0
-
-/* Hack: the agent declares and assigns ROUTER_IP in the runtime-generated
- * node_config.h, replacing this file before compilation. Declare the variables
- * manually here, so dpgen doesn't pick it up at compile time and we don't
- * substitute an empty default value.
- */
-volatile const __u64 __config_ROUTER_IP_1;
-volatile const __u64 __config_ROUTER_IP_2;
 
 #define CILIUM_NET_IFINDEX 1
 #define CILIUM_HOST_IFINDEX 1
@@ -261,3 +252,7 @@ return false;
 #define IDENTITY_LEN 16
 #define IDENTITY_MAX 65535
 #endif
+
+/*
+ *   **** WARNING, THIS FILE IS DEPRECATED, SEE COMMENT AT THE TOP ****
+ */
