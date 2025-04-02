@@ -1496,6 +1496,9 @@
         "install": {
           "type": "boolean"
         },
+        "iptablesRemoveAWSRules": {
+          "type": "boolean"
+        },
         "logFile": {
           "type": "string"
         },
@@ -1702,9 +1705,6 @@
       "type": "boolean"
     },
     "enableInternalTrafficPolicy": {
-      "type": "boolean"
-    },
-    "enableK8sTerminatingEndpoint": {
       "type": "boolean"
     },
     "enableLBIPAM": {

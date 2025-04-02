@@ -960,6 +960,10 @@
      - Install the CNI configuration and binary files into the filesystem.
      - bool
      - ``true``
+   * - :spelling:ignore:`cni.iptablesRemoveAWSRules`
+     - Enable the removal of iptables rules created by the AWS CNI VPC plugin.
+     - bool
+     - ``true``
    * - :spelling:ignore:`cni.logFile`
      - Configure the log file for CNI logging with retention policy of 7 days. Disable CNI file logging by setting this field to empty explicitly.
      - string
@@ -1126,10 +1130,6 @@
      - ``true``
    * - :spelling:ignore:`enableInternalTrafficPolicy`
      - Enable Internal Traffic Policy
-     - bool
-     - ``true``
-   * - :spelling:ignore:`enableK8sTerminatingEndpoint`
-     - Configure whether to enable auto detect of terminating state for endpoints in order to support graceful termination.
      - bool
      - ``true``
    * - :spelling:ignore:`enableLBIPAM`

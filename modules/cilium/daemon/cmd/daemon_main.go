@@ -970,9 +970,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableCiliumEndpointSlice, false, "Enable the CiliumEndpointSlice watcher in place of the CiliumEndpoint watcher (beta)")
 	option.BindEnv(vp, option.EnableCiliumEndpointSlice)
 
-	flags.Bool(option.EnableK8sTerminatingEndpoint, true, "Enable auto-detect of terminating endpoint condition")
-	option.BindEnv(vp, option.EnableK8sTerminatingEndpoint)
-
 	flags.Bool(option.EnableVTEP, defaults.EnableVTEP, "Enable  VXLAN Tunnel Endpoint (VTEP) Integration (beta)")
 	option.BindEnv(vp, option.EnableVTEP)
 
@@ -1548,7 +1545,6 @@ type daemonParams struct {
 	ServiceManager      service.ServiceManager
 	L7Proxy             *proxy.Proxy
 	ProxyAccessLogger   accesslog.ProxyAccessLogger
-	EnvoyXdsServer      envoy.XDSServer
 	DB                  *statedb.DB
 	APILimiterSet       *rate.APILimiterSet
 	AuthManager         *auth.AuthManager
@@ -1787,9 +1783,6 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		time.Sleep(option.Config.IdentityRestoreGracePeriod)
 		d.releaseRestoredIdentities()
 	}()
-	d.endpointManager.Subscribe(d)
-	// Add the endpoint manager unsubscribe as the last step in cleanup
-	defer cleaner.cleanupFuncs.Add(func() { d.endpointManager.Unsubscribe(d) })
 
 	// Migrating the ENI datapath must happen before the API is served to
 	// prevent endpoints from being created. It also must be before the health
