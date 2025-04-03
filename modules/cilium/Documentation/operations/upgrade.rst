@@ -299,7 +299,8 @@ communicating via the proxy must reconnect to re-establish connections.
   ``spec.transport.localPort`` in ``CiliumBGPPeerConfig`` has been removed and will be ignored if it was configured in the ``v2alpha1`` version.
 * The ``CiliumBGPPeeringPolicy`` CRD is deprecated and will be removed in a future release. Please migrate to ``cilium.io/v2``
   BGP CRDs (``CiliumBGPClusterConfig``, ``CiliumBGPPeerConfig``, ``CiliumBGPAdvertisement``, ``CiliumBGPNodeConfigOverride``) to configure BGP.
-
+* The check for connectivity to the Kubernetes apiserver has been removed from the cilium-agent liveness probe. This can be turned back on
+  by setting the helm option ``livenessProbe.requireK8sConnectivity`` to ``true``.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -347,6 +348,7 @@ Helm Options
   ``k8sClientExponentialBackoff.backoffMaxDurationSeconds``. Users who were already setting these
   using ``extraEnv`` should either remove them from ``extraEnv`` or set ``k8sClientExponentialBackoff.enabled=false``.
 * The deprecated Helm option ``hubble.relay.dialTimeout`` has been removed.
+* The new Helm option ``underlayProtocol`` allows selecting the IP family for the underlay. It defaults to IPv4.
 * ``k8s.apiServerURLs`` has been introduced to specify multiple Kubernetes API servers so that the agent can fail over
   to an active instance.
 * ``eni.updateEC2AdapterLimitViaAPI`` is removed since the operator will only and always use the EC2API to update the EC2 instance limit.
@@ -356,8 +358,9 @@ Helm Options
 Agent Options
 ~~~~~~~~~~~~~
 
-``k8s-api-server-urls``: This option specifies a list of URLs for Kubernetes API server instances to support high availability
-for the servers. The agent will fail over to an active instance in case of connectivity failures at runtime.
+* The new agent flag ``underlay-protocol`` allows selecting the IP family for the underlay. It defaults to IPv4.
+* ``k8s-api-server-urls``: This option specifies a list of URLs for Kubernetes API server instances to support high availability
+  for the servers. The agent will fail over to an active instance in case of connectivity failures at runtime.
 
 Bugtool Options
 ~~~~~~~~~~~~~~~

@@ -39,8 +39,7 @@ import (
 	"github.com/cilium/cilium/pkg/fqdn/defaultdns"
 	"github.com/cilium/cilium/pkg/gops"
 	hubble "github.com/cilium/cilium/pkg/hubble/cell"
-	identity "github.com/cilium/cilium/pkg/identity/cache/cell"
-	"github.com/cilium/cilium/pkg/identity/identitymanager"
+	identity "github.com/cilium/cilium/pkg/identity/cell"
 	ipamcell "github.com/cilium/cilium/pkg/ipam/cell"
 	ipcache "github.com/cilium/cilium/pkg/ipcache/cell"
 	"github.com/cilium/cilium/pkg/k8s"
@@ -181,10 +180,6 @@ var (
 		// be synced
 		k8sSynced.Cell,
 
-		// IdentityManager maintains the set of identities and a count of its
-		// users.
-		identitymanager.Cell,
-
 		// EndpointManager maintains a collection of the locally running endpoints.
 		endpointmanager.Cell,
 
@@ -245,7 +240,7 @@ var (
 		// Auth is responsible for authenticating a request if required by a policy.
 		auth.Cell,
 
-		// Provides IdentityAllocators (Responsible for allocating security identities)
+		// Provides Identity Controlplane (Responsible for allocating & managing security identities)
 		identity.Cell,
 
 		// IPCache cell provides IPCache (IP to identity mappings)

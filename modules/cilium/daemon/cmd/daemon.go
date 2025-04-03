@@ -38,8 +38,6 @@ import (
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	"github.com/cilium/cilium/pkg/endpointmanager"
-	"github.com/cilium/cilium/pkg/fqdn/defaultdns"
-	"github.com/cilium/cilium/pkg/fqdn/namemanager"
 	fqdnRules "github.com/cilium/cilium/pkg/fqdn/rules"
 	hubblecell "github.com/cilium/cilium/pkg/hubble/cell"
 	"github.com/cilium/cilium/pkg/identity"
@@ -70,7 +68,6 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	policyAPI "github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/proxy"
-	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/resiliency"
@@ -88,16 +85,15 @@ const (
 // Daemon is the cilium daemon that is in charge of perform all necessary plumbing,
 // monitoring when a LXC starts.
 type Daemon struct {
-	ctx               context.Context
-	logger            *slog.Logger
-	clientset         k8sClient.Clientset
-	db                *statedb.DB
-	epBuildQueue      endpoint.EndpointBuildQueue
-	l7Proxy           *proxy.Proxy
-	proxyAccessLogger accesslog.ProxyAccessLogger
-	svc               service.ServiceManager
-	policy            policy.PolicyRepository
-	idmgr             identitymanager.IDManager
+	ctx          context.Context
+	logger       *slog.Logger
+	clientset    k8sClient.Clientset
+	db           *statedb.DB
+	epBuildQueue endpoint.EndpointBuildQueue
+	l7Proxy      *proxy.Proxy
+	svc          service.ServiceManager
+	policy       policy.PolicyRepository
+	idmgr        identitymanager.IDManager
 
 	statusCollectMutex lock.RWMutex
 	statusResponse     models.StatusResponse
@@ -110,10 +106,6 @@ type Daemon struct {
 	routes           statedb.Table[*datapathTables.Route]
 	devices          statedb.Table[*datapathTables.Device]
 	nodeAddrs        statedb.Table[datapathTables.NodeAddress]
-
-	// dnsNameManager tracks which api.FQDNSelector are present in policy which
-	// apply to locally running endpoints.
-	dnsNameManager namemanager.NameManager
 
 	// Used to synchronize generation of daemon's BPF programs and endpoint BPF
 	// programs.
@@ -196,7 +188,6 @@ type Daemon struct {
 
 	explbConfig experimental.Config
 
-	dnsProxy    defaultdns.Proxy
 	dnsRulesAPI fqdnRules.DNSRulesService
 }
 
@@ -290,8 +281,14 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		if !option.Config.TunnelingEnabled() {
 			return nil, nil, fmt.Errorf("EncryptedOverlay support requires VXLAN tunneling mode")
 		}
-		if params.TunnelConfig.Protocol() != tunnel.VXLAN {
+		if params.TunnelConfig.EncapProtocol() != tunnel.VXLAN {
 			return nil, nil, fmt.Errorf("EncryptedOverlay support requires VXLAN tunneling protocol")
+		}
+	}
+
+	if option.Config.TunnelingEnabled() && params.TunnelConfig.UnderlayProtocol() == tunnel.IPv6 {
+		if option.Config.EnableIPSec || option.Config.EnableWireguard {
+			return nil, nil, fmt.Errorf("Transparent encryption (both IPsec and WireGuard) requires an IPv4 underlay")
 		}
 	}
 
@@ -387,7 +384,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		monitorAgent:      params.MonitorAgent,
 		svc:               params.ServiceManager,
 		l7Proxy:           params.L7Proxy,
-		proxyAccessLogger: params.ProxyAccessLogger,
 		authManager:       params.AuthManager,
 		settings:          params.Settings,
 		bigTCPConfig:      params.BigTCPConfig,
@@ -405,9 +401,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		lrpManager:        params.LRPManager,
 		ctMapGC:           params.CTNATMapGC,
 		maglevConfig:      params.MaglevConfig,
-		dnsNameManager:    params.NameManager,
 		explbConfig:       params.ExpLBConfig,
-		dnsProxy:          params.DNSProxy,
 		dnsRulesAPI:       params.DNSRulesAPI,
 	}
 
@@ -559,18 +553,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	bootstrapStats.restore.End(true)
 
 	bootstrapStats.fqdn.Start()
-	err = d.bootstrapFQDN(restoredEndpoints.possible, option.Config.ToFQDNsPreCache)
+	err = params.DNSProxy.BootstrapFQDN(restoredEndpoints.possible, option.Config.ToFQDNsPreCache)
 	if err != nil {
 		bootstrapStats.fqdn.EndError(err)
 		return nil, restoredEndpoints, err
 	}
 
-	if dnsProxy := d.dnsProxy.Get(); dnsProxy != nil {
-		// This is done in preCleanup so that proxy stops serving DNS traffic before shutdown
-		cleaner.preCleanupFuncs.Add(func() {
-			dnsProxy.Cleanup()
-		})
-	}
+	// This is done in preCleanup so that proxy stops serving DNS traffic before shutdown
+	cleaner.preCleanupFuncs.Add(func() {
+		params.DNSProxy.Cleanup()
+	})
 
 	bootstrapStats.fqdn.End(true)
 
@@ -807,8 +799,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		return nil, restoredEndpoints, fmt.Errorf("error while initializing daemon: %w", err)
 	}
 
-	// iptables rules can be updated only after d.init() intializes the iptables above.
-	err = d.updateDNSDatapathRules(d.ctx)
+	// iptables rules can be updated only after d.init() initializes the iptables above.
+	err = params.DNSProxy.UpdateDNSDatapathRules(d.ctx)
 	if err != nil {
 		log.WithError(err).Error("error encountered while updating DNS datapath rules.")
 		return nil, restoredEndpoints, fmt.Errorf("error encountered while updating DNS datapath rules: %w", err)

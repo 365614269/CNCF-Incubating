@@ -2098,6 +2098,8 @@ livenessProbe:
   failureThreshold: 10
   # -- interval between checks of the liveness probe
   periodSeconds: 30
+  # -- whether to require k8s connectivity as part of the check.
+  requireK8sConnectivity: false
 readinessProbe:
   # -- failure threshold of readiness probe
   failureThreshold: 3
@@ -2779,6 +2781,9 @@ tls:
 #   - geneve
 # @default -- `"vxlan"`
 tunnelProtocol: ""
+# -- IP family for the underlay.
+# @default -- `"ipv4"`
+underlayProtocol: ""
 # -- Enable native-routing mode or tunneling mode.
 # Possible values:
 #   - ""
