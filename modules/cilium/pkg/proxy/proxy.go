@@ -86,7 +86,7 @@ func (p *Proxy) ReleaseProxyPort(name string) error {
 }
 
 func (p *Proxy) ReinstallRoutingRules(mtu int) error {
-	return ReinstallRoutingRules(mtu)
+	return ReinstallRoutingRules(p.logger, mtu)
 }
 
 // GetProxyPort() returns the fixed listen port for a proxy, if any.
@@ -213,7 +213,7 @@ func (p *Proxy) createNewRedirect(
 
 	var impl RedirectImplementation
 	var err error
-	for nRetry := 0; nRetry < redirectCreationAttempts; nRetry++ {
+	for nRetry := range redirectCreationAttempts {
 		if err != nil {
 			// an error occurred and we are retrying
 			scopedLog.Warn("Unable to create proxy, retrying",

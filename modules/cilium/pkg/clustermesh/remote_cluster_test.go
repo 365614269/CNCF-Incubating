@@ -204,7 +204,7 @@ func TestRemoteClusterRun(t *testing.T) {
 			require.EventuallyWithT(t, func(c *assert.CollectT) {
 				rc.mutex.RLock()
 				defer rc.mutex.RUnlock()
-				assert.EqualValues(c, 1, rc.remoteIdentityCache.NumEntries())
+				assert.Equal(c, 1, rc.remoteIdentityCache.NumEntries())
 			}, timeout, tick, "Identities are not watched correctly")
 
 			// Assert that synced canaries have been watched if expected
@@ -398,7 +398,7 @@ func TestIPCacheWatcherOpts(t *testing.T) {
 		{
 			name: "with extra opts",
 			extra: func(config *types.CiliumClusterConfig) []ipcache.IWOpt {
-				return []ipcache.IWOpt{ipcache.WithClusterID(10), ipcache.WithSelfDeletionProtection()}
+				return []ipcache.IWOpt{ipcache.WithClusterID(10), ipcache.WithIdentityValidator(25)}
 			},
 			expected: 2,
 		},

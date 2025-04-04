@@ -87,10 +87,10 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 				if err != nil {
 					require.NoError(t, err)
 				}
-				patchWanted := []byte(fmt.Sprintf(`{"metadata":{"annotations":%s}}`, raw))
+				patchWanted := fmt.Appendf(nil, `{"metadata":{"annotations":%s}}`, raw)
 
 				patchReceived := action.(k8stesting.PatchAction).GetPatch()
-				require.EqualValues(t, string(patchWanted), string(patchReceived))
+				require.Equal(t, string(patchWanted), string(patchReceived))
 				patchChan <- true
 				return true, n1copy, nil
 			})
@@ -144,10 +144,10 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 				if err != nil {
 					require.NoError(t, err)
 				}
-				patchWanted := []byte(fmt.Sprintf(`{"metadata":{"annotations":%s}}`, raw))
+				patchWanted := fmt.Appendf(nil, `{"metadata":{"annotations":%s}}`, raw)
 
 				patchReceived := action.(k8stesting.PatchAction).GetPatch()
-				require.EqualValues(t, string(patchWanted), string(patchReceived))
+				require.Equal(t, string(patchWanted), string(patchReceived))
 				patchChan <- true
 				return true, n2Copy, nil
 			})
@@ -193,7 +193,7 @@ func TestRemovalOfNodeAnnotations(t *testing.T) {
 			delete(n1copy.Annotations, annotation.V4CIDRName)
 			patchWanted := []byte("[{\"op\":\"remove\",\"path\":\"/metadata/annotations/network.cilium.io~1ipv4-pod-cidr\",\"value\":null}]")
 			patchReceived := action.(k8stesting.PatchAction).GetPatch()
-			require.EqualValues(t, string(patchWanted), string(patchReceived))
+			require.Equal(t, string(patchWanted), string(patchReceived))
 			patchChan <- true
 			return true, n1copy, nil
 		})

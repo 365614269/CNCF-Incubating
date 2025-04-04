@@ -168,13 +168,13 @@ func benchWithoutListeners(b *testing.B, notifier LogRecordNotifier) {
 		for _, bm := range benchCases {
 			b.Run(bm.name, func(b *testing.B) {
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					// Each goroutine will deliver a single notification concurrently.
 					// This is done to simulate what happens when a high rate of DNS
 					// related events trigger one `notifyOnDNSMsg` callback each and
 					// consequently the event logging.
 					var wg sync.WaitGroup
-					for j := 0; j < bm.nRecords; j++ {
+					for range bm.nRecords {
 						wg.Add(1)
 						go func() {
 							defer wg.Done()
@@ -201,13 +201,13 @@ func benchWithListeners(accessLogger ProxyAccessLogger, listener *MockMonitorLis
 
 				b.ReportAllocs()
 				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					// Each goroutine will deliver a single notification concurrently.
 					// This is done to simulate what happens when a high rate of DNS
 					// related events trigger one `notifyOnDNSMsg` callback each and
 					// consequently the event logging.
 					var logWg sync.WaitGroup
-					for j := 0; j < bm.nRecords; j++ {
+					for range bm.nRecords {
 						logWg.Add(1)
 						go func() {
 							defer logWg.Done()

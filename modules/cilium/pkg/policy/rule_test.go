@@ -1324,7 +1324,7 @@ func TestL4RuleLabels(t *testing.T) {
 				require.NotNil(t, out, test.description)
 				require.Len(t, out.RuleOrigin, 1, test.description)
 				lbls := out.RuleOrigin[out.wildcard].GetLabelArrayList()
-				require.EqualValues(t, test.expectedIngressLabels[portProto], lbls, test.description)
+				require.Equal(t, test.expectedIngressLabels[portProto], lbls, test.description)
 			}
 
 			require.Equal(t, len(test.expectedEgressLabels), finalPolicy.L4Policy.Egress.PortRules.Len(), test.description)
@@ -1334,7 +1334,7 @@ func TestL4RuleLabels(t *testing.T) {
 				require.NotNil(t, out, test.description)
 				require.Len(t, out.RuleOrigin, 1, test.description)
 				lbls := out.RuleOrigin[out.wildcard].GetLabelArrayList()
-				require.EqualValues(t, test.expectedEgressLabels[portProto], lbls, test.description)
+				require.Equal(t, test.expectedEgressLabels[portProto], lbls, test.description)
 			}
 		})
 	}
@@ -2280,8 +2280,8 @@ func BenchmarkRuleString(b *testing.B) {
 		},
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = r.String()
 	}
 }
@@ -2365,7 +2365,7 @@ func TestMergeListenerReference(t *testing.T) {
 	ps := &PerSelectorPolicy{}
 	err := ps.mergeRedirect(ps)
 	require.NoError(t, err)
-	require.Equal(t, "", ps.Listener)
+	require.Empty(t, ps.Listener)
 	require.Equal(t, ListenerPriority(0), ps.Priority)
 
 	// Listener reference remains when the other has none

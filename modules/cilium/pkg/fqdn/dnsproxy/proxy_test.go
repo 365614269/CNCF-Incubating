@@ -747,12 +747,12 @@ func TestFullPathDependence(t *testing.T) {
 	}
 	restored1, _ := s.proxy.GetRules(versioned.Latest(), uint16(epID1))
 	restored1.Sort(nil)
-	require.EqualValues(t, expected1, restored1)
+	require.Equal(t, expected1, restored1)
 
 	expected2 := restore.DNSRules{}
 	restored2, _ := s.proxy.GetRules(versioned.Latest(), uint16(epID2))
 	restored2.Sort(nil)
-	require.EqualValues(t, expected2, restored2)
+	require.Equal(t, expected2, restored2)
 
 	expected3 := restore.DNSRules{
 		udpProtoPort53: restore.IPRules{
@@ -766,7 +766,7 @@ func TestFullPathDependence(t *testing.T) {
 	}
 	restored3, _ := s.proxy.GetRules(versioned.Latest(), uint16(epID3))
 	restored3.Sort(nil)
-	require.EqualValues(t, expected3, restored3)
+	require.Equal(t, expected3, restored3)
 
 	// Test with limited set of allowed IPs
 	oldUsed := s.proxy.usedServers
@@ -786,7 +786,7 @@ func TestFullPathDependence(t *testing.T) {
 	}
 	restored1b, _ := s.proxy.GetRules(versioned.Latest(), uint16(epID1))
 	restored1b.Sort(nil)
-	require.EqualValues(t, expected1b, restored1b)
+	require.Equal(t, expected1b, restored1b)
 
 	// unlimited again
 	s.proxy.usedServers = oldUsed
@@ -967,7 +967,7 @@ func TestFullPathDependence(t *testing.T) {
 	err = json.Unmarshal(jsn, &rules)
 	rules = rules.Sort(nil)
 	require.NoError(t, err, "Could not unmarshal restored rules from json")
-	require.EqualValues(t, expected1, rules)
+	require.Equal(t, expected1, rules)
 
 	// Marshal again & compare
 	// Marshal restored rules to JSON
@@ -1209,14 +1209,14 @@ func Benchmark_perEPAllow_setPortRulesForID(b *testing.B) {
 	rulesPerEP := make([]policy.L7DataMap, 0, nEPs)
 
 	var defaultRules []api.PortRuleDNS
-	for i := 0; i < nMatchPatterns; i++ {
+	for i := range nMatchPatterns {
 		defaultRules = append(defaultRules, api.PortRuleDNS{MatchPattern: "*.bar" + strconv.Itoa(i) + "another.very.long.domain.here"})
 	}
-	for i := 0; i < nMatchNames; i++ {
+	for i := range nMatchNames {
 		defaultRules = append(defaultRules, api.PortRuleDNS{MatchName: strconv.Itoa(i) + "very.long.domain.containing.a.lot.of.chars"})
 	}
 
-	for i := 0; i < nEPs; i++ {
+	for i := range nEPs {
 		commonRules := slices.Clone(defaultRules)
 		if i%everyNIsEqual != 0 {
 			commonRules = append(
@@ -1235,9 +1235,8 @@ func Benchmark_perEPAllow_setPortRulesForID(b *testing.B) {
 	pea := perEPAllow{}
 	c := regexCache{}
 	b.ReportAllocs()
-	b.StopTimer()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		for epID := uint64(0); epID < nEPs; epID++ {
 			pea.setPortRulesForID(c, epID, udpProtoPort8053, nil)
 		}
@@ -1352,8 +1351,8 @@ func Benchmark_perEPAllow_setPortRulesForID_large(b *testing.B) {
 	pea := perEPAllow{}
 	c := regexCache{}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		for epID := uint64(0); epID < numEPs; epID++ {
 			pea.setPortRulesForID(c, epID, udpProtoPort8053, rules)
 		}

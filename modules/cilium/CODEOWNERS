@@ -530,6 +530,7 @@ Makefile* @cilium/build
 /pkg/datapath/loader/ @cilium/loader
 /pkg/datapath/types/ipsec.go @cilium/ipsec
 /pkg/datapath/types/loader.go @cilium/loader
+/pkg/datapath/sockets/ @cilium/sig-lb
 /pkg/defaults @cilium/sig-agent
 /pkg/debug @cilium/sig-agent
 /pkg/dial @cilium/sig-agent
@@ -649,7 +650,6 @@ Makefile* @cilium/build
 /test/k8s/bandwidth.go @cilium/sig-datapath @cilium/ci-structure
 /test/k8s/chaos.go @cilium/sig-datapath @cilium/ci-structure
 /test/k8s/datapath_configuration.go @cilium/sig-datapath @cilium/ci-structure
-/test/runtime/connectivity.go @cilium/sig-datapath @cilium/ci-structure
 /test/verifier @cilium/loader @cilium/ci-structure
 # Policy tests
 /test/k8s/net_policies.go @cilium/sig-policy @cilium/ci-structure

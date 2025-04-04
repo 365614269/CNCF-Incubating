@@ -24,7 +24,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/node/types"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
@@ -387,7 +386,7 @@ func TestLookup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var ep *endpoint.Endpoint
 			var err error
-			mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+			mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 			if tt.cm != nil {
 				ep, err = endpoint.NewEndpointFromChangeModel(context.Background(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), tt.cm)
 				require.NoErrorf(t, err, "Test Name: %s", tt.name)
@@ -400,7 +399,7 @@ func TestLookup(t *testing.T) {
 			got, err := mgr.Lookup(args.id)
 			want.errCheck(t, want.err, err, "Test Name: %s", tt.name)
 			if want.ep {
-				require.EqualValuesf(t, ep, got, "Test Name: %s", tt.name)
+				require.Equalf(t, ep, got, "Test Name: %s", tt.name)
 			} else {
 				require.Nilf(t, got, "Test Name: %s", tt.name)
 			}
@@ -411,7 +410,7 @@ func TestLookup(t *testing.T) {
 func TestLookupCiliumID(t *testing.T) {
 	s := setupEndpointManagerSuite(t)
 
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	ep := endpoint.NewTestEndpointWithState(nil, nil, nil, nil, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 2, endpoint.StateReady)
 	type args struct {
 		id uint16
@@ -471,7 +470,7 @@ func TestLookupCiliumID(t *testing.T) {
 		want := tt.setupWant()
 		got := mgr.LookupCiliumID(args.id)
 		exists := mgr.EndpointExists(args.id)
-		require.EqualValuesf(t, want.ep, got, "Test Name: %s", tt.name)
+		require.Equalf(t, want.ep, got, "Test Name: %s", tt.name)
 		require.Equal(t, want.ep != nil, exists, "Test Name: %s", tt.name)
 		tt.postTestRun()
 	}
@@ -480,7 +479,7 @@ func TestLookupCiliumID(t *testing.T) {
 func TestLookupCNIAttachmentID(t *testing.T) {
 	s := setupEndpointManagerSuite(t)
 
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	ep, err := endpoint.NewEndpointFromChangeModel(context.Background(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), &apiv1.EndpointChangeRequest{
 		ContainerID:            "foo",
 		ContainerInterfaceName: "bar",
@@ -489,7 +488,7 @@ func TestLookupCNIAttachmentID(t *testing.T) {
 	require.NoError(t, mgr.expose(ep))
 
 	good := mgr.LookupCNIAttachmentID("foo:bar")
-	require.EqualValues(t, ep, good)
+	require.Equal(t, ep, good)
 
 	bad := mgr.LookupCNIAttachmentID("foo")
 	require.Nil(t, bad)
@@ -501,7 +500,7 @@ func TestLookupCNIAttachmentID(t *testing.T) {
 func TestLookupIPv4(t *testing.T) {
 	s := setupEndpointManagerSuite(t)
 
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	ep := endpoint.NewTestEndpointWithState(nil, nil, nil, nil, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 4, endpoint.StateReady)
 	type args struct {
 		ip string
@@ -560,14 +559,14 @@ func TestLookupIPv4(t *testing.T) {
 		args := tt.setupArgs()
 		want := tt.setupWant()
 		got := mgr.LookupIPv4(args.ip)
-		require.EqualValuesf(t, want.ep, got, "Test Name: %s", tt.name)
+		require.Equalf(t, want.ep, got, "Test Name: %s", tt.name)
 		tt.postTestRun()
 	}
 }
 
 func TestLookupCEPName(t *testing.T) {
 	s := setupEndpointManagerSuite(t)
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	type args struct {
 		podName string
 	}
@@ -655,7 +654,7 @@ func TestLookupCEPName(t *testing.T) {
 		args := tt.setupArgs()
 		want := tt.setupWant(ep)
 		got := mgr.LookupCEPName(args.podName)
-		require.EqualValues(t, want.ep, got, "Test Name: %s", tt.name)
+		require.Equal(t, want.ep, got, "Test Name: %s", tt.name)
 		tt.postTestRun(ep)
 	}
 }
@@ -694,7 +693,7 @@ func TestUpdateReferences(t *testing.T) {
 		var err error
 		ep, err = endpoint.NewEndpointFromChangeModel(context.Background(), nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), &tt.cm)
 		require.NoErrorf(t, err, "Test Name: %s", tt.name)
-		mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+		mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 
 		err = mgr.expose(ep)
 		require.NoErrorf(t, err, "Test Name: %s", tt.name)
@@ -702,29 +701,29 @@ func TestUpdateReferences(t *testing.T) {
 		mgr.updateReferencesLocked(ep, ep.Identifiers())
 
 		ep = mgr.LookupCNIAttachmentID(want.ep.GetCNIAttachmentID())
-		require.EqualValues(t, want.ep, ep, "Test Name: %s", tt.name)
+		require.Equal(t, want.ep, ep, "Test Name: %s", tt.name)
 
 		ep = mgr.lookupDockerEndpoint(want.ep.GetDockerEndpointID())
-		require.EqualValues(t, want.ep, ep, "Test Name: %s", tt.name)
+		require.Equal(t, want.ep, ep, "Test Name: %s", tt.name)
 
 		ep = mgr.LookupIPv4(want.ep.IPv4.String())
-		require.EqualValues(t, want.ep, ep, "Test Name: %s", tt.name)
+		require.Equal(t, want.ep, ep, "Test Name: %s", tt.name)
 
 		ep = mgr.lookupDockerContainerName(want.ep.GetContainerName())
-		require.EqualValues(t, want.ep, ep, "Test Name: %s", tt.name)
+		require.Equal(t, want.ep, ep, "Test Name: %s", tt.name)
 
 		ep = mgr.LookupCEPName(want.ep.GetK8sNamespaceAndCEPName())
-		require.EqualValues(t, want.ep, ep, "Test Name: %s", tt.name)
+		require.Equal(t, want.ep, ep, "Test Name: %s", tt.name)
 
 		eps := mgr.GetEndpointsByPodName(want.ep.GetK8sNamespaceAndPodName())
 		require.Len(t, eps, 1)
-		require.EqualValues(t, want.ep, eps[0], "Test Name: %s", tt.name)
+		require.Equal(t, want.ep, eps[0], "Test Name: %s", tt.name)
 	}
 }
 
 func TestRemove(t *testing.T) {
 	s := setupEndpointManagerSuite(t)
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	ep := endpoint.NewTestEndpointWithState(nil, nil, nil, nil, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 7, endpoint.StateReady)
 	type args struct{}
 	type want struct{}
@@ -761,72 +760,9 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-func TestHasGlobalCT(t *testing.T) {
-	s := setupEndpointManagerSuite(t)
-
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
-	ep := endpoint.NewTestEndpointWithState(nil, nil, nil, nil, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 1, endpoint.StateReady)
-	type want struct {
-		result bool
-	}
-	tests := []struct {
-		name        string
-		setupWant   func() want
-		preTestRun  func()
-		postTestRun func()
-	}{
-		{
-			name: "Endpoint with Conntrack global",
-			preTestRun: func() {
-				ep.ID = 1
-				ep.Options = option.NewIntOptions(&endpoint.EndpointMutableOptionLibrary)
-				require.NoError(t, mgr.expose(ep))
-			},
-			setupWant: func() want {
-				return want{
-					result: true,
-				}
-			},
-			postTestRun: func() {
-				mgr.WaitEndpointRemoved(ep)
-				ep = endpoint.NewTestEndpointWithState(nil, nil, nil, nil, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 1, endpoint.StateReady)
-				ep.ID = 0
-				ep.Options = nil
-			},
-		},
-		{
-			name: "Endpoint with Conntrack local",
-			preTestRun: func() {
-				ep.ID = 1
-				ep.Options = option.NewIntOptions(&endpoint.EndpointMutableOptionLibrary)
-				ep.Options.SetIfUnset(option.ConntrackLocal, option.OptionEnabled)
-				require.NoError(t, mgr.expose(ep))
-			},
-			setupWant: func() want {
-				return want{
-					result: false,
-				}
-			},
-			postTestRun: func() {
-				mgr.WaitEndpointRemoved(ep)
-				ep = endpoint.NewTestEndpointWithState(nil, nil, nil, nil, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 1, endpoint.StateReady)
-				ep.ID = 0
-				ep.Options = nil
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt.preTestRun()
-		want := tt.setupWant()
-		got := mgr.HasGlobalCT()
-		require.EqualValues(t, want.result, got, "Test Name: %s", tt.name)
-		tt.postTestRun()
-	}
-}
-
 func TestWaitForEndpointsAtPolicyRev(t *testing.T) {
 	s := setupEndpointManagerSuite(t)
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	ep := endpoint.NewTestEndpointWithState(nil, nil, nil, nil, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &endpoint.FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 1, endpoint.StateReady)
 	type args struct {
 		ctx    context.Context
@@ -938,7 +874,7 @@ func TestMissingNodeLabelsUpdate(t *testing.T) {
 	// Initialize label filter config.
 	labelsfilter.ParseLabelPrefixCfg(nil, nil, "")
 	s := setupEndpointManagerSuite(t)
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	hostEPID := uint16(17)
 
 	// Initialize the local node watcher before the host endpoint is created.
@@ -961,14 +897,14 @@ func TestMissingNodeLabelsUpdate(t *testing.T) {
 	hostEP, ok := mgr.endpoints[hostEPID]
 	require.True(t, ok)
 	got := hostEP.OpLabels.IdentityLabels().K8sStringMap()
-	require.EqualValues(t, map[string]string{"k2": "v2"}, got)
+	require.Equal(t, map[string]string{"k2": "v2"}, got)
 }
 
 func TestUpdateHostEndpointLabels(t *testing.T) {
 	// Initialize label filter config.
 	labelsfilter.ParseLabelPrefixCfg([]string{"k8s:!ignore1", "k8s:!ignore2"}, nil, "")
 	s := setupEndpointManagerSuite(t)
-	mgr := New(&dummyEpSyncher{}, nil, nil, nil)
+	mgr := New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	hostEPID := uint16(17)
 	type args struct {
 		oldLabels, newLabels map[string]string

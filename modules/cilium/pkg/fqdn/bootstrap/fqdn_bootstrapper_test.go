@@ -64,7 +64,7 @@ func setupDaemonFQDNSuite(tb testing.TB) *DaemonFQDNSuite {
 	ds := &DaemonFQDNSuite{}
 	d := &fqdnProxyBootstrapper{}
 	d.policyRepo = policy.NewPolicyRepository(hivetest.Logger(tb), nil, nil, nil, nil, api.NewPolicyMetricsNoop())
-	d.endpointManager = endpointmanager.New(&dummyEpSyncher{}, nil, nil, nil)
+	d.endpointManager = endpointmanager.New(&dummyEpSyncher{}, nil, nil, nil, nil)
 	d.ipcache = ipcache.NewIPCache(&ipcache.Configuration{
 		Context:           context.TODO(),
 		IdentityAllocator: testidentity.NewMockIdentityAllocator(nil),
@@ -179,10 +179,10 @@ func BenchmarkNotifyOnDNSMsg(b *testing.B) {
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
+
 	// Simulate parallel DNS responses from the upstream DNS for cilium.io and
 	// ebpf.io, done by every endpoint.
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, ep := range endpoints {
 			wg.Add(1)
 			go func() {

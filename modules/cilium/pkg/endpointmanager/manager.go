@@ -73,6 +73,10 @@ type endpointManager struct {
 	// up-to-date information about endpoints managed by the endpoint manager.
 	EndpointResourceSynchronizer
 
+	// kvstoreSyncher updates the kvstore (e.g., etcd) with up-to-date
+	// information about endpoints.
+	kvstoreSyncher *ipcache.IPIdentitySynchronizer
+
 	// subscribers are notified when events occur in the endpointManager.
 	subscribers map[Subscriber]struct{}
 
@@ -110,13 +114,14 @@ type endpointManager struct {
 type endpointDeleteFunc func(*endpoint.Endpoint, endpoint.DeleteConfig) []error
 
 // New creates a new endpointManager.
-func New(epSynchronizer EndpointResourceSynchronizer, lns *node.LocalNodeStore, health cell.Health, monitorAgent monitoragent.Agent) *endpointManager {
+func New(epSynchronizer EndpointResourceSynchronizer, ks *ipcache.IPIdentitySynchronizer, lns *node.LocalNodeStore, health cell.Health, monitorAgent monitoragent.Agent) *endpointManager {
 	mgr := endpointManager{
 		health:                       health,
 		endpoints:                    make(map[uint16]*endpoint.Endpoint),
 		endpointsAux:                 make(map[string]*endpoint.Endpoint),
 		mcastManager:                 mcastmanager.New(option.Config.IPv6MCastDevice),
 		EndpointResourceSynchronizer: epSynchronizer,
+		kvstoreSyncher:               ks,
 		subscribers:                  make(map[Subscriber]struct{}),
 		controllers:                  controller.NewManager(),
 		localNodeStore:               lns,
@@ -621,17 +626,6 @@ func (mgr *endpointManager) OverrideEndpointOpts(om option.OptionMap) {
 	}
 }
 
-// HasGlobalCT returns true if the endpoints have a global CT, false otherwise.
-func (mgr *endpointManager) HasGlobalCT() bool {
-	eps := mgr.GetEndpoints()
-	for _, e := range eps {
-		if !e.Options.IsEnabled(option.ConntrackLocal) {
-			return true
-		}
-	}
-	return false
-}
-
 // GetEndpoints returns a slice of all endpoints present in endpoint manager.
 func (mgr *endpointManager) GetEndpoints() []*endpoint.Endpoint {
 	mgr.mutex.RLock()
@@ -671,6 +665,8 @@ func (mgr *endpointManager) expose(ep *endpoint.Endpoint) error {
 	mgr.updateReferencesLocked(ep, identifiers)
 	mgr.mutex.Unlock()
 
+	ep.SetKVStoreSynchronizer(mgr.kvstoreSyncher)
+
 	ep.InitEndpointHealth(mgr.health)
 	mgr.RunK8sCiliumEndpointSync(ep, ep.GetReporter("cep-k8s-sync"))
 
@@ -709,7 +705,7 @@ func (mgr *endpointManager) AddEndpoint(ep *endpoint.Endpoint) (err error) {
 	// when endpoint and its logger are created pod details are not populated
 	// and all subsequent logs have empty pod details like ip addresses, k8sPodName
 	// this update will populate pod details in logger
-	ep.UpdateLogger(map[string]interface{}{
+	ep.UpdateLogger(map[string]any{
 		logfields.ContainerID: ep.GetShortContainerID(),
 		logfields.IPv4:        ep.GetIPv4Address(),
 		logfields.IPv6:        ep.GetIPv6Address(),

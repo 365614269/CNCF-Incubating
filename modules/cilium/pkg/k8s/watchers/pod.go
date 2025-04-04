@@ -190,7 +190,6 @@ func (k *K8sPodWatcher) podsInit(ctx context.Context) {
 					}
 					k.k8sResourceSynced.SetEventTimestamp(podApiGroup)
 					pods[name] = pod
-
 				} else {
 					k.deleteK8sPodV1(pod)
 					k.k8sResourceSynced.SetEventTimestamp(podApiGroup)
@@ -552,8 +551,8 @@ var (
 
 func netnsCookieSupported(logger *slog.Logger) bool {
 	_netnsCookieSupportedOnce.Do(func() {
-		_netnsCookieSupported = probes.HaveProgramHelper(ebpf.CGroupSock, asm.FnGetNetnsCookie) == nil &&
-			probes.HaveProgramHelper(ebpf.CGroupSockAddr, asm.FnGetNetnsCookie) == nil
+		_netnsCookieSupported = probes.HaveProgramHelper(logger, ebpf.CGroupSock, asm.FnGetNetnsCookie) == nil &&
+			probes.HaveProgramHelper(logger, ebpf.CGroupSockAddr, asm.FnGetNetnsCookie) == nil
 	})
 	return _netnsCookieSupported
 }

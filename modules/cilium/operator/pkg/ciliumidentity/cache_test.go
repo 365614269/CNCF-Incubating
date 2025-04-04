@@ -154,7 +154,7 @@ func TestCIDStateThreadSafety(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	queryStateFunc := func() {
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			state.LookupByID("1000")
 			state.Upsert("1000", k)
 			state.LookupByKey(k)
@@ -166,7 +166,7 @@ func TestCIDStateThreadSafety(t *testing.T) {
 		wg.Done()
 	}
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg.Add(1)
 		go queryStateFunc()
 	}
@@ -196,16 +196,16 @@ func TestCIDUsageInPods(t *testing.T) {
 
 	usedCID, exists := state.podToCID[podName1]
 	assert.False(t, exists, assertTxt)
-	assert.Equal(t, "", usedCID, assertTxt)
+	assert.Empty(t, usedCID, assertTxt)
 
 	prevCID, count, exists := state.RemovePod(podName1)
 	assert.False(t, exists)
-	assert.Equal(t, "", prevCID, assertTxt)
+	assert.Empty(t, prevCID, assertTxt)
 	assert.Equal(t, 0, count, assertTxt)
 
 	assertTxt = "Assign CID to Pod 1"
 	prevCID, count = state.AssignCIDToPod(podName1, cidName1)
-	assert.Equal(t, "", prevCID, assertTxt)
+	assert.Empty(t, prevCID, assertTxt)
 	assert.Equal(t, 0, count, assertTxt)
 	assert.Equal(t, 1, state.CIDUsageCount(cidName1), assertTxt)
 
@@ -216,7 +216,7 @@ func TestCIDUsageInPods(t *testing.T) {
 	assertTxt = "Assign CID to Pod 2"
 	podName2 := "pod2"
 	prevCID, count = state.AssignCIDToPod(podName2, cidName1)
-	assert.Equal(t, "", prevCID, assertTxt)
+	assert.Empty(t, prevCID, assertTxt)
 	assert.Equal(t, 0, count, assertTxt)
 	assert.Equal(t, 2, state.CIDUsageCount(cidName1), assertTxt)
 
@@ -262,7 +262,7 @@ func TestCIDUsageInPods(t *testing.T) {
 
 	usedCID, exists = state.podToCID[podName1]
 	assert.False(t, exists, assertTxt)
-	assert.Equal(t, "", usedCID, assertTxt)
+	assert.Empty(t, usedCID, assertTxt)
 
 	assertTxt = "Remove Pod 2"
 	prevCID, count, exists = state.RemovePod(podName2)
@@ -273,7 +273,7 @@ func TestCIDUsageInPods(t *testing.T) {
 
 	usedCID, exists = state.podToCID[podName2]
 	assert.False(t, exists, assertTxt)
-	assert.Equal(t, "", usedCID, assertTxt)
+	assert.Empty(t, usedCID, assertTxt)
 }
 
 func TestCIDUsageInCES(t *testing.T) {

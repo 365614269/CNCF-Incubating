@@ -4,7 +4,6 @@
 package identitybackend
 
 import (
-	"context"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -80,9 +79,9 @@ func TestSanitizeK8sLabels(t *testing.T) {
 
 	for _, test := range testCases {
 		selected, skipped := SanitizeK8sLabels(test.input)
-		require.EqualValues(t, test.selected, selected)
-		require.EqualValues(t, test.skipped, skipped)
-		require.EqualValues(t, test.validationErrors, validation.ValidateLabels(selected, path))
+		require.Equal(t, test.selected, selected)
+		require.Equal(t, test.skipped, skipped)
+		require.Equal(t, test.validationErrors, validation.ValidateLabels(selected, path))
 	}
 }
 
@@ -197,8 +196,7 @@ func TestGetIdentity(t *testing.T) {
 				t.Fatalf("Can't create CRD Backend: %s", err)
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			addWaitGroup := sync.WaitGroup{}
 			addWaitGroup.Add(len(tc.identities))

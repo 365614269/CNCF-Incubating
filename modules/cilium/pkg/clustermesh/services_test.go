@@ -36,7 +36,7 @@ import (
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 )
 
-var etcdConfig = []byte(fmt.Sprintf("endpoints:\n- %s\n", kvstore.EtcdDummyAddress()))
+var etcdConfig = fmt.Appendf(nil, "endpoints:\n- %s\n", kvstore.EtcdDummyAddress())
 
 func (s *ClusterMeshServicesTestSuite) prepareServiceUpdate(tb testing.TB, clusterID uint32, backendIP, portName string, port uint16) (string, string) {
 	tb.Helper()
@@ -140,7 +140,7 @@ func setup(tb testing.TB) *ClusterMeshServicesTestSuite {
 
 	// wait for both clusters to appear in the list of cm clusters
 	require.EventuallyWithT(tb, func(c *assert.CollectT) {
-		assert.EqualValues(c, 2, s.mesh.NumReadyClusters())
+		assert.Equal(c, 2, s.mesh.NumReadyClusters())
 	}, timeout, tick)
 
 	return s

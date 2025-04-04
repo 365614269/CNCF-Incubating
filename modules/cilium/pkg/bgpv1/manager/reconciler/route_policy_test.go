@@ -630,7 +630,7 @@ func TestRoutePolicyReconciler(t *testing.T) {
 
 			// Run the reconciler twice to ensure idempotency. This
 			// simulates the retrying behavior of the controller.
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				t.Run(tt.name+"-init", func(t *testing.T) {
 					err = policyReconciler.Reconcile(context.Background(), params)
 					if tt.expectError {
@@ -660,7 +660,7 @@ func TestRoutePolicyReconciler(t *testing.T) {
 			}
 			// Run the reconciler twice to ensure idempotency. This
 			// simulates the retrying behavior of the controller.
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				t.Run(tt.name+"-follow-up", func(t *testing.T) {
 					err = policyReconciler.Reconcile(context.Background(), params)
 					require.NoError(t, err)
@@ -679,7 +679,7 @@ func validatePoliciesMatch(t *testing.T, actual map[string]*types.RoutePolicy, e
 	for _, expPolicy := range expected {
 		policy := actual[expPolicy.Name]
 		require.NotNil(t, policy)
-		require.EqualValues(t, expPolicy, policy)
+		require.Equal(t, expPolicy, policy)
 	}
 }
 
@@ -750,7 +750,7 @@ func TestCommunityDeduplication(t *testing.T) {
 
 			res2 := dedupLargeCommunities(tt.large)
 
-			require.EqualValues(t, tt.expected, append(res, res2...))
+			require.Equal(t, tt.expected, append(res, res2...))
 		})
 	}
 }

@@ -348,13 +348,8 @@ func (ct *ConnectivityTest) setupAndValidate(ctx context.Context, extra SetupHoo
 	}
 
 	if ct.debug() {
-		fs := make([]features.Feature, 0, len(ct.Features))
-		for f := range ct.Features {
-			fs = append(fs, f)
-		}
-		slices.Sort(fs)
 		ct.Debug("Detected features:")
-		for _, f := range fs {
+		for _, f := range slices.Sorted(maps.Keys(ct.Features)) {
 			ct.Debugf("  %s: %s", f, ct.Features[f])
 		}
 	}
@@ -1329,4 +1324,13 @@ func (ct *ConnectivityTest) ShouldRunConnDisruptEgressGateway() bool {
 		ct.Features[features.NodeWithoutCilium].Enabled &&
 		!ct.Features[features.KPRNodePortAcceleration].Enabled &&
 		ct.params.MultiCluster == ""
+}
+
+func (ct *ConnectivityTest) IsSocketLBFull() bool {
+	socketLBEnabled, _ := ct.Features.MatchRequirements(features.RequireEnabled(features.KPRSocketLB))
+	if socketLBEnabled {
+		socketLBHostnsOnly, _ := ct.Features.MatchRequirements(features.RequireEnabled(features.KPRSocketLBHostnsOnly))
+		return !socketLBHostnsOnly
+	}
+	return false
 }

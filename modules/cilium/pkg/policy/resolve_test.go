@@ -42,8 +42,7 @@ var testRedirects = map[string]uint16{
 
 func generateNumIdentities(numIdentities int) identity.IdentityMap {
 	c := make(identity.IdentityMap, numIdentities)
-	for i := 0; i < numIdentities; i++ {
-
+	for i := range numIdentities {
 		identityLabel := labels.NewLabel(fmt.Sprintf("k8s:foo%d", i), "", "")
 		clusterLabel := labels.NewLabel("io.cilium.k8s.policy.cluster=default", "", labels.LabelSourceK8s)
 		serviceAccountLabel := labels.NewLabel("io.cilium.k8s.policy.serviceaccount=default", "", labels.LabelSourceK8s)
@@ -205,8 +204,8 @@ func BenchmarkRegenerateCIDRPolicyRules(b *testing.B) {
 	ip, _ := td.repo.resolvePolicyLocked(fooIdentity)
 	owner := DummyOwner{logger: hivetest.Logger(b)}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		epPolicy := ip.DistillPolicy(hivetest.Logger(b), owner, nil)
 		owner.mapStateSize = epPolicy.policyMapState.Len()
 		epPolicy.Ready()
@@ -218,8 +217,8 @@ func BenchmarkRegenerateCIDRPolicyRules(b *testing.B) {
 func BenchmarkRegenerateL3IngressPolicyRules(b *testing.B) {
 	td := newTestData(hivetest.Logger(b))
 	td.bootstrapRepo(GenerateL3IngressRules, 1000, b)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		ip, _ := td.repo.resolvePolicyLocked(fooIdentity)
 		policy := ip.DistillPolicy(hivetest.Logger(b), DummyOwner{logger: hivetest.Logger(b)}, nil)
 		policy.Ready()
@@ -230,8 +229,8 @@ func BenchmarkRegenerateL3IngressPolicyRules(b *testing.B) {
 func BenchmarkRegenerateL3EgressPolicyRules(b *testing.B) {
 	td := newTestData(hivetest.Logger(b))
 	td.bootstrapRepo(GenerateL3EgressRules, 1000, b)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		ip, _ := td.repo.resolvePolicyLocked(fooIdentity)
 		policy := ip.DistillPolicy(hivetest.Logger(b), DummyOwner{logger: hivetest.Logger(b)}, nil)
 		policy.Ready()

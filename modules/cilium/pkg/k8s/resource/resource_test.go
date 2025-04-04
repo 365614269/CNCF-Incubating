@@ -329,7 +329,7 @@ func TestResource_RepeatedDelete(t *testing.T) {
 	// Repeatedly create and delete the node in the background
 	// while "unreliably" processing some of the delete events.
 	go func() {
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			node.ObjectMeta.ResourceVersion = fmt.Sprintf("%d", i)
 
 			lw.events <- watch.Event{
@@ -635,7 +635,7 @@ func TestResource_WithIndexers(t *testing.T) {
 		fakeClient, cs = k8sClient.NewFakeClientset(hivetest.Logger(t))
 
 		indexName = "node-index-key"
-		indexFunc = func(obj interface{}) ([]string, error) {
+		indexFunc = func(obj any) ([]string, error) {
 			switch t := obj.(type) {
 			case *corev1.Node:
 				return []string{t.Name}, nil
@@ -678,7 +678,7 @@ func TestResource_WithIndexers(t *testing.T) {
 	events := nodeResource.Events(ctx)
 
 	// wait for the upsert events
-	for i := 0; i < len(nodes); i++ {
+	for range len(nodes) {
 		ev, ok := <-events
 		require.True(t, ok)
 		require.Equal(t, resource.Upsert, ev.Kind)
@@ -972,14 +972,12 @@ func BenchmarkResource(b *testing.B) {
 	assert.Equal(b, resource.Sync, ev.Kind)
 	ev.Done(nil)
 
-	b.ResetTimer()
-
 	var wg sync.WaitGroup
 
 	// Feed in b.N nodes as watcher events
 	wg.Add(1)
 	go func() {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			name := fmt.Sprintf("node-%d", i)
 			lw.events <- watch.Event{Type: watch.Added, Object: &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
@@ -992,7 +990,7 @@ func BenchmarkResource(b *testing.B) {
 	}()
 
 	// Consume the events via the resource
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ev, ok := <-events
 		assert.True(b, ok)
 		assert.Equal(b, resource.Upsert, ev.Kind)

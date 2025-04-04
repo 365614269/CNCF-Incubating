@@ -432,13 +432,12 @@ func BenchmarkUpdateAndDeleteCycle(b *testing.B) {
 	mngr.Subscribe(dp)
 	defer mngr.Stop(context.TODO())
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		n := nodeTypes.Node{Name: fmt.Sprintf("%d", i), Source: source.Local}
 		mngr.NodeUpdated(n)
 	}
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		n := nodeTypes.Node{Name: fmt.Sprintf("%d", i), Source: source.Local}
 		mngr.NodeDeleted(n)
 	}
@@ -458,7 +457,7 @@ func TestClusterSizeDependantInterval(t *testing.T) {
 
 	prevInterval := time.Nanosecond
 
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		n := nodeTypes.Node{Name: fmt.Sprintf("%d", i), Source: source.Local, IPAddresses: []nodeTypes.Address{
 			{
 				Type: addressing.NodeInternalIP,
@@ -504,7 +503,7 @@ func TestBackgroundSync(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < numNodes; i++ {
+	for i := range numNodes {
 		n := nodeTypes.Node{Name: fmt.Sprintf("%d", i), Source: source.Kubernetes, IPAddresses: []nodeTypes.Address{
 			{
 				Type: addressing.NodeInternalIP,
@@ -972,7 +971,7 @@ func TestNodeManagerEmitStatus(t *testing.T) {
 	status, _ = checkStatus()
 	assert.Equal(types.LevelOK, string(status.Level))
 
-	for i := 0; i < cap(nh1.Stop); i++ {
+	for range cap(nh1.Stop) {
 		nh1.Stop <- struct{}{}
 	}
 }

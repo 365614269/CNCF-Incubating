@@ -495,7 +495,7 @@ func TestProxyID(t *testing.T) {
 	e.UpdateLogger(nil)
 
 	id, port, proto := e.proxyID(&policy.L4Filter{Port: 8080, Protocol: api.ProtoTCP, Ingress: true}, "")
-	require.NotEqual(t, "", id)
+	require.NotEmpty(t, id)
 	require.Equal(t, uint16(8080), port)
 	require.Equal(t, u8proto.TCP, proto)
 
@@ -504,11 +504,11 @@ func TestProxyID(t *testing.T) {
 	require.True(t, ingress)
 	require.Equal(t, "TCP", protocol)
 	require.Equal(t, uint16(8080), port)
-	require.Equal(t, "", listener)
+	require.Empty(t, listener)
 	require.NoError(t, err)
 
 	id, port, proto = e.proxyID(&policy.L4Filter{Port: 8080, Protocol: api.ProtoTCP, Ingress: true}, "test-listener")
-	require.NotEqual(t, "", id)
+	require.NotEmpty(t, id)
 	require.Equal(t, uint16(8080), port)
 	require.Equal(t, u8proto.TCP, proto)
 	endpointID, ingress, protocol, port, listener, err = policy.ParseProxyID(id)
@@ -521,7 +521,7 @@ func TestProxyID(t *testing.T) {
 
 	// Undefined named port
 	id, port, proto = e.proxyID(&policy.L4Filter{PortName: "foobar", Protocol: api.ProtoTCP, Ingress: true}, "")
-	require.Equal(t, "", id)
+	require.Empty(t, id)
 	require.Equal(t, uint16(0), port)
 	require.Equal(t, u8proto.ANY, proto)
 }
@@ -606,7 +606,7 @@ var (
 	deadlockTestTimeout = 3*deadlockTimeout + 1*time.Second
 )
 
-func (n *EndpointDeadlockEvent) Handle(ifc chan interface{}) {
+func (n *EndpointDeadlockEvent) Handle(ifc chan any) {
 	// We need to sleep here so that we are consuming an event off the queue,
 	// but not acquiring the lock yet.
 	// There isn't much of a better way to ensure that an Event is being
@@ -709,13 +709,13 @@ func BenchmarkEndpointGetModel(b *testing.B) {
 
 	e := NewTestEndpointWithState(nil, nil, nil, s.orchestrator, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &FakeEndpointProxy{}, testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 123, StateWaitingForIdentity)
 
-	for i := 0; i < 256; i++ {
+	for range 256 {
 		e.LogStatusOK(BPF, "Hello World!")
 	}
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		e.GetModel()
 	}
 }
@@ -779,14 +779,11 @@ func TestMetadataResolver(t *testing.T) {
 	for _, restored := range []bool{false, true} {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%s (restored=%t)", tt.name, restored), func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-
 				ep := NewTestEndpointWithState(nil, nil, nil, s.orchestrator, nil, nil, nil, identitymanager.NewIDManager(), nil, s.repo, testipcache.NewMockIPCache(), &FakeEndpointProxy{},
 					testidentity.NewMockIdentityAllocator(nil), ctmap.NewFakeGCRunner(), 123, StateWaitingForIdentity)
 				ep.K8sNamespace, ep.K8sPodName, ep.K8sUID = "bar", "foo", "uid"
 
-				_, err := ep.metadataResolver(ctx, restored, true, labels.Labels{}, &fakeTypes.BandwidthManager{}, tt.resolveMetadata)
+				_, err := ep.metadataResolver(t.Context(), restored, true, labels.Labels{}, &fakeTypes.BandwidthManager{}, tt.resolveMetadata)
 				tt.assert(t, err)
 			})
 		}

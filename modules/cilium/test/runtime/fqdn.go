@@ -6,6 +6,7 @@ package RuntimeTest
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -519,7 +520,7 @@ var _ = Describe("RuntimeAgentFQDNPolicies", func() {
 		}
 
 		By("Testing %q and %q containers are allow to work with roundrobin dns", helpers.App1, helpers.App2)
-		for i := 0; i < numberOfTries; i++ {
+		for range numberOfTries {
 			for _, container := range []string{helpers.App1, helpers.App2} {
 				By("Testing connectivity to Cilium.test domain")
 				res := vm.ContainerExec(container, helpers.CurlFail(target))
@@ -1160,15 +1161,9 @@ var _ = Describe("RuntimeAgentFQDNPolicies", func() {
 // returned array will be sorted by map keys, the reason is that Golang does
 // not support ordered maps and for DNS-config the values need to be always
 // sorted.
-func getMapValues(m map[string]string) []interface{} {
-
-	values := make([]interface{}, len(m))
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	for i, k := range keys {
+func getMapValues(m map[string]string) []any {
+	values := make([]any, len(m))
+	for i, k := range slices.Sorted(maps.Keys(m)) {
 		values[i] = m[k]
 	}
 	return values

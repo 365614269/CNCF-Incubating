@@ -41,6 +41,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
+	"github.com/cilium/cilium/pkg/ipcache"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labelsfilter"
@@ -161,6 +162,10 @@ type Endpoint struct {
 
 	// namedPortsGetter can get the ipcache.IPCache object.
 	namedPortsGetter namedPortsGetter
+
+	// kvstoreSyncher updates the kvstore (e.g., etcd) with up-to-date
+	// information about endpoints. Initialized by manager.expose.
+	kvstoreSyncher *ipcache.IPIdentitySynchronizer
 
 	// ID of the endpoint, unique in the scope of the node
 	ID uint16
@@ -433,7 +438,7 @@ type Endpoint struct {
 	ciliumEndpointUID k8sTypes.UID
 
 	// properties is used to store some internal properties about this Endpoint.
-	properties map[string]interface{}
+	properties map[string]any
 
 	// Root scope for all of this endpoints reporters.
 	reporterScope       cell.Health
@@ -638,7 +643,7 @@ func createEndpoint(dnsRulesApi DNSRulesAPI, epBuildQueue EndpointBuildQueue, lo
 		allocator:        allocator,
 		logLimiter:       logging.NewLimiter(10*time.Second, 3), // 1 log / 10 secs, burst of 3
 		noTrackPort:      0,
-		properties:       map[string]interface{}{},
+		properties:       map[string]any{},
 		ctMapGC:          ctMapGC,
 
 		forcePolicyCompute: true,
@@ -812,17 +817,6 @@ func (e *Endpoint) GetNodeMAC() mac.MAC {
 	return e.nodeMAC
 }
 
-// ConntrackNameLocked returns the name suffix for the endpoint-specific bpf
-// conntrack map, which is a 5-digit endpoint ID, or "global" when the
-// global map should be used.
-// Must be called with the endpoint locked.
-func (e *Endpoint) ConntrackNameLocked() string {
-	if e.ConntrackLocalLocked() {
-		return fmt.Sprintf("%05d", int(e.ID))
-	}
-	return "global"
-}
-
 // StringID returns the endpoint's ID in a string.
 func (e *Endpoint) StringID() string {
 	return strconv.Itoa(int(e.ID))
@@ -873,7 +867,7 @@ func (e *Endpoint) String() string {
 
 // optionChanged is a callback used with pkg/option to apply the options to an
 // endpoint.  Not used for anything at the moment.
-func optionChanged(key string, value option.OptionSetting, data interface{}) {
+func optionChanged(key string, value option.OptionSetting, data any) {
 }
 
 // applyOptsLocked applies the given options to the endpoint's options and
@@ -917,26 +911,6 @@ func (e *Endpoint) SetDefaultOpts(opts *option.IntOptions) {
 		e.Options.SetValidated(option.DebugPolicy, option.OptionEnabled)
 	}
 	e.UpdateLogger(nil)
-}
-
-// ConntrackLocal determines whether this endpoint is currently using a local
-// table to handle connection tracking (true), or the global table (false).
-func (e *Endpoint) ConntrackLocal() bool {
-	e.unconditionalRLock()
-	defer e.runlock()
-
-	return e.ConntrackLocalLocked()
-}
-
-// ConntrackLocalLocked is the same as ConntrackLocal, but assumes that the
-// endpoint is already locked for reading.
-func (e *Endpoint) ConntrackLocalLocked() bool {
-	if e.SecurityIdentity == nil || e.Options == nil ||
-		!e.Options.IsEnabled(option.ConntrackLocal) {
-		return false
-	}
-
-	return true
 }
 
 // base64 returns the endpoint in a base64 format.
@@ -1321,9 +1295,7 @@ func (e *Endpoint) leaveLocked(conf DeleteConfig) []error {
 		trigger.Shutdown()
 	}
 
-	if e.ConntrackLocalLocked() {
-		ctmap.CloseLocalMaps(e.ConntrackNameLocked())
-	} else if !e.isProperty(PropertyFakeEndpoint) {
+	if !e.isProperty(PropertyFakeEndpoint) {
 		e.scrubIPsInConntrackTableLocked()
 	}
 
@@ -2388,7 +2360,7 @@ func (e *Endpoint) setPolicyRevision(rev uint64) {
 
 	now := time.Now()
 	e.policyRevision = rev
-	e.UpdateLogger(map[string]interface{}{
+	e.UpdateLogger(map[string]any{
 		logfields.DatapathPolicyRevision: e.policyRevision,
 	})
 	for ps := range e.policyRevisionSignals {
@@ -2550,13 +2522,13 @@ func (e *Endpoint) Delete(conf DeleteConfig) []error {
 		// expected, then the rules will be left as-is because there was
 		// likely manual intervention.
 		if e.IPv4.IsValid() {
-			if err := linuxrouting.Delete(e.IPv4, option.Config.EgressMultiHomeIPRuleCompat); err != nil {
+			if err := linuxrouting.Delete(logging.DefaultSlogLogger, e.IPv4, option.Config.EgressMultiHomeIPRuleCompat); err != nil {
 				errs = append(errs, fmt.Errorf("unable to delete endpoint routing rules: %w", err))
 			}
 		}
 
 		if e.IPv6.IsValid() {
-			if err := linuxrouting.Delete(e.IPv6, option.Config.EgressMultiHomeIPRuleCompat); err != nil {
+			if err := linuxrouting.Delete(logging.DefaultSlogLogger, e.IPv6, option.Config.EgressMultiHomeIPRuleCompat); err != nil {
 				errs = append(errs, fmt.Errorf("unable to delete endpoint routing rules: %w", err))
 			}
 		}
@@ -2689,14 +2661,14 @@ func (e *Endpoint) GetCreatedAt() time.Time {
 }
 
 // GetPropertyValue returns the metadata value for this key.
-func (e *Endpoint) GetPropertyValue(key string) interface{} {
+func (e *Endpoint) GetPropertyValue(key string) any {
 	e.mutex.RWMutex.RLock()
 	defer e.mutex.RWMutex.RUnlock()
 	return e.properties[key]
 }
 
 // SetPropertyValue sets the metadata value for this key.
-func (e *Endpoint) SetPropertyValue(key string, value interface{}) interface{} {
+func (e *Endpoint) SetPropertyValue(key string, value any) any {
 	e.mutex.RWMutex.Lock()
 	defer e.mutex.RWMutex.Unlock()
 	old := e.properties[key]
@@ -2727,4 +2699,10 @@ func (e *Endpoint) SetCtMapGC(ctMapGC ctmap.GCRunner) {
 	e.unconditionalLock()
 	defer e.unlock()
 	e.ctMapGC = ctMapGC
+}
+
+// SetKVStoreSynchronizer sets the object used to synchronize the endpoint into
+// the kvstore.
+func (e *Endpoint) SetKVStoreSynchronizer(sync *ipcache.IPIdentitySynchronizer) {
+	e.kvstoreSyncher = sync
 }

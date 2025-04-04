@@ -361,13 +361,7 @@ func (o *IntOptions) GetFmtList() string {
 	txt := ""
 
 	o.optsMU.RLock()
-	opts := make([]string, 0, len(o.opts))
-	for k := range o.opts {
-		opts = append(opts, k)
-	}
-	slices.Sort(opts)
-
-	for _, k := range opts {
+	for _, k := range slices.Sorted(maps.Keys(o.opts)) {
 		def := o.getFmtOpt(k)
 		if def != "" {
 			txt += def + "\n"
@@ -384,13 +378,7 @@ func (o *IntOptions) Dump() {
 	}
 
 	o.optsMU.RLock()
-	opts := make([]string, 0, len(o.opts))
-	for k := range o.opts {
-		opts = append(opts, k)
-	}
-	slices.Sort(opts)
-
-	for _, k := range opts {
+	for _, k := range slices.Sorted(maps.Keys(o.opts)) {
 		var text string
 		_, option := o.library.Lookup(k)
 		if option == nil || option.Format == nil {
@@ -432,7 +420,7 @@ func (o *IntOptions) Validate(n models.ConfigurationMap) error {
 }
 
 // ChangedFunc is called by `Apply()` for each option changed
-type ChangedFunc func(key string, value OptionSetting, data interface{})
+type ChangedFunc func(key string, value OptionSetting, data any)
 
 // enable enables the option `name` with all its dependencies
 func (o *IntOptions) enable(name string) {
@@ -483,7 +471,7 @@ type changedOptions struct {
 //
 // The caller is expected to have validated the configuration options prior to
 // calling this function.
-func (o *IntOptions) ApplyValidated(n OptionMap, changed ChangedFunc, data interface{}) int {
+func (o *IntOptions) ApplyValidated(n OptionMap, changed ChangedFunc, data any) int {
 	changes := make([]changedOptions, 0, len(n))
 
 	o.optsMU.Lock()

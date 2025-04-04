@@ -375,10 +375,7 @@ func calculateExcessIPs(availableIPs, usedIPs, preAllocate, minAllocate, maxAbov
 	// interface restrictions, less than max-above-watermark may have been
 	// allocated but we never want to release IPs that have been allocated
 	// because of max-above-watermark.
-	excessIPs = availableIPs - usedIPs - preAllocate - maxAboveWatermark
-	if excessIPs < 0 {
-		excessIPs = 0
-	}
+	excessIPs = max(availableIPs-usedIPs-preAllocate-maxAboveWatermark, 0)
 
 	return
 }
@@ -1102,7 +1099,7 @@ func (n *Node) syncToAPIServer() error {
 	// second attempt fails as well we are likely under heavy contention,
 	// fall back to the controller based background interval to retry.
 	maxRetries := 2
-	for retry := 0; retry < maxRetries; retry++ {
+	for retry := range maxRetries {
 		if node.Status.IPAM.Used == nil {
 			node.Status.IPAM.Used = ipamTypes.AllocationMap{}
 		}
@@ -1122,7 +1119,7 @@ func (n *Node) syncToAPIServer() error {
 		}
 	}
 
-	for retry := 0; retry < maxRetries; retry++ {
+	for retry := range maxRetries {
 		node.Spec.IPAM.Pool = pool
 		n.logger.Load().Debug("Updating node in apiserver", logfields.PoolSize, len(node.Spec.IPAM.Pool))
 

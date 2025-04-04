@@ -30,6 +30,10 @@ const (
 	Syslog    = "syslog"
 	LevelOpt  = "level"
 	FormatOpt = "format"
+	WriterOpt = "writer"
+
+	StdOutOpt = "stdout"
+	StdErrOpt = "stderr"
 
 	LogFormatText          LogFormat = "text"
 	LogFormatTextTimestamp LogFormat = "text-ts"
@@ -152,7 +156,7 @@ func severityOverrideWriter(level logrus.Level, log *logrus.Entry, overrides []l
 func writerScanner(
 	entry *logrus.Entry,
 	reader *io.PipeReader,
-	defaultPrintFunc func(args ...interface{}),
+	defaultPrintFunc func(args ...any),
 	overrides []logLevelOverride) {
 
 	defer reader.Close()
@@ -294,7 +298,8 @@ func SetupLogging(loggers []string, logOpts LogOptions, tag string, debug bool) 
 	if debug {
 		logOpts[LevelOpt] = "debug"
 	}
-	initializeSlog(logOpts, len(loggers) == 0)
+
+	initializeSlog(logOpts, loggers)
 
 	// Updating the default log format
 	SetLogFormat(logOpts.GetLogFormat())
@@ -397,7 +402,7 @@ func getLogDriverConfig(logDriver string, logOpts LogOptions) LogOptions {
 
 // MultiLine breaks a multi line text into individual log entries and calls the
 // logging function to log each entry
-func MultiLine(logFn func(args ...interface{}), output string) {
+func MultiLine(logFn func(args ...any), output string) {
 	scanner := bufio.NewScanner(bytes.NewReader([]byte(output)))
 	for scanner.Scan() {
 		logFn(scanner.Text())

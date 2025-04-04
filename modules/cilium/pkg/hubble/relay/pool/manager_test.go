@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net"
 	"slices"
 	"sort"
@@ -693,7 +694,7 @@ func TestPeerManager(t *testing.T) {
 			// the objects are not easily compared -> hack the assertion
 			sort.Sort(ByName(got))
 			sort.Sort(ByName(tt.want.peers))
-			assert.Equal(t, len(tt.want.peers), len(got))
+			assert.Len(t, got, len(tt.want.peers))
 			for i := range got {
 				if tt.want.peers[i].Conn == nil {
 					assert.Nil(t, got[i].Conn)
@@ -1216,12 +1217,7 @@ func metricTextFormatFromPeerStatusMap(peerStatus map[string]uint32) string {
 	buf.WriteString(`# HELP hubble_relay_pool_peer_connection_status Measures the connectivity status of all peers by counting the number of peers for each given connection status.
 # TYPE hubble_relay_pool_peer_connection_status gauge
 `)
-	keys := make([]string, 0, len(peerStatus))
-	for key := range peerStatus {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
-	for _, key := range keys {
+	for _, key := range slices.Sorted(maps.Keys(peerStatus)) {
 		buf.WriteString(fmt.Sprintf("hubble_relay_pool_peer_connection_status{status=\"%s\"} %d\n", key, peerStatus[key]))
 	}
 	return buf.String()

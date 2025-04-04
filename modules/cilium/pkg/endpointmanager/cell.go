@@ -194,9 +194,6 @@ type EndpointManager interface {
 	// manager as policy.Endpoint interface set for the map key.
 	GetPolicyEndpoints() map[policy.Endpoint]struct{}
 
-	// HasGlobalCT returns true if the endpoints have a global CT, false otherwise.
-	HasGlobalCT() bool
-
 	// CallbackForEndpointsAtPolicyRev registers a callback on all endpoints that
 	// exist when invoked. It is similar to WaitForEndpointsAtPolicyRevision but
 	// each endpoint that reaches the desired revision calls 'done' independently.
@@ -228,14 +225,15 @@ var (
 type endpointManagerParams struct {
 	cell.In
 
-	Lifecycle       cell.Lifecycle
-	Config          EndpointManagerConfig
-	Clientset       client.Clientset
-	MetricsRegistry *metrics.Registry
-	Health          cell.Health
-	EPSynchronizer  EndpointResourceSynchronizer
-	LocalNodeStore  *node.LocalNodeStore
-	MonitorAgent    monitoragent.Agent
+	Lifecycle           cell.Lifecycle
+	Config              EndpointManagerConfig
+	Clientset           client.Clientset
+	MetricsRegistry     *metrics.Registry
+	Health              cell.Health
+	EPSynchronizer      EndpointResourceSynchronizer
+	KVStoreSynchronizer *ipcache.IPIdentitySynchronizer
+	LocalNodeStore      *node.LocalNodeStore
+	MonitorAgent        monitoragent.Agent
 }
 
 type endpointManagerOut struct {
@@ -249,7 +247,7 @@ type endpointManagerOut struct {
 func newDefaultEndpointManager(p endpointManagerParams) endpointManagerOut {
 	checker := endpoint.CheckHealth
 
-	mgr := New(p.EPSynchronizer, p.LocalNodeStore, p.Health, p.MonitorAgent)
+	mgr := New(p.EPSynchronizer, p.KVStoreSynchronizer, p.LocalNodeStore, p.Health, p.MonitorAgent)
 	if p.Config.EndpointGCInterval > 0 {
 		ctx, cancel := context.WithCancel(context.Background())
 		p.Lifecycle.Append(cell.Hook{

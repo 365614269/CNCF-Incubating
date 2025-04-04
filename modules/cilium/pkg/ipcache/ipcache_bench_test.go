@@ -40,14 +40,15 @@ func BenchmarkInjectLabels(b *testing.B) {
 
 	addr := netip.MustParseAddr("1.0.0.0")
 	lbls := labels.NewLabelsFromSortedList(labels.LabelSourceCIDRGroup + ":foo=bar")
+
 	prefixes := make([]cmtypes.PrefixCluster, 0, b.N)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		pfx := cmtypes.NewLocalPrefixCluster(netip.PrefixFrom(addr, 30))
-		for j := 0; j < 4; j++ {
+		for range 4 {
 			addr = addr.Next()
 		}
 		prefixes = append(prefixes, ipc.metadata.upsertLocked(pfx, source.Kubernetes, "cidr-policy", lbls)...)

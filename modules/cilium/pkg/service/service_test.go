@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"errors"
+	"iter"
 	"log/slog"
 	"maps"
 	"net"
@@ -33,9 +34,11 @@ import (
 	monitorAgent "github.com/cilium/cilium/pkg/monitor/agent"
 	"github.com/cilium/cilium/pkg/monitor/agent/consumer"
 	"github.com/cilium/cilium/pkg/monitor/agent/listener"
+	"github.com/cilium/cilium/pkg/netns"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/service/healthserver"
+	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/testutils/mockmaps"
 	testsockets "github.com/cilium/cilium/pkg/testutils/sockets"
 	"github.com/cilium/cilium/pkg/time"
@@ -232,7 +235,7 @@ func setupManagerTestSuite(tb testing.TB) *ManagerTestSuite {
 }
 
 func (m *ManagerTestSuite) newServiceMock(ctx context.Context, lbmap datapathTypes.LBMap) {
-	m.svc = newService(m.logger, &FakeMonitorAgent{}, lbmap, nil, nil, true)
+	m.svc = newService(m.logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
 	m.svc.backendConnectionHandler = testsockets.NewMockSockets(make([]*testsockets.MockSocket, 0))
 	health, _ := cell.NewSimpleHealth()
 	go m.svc.handleHealthCheckEvent(ctx, health)
@@ -581,8 +584,7 @@ func TestRestoreServices(t *testing.T) {
 	option.Config.NodePortAlg = option.NodePortAlgMaglev
 	lbmap := m.svc.lbmap.(*mockmaps.LBMockMap)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	m.newServiceMock(ctx, lbmap)
 
@@ -600,10 +602,10 @@ func TestRestoreServices(t *testing.T) {
 
 	// Services have been restored too
 	require.Len(t, m.svc.svcByID, 2)
-	require.EqualValues(t, lbmap.ServiceByID[uint16(id1)].Frontend, m.svc.svcByID[id1].frontend)
-	require.EqualValues(t, lbmap.ServiceByID[uint16(id1)].Backends, m.svc.svcByID[id1].backends)
-	require.EqualValues(t, lbmap.ServiceByID[uint16(id2)].Frontend, m.svc.svcByID[id2].frontend)
-	require.EqualValues(t, lbmap.ServiceByID[uint16(id2)].Backends, m.svc.svcByID[id2].backends)
+	require.Equal(t, lbmap.ServiceByID[uint16(id1)].Frontend, m.svc.svcByID[id1].frontend)
+	require.Equal(t, lbmap.ServiceByID[uint16(id1)].Backends, m.svc.svcByID[id1].backends)
+	require.Equal(t, lbmap.ServiceByID[uint16(id2)].Frontend, m.svc.svcByID[id2].frontend)
+	require.Equal(t, lbmap.ServiceByID[uint16(id2)].Backends, m.svc.svcByID[id2].backends)
 
 	// Session affinity too
 	require.False(t, m.svc.svcByID[id1].sessionAffinity)
@@ -662,8 +664,7 @@ func TestSyncWithK8sFinished(t *testing.T) {
 	// Restart service, but keep the lbmap to restore services from
 	lbmap := m.svc.lbmap.(*mockmaps.LBMockMap)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	m.newServiceMock(ctx, lbmap)
 
@@ -773,7 +774,7 @@ func TestRestoreServiceWithStaleBackends(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			lbmap := mockmaps.NewLBMockMap()
 			logger := hivetest.Logger(t)
-			svc := newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true)
+			svc := newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
 
 			_, id1, err := svc.upsertService(service("foo", "bar", "172.16.0.1", backendAddrs...))
 			require.NoError(t, err, "Failed to upsert service")
@@ -783,7 +784,7 @@ func TestRestoreServiceWithStaleBackends(t *testing.T) {
 			require.ElementsMatch(t, backendAddrs, toBackendAddrs(slices.Collect(maps.Values(lbmap.BackendByID))), "lbmap not populated correctly")
 
 			// Recreate the Service structure, but keep the lbmap to restore services from
-			svc = newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true)
+			svc = newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
 			require.NoError(t, svc.RestoreServices(), "Failed to restore services")
 
 			// Simulate a set of service updates. Until synchronization completes, a given service
@@ -1014,7 +1015,7 @@ func TestHealthCheckLoadBalancerIP(t *testing.T) {
 	err := m.svc.upsertNodePortHealthService(svc, mockCollector)
 
 	require.NoError(t, err)
-	require.NotEqual(t, "", svc.healthcheckFrontendHash)
+	require.NotEmpty(t, svc.healthcheckFrontendHash)
 	require.Equal(t, "svc1-healthCheck", m.svc.svcByHash[svc.healthcheckFrontendHash].svcName.Name)
 	require.Equal(t, "ns1", m.svc.svcByHash[svc.healthcheckFrontendHash].svcName.Namespace)
 	require.Equal(t, svc.svcHealthCheckNodePort, m.svc.svcByHash[svc.healthcheckFrontendHash].frontend.Port)
@@ -1027,7 +1028,7 @@ func TestHealthCheckLoadBalancerIP(t *testing.T) {
 	oldHealthHash := svc.healthcheckFrontendHash
 	err = m.svc.upsertNodePortHealthService(svc, mockCollector)
 	require.NoError(t, err)
-	require.Equal(t, "", svc.healthcheckFrontendHash)
+	require.Empty(t, svc.healthcheckFrontendHash)
 	require.Nil(t, m.svc.svcByHash[oldHealthHash])
 
 	// Restore the original version of svc1
@@ -1035,7 +1036,7 @@ func TestHealthCheckLoadBalancerIP(t *testing.T) {
 	svc.svcHealthCheckNodePort = 32001
 	err = m.svc.upsertNodePortHealthService(svc, mockCollector)
 	require.NoError(t, err)
-	require.NotEqual(t, "", svc.healthcheckFrontendHash)
+	require.NotEmpty(t, svc.healthcheckFrontendHash)
 	require.Equal(t, "svc1-healthCheck", m.svc.svcByHash[svc.healthcheckFrontendHash].svcName.Name)
 	require.Equal(t, "ns1", m.svc.svcByHash[svc.healthcheckFrontendHash].svcName.Namespace)
 	require.Equal(t, svc.svcHealthCheckNodePort, m.svc.svcByHash[svc.healthcheckFrontendHash].frontend.Port)
@@ -1173,11 +1174,11 @@ func TestLocalRedirectLocalBackendSelection(t *testing.T) {
 	require.Equal(t, "ns1", svc.svcName.Namespace)
 	require.Equal(t, "svc1", svc.svcName.Name)
 	// Only node-local backends are selected
-	require.Equal(t, len(localBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(localBackends))
 
 	svcFromLbMap, ok := m.lbmap.ServiceByID[uint16(id)]
 	require.True(t, ok)
-	require.Equal(t, len(svc.backends), len(svcFromLbMap.Backends))
+	require.Len(t, svcFromLbMap.Backends, len(svc.backends))
 }
 
 // Local redirect service should be able to override a ClusterIP service with same
@@ -1218,7 +1219,7 @@ func TestLocalRedirectServiceOverride(t *testing.T) {
 	require.NotEqual(t, lb.ID(0), id)
 
 	svc, ok := m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 
 	// Insert the service entry of type Local Redirect.
@@ -1231,7 +1232,7 @@ func TestLocalRedirectServiceOverride(t *testing.T) {
 	require.NotEqual(t, lb.ID(0), id)
 	svc = m.svc.svcByID[id]
 	// Only node-local backends are selected.
-	require.Equal(t, len(localBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(localBackends))
 
 	// Insert the service entry of type ClusterIP.
 	p1.Type = lb.SVCTypeClusterIP
@@ -1258,7 +1259,7 @@ func TestLocalRedirectServiceOverride(t *testing.T) {
 	require.NotEqual(t, lb.ID(0), id)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 
 	// Insert the service entry of type Local Redirect.
@@ -1296,7 +1297,7 @@ func TestUpsertServiceWithTerminatingBackends(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, created)
 	require.Equal(t, lb.ID(1), id1)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
 	require.Equal(t, len(backends), m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 
 	p.Backends[0].State = lb.BackendStateTerminating
@@ -1304,7 +1305,7 @@ func TestUpsertServiceWithTerminatingBackends(t *testing.T) {
 	_, _, err = m.svc.UpsertService(p)
 
 	require.NoError(t, err)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
 	require.Equal(t, len(backends1), m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 	// Sorted active backends by ID first followed by non-active
 	require.Equal(t, lb.BackendID(2), m.lbmap.ServiceByID[uint16(id1)].Backends[0].ID)
@@ -1504,7 +1505,7 @@ func TestRestoreServiceWithTerminatingBackends(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, created)
 	require.Equal(t, lb.ID(1), id1)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
 	require.Equal(t, len(backends), m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 
 	p.Backends[0].State = lb.BackendStateTerminating
@@ -1516,8 +1517,7 @@ func TestRestoreServiceWithTerminatingBackends(t *testing.T) {
 	// Simulate agent restart.
 	lbmap := m.svc.lbmap.(*mockmaps.LBMockMap)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	m.newServiceMock(ctx, lbmap)
 
@@ -1578,7 +1578,7 @@ func TestL7LoadBalancerServiceOverride(t *testing.T) {
 	require.NotEqual(t, lb.ID(0), id)
 
 	svc, ok := m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 
@@ -1589,7 +1589,7 @@ func TestL7LoadBalancerServiceOverride(t *testing.T) {
 	require.Error(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 
@@ -1599,7 +1599,7 @@ func TestL7LoadBalancerServiceOverride(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(9090), svc.l7LBProxyPort)
 
@@ -1615,7 +1615,7 @@ func TestL7LoadBalancerServiceOverride(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(9090), svc.l7LBProxyPort)
 
@@ -1624,7 +1624,7 @@ func TestL7LoadBalancerServiceOverride(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(9090), svc.l7LBProxyPort)
 
@@ -1633,7 +1633,7 @@ func TestL7LoadBalancerServiceOverride(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 }
@@ -1673,7 +1673,7 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NotEqual(t, lb.ID(0), id)
 
 	svc, ok := m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 
@@ -1686,7 +1686,7 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(9090), svc.l7LBProxyPort)
 
@@ -1695,7 +1695,7 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 
@@ -1704,7 +1704,7 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 
@@ -1734,7 +1734,7 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NotEqual(t, lb.ID(0), id2)
 
 	svc, ok = m.svc.svcByID[id2]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(9090), svc.l7LBProxyPort)
 
@@ -1744,7 +1744,7 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id2]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(9090), svc.l7LBProxyPort)
 
@@ -1753,7 +1753,7 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id2]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(9090), svc.l7LBProxyPort)
 
@@ -1762,12 +1762,12 @@ func TestL7LoadBalancerServiceOverrideWithPorts(t *testing.T) {
 	require.NoError(t, err)
 
 	svc, ok = m.svc.svcByID[id]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 
 	svc, ok = m.svc.svcByID[id2]
-	require.Equal(t, len(allBackends), len(svc.backends))
+	require.Len(t, svc.backends, len(allBackends))
 	require.True(t, ok)
 	require.Equal(t, uint16(0), svc.l7LBProxyPort)
 }
@@ -1887,11 +1887,11 @@ func TestUpdateBackendsState(t *testing.T) {
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id1].backends[1].State)
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id2].backends[0].State)
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id2].backends[1].State)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id2)].Backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id2)].Backends, len(backends))
 	require.Equal(t, len(backends), m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 	require.Equal(t, len(backends), m.lbmap.SvcActiveBackendsCount[uint16(id2)])
-	require.Equal(t, len(backends), len(m.lbmap.BackendByID))
+	require.Len(t, m.lbmap.BackendByID, len(backends))
 	// Backend states are persisted in the map.
 	require.Equal(t, lb.BackendStateActive, m.lbmap.BackendByID[1].State)
 	require.Equal(t, lb.BackendStateActive, m.lbmap.BackendByID[2].State)
@@ -1908,11 +1908,11 @@ func TestUpdateBackendsState(t *testing.T) {
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id1].backends[1].State)
 	require.Equal(t, lb.BackendStateQuarantined, m.svc.svcByID[id2].backends[0].State)
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id2].backends[1].State)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id2)].Backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id2)].Backends, len(backends))
 	require.Equal(t, 1, m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 	require.Equal(t, 1, m.lbmap.SvcActiveBackendsCount[uint16(id2)])
-	require.Equal(t, len(backends), len(m.lbmap.BackendByID))
+	require.Len(t, m.lbmap.BackendByID, len(backends))
 	require.ElementsMatch(t, svcs, []lb.L3n4Addr{p1.Frontend.L3n4Addr, p2.Frontend.L3n4Addr})
 	// Updated backend states are persisted in the map.
 	require.Equal(t, lb.BackendStateQuarantined, m.lbmap.BackendByID[1].State)
@@ -1930,11 +1930,11 @@ func TestUpdateBackendsState(t *testing.T) {
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id1].backends[1].State)
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id2].backends[0].State)
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id2].backends[1].State)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id2)].Backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id2)].Backends, len(backends))
 	require.Equal(t, len(backends), m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 	require.Equal(t, len(backends), m.lbmap.SvcActiveBackendsCount[uint16(id2)])
-	require.Equal(t, len(backends), len(m.lbmap.BackendByID))
+	require.Len(t, m.lbmap.BackendByID, len(backends))
 	require.ElementsMatch(t, svcs, []lb.L3n4Addr{p1.Frontend.L3n4Addr, p2.Frontend.L3n4Addr})
 	// Updated backend states are persisted in the map.
 	require.Equal(t, lb.BackendStateActive, m.lbmap.BackendByID[1].State)
@@ -1971,8 +1971,8 @@ func TestRestoreServiceWithBackendStates(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, created)
 	require.Equal(t, lb.ID(1), id1)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
-	require.Equal(t, len(backends), len(m.svc.backendByHash))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
+	require.Len(t, m.svc.backendByHash, len(backends))
 
 	// Update backend states.
 	var updates []*lb.Backend
@@ -1986,8 +1986,7 @@ func TestRestoreServiceWithBackendStates(t *testing.T) {
 	// Simulate agent restart.
 	lbmap := m.svc.lbmap.(*mockmaps.LBMockMap)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	m.newServiceMock(ctx, lbmap)
 
@@ -1996,7 +1995,7 @@ func TestRestoreServiceWithBackendStates(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check that backends along with their states have been restored
-	require.Equal(t, len(backends), len(m.svc.backendByHash))
+	require.Len(t, m.svc.backendByHash, len(backends))
 	statesMatched := 0
 	for _, b := range backends {
 		be, found := m.svc.backendByHash[b.Hash()]
@@ -2262,11 +2261,11 @@ func TestTrafficPolicy(t *testing.T) {
 
 	svcFromLbMap1, ok := m.lbmap.ServiceByID[uint16(id1)]
 	require.True(t, ok)
-	require.Equal(t, len(localBackends), len(svcFromLbMap1.Backends))
+	require.Len(t, svcFromLbMap1.Backends, len(localBackends))
 
 	svcFromLbMap2, ok := m.lbmap.ServiceByID[uint16(id2)]
 	require.True(t, ok)
-	require.Equal(t, len(allBackends), len(svcFromLbMap2.Backends))
+	require.Len(t, svcFromLbMap2.Backends, len(allBackends))
 
 	p1.ExtTrafficPolicy = lb.SVCTrafficPolicyLocal
 	p1.IntTrafficPolicy = lb.SVCTrafficPolicyCluster
@@ -2277,7 +2276,7 @@ func TestTrafficPolicy(t *testing.T) {
 
 	svcFromLbMap3, ok := m.lbmap.ServiceByID[uint16(id1)]
 	require.True(t, ok)
-	require.Equal(t, len(allBackends), len(svcFromLbMap3.Backends))
+	require.Len(t, svcFromLbMap3.Backends, len(allBackends))
 
 	p2.ExtTrafficPolicy = lb.SVCTrafficPolicyLocal
 	p2.IntTrafficPolicy = lb.SVCTrafficPolicyCluster
@@ -2288,7 +2287,7 @@ func TestTrafficPolicy(t *testing.T) {
 
 	svcFromLbMap4, ok := m.lbmap.ServiceByID[uint16(id2)]
 	require.True(t, ok)
-	require.Equal(t, len(localBackends), len(svcFromLbMap4.Backends))
+	require.Len(t, svcFromLbMap4.Backends, len(localBackends))
 
 	found, err := m.svc.DeleteServiceByID(lb.ServiceID(id1))
 	require.NoError(t, err)
@@ -2349,8 +2348,8 @@ func TestRestoreServicesWithLeakedBackends(t *testing.T) {
 
 	require.NoError(t, err1)
 	require.Equal(t, lb.ID(1), id1)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
-	require.Equal(t, len(backends), len(m.lbmap.BackendByID))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
+	require.Len(t, m.lbmap.BackendByID, len(backends))
 
 	// Simulate leaked backends with various leaked scenarios.
 	// Backend2 is a duplicate leaked backend with the same L3nL4Addr as backends[0]
@@ -2371,14 +2370,14 @@ func TestRestoreServicesWithLeakedBackends(t *testing.T) {
 	require.Len(t, m.lbmap.BackendByID, len(backends)+4)
 	lbmap := m.svc.lbmap.(*mockmaps.LBMockMap)
 	logger := hivetest.Logger(t)
-	m.svc = newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true)
+	m.svc = newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
 
 	// Restore services from lbmap
 	err := m.svc.RestoreServices()
 	require.NoError(t, err)
-	require.Equal(t, len(backends), len(m.lbmap.ServiceByID[uint16(id1)].Backends))
+	require.Len(t, m.lbmap.ServiceByID[uint16(id1)].Backends, len(backends))
 	// Leaked backends should be deleted.
-	require.Equal(t, len(backends), len(m.lbmap.BackendByID))
+	require.Len(t, m.lbmap.BackendByID, len(backends))
 }
 
 // Tests backend connections getting destroyed.
@@ -2491,7 +2490,7 @@ func (f *FakeMonitorAgent) RemoveConsumer(mc consumer.MonitorConsumer) {
 func (f *FakeMonitorAgent) RemoveListener(ml listener.MonitorListener) {
 }
 
-func (f *FakeMonitorAgent) SendEvent(typ int, event interface{}) error {
+func (f *FakeMonitorAgent) SendEvent(typ int, event any) error {
 	return nil
 }
 
@@ -2518,8 +2517,8 @@ func TestHealthCheckCB(t *testing.T) {
 
 	require.NoError(t, err1)
 	require.Equal(t, id1, lb.ID(1))
-	require.Equal(t, len(m.lbmap.ServiceByID[uint16(id1)].Backends), len(backends))
-	require.Equal(t, len(m.lbmap.BackendByID), len(backends))
+	require.Len(t, backends, len(m.lbmap.ServiceByID[uint16(id1)].Backends))
+	require.Len(t, backends, len(m.lbmap.BackendByID))
 	require.Equal(t, lb.BackendStateActive, m.svc.svcByID[id1].backends[0].State)
 
 	be := backends[0]
@@ -2531,7 +2530,7 @@ func TestHealthCheckCB(t *testing.T) {
 		})
 
 	require.EventuallyWithT(t, func(ct *assert.CollectT) {
-		assert.Equal(ct, len(m.lbmap.BackendByID), len(backends))
+		assert.Len(ct, backends, len(m.lbmap.BackendByID))
 		assert.Equal(ct, lb.BackendStateQuarantined, m.svc.svcByID[id1].backends[0].State)
 		assert.Equal(ct, 1, m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 	}, 3*time.Second, 100*time.Millisecond)
@@ -2561,8 +2560,7 @@ func TestHealthCheckInitialSync(t *testing.T) {
 	// Upsert the service before subscription
 	m.svc.UpsertService(p1)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	m.svc.Subscribe(ctx, func(svcInfo HealthUpdateSvcInfo) {
 		receivedServices = append(receivedServices, svcInfo.Name)
@@ -2625,16 +2623,16 @@ func TestNotifyHealthCheckUpdatesSubscriber(t *testing.T) {
 
 	require.NoError(t, err1)
 	require.Equal(t, id1, lb.ID(1))
-	require.Equal(t, len(m.lbmap.ServiceByID[uint16(id1)].Backends), len(backends))
-	require.Equal(t, len(m.lbmap.BackendByID), len(backends))
+	require.Len(t, backends, len(m.lbmap.ServiceByID[uint16(id1)].Backends))
+	require.Len(t, backends, len(m.lbmap.BackendByID))
 	require.Equal(t, 2, m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 
 	_, id2, err2 := m.svc.UpsertService(p2)
 
 	require.NoError(t, err2)
 	require.Equal(t, id2, lb.ID(2))
-	require.Equal(t, len(m.lbmap.ServiceByID[uint16(id2)].Backends), len(backends))
-	require.Equal(t, len(m.lbmap.BackendByID), len(backends))
+	require.Len(t, backends, len(m.lbmap.ServiceByID[uint16(id2)].Backends))
+	require.Len(t, backends, len(m.lbmap.BackendByID))
 	require.Equal(t, 2, m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 
 	go func() {
@@ -2724,7 +2722,7 @@ func TestNotifyHealthCheckUpdatesSubscriber(t *testing.T) {
 
 	require.NoError(t, err1)
 	require.Equal(t, id1, lb.ID(3))
-	require.Equal(t, len(m.lbmap.ServiceByID[uint16(id1)].Backends), len(backends))
+	require.Len(t, backends, len(m.lbmap.ServiceByID[uint16(id1)].Backends))
 	require.Equal(t, 1, m.lbmap.SvcActiveBackendsCount[uint16(id1)])
 
 	// Send a CB service event
@@ -2736,4 +2734,179 @@ func TestNotifyHealthCheckUpdatesSubscriber(t *testing.T) {
 	// The subscriber callback function asserts expected callbacks, and also
 	// closes the channel.
 	<-cbCh1
+}
+
+func initializeNetns(t *testing.T, ns *netns.NetNS, addr string) net.Conn {
+	var conn net.Conn
+	assert.NoError(t, ns.Do(func() error {
+		ls, err := netlink.LinkList()
+		assert.NoError(t, err)
+		for _, l := range ls {
+			// Netns should be default created with loopback dev
+			// we assign a localhost address to it to allow us to
+			// bind sockets.
+			if l.Attrs().Name == "lo" {
+				netlink.AddrAdd(l, &netlink.Addr{
+					IPNet: &net.IPNet{
+						IP:   net.ParseIP("127.0.0.1"),
+						Mask: net.IPv4Mask(0xff, 0xff, 0xff, 0xff),
+					},
+				})
+			}
+			_, err := netlink.AddrList(l, unix.AF_INET)
+			assert.NoError(t, err)
+		}
+		conn, err = net.Dial("udp", addr)
+		assert.NoError(t, err)
+		conn.Write([]byte("ping"))
+		return err
+	}))
+	return conn
+}
+
+func TestTerminateUDPConnectionsToBackend(t *testing.T) {
+	testutils.PrivilegedTest(t)
+
+	ns1, err := netns.New()
+	require.NoError(t, err)
+	// ns2 has a connection that should not be matched due
+	// to a different port.
+	ns2, err := netns.New()
+	require.NoError(t, err)
+	// ns3 will match revnat, but with a different cookie value
+	// so we expect to avoid a socket close (i.e. this is
+	// the case where we have matching tuple values, but
+	// in an unexpected socket cookie value).
+	ns3, err := netns.New()
+	require.NoError(t, err)
+
+	var conn1, conn2, conn3 net.Conn
+	conn1 = initializeNetns(t, ns1, "127.0.0.1:30000")
+	defer conn1.Close()
+
+	conn2 = initializeNetns(t, ns2, "127.0.0.1:30002")
+	defer conn2.Close()
+
+	conn3 = initializeNetns(t, ns3, "127.0.0.1:30001")
+	defer conn3.Close()
+
+	getCookie := func(ns *netns.NetNS, port uint16) uint32 {
+		if ns == nil {
+			var err error
+			ns, err = netns.Current()
+			require.NoError(t, err)
+		}
+		out := uint32(0)
+		ns.Do(func() error {
+			sock, err := netlink.SocketDiagUDP(unix.AF_INET)
+			assert.NoError(t, err)
+			for _, s := range sock {
+				if s.ID.DestinationPort == port {
+					out = s.ID.Cookie[0]
+					break
+				}
+			}
+			return nil
+		})
+		return out
+	}
+
+	cookie := getCookie(ns1, 30000)
+
+	lbmap := mockmaps.NewLBMockMap()
+
+	lbmap.AddSockRevNat(uint64(cookie), net.IP{127, 0, 0, 1}, 30000)
+
+	logger := hivetest.Logger(t)
+	s := Service{
+		logger: logger,
+		config: &option.DaemonConfig{
+			EnableSocketLB:                         true,
+			EnableSocketLBPodConnectionTermination: true,
+			BPFSocketLBHostnsOnly:                  false,
+		},
+
+		backendConnectionHandler: &backendConnectionHandler{},
+
+		// Don't need to pin ns's for the purpose of the test.
+		nsIterator: func() (iter.Seq2[string, *netns.NetNS], <-chan error) {
+			ch := make(chan error)
+			return func(yield func(string, *netns.NetNS) bool) {
+				yield("cni-0000", ns1)
+				yield("cni-0001", ns2)
+				yield("cni-0002", ns3)
+				close(ch)
+			}, ch
+		},
+
+		lbmap: lbmap,
+	}
+	ip, err := netip.ParseAddr("127.0.0.1")
+	require.NoError(t, err)
+	l4a := lb.NewL3n4Addr(lb.UDP, cmtypes.AddrClusterFrom(ip, 0), 30000, 0)
+
+	assertForceClose := func(closed bool, c net.Conn) {
+		if closed {
+			c.SetDeadline(time.Now().Add(time.Millisecond * 250))
+			_, err = c.Read([]byte{0})
+			assert.ErrorIs(t, err, unix.ECONNABORTED, "first sock connection should have been aborted")
+		} else {
+			c.SetDeadline(time.Now().Add(time.Millisecond * 250))
+			_, err = c.Read([]byte{0})
+			//nolint:errorlint
+			assert.True(t, err.(net.Error).Timeout(),
+				"other connection should not be prematurely closed, thus read cmd on the sock should simply be allowed to timeout")
+		}
+	}
+
+	// 1. First, we have conn1 in ns1 which has:
+	// 	* Is tracked in the l3nl4addr map.
+	// 	* Real socket cookie.
+	// 	* BPFSocketLBHostnsOnly is disabled
+	// Therefore we expect a socket close.
+	assert.NoError(t, s.TerminateUDPConnectionsToBackend(l4a))
+
+	assertForceClose(true, conn1)
+	assertForceClose(false, conn2)
+
+	l4a = lb.NewL3n4Addr(lb.UDP, cmtypes.AddrClusterFrom(ip, 0), 30001, 0)
+	assert.NoError(t, s.TerminateUDPConnectionsToBackend(l4a))
+	assertForceClose(false, conn3)
+
+	// 2. Will otherwise close, but we have lb host ns only enabled so we expect
+	// 	connection to *not* close.
+	assert.NoError(t, ns3.Do(func() error {
+		conn3, err = net.Dial("udp", "127.0.0.1:30001")
+		assert.NoError(t, err)
+		return nil
+	}))
+	cookie3 := getCookie(ns3, 30001)
+	lbmap.AddSockRevNat(uint64(cookie3), net.IP{127, 0, 0, 1}, 30001)
+	l4a = lb.NewL3n4Addr(lb.UDP, cmtypes.AddrClusterFrom(ip, 0), 30001, 0)
+	s.config.BPFSocketLBHostnsOnly = true
+	assert.NoError(t, s.TerminateUDPConnectionsToBackend(l4a))
+	assertForceClose(false, conn3)
+
+	// 3. Now we try a similar test, but with a connection in host ns
+	// 	so this one should close.
+	conn3, err = net.Dial("udp", "127.0.0.1:30004")
+	assert.NoError(t, err)
+	lbmap.AddSockRevNat(uint64(getCookie(nil, 30004)), net.IP{127, 0, 0, 1}, 30004)
+	l4a = lb.NewL3n4Addr(lb.UDP, cmtypes.AddrClusterFrom(ip, 0), 30004, 0)
+	assert.NoError(t, s.TerminateUDPConnectionsToBackend(l4a))
+	assertForceClose(true, conn3)
+
+	// 4. Now we try one in ns3 again, but we turn off lb host ns only so we expect a connection
+	// 	to be closed.
+	assert.NoError(t, ns3.Do(func() error {
+		conn3, err = net.Dial("udp", "127.0.0.1:30003")
+		assert.NoError(t, err)
+		return nil
+	}))
+	cookie3 = getCookie(ns3, 30003)
+	lbmap.AddSockRevNat(uint64(cookie3), net.IP{127, 0, 0, 1}, 30003)
+	l4a = lb.NewL3n4Addr(lb.UDP, cmtypes.AddrClusterFrom(ip, 0), 30003, 0)
+	s.config.BPFSocketLBHostnsOnly = false
+	assert.NoError(t, s.TerminateUDPConnectionsToBackend(l4a))
+	assertForceClose(true, conn3)
 }

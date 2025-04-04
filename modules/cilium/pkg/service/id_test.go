@@ -74,7 +74,7 @@ func TestServices(t *testing.T) {
 	require.NoError(t, err)
 	wantL3n4AddrID.ID = loadbalancer.ID(ffsIDu16)
 	wantL3n4AddrID.L3n4Addr = l3n4Addr1
-	require.EqualValues(t, wantL3n4AddrID, gotL3n4AddrID)
+	require.Equal(t, wantL3n4AddrID, gotL3n4AddrID)
 
 	err = DeleteID(hivetest.Logger(t), FirstFreeServiceID)
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestServices(t *testing.T) {
 	require.NoError(t, err)
 	wantL3n4AddrID.ID = loadbalancer.ID(FirstFreeServiceID + 1)
 	wantL3n4AddrID.L3n4Addr = l3n4Addr2
-	require.EqualValues(t, wantL3n4AddrID, gotL3n4AddrID)
+	require.Equal(t, wantL3n4AddrID, gotL3n4AddrID)
 
 	err = DeleteID(hivetest.Logger(t), FirstFreeServiceID)
 	require.NoError(t, err)
@@ -211,7 +211,7 @@ func BenchmarkAllocation(b *testing.B) {
 
 	logger := hivetest.Logger(b)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		addr.L4Addr.Port = uint16(b.N)
 		_, err := AcquireID(logger, addr, 0)
 		require.NoError(b, err)

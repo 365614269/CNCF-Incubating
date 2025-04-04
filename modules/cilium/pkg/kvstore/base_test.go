@@ -31,7 +31,7 @@ func testLock(t *testing.T) {
 	Client().DeletePrefix(context.TODO(), prefix)
 	defer Client().DeletePrefix(context.TODO(), prefix)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		lock, err := LockPath(context.Background(), hivetest.Logger(t), Client(), fmt.Sprintf("%sfoo/%d", prefix, i))
 		require.NoError(t, err)
 		require.NotNil(t, lock)
@@ -64,7 +64,7 @@ func testGetSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, pairs)
 
-	for i := 0; i < maxID; i++ {
+	for i := range maxID {
 		val, err := Client().Get(context.TODO(), testKey(prefix, i))
 		require.NoError(t, err)
 		require.Nil(t, val)
@@ -73,14 +73,14 @@ func testGetSet(t *testing.T) {
 
 		val, err = Client().Get(context.TODO(), testKey(prefix, i))
 		require.NoError(t, err)
-		require.EqualValues(t, testValue(i), string(val))
+		require.Equal(t, testValue(i), string(val))
 	}
 
 	pairs, err = Client().ListPrefix(context.Background(), prefix)
 	require.NoError(t, err)
 	require.Len(t, pairs, maxID)
 
-	for i := 0; i < maxID; i++ {
+	for i := range maxID {
 		require.NoError(t, Client().Delete(context.TODO(), testKey(prefix, i)))
 
 		val, err := Client().Get(context.TODO(), testKey(prefix, i))
@@ -107,8 +107,7 @@ func benchmarkGet(b *testing.B) {
 	key := testKey(prefix, 1)
 	require.NoError(b, Client().Update(context.TODO(), key, []byte(testValue(100)), false))
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := Client().Get(context.TODO(), key)
 		require.NoError(b, err)
 	}
@@ -126,8 +125,8 @@ func benchmarkSet(b *testing.B) {
 	defer Client().DeletePrefix(context.TODO(), prefix)
 
 	key, val := testKey(prefix, 1), testValue(100)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		require.NoError(b, Client().Update(context.TODO(), key, []byte(val), false))
 	}
 }
@@ -149,14 +148,14 @@ func testUpdate(t *testing.T) {
 
 	val, err := Client().Get(context.TODO(), testKey(prefix, 0))
 	require.NoError(t, err)
-	require.EqualValues(t, testValue(0), string(val))
+	require.Equal(t, testValue(0), string(val))
 
 	// update
 	require.NoError(t, Client().Update(context.Background(), testKey(prefix, 0), []byte(testValue(0)), true))
 
 	val, err = Client().Get(context.TODO(), testKey(prefix, 0))
 	require.NoError(t, err)
-	require.EqualValues(t, testValue(0), string(val))
+	require.Equal(t, testValue(0), string(val))
 }
 
 func TestCreateOnly(t *testing.T) {
@@ -177,7 +176,7 @@ func testCreateOnly(t *testing.T) {
 
 	val, err := Client().Get(context.TODO(), testKey(prefix, 0))
 	require.NoError(t, err)
-	require.EqualValues(t, testValue(0), string(val))
+	require.Equal(t, testValue(0), string(val))
 
 	success, err = Client().CreateOnly(context.Background(), testKey(prefix, 0), []byte(testValue(1)), false)
 	require.NoError(t, err)
@@ -185,7 +184,7 @@ func testCreateOnly(t *testing.T) {
 
 	val, err = Client().Get(context.TODO(), testKey(prefix, 0))
 	require.NoError(t, err)
-	require.EqualValues(t, testValue(0), string(val))
+	require.Equal(t, testValue(0), string(val))
 }
 
 func expectEvent(t *testing.T, events EventChan, typ EventType, key string, val string) {
@@ -194,7 +193,7 @@ func expectEvent(t *testing.T, events EventChan, typ EventType, key string, val 
 		require.Equal(t, typ, event.Typ)
 
 		if event.Typ != EventTypeListDone {
-			require.EqualValues(t, key, event.Key)
+			require.Equal(t, key, event.Key)
 			// etcd does not provide the value of deleted keys so we can't check it.
 		}
 	case <-time.After(10 * time.Second):
