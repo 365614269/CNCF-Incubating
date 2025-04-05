@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/mac"
+	mtuconst "github.com/cilium/cilium/pkg/mtu"
 	"github.com/cilium/cilium/pkg/option"
 )
 
@@ -325,18 +326,22 @@ func setupVxlanDevice(logger *slog.Logger, sysctl sysctl.Sysctl, port, srcPortLo
 // renamed to cilium_ip6tnl. This is to communicate to the user that Cilium has
 // taken control of the encapsulation stack on the node, as it currently doesn't
 // explicitly support sharing it with other tools/CNIs. Fallback devices are left
-// unused for production traffic. Only devices that were explicitly created are used.
-func setupIPIPDevices(logger *slog.Logger, sysctl sysctl.Sysctl, ipv4, ipv6 bool) error {
+// unused for production traffic. Only devices that were explicitly created are
+// used. As of Cilium 1.18, cilium_tunl and cilium_ip6tnl are not created anymore.
+func setupIPIPDevices(logger *slog.Logger, sysctl sysctl.Sysctl, ipv4, ipv6 bool, mtu int) error {
 	// FlowBased sets IFLA_IPTUN_COLLECT_METADATA, the equivalent of 'ip link add
 	// ... type ipip/ip6tnl external'. This is needed so bpf programs can use
 	// bpf_skb_[gs]et_tunnel_key() on packets flowing through tunnels.
-
 	if ipv4 {
-		// Set up IPv4 tunnel device if requested.
-		if _, err := ensureDevice(logger, sysctl, &netlink.Iptun{
-			LinkAttrs: netlink.LinkAttrs{Name: defaults.IPIPv4Device},
+		dev := &netlink.Iptun{
+			LinkAttrs: netlink.LinkAttrs{
+				Name: defaults.IPIPv4Device,
+				MTU:  mtu - mtuconst.IPIPv4Overhead,
+			},
 			FlowBased: true,
-		}); err != nil {
+		}
+
+		if _, err := ensureDevice(logger, sysctl, dev); err != nil {
 			return fmt.Errorf("creating %s: %w", defaults.IPIPv4Device, err)
 		}
 
@@ -352,11 +357,15 @@ func setupIPIPDevices(logger *slog.Logger, sysctl sysctl.Sysctl, ipv4, ipv6 bool
 	}
 
 	if ipv6 {
-		// Set up IPv6 tunnel device if requested.
-		if _, err := ensureDevice(logger, sysctl, &netlink.Ip6tnl{
-			LinkAttrs: netlink.LinkAttrs{Name: defaults.IPIPv6Device},
+		dev := &netlink.Ip6tnl{
+			LinkAttrs: netlink.LinkAttrs{
+				Name: defaults.IPIPv6Device,
+				MTU:  mtu - mtuconst.IPIPv6Overhead,
+			},
 			FlowBased: true,
-		}); err != nil {
+		}
+
+		if _, err := ensureDevice(logger, sysctl, dev); err != nil {
 			return fmt.Errorf("creating %s: %w", defaults.IPIPv6Device, err)
 		}
 
