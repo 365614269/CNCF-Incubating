@@ -85,6 +85,7 @@ weight: 1
   - [Guaranteed Instance Manager CPU](#guaranteed-instance-manager-cpu)
   - [Disable Snapshot Purge](#disable-snapshot-purge)
   - [Auto Cleanup Snapshot When Delete Backup](#auto-cleanup-snapshot-when-delete-backup)
+  - [Auto Cleanup Snapshot After On-Demand Backup Completed](#auto-cleanup-snapshot-after-on-demand-backup-completed)
   - [V1 Data Engine](#v1-data-engine)
   - [V2 Data Engine](#v2-data-engine)
   - [Guaranteed Instance Manager CPU for V2 Data Engine](#guaranteed-instance-manager-cpu-for-v2-data-engine)
@@ -969,6 +970,12 @@ data is moved to other disks.
 
 When set to true, the snapshot used by the backup will be automatically cleaned up when the backup is deleted.
 
+#### Auto Cleanup Snapshot After On-Demand Backup Completed
+
+> Default: `false`
+
+When set to true, the snapshot used by the backup will be automatically cleaned up after the on-demand backup is completed.
+
 #### V1 Data Engine
 
 > Default: `true`
@@ -994,7 +1001,7 @@ Setting that allows you to enable the V2 Data Engine, which is based on the Stor
 Number of millicpus on each node to be reserved for each instance manager pod when the V2 Data Engine is enabled. The Storage Performance Development Kit (SPDK) target daemon within each instance manager pod uses at least one CPU core. Configuring a minimum CPU usage value is essential for maintaining engine and replica stability, especially during periods of high node workload.
 
 > **Warning:**
->  - Specifying a value of 0 disables CPU requests for instance manager pods. You must specify an integer between 1000 and 8000.
+>  - Specifying a value of 0 disables CPU requests for instance manager pods. You must specify an integer larger than 1000.
 >  - This is a global setting. Modifying the value triggers an automatic restart of the Instance Manager pods. However, V2 Instance Manager pods that use this setting are restarted only when no instances are running.
 
 #### V2 Data Engine CPU Mask
