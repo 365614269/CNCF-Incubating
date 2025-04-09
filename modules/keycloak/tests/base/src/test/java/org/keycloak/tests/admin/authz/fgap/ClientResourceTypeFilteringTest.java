@@ -42,7 +42,7 @@ import org.keycloak.representations.idm.authorization.UserPolicyRepresentation;
 import org.keycloak.testframework.annotations.InjectAdminClient;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 
-@KeycloakIntegrationTest(config = KeycloakAdminPermissionsServerConfig.class)
+@KeycloakIntegrationTest
 public class ClientResourceTypeFilteringTest extends AbstractPermissionTest {
 
     @InjectAdminClient(mode = InjectAdminClient.Mode.MANAGED_REALM, client = "myclient", user = "myadmin")
@@ -87,7 +87,7 @@ public class ClientResourceTypeFilteringTest extends AbstractPermissionTest {
 
         search = realmAdminClient.realm(realm.getName()).clients().findAll();
         assertFalse(search.isEmpty());
-        assertEquals(58, search.size());
+        assertEquals(59, search.size());
     }
 
     @Test

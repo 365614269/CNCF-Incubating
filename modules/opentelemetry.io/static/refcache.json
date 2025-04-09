@@ -14271,6 +14271,10 @@
     "StatusCode": 200,
     "LastSeen": "2025-02-06T02:26:59.999Z"
   },
+  "https://last9.io/docs/integrations-opentelemetry/": {
+    "StatusCode": 206,
+    "LastSeen": "2025-04-08T07:13:45.660164039Z"
+  },
   "https://learn.microsoft.com/archive/blogs/askcore/windows-performance-monitor-disk-counters-explained#windows-performance-monitor-disk-counters-explained": {
     "StatusCode": 200,
     "LastSeen": "2025-02-06T02:26:12.345Z"
@@ -18299,6 +18303,10 @@
     "StatusCode": 200,
     "LastSeen": "2025-01-24T14:36:50.470824-05:00"
   },
+  "https://www.controltheory.com/use-case/otel-collector-management/": {
+    "StatusCode": 200,
+    "LastSeen": "2025-04-08T16:23:33.721746456-07:00"
+  },
   "https://www.couchbase.com/": {
     "StatusCode": 206,
     "LastSeen": "2025-01-24T14:36:52.894684-05:00"
@@ -18614,6 +18622,10 @@
   "https://www.jaegertracing.io/docs/latest/getting-started/": {
     "StatusCode": 206,
     "LastSeen": "2025-01-06T11:32:17.738973-05:00"
+  },
+  "https://www.jaegertracing.io/docs/latest/migration/": {
+    "StatusCode": 206,
+    "LastSeen": "2025-04-07T20:10:35.391082566Z"
   },
   "https://www.jaegertracing.io/sdk-migration/#propagation-format": {
     "StatusCode": 200,
