@@ -125,6 +125,19 @@ class SessionTest(BaseTest):
             s = Session()
             self.assertEqual(s.get_subscription_id(), DEFAULT_SUBSCRIPTION_ID)
             self.assertEqual(s.get_tenant_id(), DEFAULT_TENANT_ID)
+        mock_run.assert_called_with(['account', 'show', '--output', 'json'], timeout=10)
+
+    @patch('c7n_azure.session._run_command')
+    @patch('c7n_azure.session.az_identity_version', '1.19.0')
+    def test_initialize_session_old_version(self, mock_run):
+        mock_run.return_value = \
+            f'{{"id":"{DEFAULT_SUBSCRIPTION_ID}", "tenantId":"{DEFAULT_TENANT_ID}"}}'
+
+        with patch.dict(os.environ, {}, clear=True):
+            s = Session()
+            self.assertEqual(s.get_subscription_id(), DEFAULT_SUBSCRIPTION_ID)
+            self.assertEqual(s.get_tenant_id(), DEFAULT_TENANT_ID)
+        mock_run.assert_called_with('az account show --output json', timeout=10)
 
     def test_run_command_signature(self):
         """Catch signature changes in the internal method we use for CLI authentication
