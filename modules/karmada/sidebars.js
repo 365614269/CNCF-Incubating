@@ -233,7 +233,8 @@ module.exports = {
                 "developers/releasing",
                 "developers/customize-karmada-scheduler",
                 "developers/document-releasing",
-                "developers/add-new-api"
+                "developers/add-new-api",
+                "developers/secure-coding-specifications"
             ],
         },
         {
@@ -288,6 +289,7 @@ module.exports = {
                         "reference/karmadactl/karmadactl-commands/karmadactl",
                         "reference/karmadactl/karmadactl-usage-conventions",
                         "reference/karmadactl/karmadactl-config.v1alpha1",
+                        "reference/karmadactl/operation-scope",
                     ],
                 },
                 {
