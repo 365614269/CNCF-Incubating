@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
+@import '../components/Avatar/Avatar.styles.css';
 @import '../components/Box/styles.css';
 @import '../components/Button/styles.css';
+@import '../components/Collapsible/Collapsible.styles.css';
 @import '../components/DataTable/Root/DataTableRoot.styles.css';
 @import '../components/DataTable/Pagination/DataTablePagination.styles.css';
 @import '../components/Flex/styles.css';
@@ -27,6 +29,7 @@
 @import '../components/Table/TableCell/TableCell.styles.css';
 @import '../components/Table/TableCellText/TableCellText.styles.css';
 @import '../components/Table/TableCellLink/TableCellLink.styles.css';
+@import '../components/Table/TableCellProfile/TableCellProfile.styles.css';
 @import '../components/Text/styles.css';
 @import '../components/Heading/styles.css';
 @import '../components/IconButton/styles.css';

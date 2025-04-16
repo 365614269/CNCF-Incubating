@@ -42,6 +42,7 @@ export const columns: ColumnDef<DataProps>[] = [
     ),
     enableSorting: false,
     enableHiding: false,
+    size: 50,
   },
   {
     accessorKey: 'name',
@@ -53,22 +54,33 @@ export const columns: ColumnDef<DataProps>[] = [
         href="/"
       />
     ),
+    size: 450,
   },
   {
     accessorKey: 'owner',
     header: 'Owner',
-    cell: ({ row }) => (
-      <DataTable.TableCellText title={row.getValue('owner')} />
-    ),
+    cell: ({ row }) => {
+      const owner = row.getValue('owner') as DataProps['owner'];
+
+      return (
+        <DataTable.TableCellProfile
+          name={owner.name}
+          src={owner.profilePicture}
+          to={owner.link}
+        />
+      );
+    },
   },
   {
     accessorKey: 'type',
     header: 'Type',
     cell: ({ row }) => <DataTable.TableCellText title={row.getValue('type')} />,
+    size: 150,
   },
   {
     accessorKey: 'tags',
     header: 'Tags',
     cell: ({ row }) => <DataTable.TableCellText title={row.getValue('tags')} />,
+    size: 150,
   },
 ];

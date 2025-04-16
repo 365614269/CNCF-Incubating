@@ -15,6 +15,8 @@ import * as FlexStories from '../../../packages/canon/src/components/Flex/Flex.s
 import * as SelectStories from '../../../packages/canon/src/components/Select/Select.stories';
 import * as MenuStories from '../../../packages/canon/src/components/Menu/Menu.stories';
 import * as LinkStories from '../../../packages/canon/src/components/Link/Link.stories';
+import * as AvatarStories from '../../../packages/canon/src/components/Avatar/Avatar.stories';
+import * as CollapsibleStories from '../../../packages/canon/src/components/Collapsible/Collapsible.stories';
 
 export const BoxSnippet = ({ story }: { story: keyof typeof BoxStories }) => {
   const stories = composeStories(BoxStories);
@@ -137,6 +139,28 @@ export const MenuSnippet = ({ story }: { story: keyof typeof MenuStories }) => {
 
 export const LinkSnippet = ({ story }: { story: keyof typeof LinkStories }) => {
   const stories = composeStories(LinkStories);
+  const StoryComponent = stories[story as keyof typeof stories];
+
+  return StoryComponent ? <StoryComponent /> : null;
+};
+
+export const AvatarSnippet = ({
+  story,
+}: {
+  story: keyof typeof AvatarStories;
+}) => {
+  const stories = composeStories(AvatarStories);
+  const StoryComponent = stories[story as keyof typeof stories];
+
+  return StoryComponent ? <StoryComponent /> : null;
+};
+
+export const CollapsibleSnippet = ({
+  story,
+}: {
+  story: keyof typeof CollapsibleStories;
+}) => {
+  const stories = composeStories(CollapsibleStories);
   const StoryComponent = stories[story as keyof typeof stories];
 
   return StoryComponent ? <StoryComponent /> : null;
