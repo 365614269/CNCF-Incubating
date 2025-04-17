@@ -1347,7 +1347,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:b8f10a6769013b589725f95b99b990a07eeec6d6b34d5ea748f816dd671d04ca","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.33.2-1743993934-6e55b1412ae5976fb0c8fdc87a5e53942f70b0fc","useDigest":true}``
+     - ``{"digest":"sha256:9e7d25c315f3aa9e5066cc39e25702132311f5ad8416a4d7b5b28377deeaad6e","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.33.2-1744671928-c57114fd0d5919216efde96fcf7a6b1471f6250b","useDigest":true}``
    * - :spelling:ignore:`envoy.initialFetchTimeoutSeconds`
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
@@ -1739,7 +1739,7 @@
    * - :spelling:ignore:`hubble.metrics`
      - Hubble metrics configuration. See https://docs.cilium.io/en/stable/observability/metrics/#hubble-metrics for more comprehensive documentation about Hubble metrics.
      - object
-     - ``{"dashboards":{"annotations":{},"enabled":false,"label":"grafana_dashboard","labelValue":"1","namespace":null},"dynamic":{"config":{"configMapName":"cilium-dynamic-metrics-config","content":[{"contextOptions":[],"excludeFilters":[],"includeFilters":[],"name":"all"}],"createConfigMap":true},"enabled":false},"enableOpenMetrics":false,"enabled":null,"port":9965,"serviceAnnotations":{},"serviceMonitor":{"annotations":{},"enabled":false,"interval":"10s","jobLabel":"","labels":{},"metricRelabelings":null,"relabelings":[{"action":"replace","replacement":"${1}","sourceLabels":["__meta_kubernetes_pod_node_name"],"targetLabel":"node"}],"scrapeTimeout":null,"tlsConfig":{}},"tls":{"enabled":false,"server":{"cert":"","existingSecret":"","extraDnsNames":[],"extraIpAddresses":[],"key":"","mtls":{"enabled":false,"key":"ca.crt","name":null,"useSecret":false}}}}``
+     - ``{"dashboards":{"annotations":{},"enabled":false,"label":"grafana_dashboard","labelValue":"1","namespace":null},"dynamic":{"config":{"configMapName":"cilium-dynamic-metrics-config","content":[],"createConfigMap":true},"enabled":false},"enableOpenMetrics":false,"enabled":null,"port":9965,"serviceAnnotations":{},"serviceMonitor":{"annotations":{},"enabled":false,"interval":"10s","jobLabel":"","labels":{},"metricRelabelings":null,"relabelings":[{"action":"replace","replacement":"${1}","sourceLabels":["__meta_kubernetes_pod_node_name"],"targetLabel":"node"}],"scrapeTimeout":null,"tlsConfig":{}},"tls":{"enabled":false,"server":{"cert":"","existingSecret":"","extraDnsNames":[],"extraIpAddresses":[],"key":"","mtls":{"enabled":false,"key":"ca.crt","name":null,"useSecret":false}}}}``
    * - :spelling:ignore:`hubble.metrics.dashboards`
      - Grafana dashboards for hubble grafana can import dashboards based on the label and value ref: https://github.com/grafana/helm-charts/tree/main/charts/grafana#sidecar-for-dashboards
      - object
@@ -1751,7 +1751,7 @@
    * - :spelling:ignore:`hubble.metrics.dynamic.config.content`
      - -- Exporters configuration in YAML format.
      - list
-     - ``[{"contextOptions":[],"excludeFilters":[],"includeFilters":[],"name":"all"}]``
+     - ``[]``
    * - :spelling:ignore:`hubble.metrics.dynamic.config.createConfigMap`
      - -- True if helm installer should create config map. Switch to false if you want to self maintain the file content.
      - bool
@@ -2683,7 +2683,7 @@
    * - :spelling:ignore:`loadBalancer`
      - Configure service load balancing
      - object
-     - ``{"acceleration":"disabled","experimental":false,"l7":{"algorithm":"round_robin","backend":"disabled","ports":[]}}``
+     - ``{"acceleration":"disabled","experimental":true,"l7":{"algorithm":"round_robin","backend":"disabled","ports":[]}}``
    * - :spelling:ignore:`loadBalancer.acceleration`
      - acceleration is the option to accelerate service handling via XDP Applicable values can be: disabled (do not use XDP), native (XDP BPF program is run directly out of the networking driver's early receive path), or best-effort (use native mode XDP acceleration on devices that support it).
      - string
@@ -2691,7 +2691,7 @@
    * - :spelling:ignore:`loadBalancer.experimental`
      - experimental enables support for the experimental load-balancing control-plane.
      - bool
-     - ``false``
+     - ``true``
    * - :spelling:ignore:`loadBalancer.l7`
      - L7 LoadBalancer
      - object

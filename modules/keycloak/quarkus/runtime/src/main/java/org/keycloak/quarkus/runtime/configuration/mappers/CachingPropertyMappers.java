@@ -24,7 +24,7 @@ import static org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper.
 final class CachingPropertyMappers {
 
     private static final String REMOTE_HOST_SET = "remote host is set";
-    private static final String MULTI_SITE_OR_EMBEDDED_REMOTE_FEATURE_SET = "feature '%s', '%s' or '%s' is set".formatted(Profile.Feature.MULTI_SITE.getKey(), Profile.Feature.CLUSTERLESS.getKey(), Profile.Feature.CACHE_EMBEDDED_REMOTE_STORE.getKey());
+    private static final String MULTI_SITE_OR_EMBEDDED_REMOTE_FEATURE_SET = "feature '%s' or '%s' is set".formatted(Profile.Feature.MULTI_SITE.getKey(), Profile.Feature.CLUSTERLESS.getKey());
     private static final String MULTI_SITE_FEATURE_SET = "feature '%s' or '%s' is set".formatted(Profile.Feature.MULTI_SITE.getKey(), Profile.Feature.CLUSTERLESS.getKey());
 
     private static final String CACHE_STACK_SET_TO_ISPN = "'cache' type is set to '" + CachingOptions.Mechanism.ispn.name() + "'";
@@ -92,23 +92,28 @@ final class CachingPropertyMappers {
                         .build(),
                 fromOption(CachingOptions.CACHE_REMOTE_HOST)
                         .paramLabel("hostname")
+                        .to("kc.spi-cache-remote-default-hostname")
                         .addValidateEnabled(CachingPropertyMappers::isRemoteCacheHostEnabled, MULTI_SITE_OR_EMBEDDED_REMOTE_FEATURE_SET)
                         .isRequired(InfinispanUtils::isRemoteInfinispan, MULTI_SITE_FEATURE_SET)
                         .build(),
                 fromOption(CachingOptions.CACHE_REMOTE_PORT)
                         .isEnabled(CachingPropertyMappers::remoteHostSet, CachingPropertyMappers.REMOTE_HOST_SET)
+                        .to("kc.spi-cache-remote-default-port")
                         .paramLabel("port")
                         .build(),
                 fromOption(CachingOptions.CACHE_REMOTE_TLS_ENABLED)
                         .isEnabled(CachingPropertyMappers::remoteHostSet, CachingPropertyMappers.REMOTE_HOST_SET)
+                        .to("kc.spi-cache-remote-default-tls-enabled")
                         .build(),
                 fromOption(CachingOptions.CACHE_REMOTE_USERNAME)
                         .isEnabled(CachingPropertyMappers::remoteHostSet, CachingPropertyMappers.REMOTE_HOST_SET)
+                        .to("kc.spi-cache-remote-default-username")
                         .validator((value) -> validateCachingOptionIsPresent(CachingOptions.CACHE_REMOTE_USERNAME, CachingOptions.CACHE_REMOTE_PASSWORD))
                         .paramLabel("username")
                         .build(),
                 fromOption(CachingOptions.CACHE_REMOTE_PASSWORD)
                         .isEnabled(CachingPropertyMappers::remoteHostSet, CachingPropertyMappers.REMOTE_HOST_SET)
+                        .to("kc.spi-cache-remote-default-password")
                         .validator((value) -> validateCachingOptionIsPresent(CachingOptions.CACHE_REMOTE_PASSWORD, CachingOptions.CACHE_REMOTE_USERNAME))
                         .paramLabel("password")
                         .isMasked(true)
@@ -203,7 +208,7 @@ final class CachingPropertyMappers {
     }
 
     private static boolean isRemoteCacheHostEnabled() {
-        return InfinispanUtils.isRemoteInfinispan() || Profile.isFeatureEnabled(Profile.Feature.CACHE_EMBEDDED_REMOTE_STORE);
+        return InfinispanUtils.isRemoteInfinispan();
     }
 
     private static void validateCachingOptionIsPresent(Option<?> optionSet, Option<?> optionRequired) {
