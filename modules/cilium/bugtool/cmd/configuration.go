@@ -85,6 +85,7 @@ var bpfMapsPath = []string{
 	"tc/globals/cilium_tunnel_map",
 	"tc/globals/cilium_ktime_cache",
 	"tc/globals/cilium_ipcache",
+	"tc/globals/cilium_ipcache_v2",
 	"tc/globals/cilium_events",
 	"tc/globals/cilium_signals",
 	"tc/globals/cilium_capture4_rules",
@@ -219,6 +220,7 @@ func miscSystemCommands() []string {
 		// tc
 		"tc qdisc show",
 		"tc -d -s qdisc show", // Show statistics on queuing disciplines
+		"find /sys/fs/bpf -ls",
 	}
 }
 
