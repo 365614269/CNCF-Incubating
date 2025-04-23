@@ -72,7 +72,7 @@ import (
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labelsfilter"
-	"github.com/cilium/cilium/pkg/loadbalancer/experimental"
+	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/loadinfo"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -1567,7 +1567,7 @@ type daemonParams struct {
 	Orchestrator        datapath.Orchestrator
 	LRPManager          *redirectpolicy.Manager
 	MaglevConfig        maglev.Config
-	ExpLBConfig         experimental.Config
+	LBConfig            loadbalancer.Config
 	DNSProxy            bootstrap.FQDNProxyBootstrapper
 	StatusCollector     status.StatusCollector
 }
@@ -1797,7 +1797,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 
 	bootstrapStats.healthCheck.Start()
 	if option.Config.EnableHealthChecking {
-		if err := d.ciliumHealth.Init(d.ctx, d.healthEndpointRouting); err != nil {
+		if err := d.ciliumHealth.Init(d.ctx, d.healthEndpointRouting, cleaner.cleanupFuncs.Add); err != nil {
 			return fmt.Errorf("failed to initialize cilium health: %w", err)
 		}
 	}

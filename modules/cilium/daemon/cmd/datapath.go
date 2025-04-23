@@ -158,17 +158,11 @@ func (d *Daemon) initMaps() error {
 		return fmt.Errorf("initializing ratelimit maps: %w", err)
 	}
 
-	if option.Config.TunnelingEnabled() {
-		if err := tunnel.TunnelMap().Recreate(); err != nil {
-			return fmt.Errorf("initializing tunnel map: %w", err)
-		}
-	} else {
-		// Make sure that the tunnel map gets unpinned when running in native
-		// routing mode, to prevent stale leftover entries when changing mode.
-		err := tunnel.TunnelMap().Unpin()
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("removing tunnel map: %w", err)
-		}
+	// Tunnel map is no longer used, not even in tunnel routing mode.
+	// Therefore, make sure it gets unpinned at startup.
+	err := tunnel.TunnelMap().Unpin()
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("removing tunnel map: %w", err)
 	}
 
 	if option.Config.EnableVTEP {
@@ -283,7 +277,7 @@ func (d *Daemon) initMaps() error {
 		}
 	}
 
-	if !d.explbConfig.EnableExperimentalLB &&
+	if !d.lbConfig.EnableExperimentalLB &&
 		(option.Config.NodePortAlg == option.NodePortAlgMaglev ||
 			option.Config.LoadBalancerAlgorithmAnnotation) {
 		if err := lbmap.InitMaglevMaps(option.Config.EnableIPv4, option.Config.EnableIPv6, uint32(d.maglevConfig.MaglevTableSize)); err != nil {
