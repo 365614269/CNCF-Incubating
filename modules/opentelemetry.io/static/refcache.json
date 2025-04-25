@@ -1423,6 +1423,10 @@
     "StatusCode": 206,
     "LastSeen": "2025-02-01T07:12:05.346585-05:00"
   },
+  "https://docs.micrometer.io/tracing/reference/api.html#_micrometer_tracing_opentelemetry_setup": {
+    "StatusCode": 206,
+    "LastSeen": "2025-04-24T05:50:04.173252398-07:00"
+  },
   "https://docs.microsoft.com/aspnet/core": {
     "StatusCode": 200,
     "LastSeen": "2025-02-02T10:58:41.536648-05:00"
@@ -4859,6 +4863,10 @@
     "StatusCode": 200,
     "LastSeen": "2025-02-02T15:45:53.024Z"
   },
+  "https://github.com/micrometer-metrics/tracing/tree/main/micrometer-tracing-bridges/micrometer-tracing-bridge-otel": {
+    "StatusCode": 206,
+    "LastSeen": "2025-04-24T05:50:03.356710098-07:00"
+  },
   "https://github.com/microsft": {
     "StatusCode": 206,
     "LastSeen": "2024-12-12T21:04:04.691776+01:00"
@@ -5622,6 +5630,10 @@
   "https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/34427": {
     "StatusCode": 206,
     "LastSeen": "2025-01-23T00:42:06.061499598Z"
+  },
+  "https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/cmd/opampsupervisor": {
+    "StatusCode": 206,
+    "LastSeen": "2025-04-22T16:02:37.121872+02:00"
   },
   "https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/cmd/telemetrygen": {
     "StatusCode": 206,
@@ -15715,6 +15727,10 @@
     "StatusCode": 200,
     "LastSeen": "2025-01-30T14:41:05.186296-05:00"
   },
+  "https://pkg.go.dev/github.com/open-telemetry/opentelemetry-collector-contrib/cmd/opampsupervisor": {
+    "StatusCode": 200,
+    "LastSeen": "2025-04-22T16:02:45.796954+02:00"
+  },
   "https://pkg.go.dev/github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alertmanagerexporter": {
     "StatusCode": 200,
     "LastSeen": "2025-02-02T10:58:51.272137-05:00"
@@ -18550,6 +18566,10 @@
   "https://www.elastic.co/": {
     "StatusCode": 206,
     "LastSeen": "2025-01-13T12:10:40.954551-05:00"
+  },
+  "https://www.elastic.co/docs/reference/elasticsearch/clients/java/setup/opentelemetry": {
+    "StatusCode": 206,
+    "LastSeen": "2025-04-24T05:49:17.499365942-07:00"
   },
   "https://www.elastic.co/elasticsearch": {
     "StatusCode": 206,
