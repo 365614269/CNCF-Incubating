@@ -73,7 +73,7 @@ func TestScript(t *testing.T) {
 			daemonk8s.ResourcesCell,
 			daemonk8s.TablesCell,
 			maglev.Cell,
-			cell.Config(cecConfig{}),
+			cell.Config(CECConfig{}),
 			cell.Config(envoy.ProxyConfig{}),
 
 			lbcell.Cell,
@@ -106,12 +106,15 @@ func TestScript(t *testing.T) {
 					cell.Provide(
 						newCECResourceParser,
 						func(log *slog.Logger) PortAllocator { return staticPortAllocator{log} },
+						func() FeatureMetrics {
+							return mockFeatureMetrics{}
+						},
 					),
 					node.LocalNodeStoreCell,
 					cell.Invoke(func(lns_ *node.LocalNodeStore) { lns = lns_ }),
 				),
-				experimentalTableCells,
-				experimentalControllerCells,
+				tableCells,
+				controllerCells,
 
 				cell.ProvidePrivate(
 					func() promise.Promise[synced.CRDSync] {
@@ -499,3 +502,24 @@ func (s staticPortAllocator) ReleaseProxyPort(name string) error {
 }
 
 var _ PortAllocator = staticPortAllocator{}
+
+type mockFeatureMetrics struct {
+}
+
+// AddCCEC implements CECMetrics.
+func (m mockFeatureMetrics) AddCCEC() {
+}
+
+// AddCEC implements CECMetrics.
+func (m mockFeatureMetrics) AddCEC() {
+}
+
+// DelCCEC implements CECMetrics.
+func (m mockFeatureMetrics) DelCCEC() {
+}
+
+// DelCEC implements CECMetrics.
+func (m mockFeatureMetrics) DelCEC() {
+}
+
+var _ FeatureMetrics = mockFeatureMetrics{}
