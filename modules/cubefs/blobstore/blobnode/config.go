@@ -145,8 +145,7 @@ func (s *Service) ConfigReload(c *rpc.Context) {
 		return
 	}
 
-	// for front-end web page
-	c.RespondJSON(args)
+	c.Respond()
 }
 
 func (s *Service) ConfigGet(c *rpc.Context) {
@@ -184,6 +183,12 @@ func (s *Service) reloadDataQos(ctx context.Context, args *bnapi.ConfigReloadArg
 		qosConf.ReadDiscard = int32(value)
 	case "write_discard":
 		qosConf.WriteDiscard = int32(value)
+	case "read_queue_depth":
+		qosConf.ReadQueueDepth = int32(value)
+	case "write_queue_depth":
+		qosConf.WriteQueueDepth = int32(value)
+	case "delete_queue_depth":
+		qosConf.DeleteQueueDepth = int32(value)
 	default:
 		return ErrNotSupportKey
 	}

@@ -64,7 +64,7 @@ func (cs *chunk) StartCompact(ctx context.Context) (newcs core.ChunkAPI, err err
 	stg := cs.getStg()
 
 	// new dstChunkStorage
-	ncs, err := newChunkStorage(ctx, cs.Disk().GetDataPath(), vm, cs.readPool, cs.writePool, func(o *core.Option) {
+	ncs, err := newChunkStorage(ctx, cs.Disk().GetDataPath(), vm, cs.ioPools, func(o *core.Option) {
 		o.Conf = cs.Disk().GetConfig()
 		o.DB = stg.MetaHandler().InnerDB()
 		o.IoQos = cs.Disk().GetIoQos()
@@ -179,6 +179,11 @@ func (cs *chunk) doCompact(ctx context.Context, ncs *chunk) (err error) {
 
 		// dstChunkStorage write data
 		err = ncs.Write(ctx, shard)
+		// read old shard, and write to new chunk. should manual free buffer
+		if rc, ok := shard.Body.(*storage.ShardReadCloser); ok {
+			rc.Close()
+		}
+
 		if err != nil {
 			span.Errorf("write shard(%v) to chunk(%s) failed: %v", blobID, ncs.ID(), err)
 			return
