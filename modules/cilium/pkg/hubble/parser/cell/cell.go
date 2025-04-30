@@ -24,7 +24,7 @@ import (
 	identitycell "github.com/cilium/cilium/pkg/identity/cache/cell"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/loadbalancer"
-	"github.com/cilium/cilium/pkg/service"
+	"github.com/cilium/cilium/pkg/loadbalancer/legacy/service"
 )
 
 var Cell = cell.Module(
@@ -60,6 +60,12 @@ func newPayloadParser(params payloadParserParams) (parser.Decoder, error) {
 			),
 		)
 	}
+	parserOpts = append(
+		parserOpts,
+		parserOptions.WithNetworkPolicyCorrelation(
+			params.Log,
+			params.Config.EnableNetworkPolicyCorrelation,
+		))
 	return parser.New(params.Log, g, g, g, params.Ipcache, g, params.LinkCache, params.CGroupManager, params.Config.SkipUnknownCGroupIDs, parserOpts...)
 }
 

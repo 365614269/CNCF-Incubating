@@ -12,21 +12,14 @@ PKTGEN("tc", "ipsec_redirect")
 int ipsec_redirect_pktgen(struct __ctx_buff *ctx)
 {
 	struct pktgen builder;
-	struct ethhdr *l2;
 	struct iphdr *l3;
 
 	pktgen__init(&builder, ctx);
 
-	l2 = pktgen__push_ethhdr(&builder);
-	if (!l2)
-		return TEST_ERROR;
-	ethhdr__set_macs(l2, (__u8 *)SOURCE_MAC, (__u8 *)DST_MAC);
-
-	l3 = pktgen__push_default_iphdr(&builder);
+	l3 = pktgen__push_ipv4_packet(&builder, (__u8 *)SOURCE_MAC, (__u8 *)DST_MAC,
+				      SOURCE_IP, DST_IP);
 	if (!l3)
 		return TEST_ERROR;
-	l3->saddr = SOURCE_IP;
-	l3->daddr = DST_IP;
 
 	pktgen__finish(&builder);
 	return 0;
@@ -44,7 +37,7 @@ int ipsec_redirect_check(__maybe_unused struct __ctx_buff *ctx)
 	 */
 
 	/* fill in nodemap entry */
-	node_v4_add_entry(DST_IP, DST_NODE_ID, TARGET_SPI);
+	node_v4_add_entry(DST_NODE_IP, DST_NODE_ID, TARGET_SPI);
 
 	/* fill encrypt map with node's current SPI 3 */
 	struct encrypt_config cfg = {
@@ -53,20 +46,14 @@ int ipsec_redirect_check(__maybe_unused struct __ctx_buff *ctx)
 	map_update_elem(&cilium_encrypt_state, &ret, &cfg, BPF_ANY);
 
 	ipcache_v4_add_entry(SOURCE_IP, 0, SOURCE_IDENTITY, 0, BAD_SPI);
-	/* this IPcache fill is not a representation of how things work during
-	 * Cilium runtime, a IPCache entry would not point to itself as its
-	 * tunnel_endpoint, this just makes the test a bit simpler.
-	 * The tunnel_endpoint is used in the IPsec hook under test below to
-	 * find the associated NodeID for an egress packet
-	 */
-	ipcache_v4_add_entry(DST_IP, 0, 0xAC, DST_IP, TARGET_SPI);
+	ipcache_v4_add_entry(DST_IP, 0, 0xAC, DST_NODE_IP, TARGET_SPI);
 
 	ret = ipsec_maybe_redirect_to_encrypt(ctx, bpf_htons(ETH_P_IP),
 					      SOURCE_IDENTITY);
 	assert(ret == CTX_ACT_REDIRECT);
 
 	/* assert we set the correct mark */
-	assert(ctx->mark == TARGET_MARK);
+	assert(ctx->mark == ipsec_encode_encryption_mark(TARGET_SPI, DST_NODE_ID));
 
 	/* the original source layer 2 address should be the destination for
 	 * hairpin redirect
