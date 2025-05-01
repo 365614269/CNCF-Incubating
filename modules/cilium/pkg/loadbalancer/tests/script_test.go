@@ -88,16 +88,10 @@ func TestScript(t *testing.T) {
 					source.NewSources,
 					func(cfg loadbalancer.TestConfig) *option.DaemonConfig {
 						return &option.DaemonConfig{
-							EnableIPv4:                      true,
-							EnableIPv6:                      true,
-							SockRevNatEntries:               1000,
-							LBMapEntries:                    1000,
-							NodePortAlg:                     cfg.NodePortAlg,
-							EnableHealthCheckNodePort:       cfg.EnableHealthCheckNodePort,
-							KubeProxyReplacement:            option.KubeProxyReplacementTrue,
-							EnableNodePort:                  true,
-							ExternalClusterIP:               cfg.ExternalClusterIP,
-							LoadBalancerAlgorithmAnnotation: cfg.LoadBalancerAlgorithmAnnotation,
+							EnableIPv4:           true,
+							EnableIPv6:           true,
+							KubeProxyReplacement: option.KubeProxyReplacementTrue,
+							EnableNodePort:       true,
 						}
 					},
 					func(ops *lbreconciler.BPFOps, lns *node.LocalNodeStore, w *writer.Writer) uhive.ScriptCmdsOut {

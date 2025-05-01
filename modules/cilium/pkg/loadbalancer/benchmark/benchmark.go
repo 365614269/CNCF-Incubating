@@ -73,26 +73,29 @@ func RunBenchmark(testSize int, iterations int, loglevel slog.Level, validate bo
 		bpfMaps := &lbmaps.BPFLBMaps{
 			Log:    log,
 			Pinned: false,
-			Cfg: loadbalancer.ExternalConfig{
-				ZoneMapper: &option.DaemonConfig{},
-				LBMapsConfig: loadbalancer.LBMapsConfig{
-					MaxSockRevNatMapEntries:  3 * testSize,
-					ServiceMapMaxEntries:     3 * testSize,
-					BackendMapMaxEntries:     3 * testSize,
-					RevNatMapMaxEntries:      3 * testSize,
-					AffinityMapMaxEntries:    3 * testSize,
-					SourceRangeMapMaxEntries: 3 * testSize,
-					MaglevMapMaxEntries:      3 * testSize,
+			Cfg: loadbalancer.Config{
+				UserConfig: loadbalancer.UserConfig{
+					EnableExperimentalLB:    true,
+					RetryBackoffMin:         time.Second,
+					RetryBackoffMax:         time.Second,
+					LBMapEntries:            3 * testSize,
+					LBServiceMapEntries:     3 * testSize,
+					LBBackendMapEntries:     3 * testSize,
+					LBRevNatEntries:         3 * testSize,
+					LBAffinityMapEntries:    3 * testSize,
+					LBSourceRangeAllTypes:   false,
+					LBSourceRangeMapEntries: 3 * testSize,
+					LBMaglevMapEntries:      3 * testSize,
+					LBSockRevNatEntries:     3 * testSize,
 				},
-				EnableIPv4:                      true,
-				EnableIPv6:                      true,
-				ExternalClusterIP:               true,
-				EnableHealthCheckNodePort:       true,
-				KubeProxyReplacement:            true,
-				NodePortMin:                     30000,
-				NodePortMax:                     40000,
-				NodePortAlg:                     "random",
-				LoadBalancerAlgorithmAnnotation: false,
+				NodePortMin: loadbalancer.NodePortMinDefault,
+				NodePortMax: loadbalancer.NodePortMaxDefault,
+			},
+			ExtCfg: loadbalancer.ExternalConfig{
+				ZoneMapper:           &option.DaemonConfig{},
+				EnableIPv4:           true,
+				EnableIPv6:           true,
+				KubeProxyReplacement: true,
 			},
 			MaglevCfg: maglevConfig,
 		}
@@ -524,12 +527,9 @@ func testHive(maps lbmaps.LBMaps,
 	bo **lbreconciler.BPFOps,
 ) *hive.Hive {
 	extConfig := loadbalancer.ExternalConfig{
-		ZoneMapper:        &option.DaemonConfig{},
-		EnableIPv4:        true,
-		EnableIPv6:        true,
-		ExternalClusterIP: false,
-		NodePortMin:       option.NodePortMinDefault,
-		NodePortMax:       option.NodePortMaxDefault,
+		ZoneMapper: &option.DaemonConfig{},
+		EnableIPv4: true,
+		EnableIPv6: true,
 	}
 
 	return hive.New(
@@ -543,9 +543,9 @@ func testHive(maps lbmaps.LBMaps,
 			cell.Provide(
 				func() loadbalancer.Config {
 					return loadbalancer.Config{
-						EnableExperimentalLB: true,
-						RetryBackoffMin:      time.Millisecond,
-						RetryBackoffMax:      time.Millisecond,
+						UserConfig:  loadbalancer.DefaultUserConfig,
+						NodePortMin: loadbalancer.NodePortMinDefault,
+						NodePortMax: loadbalancer.NodePortMaxDefault,
 					}
 				},
 				func() loadbalancer.ExternalConfig { return extConfig },

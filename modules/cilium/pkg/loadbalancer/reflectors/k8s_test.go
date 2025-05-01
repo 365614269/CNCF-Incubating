@@ -18,15 +18,9 @@ import (
 
 var (
 	benchmarkExternalConfig = loadbalancer.ExternalConfig{
-		EnableIPv4:                      true,
-		EnableIPv6:                      true,
-		ExternalClusterIP:               true,
-		EnableHealthCheckNodePort:       true,
-		KubeProxyReplacement:            true,
-		NodePortMin:                     10000,
-		NodePortMax:                     30000,
-		NodePortAlg:                     "random",
-		LoadBalancerAlgorithmAnnotation: false,
+		EnableIPv4:           true,
+		EnableIPv6:           true,
+		KubeProxyReplacement: true,
 	}
 )
 

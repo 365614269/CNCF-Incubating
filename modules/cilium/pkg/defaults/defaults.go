@@ -278,10 +278,6 @@ const (
 	// EnableEndpointHealthChecking
 	EnableEndpointHealthChecking = true
 
-	// EnableHealthCheckNodePort is the default value for
-	// EnableHealthCheckNodePort
-	EnableHealthCheckNodePort = true
-
 	// EnableHealthCheckLoadBalancerIP is the default value for
 	// EnableHealthCheckLoadBalancerIP
 	EnableHealthCheckLoadBalancerIP = false
@@ -473,19 +469,12 @@ const (
 	// API groups using Discovery API.
 	K8sEnableLeasesFallbackDiscovery = false
 
-	// KubeProxyReplacementHealthzBindAddr is the default kubeproxyReplacement healthz server bind addr
-	KubeProxyReplacementHealthzBindAddr = ""
-
 	// InstallNoConntrackRules instructs Cilium to install Iptables rules to skip netfilter connection tracking on all pod traffic.
 	InstallNoConntrackIptRules = false
 
 	// ContainerIPLocalReservedPortsAuto instructs the Cilium CNI plugin to reserve
 	// an auto-generated list of ports in the container network namespace
 	ContainerIPLocalReservedPortsAuto = "auto"
-
-	// ExternalClusterIP enables cluster external access to ClusterIP services.
-	// Defaults to false to retain prior behaviour of not routing external packets to ClusterIPs.
-	ExternalClusterIP = false
 
 	// EnableICMPRules enables ICMP-based rule support for Cilium Network Policies.
 	EnableICMPRules = true

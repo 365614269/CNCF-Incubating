@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpointmanager"
+	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
@@ -278,8 +279,8 @@ func (d *Daemon) initMaps() error {
 	}
 
 	if !d.lbConfig.EnableExperimentalLB &&
-		(option.Config.NodePortAlg == option.NodePortAlgMaglev ||
-			option.Config.LoadBalancerAlgorithmAnnotation) {
+		(d.lbConfig.LBAlgorithm == loadbalancer.LBAlgorithmMaglev ||
+			d.lbConfig.AlgorithmAnnotation) {
 		if err := lbmap.InitMaglevMaps(option.Config.EnableIPv4, option.Config.EnableIPv6, uint32(d.maglevConfig.MaglevTableSize)); err != nil {
 			return fmt.Errorf("initializing maglev maps: %w", err)
 		}

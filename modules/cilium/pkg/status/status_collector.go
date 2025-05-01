@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	k8smetrics "github.com/cilium/cilium/pkg/k8s/metrics"
 	"github.com/cilium/cilium/pkg/kvstore"
+	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/lock"
 	ipcachemap "github.com/cilium/cilium/pkg/maps/ipcache"
 	ipmasqmap "github.com/cilium/cilium/pkg/maps/ipmasq"
@@ -323,11 +324,11 @@ func (d *statusCollector) getKubeProxyReplacementStatus(ctx context.Context) *mo
 			features.NodePort.Mode = strings.Title(d.statusParams.DaemonConfig.NodePortMode)
 		}
 		features.NodePort.Algorithm = models.KubeProxyReplacementFeaturesNodePortAlgorithmRandom
-		if d.statusParams.DaemonConfig.NodePortAlg == option.NodePortAlgMaglev {
+		if d.statusParams.LBConfig.LBAlgorithm == loadbalancer.LBAlgorithmMaglev {
 			features.NodePort.Algorithm = models.KubeProxyReplacementFeaturesNodePortAlgorithmMaglev
 			features.NodePort.LutSize = int64(d.statusParams.MaglevConfig.MaglevTableSize)
 		}
-		if d.statusParams.DaemonConfig.LoadBalancerAlgorithmAnnotation {
+		if d.statusParams.LBConfig.AlgorithmAnnotation {
 			features.NodePort.LutSize = int64(d.statusParams.MaglevConfig.MaglevTableSize)
 		}
 		if d.statusParams.DaemonConfig.NodePortAcceleration == option.NodePortAccelerationGeneric {
@@ -335,8 +336,8 @@ func (d *statusCollector) getKubeProxyReplacementStatus(ctx context.Context) *mo
 		} else {
 			features.NodePort.Acceleration = strings.Title(d.statusParams.DaemonConfig.NodePortAcceleration)
 		}
-		features.NodePort.PortMin = int64(d.statusParams.DaemonConfig.NodePortMin)
-		features.NodePort.PortMax = int64(d.statusParams.DaemonConfig.NodePortMax)
+		features.NodePort.PortMin = int64(d.statusParams.LBConfig.NodePortMin)
+		features.NodePort.PortMax = int64(d.statusParams.LBConfig.NodePortMax)
 	}
 	if d.statusParams.DaemonConfig.EnableHostPort {
 		features.HostPort.Enabled = true
@@ -368,7 +369,7 @@ func (d *statusCollector) getKubeProxyReplacementStatus(ctx context.Context) *mo
 		features.Nat46X64.Service = svc
 	}
 	if d.statusParams.DaemonConfig.EnableNodePort {
-		if d.statusParams.DaemonConfig.LoadBalancerAlgorithmAnnotation {
+		if d.statusParams.LBConfig.AlgorithmAnnotation {
 			features.Annotations = append(features.Annotations, annotation.ServiceLoadBalancingAlgorithm)
 		}
 		if d.statusParams.DaemonConfig.LoadBalancerModeAnnotation {
@@ -496,7 +497,7 @@ func (d *statusCollector) getBPFMapStatus() *models.BPFMapStatus {
 			},
 			{
 				Name: "Sock reverse NAT",
-				Size: int64(d.statusParams.DaemonConfig.SockRevNatEntries),
+				Size: int64(d.statusParams.LBConfig.LBSockRevNatEntries),
 			},
 		},
 	}

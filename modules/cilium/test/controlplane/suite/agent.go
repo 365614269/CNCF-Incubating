@@ -109,7 +109,7 @@ func (h *agentHandle) setupCiliumAgentHive(clientset k8sClient.Clientset, extraC
 	// Disable the experimental LB control-plane. The tests here use the "LBMockMap" which is not used
 	// by the new implementation. Once we switch implementations we can remove the LB related tests from
 	// here as they're already covered by the LB test suite.
-	hive.AddConfigOverride(h.hive, func(c *loadbalancer.Config) {
+	hive.AddConfigOverride(h.hive, func(c *loadbalancer.UserConfig) {
 		c.EnableExperimentalLB = false
 	})
 }
@@ -134,7 +134,6 @@ func (h *agentHandle) populateCiliumAgentOptions(testDir string, modConfig func(
 	option.Config.KubeProxyReplacement = option.KubeProxyReplacementTrue
 	option.Config.K8sRequireIPv6PodCIDR = false
 	option.Config.EnableL7Proxy = false
-	option.Config.EnableHealthCheckNodePort = false
 	option.Config.Debug = true
 
 	// Apply the test-specific agent configuration modifier

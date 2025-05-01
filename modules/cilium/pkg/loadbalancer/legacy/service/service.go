@@ -159,7 +159,7 @@ func (svc *svcInfo) isIntLocal() bool {
 	}
 }
 
-func (svc *svcInfo) filterBackends(frontend lb.L3n4AddrID) bool {
+func (svc *svcInfo) filterBackends(lbConfig lb.Config, frontend lb.L3n4AddrID) bool {
 	switch svc.svcType {
 	case lb.SVCTypeLocalRedirect:
 		return true
@@ -183,22 +183,22 @@ func (svc *svcInfo) filterBackends(frontend lb.L3n4AddrID) bool {
 	}
 }
 
-func (svc *svcInfo) useMaglev() bool {
+func (svc *svcInfo) useMaglev(cfg lb.Config) bool {
 	// we need to check if LoadBalancerAlgorithmAnnotation is enabled otherwise load
 	// balancer algorithm will not be populated in lb maps and this information
 	// will be lost when services are restored from maps.
-	if option.Config.LoadBalancerAlgorithmAnnotation {
+	if cfg.AlgorithmAnnotation {
 		if svc.loadBalancerAlgorithm != lb.SVCLoadBalancingAlgorithmMaglev {
 			return false
 		}
-	} else if option.Config.NodePortAlg != option.NodePortAlgMaglev {
+	} else if cfg.LBAlgorithm != lb.LBAlgorithmMaglev {
 		return false
 	}
 	// Provision the Maglev LUT for ClusterIP only if ExternalClusterIP is
 	// enabled because ClusterIP can also be accessed from outside with this
 	// setting. We don't do it unconditionally to avoid increasing memory
 	// footprint.
-	if svc.svcType == lb.SVCTypeClusterIP && !option.Config.ExternalClusterIP {
+	if svc.svcType == lb.SVCTypeClusterIP && !cfg.ExternalClusterIP {
 		return false
 	}
 	// Wildcarded frontend is not exposed for external traffic.
@@ -304,13 +304,15 @@ type Service struct {
 	k8sControlplaneEnabled bool
 
 	config *option.DaemonConfig
+
+	lbConfig lb.Config
 }
 
 // newService creates a new instance of the service handler.
-func newService(logger *slog.Logger, monitorAgent monitorAgent.Agent, lbmap datapathTypes.LBMap, backendDiscoveryHandler datapathTypes.NodeNeighbors, healthCheckers []HealthChecker, k8sControlplaneEnabled bool,
+func newService(logger *slog.Logger, monitorAgent monitorAgent.Agent, lbConfig lb.Config, lbmap datapathTypes.LBMap, backendDiscoveryHandler datapathTypes.NodeNeighbors, healthCheckers []HealthChecker, k8sControlplaneEnabled bool,
 	config *option.DaemonConfig) *Service {
 	var localHealthServer healthServer
-	if option.Config.EnableHealthCheckNodePort {
+	if lbConfig.EnableHealthCheckNodePort {
 		localHealthServer = healthserver.New(logger)
 	}
 
@@ -330,6 +332,7 @@ func newService(logger *slog.Logger, monitorAgent monitorAgent.Agent, lbmap data
 		healthCheckers:           healthCheckers,
 		k8sControlplaneEnabled:   k8sControlplaneEnabled,
 		config:                   config,
+		lbConfig:                 lbConfig,
 		nsIterator:               netns.All,
 	}
 	svc.lastUpdatedTs.Store(time.Now())
@@ -846,7 +849,7 @@ func (s *Service) upsertService(params *lb.LegacySVC) (bool, lb.ID, error) {
 		logfields.ServiceID, svc.frontend.ID,
 	)
 
-	filterBackends := svc.filterBackends(params.Frontend)
+	filterBackends := svc.filterBackends(s.lbConfig, params.Frontend)
 	prevBackendCount := len(svc.backends)
 
 	backendsCopy := []*lb.LegacyBackend{}
@@ -899,7 +902,7 @@ func (s *Service) upsertService(params *lb.LegacySVC) (bool, lb.ID, error) {
 
 	// Only add a HealthCheckNodePort server if this is a service which may
 	// only contain local backends (i.e. it has externalTrafficPolicy=Local)
-	if option.Config.EnableHealthCheckNodePort {
+	if s.lbConfig.EnableHealthCheckNodePort {
 		if svc.isExtLocal() && filterBackends && svc.svcHealthCheckNodePort > 0 {
 			// HealthCheckNodePort is used by external systems to poll the state of the Service,
 			// it should never take into consideration Terminating backends, even when there are only
@@ -1153,7 +1156,7 @@ func (s *Service) UpdateBackendsStateMultiple(svcMapping map[lb.ID]*svcInfo, bac
 						SourceRangesPolicy:        info.svcSourceRangesPolicy,
 						ProxyDelegation:           info.svcProxyDelegation,
 						CheckSourceRange:          info.checkLBSourceRange(),
-						UseMaglev:                 info.useMaglev(),
+						UseMaglev:                 info.useMaglev(s.lbConfig),
 						Name:                      info.svcName,
 						LoopbackHostport:          info.LoopbackHostport,
 						LoadBalancingAlgorithm:    info.loadBalancerAlgorithm,
@@ -1758,7 +1761,7 @@ func (s *Service) upsertServiceIntoLBMaps(svc *svcInfo, isExtLocal, isIntLocal b
 		SourceRangesPolicy:        svc.svcSourceRangesPolicy,
 		ProxyDelegation:           svc.svcProxyDelegation,
 		CheckSourceRange:          checkLBSrcRange,
-		UseMaglev:                 svc.useMaglev(),
+		UseMaglev:                 svc.useMaglev(s.lbConfig),
 		L7LBProxyPort:             svc.l7LBProxyPort,
 		Name:                      svc.svcName,
 		LoopbackHostport:          svc.LoopbackHostport,
@@ -1987,7 +1990,7 @@ func (s *Service) restoreServicesLocked(svcBackendsById map[lb.BackendID]struct{
 		// the changed M param.
 		ipv6 := newSVC.frontend.IsIPv6() || (svc.NatPolicy == lb.SVCNatPolicyNat46)
 		recreated := s.lbmap.IsMaglevLookupTableRecreated(ipv6)
-		if newSVC.useMaglev() && recreated {
+		if newSVC.useMaglev(s.lbConfig) && recreated {
 			backends := make(map[string]*lb.LegacyBackend, len(newSVC.backends))
 			for _, b := range newSVC.backends {
 				// DumpServiceMaps() can return services with some empty (nil) backends.
@@ -2030,7 +2033,7 @@ func (s *Service) deleteServiceLocked(svc *svcInfo) error {
 	)
 
 	if err := s.lbmap.DeleteService(svc.frontend, len(svc.backends),
-		svc.useMaglev(), svc.svcNatPolicy); err != nil {
+		svc.useMaglev(s.lbConfig), svc.svcNatPolicy); err != nil {
 		return err
 	}
 
@@ -2077,7 +2080,7 @@ func (s *Service) deleteServiceLocked(svc *svcInfo) error {
 		}
 	}
 
-	if option.Config.EnableHealthCheckNodePort {
+	if s.lbConfig.EnableHealthCheckNodePort {
 		s.healthServer.DeleteService(lb.ID(svc.frontend.ID))
 	}
 

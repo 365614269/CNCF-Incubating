@@ -34,6 +34,7 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/labels"
+	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/mac"
 	"github.com/cilium/cilium/pkg/maglev"
 	"github.com/cilium/cilium/pkg/maps/configmap"
@@ -464,9 +465,9 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 			}
 		}
 
-		cDefinesMap["NODEPORT_PORT_MIN"] = fmt.Sprintf("%d", option.Config.NodePortMin)
-		cDefinesMap["NODEPORT_PORT_MAX"] = fmt.Sprintf("%d", option.Config.NodePortMax)
-		cDefinesMap["NODEPORT_PORT_MIN_NAT"] = fmt.Sprintf("%d", option.Config.NodePortMax+1)
+		cDefinesMap["NODEPORT_PORT_MIN"] = fmt.Sprintf("%d", cfg.LBConfig.NodePortMin)
+		cDefinesMap["NODEPORT_PORT_MAX"] = fmt.Sprintf("%d", cfg.LBConfig.NodePortMax)
+		cDefinesMap["NODEPORT_PORT_MIN_NAT"] = fmt.Sprintf("%d", cfg.LBConfig.NodePortMax+1)
 		cDefinesMap["NODEPORT_PORT_MAX_NAT"] = strconv.Itoa(NodePortMaxNAT)
 	}
 
@@ -485,19 +486,19 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	)
 	cDefinesMap["LB_SELECTION_RANDOM"] = fmt.Sprintf("%d", selectionRandom)
 	cDefinesMap["LB_SELECTION_MAGLEV"] = fmt.Sprintf("%d", selectionMaglev)
-	if option.Config.LoadBalancerAlgorithmAnnotation {
+	if cfg.LBConfig.AlgorithmAnnotation {
 		cDefinesMap["LB_SELECTION_PER_SERVICE"] = "1"
 	}
-	if option.Config.NodePortAlg == option.NodePortAlgRandom {
+	if cfg.LBConfig.LBAlgorithm == loadbalancer.LBAlgorithmRandom {
 		cDefinesMap["LB_SELECTION"] = fmt.Sprintf("%d", selectionRandom)
-	} else if option.Config.NodePortAlg == option.NodePortAlgMaglev {
+	} else if cfg.LBConfig.LBAlgorithm == loadbalancer.LBAlgorithmMaglev {
 		cDefinesMap["LB_SELECTION"] = fmt.Sprintf("%d", selectionMaglev)
 	}
 
 	// define maglev tables when loadbalancer algorith is maglev or config can
 	// be set by the Service annotation
-	if option.Config.LoadBalancerAlgorithmAnnotation ||
-		option.Config.NodePortAlg == option.NodePortAlgMaglev {
+	if cfg.LBConfig.AlgorithmAnnotation ||
+		cfg.LBConfig.LBAlgorithm == loadbalancer.LBAlgorithmMaglev {
 		cDefinesMap["LB_MAGLEV_LUT_SIZE"] = fmt.Sprintf("%d", h.maglev.Config.MaglevTableSize)
 	}
 	cDefinesMap["HASH_INIT4_SEED"] = fmt.Sprintf("%d", h.maglev.SeedJhash0)

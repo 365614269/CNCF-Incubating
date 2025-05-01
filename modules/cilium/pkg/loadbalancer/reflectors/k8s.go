@@ -83,6 +83,7 @@ type reflectorParams struct {
 	EndpointsResource      stream.Observable[resource.Event[*k8s.Endpoints]]
 	Pods                   statedb.Table[daemonK8s.LocalPod]
 	Writer                 *writer.Writer
+	Config                 loadbalancer.Config
 	ExtConfig              loadbalancer.ExternalConfig
 	HaveNetNSCookieSupport lbmaps.HaveNetNSCookieSupport
 	TestConfig             *loadbalancer.TestConfig `optional:"true"`
@@ -157,7 +158,7 @@ func runPodReflector(ctx context.Context, health cell.Health, p reflectorParams,
 						continue
 					}
 
-					err := upsertHostPort(p.HaveNetNSCookieSupport, p.ExtConfig, p.Log, txn, p.Writer, obj)
+					err := upsertHostPort(p.HaveNetNSCookieSupport, p.Config, p.ExtConfig, p.Log, txn, p.Writer, obj)
 					rh.update(podName, err)
 				}
 			}
@@ -295,7 +296,6 @@ func runServiceEndpointsReflector(ctx context.Context, health cell.Health, p ref
 				if buf == nil {
 					buf = bufferPool.Get().(buffer)
 				}
-				ev.Done(nil)
 				_, isSvc := ev.Object.(*slim_corev1.Service)
 				buf.Insert(bufferKey{key: ev.Key, isSvc: isSvc}, ev)
 				return buf
@@ -727,7 +727,7 @@ func hostPortServiceNamePrefix(pod *slim_corev1.Pod) loadbalancer.ServiceName {
 	}
 }
 
-func upsertHostPort(netnsCookie lbmaps.HaveNetNSCookieSupport, extConfig loadbalancer.ExternalConfig, log *slog.Logger, wtxn writer.WriteTxn, writer *writer.Writer, pod *slim_corev1.Pod) error {
+func upsertHostPort(netnsCookie lbmaps.HaveNetNSCookieSupport, config loadbalancer.Config, extConfig loadbalancer.ExternalConfig, log *slog.Logger, wtxn writer.WriteTxn, writer *writer.Writer, pod *slim_corev1.Pod) error {
 	podIPs := k8sUtils.ValidIPs(pod.Status)
 	containers := slices.Concat(pod.Spec.InitContainers, pod.Spec.Containers)
 	serviceNamePrefix := hostPortServiceNamePrefix(pod)
@@ -739,12 +739,12 @@ func upsertHostPort(netnsCookie lbmaps.HaveNetNSCookieSupport, extConfig loadbal
 				continue
 			}
 
-			if uint16(p.HostPort) >= extConfig.NodePortMin &&
-				uint16(p.HostPort) <= extConfig.NodePortMax {
+			if uint16(p.HostPort) >= config.NodePortMin &&
+				uint16(p.HostPort) <= config.NodePortMax {
 				log.Warn("The requested hostPort is colliding with the configured NodePort range. Ignoring.",
 					logfields.HostPort, p.HostPort,
-					logfields.NodePortMin, extConfig.NodePortMin,
-					logfields.NodePortMax, extConfig.NodePortMax,
+					logfields.NodePortMin, config.NodePortMin,
+					logfields.NodePortMax, config.NodePortMax,
 				)
 				continue
 			}
@@ -905,6 +905,9 @@ func deleteHostPort(params reflectorParams, wtxn writer.WriteTxn, pod *slim_core
 
 func toObjectObservable[T runtime.Object](src stream.Observable[resource.Event[T]]) stream.Observable[resource.Event[runtime.Object]] {
 	return stream.Map(src, func(ev resource.Event[T]) resource.Event[runtime.Object] {
+		// Already mark the event as handled as we don't need retries.
+		ev.Done(nil)
+
 		return resource.Event[runtime.Object]{
 			Kind:   ev.Kind,
 			Key:    ev.Key,
@@ -917,21 +920,24 @@ func toObjectObservable[T runtime.Object](src stream.Observable[resource.Event[T
 func joinObservables[T any](src stream.Observable[T], srcs ...stream.Observable[T]) stream.Observable[T] {
 	return stream.FuncObservable[T](
 		func(ctx context.Context, next func(T), complete func(error)) {
-			var mu lock.Mutex // Use a mutex to serialize the 'next' callbacks
-			completed := false
+			// Use a mutex to serialize the 'next' callbacks
+			var mu lock.Mutex
+
+			remainingCompletions := len(srcs)
 			emit := func(x T) {
 				mu.Lock()
 				defer mu.Unlock()
-				if !completed {
+				if remainingCompletions > 0 {
 					next(x)
 				}
 			}
+
 			comp := func(err error) {
 				mu.Lock()
 				defer mu.Unlock()
-				if !completed {
+				remainingCompletions--
+				if remainingCompletions == 0 {
 					complete(err)
-					completed = true
 				}
 			}
 			src.Observe(ctx, emit, comp)

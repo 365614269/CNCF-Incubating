@@ -145,16 +145,14 @@ func TestLocalRedirectServiceExistsError(t *testing.T) {
 }
 
 type ManagerTestSuite struct {
-	svc                         *Service
-	lbmap                       *mockmaps.LBMockMap // for accessing public fields
-	svcHealth                   *healthserver.MockHealthHTTPServerFactory
-	prevOptionSessionAffinity   bool
-	prevOptionLBSourceRanges    bool
-	prevOptionNPAlgo            string
-	prevOptionDPMode            string
-	prevOptionExternalClusterIP bool
-	ipv6                        bool
-	logger                      *slog.Logger
+	svc                       *Service
+	lbmap                     *mockmaps.LBMockMap // for accessing public fields
+	svcHealth                 *healthserver.MockHealthHTTPServerFactory
+	prevOptionSessionAffinity bool
+	prevOptionLBSourceRanges  bool
+	prevOptionDPMode          string
+	ipv6                      bool
+	logger                    *slog.Logger
 }
 
 var (
@@ -178,7 +176,7 @@ func setupManagerTestSuite(tb testing.TB) *ManagerTestSuite {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	m.lbmap = mockmaps.NewLBMockMap()
-	m.newServiceMock(ctx, m.lbmap)
+	m.newServiceMock(ctx, lb.DefaultConfig, m.lbmap)
 
 	m.svcHealth = healthserver.NewMockHealthHTTPServerFactory(logger)
 	m.svc.healthServer = healthserver.WithHealthHTTPServerFactory(logger, m.svcHealth)
@@ -189,9 +187,7 @@ func setupManagerTestSuite(tb testing.TB) *ManagerTestSuite {
 	m.prevOptionLBSourceRanges = option.Config.EnableSVCSourceRangeCheck
 	option.Config.EnableSVCSourceRangeCheck = true
 
-	m.prevOptionNPAlgo = option.Config.NodePortAlg
 	m.prevOptionDPMode = option.Config.DatapathMode
-	m.prevOptionExternalClusterIP = option.Config.ExternalClusterIP
 
 	option.Config.EnableInternalTrafficPolicy = true
 
@@ -224,9 +220,7 @@ func setupManagerTestSuite(tb testing.TB) *ManagerTestSuite {
 		backendIDAlloc.resetLocalID()
 		option.Config.EnableSessionAffinity = m.prevOptionSessionAffinity
 		option.Config.EnableSVCSourceRangeCheck = m.prevOptionLBSourceRanges
-		option.Config.NodePortAlg = m.prevOptionNPAlgo
 		option.Config.DatapathMode = m.prevOptionDPMode
-		option.Config.ExternalClusterIP = m.prevOptionExternalClusterIP
 		option.Config.EnableIPv6 = m.ipv6
 		cancel()
 	})
@@ -234,8 +228,8 @@ func setupManagerTestSuite(tb testing.TB) *ManagerTestSuite {
 	return m
 }
 
-func (m *ManagerTestSuite) newServiceMock(ctx context.Context, lbmap datapathTypes.LBMap) {
-	m.svc = newService(m.logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
+func (m *ManagerTestSuite) newServiceMock(ctx context.Context, lbcfg lb.Config, lbmap datapathTypes.LBMap) {
+	m.svc = newService(m.logger, &FakeMonitorAgent{}, lbcfg, lbmap, nil, nil, true, option.Config)
 	m.svc.backendConnectionHandler = testsockets.NewMockSockets(make([]*testsockets.MockSocket, 0))
 	health, _ := cell.NewSimpleHealth()
 	go m.svc.handleHealthCheckEvent(ctx, health)
@@ -581,12 +575,12 @@ func TestRestoreServices(t *testing.T) {
 	require.NoError(t, err)
 
 	// Restart service, but keep the lbmap to restore services from
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	lbmap := m.svc.lbmap.(*mockmaps.LBMockMap)
 
 	ctx := t.Context()
 
-	m.newServiceMock(ctx, lbmap)
+	m.newServiceMock(ctx, m.svc.lbConfig, lbmap)
 
 	// Restore services from lbmap
 	err = m.svc.RestoreServices()
@@ -666,7 +660,7 @@ func TestSyncWithK8sFinished(t *testing.T) {
 
 	ctx := t.Context()
 
-	m.newServiceMock(ctx, lbmap)
+	m.newServiceMock(ctx, lb.DefaultConfig, lbmap)
 
 	err = m.svc.RestoreServices()
 	require.NoError(t, err)
@@ -774,7 +768,7 @@ func TestRestoreServiceWithStaleBackends(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			lbmap := mockmaps.NewLBMockMap()
 			logger := hivetest.Logger(t)
-			svc := newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
+			svc := newService(logger, &FakeMonitorAgent{}, lb.DefaultConfig, lbmap, nil, nil, true, option.Config)
 
 			_, id1, err := svc.upsertService(service("foo", "bar", "172.16.0.1", backendAddrs...))
 			require.NoError(t, err, "Failed to upsert service")
@@ -784,7 +778,7 @@ func TestRestoreServiceWithStaleBackends(t *testing.T) {
 			require.ElementsMatch(t, backendAddrs, toBackendAddrs(slices.Collect(maps.Values(lbmap.BackendByID))), "lbmap not populated correctly")
 
 			// Recreate the Service structure, but keep the lbmap to restore services from
-			svc = newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
+			svc = newService(logger, &FakeMonitorAgent{}, lb.DefaultConfig, lbmap, nil, nil, true, option.Config)
 			require.NoError(t, svc.RestoreServices(), "Failed to restore services")
 
 			// Simulate a set of service updates. Until synchronization completes, a given service
@@ -1065,12 +1059,10 @@ func TestHealthCheckNodePortDisabled(t *testing.T) {
 
 	// NewService sets healthServer to nil if EnableHealthCheckNodePort is
 	// false at start time. We emulate this here by temporarily setting it nil.
-	enableHealthCheckNodePort := option.Config.EnableHealthCheckNodePort
 	healthServer := m.svc.healthServer
-	option.Config.EnableHealthCheckNodePort = false
+	m.svc.lbConfig.EnableHealthCheckNodePort = false
 	m.svc.healthServer = nil
 	defer func() {
-		option.Config.EnableHealthCheckNodePort = enableHealthCheckNodePort
 		m.svc.healthServer = healthServer
 	}()
 
@@ -1277,7 +1269,7 @@ func TestLocalRedirectServiceOverride(t *testing.T) {
 func TestUpsertServiceWithTerminatingBackends(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	backends := append(backends4, backends1...)
 	p := &lb.LegacySVC{
 		Frontend:                  frontend1,
@@ -1340,7 +1332,7 @@ func TestUpsertServiceWithTerminatingBackends(t *testing.T) {
 func TestUpsertServiceWithOnlyTerminatingBackends(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	backends := backends1 // There are 2 backends
 	p := &lb.LegacySVC{
 		Frontend:                  frontend1,
@@ -1420,8 +1412,8 @@ func TestUpsertServiceWithOnlyTerminatingBackends(t *testing.T) {
 func TestUpsertServiceWithExternalClusterIP(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
-	option.Config.ExternalClusterIP = true
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
+	m.svc.lbConfig.ExternalClusterIP = true
 	backends := make([]*lb.LegacyBackend, 0, len(backends1))
 	for _, b := range backends1 {
 		backends = append(backends, b.DeepCopy())
@@ -1456,7 +1448,7 @@ func TestUpsertServiceWithExternalClusterIP(t *testing.T) {
 func TestUpsertServiceWithOutExternalClusterIP(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	p := &lb.LegacySVC{
 		Frontend:              frontend1,
 		Backends:              backends1,
@@ -1484,7 +1476,7 @@ func TestUpsertServiceWithOutExternalClusterIP(t *testing.T) {
 func TestRestoreServiceWithTerminatingBackends(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	backends := append(backends4, backends1...)
 	p := &lb.LegacySVC{
 		Frontend:                  frontend1,
@@ -1519,7 +1511,7 @@ func TestRestoreServiceWithTerminatingBackends(t *testing.T) {
 
 	ctx := t.Context()
 
-	m.newServiceMock(ctx, lbmap)
+	m.newServiceMock(ctx, lb.DefaultConfig, lbmap)
 
 	// Restore services from lbmap
 	err = m.svc.RestoreServices()
@@ -1945,7 +1937,7 @@ func TestUpdateBackendsState(t *testing.T) {
 func TestRestoreServiceWithBackendStates(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	bs := append(backends1, backends4...)
 	backends := make([]*lb.LegacyBackend, 0, len(bs))
 	for _, b := range bs {
@@ -1988,7 +1980,7 @@ func TestRestoreServiceWithBackendStates(t *testing.T) {
 
 	ctx := t.Context()
 
-	m.newServiceMock(ctx, lbmap)
+	m.newServiceMock(ctx, m.svc.lbConfig, lbmap)
 
 	// Restore services from lbmap
 	err = m.svc.RestoreServices()
@@ -2012,7 +2004,7 @@ func TestRestoreServiceWithBackendStates(t *testing.T) {
 func TestUpsertServiceWithZeroWeightBackends(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	backends := append(backends1, backends4...)
 	backends[1].Weight = 0
 	backends[1].State = lb.BackendStateMaintenance
@@ -2076,7 +2068,7 @@ func TestUpsertServiceWithZeroWeightBackends(t *testing.T) {
 func TestUpdateBackendsStateWithBackendSharedAcrossServices(t *testing.T) {
 	m := setupManagerTestSuite(t)
 
-	option.Config.NodePortAlg = option.NodePortAlgMaglev
+	m.svc.lbConfig.LBAlgorithm = lb.LBAlgorithmMaglev
 	be := append(backends1, backends4...)
 	backends := make([]*lb.LegacyBackend, 0, len(be))
 	for _, b := range be {
@@ -2370,7 +2362,7 @@ func TestRestoreServicesWithLeakedBackends(t *testing.T) {
 	require.Len(t, m.lbmap.BackendByID, len(backends)+4)
 	lbmap := m.svc.lbmap.(*mockmaps.LBMockMap)
 	logger := hivetest.Logger(t)
-	m.svc = newService(logger, &FakeMonitorAgent{}, lbmap, nil, nil, true, option.Config)
+	m.svc = newService(logger, &FakeMonitorAgent{}, lb.DefaultConfig, lbmap, nil, nil, true, option.Config)
 
 	// Restore services from lbmap
 	err := m.svc.RestoreServices()

@@ -17,8 +17,8 @@ import (
 
 // Load-balancing control-plane meta cell.
 var Cell = cell.Group(
-	cell.Config(loadbalancer.DefaultConfig),
-	cell.Provide(loadbalancer.NewExternalConfig),
+	// Provides [loadbalancer.Config] and [loadbalancer.ExternalConfig].
+	loadbalancer.ConfigCell,
 
 	// Load-balancing tables and the [writer.Writer] API
 	writer.Cell,

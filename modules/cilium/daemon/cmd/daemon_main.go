@@ -255,9 +255,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableHealthChecking, defaults.EnableHealthChecking, "Enable connectivity health checking")
 	option.BindEnv(vp, option.EnableHealthChecking)
 
-	flags.Bool(option.EnableHealthCheckNodePort, defaults.EnableHealthCheckNodePort, "Enables a healthcheck nodePort server for NodePort services with 'healthCheckNodePort' being set")
-	option.BindEnv(vp, option.EnableHealthCheckNodePort)
-
 	flags.Bool(option.EnableHealthCheckLoadBalancerIP, defaults.EnableHealthCheckLoadBalancerIP, "Enable access of the healthcheck nodePort on the LoadBalancerIP. Needs --enable-health-check-nodeport to be enabled")
 	option.BindEnv(vp, option.EnableHealthCheckLoadBalancerIP)
 
@@ -522,9 +519,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 		option.KubeProxyReplacementFalse, option.KubeProxyReplacementTrue))
 	option.BindEnv(vp, option.KubeProxyReplacement)
 
-	flags.String(option.KubeProxyReplacementHealthzBindAddr, defaults.KubeProxyReplacementHealthzBindAddr, "The IP address with port for kube-proxy replacement health check server to serve on (set to '0.0.0.0:10256' for all IPv4 interfaces and '[::]:10256' for all IPv6 interfaces). Set empty to disable.")
-	option.BindEnv(vp, option.KubeProxyReplacementHealthzBindAddr)
-
 	flags.Bool(option.EnableHostPort, false, fmt.Sprintf("Enable k8s hostPort mapping feature (requires enabling %s)", option.EnableNodePort))
 	option.BindEnv(vp, option.EnableHostPort)
 
@@ -556,10 +550,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.NodePortMode)
 	option.BindEnv(vp, option.NodePortMode)
 
-	flags.String(option.NodePortAlg, option.NodePortAlgRandom, "BPF load balancing algorithm (\"random\", \"maglev\")")
-	flags.MarkHidden(option.NodePortAlg)
-	option.BindEnv(vp, option.NodePortAlg)
-
 	flags.String(option.NodePortAcceleration, option.NodePortAccelerationDisabled, fmt.Sprintf(
 		"BPF NodePort acceleration via XDP (\"%s\", \"%s\")",
 		option.NodePortAccelerationNative, option.NodePortAccelerationDisabled))
@@ -571,12 +561,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.String(option.LoadBalancerMode, option.NodePortModeSNAT, "BPF load balancing mode (\"snat\", \"dsr\", \"hybrid\")")
 	option.BindEnv(vp, option.LoadBalancerMode)
-
-	flags.Bool(option.LoadBalancerAlgorithmAnnotation, false, "Enable service-level annotation for configuring BPF load balancing algorithm")
-	option.BindEnv(vp, option.LoadBalancerAlgorithmAnnotation)
-
-	flags.String(option.LoadBalancerAlgorithm, option.NodePortAlgRandom, "BPF load balancing algorithm (\"random\", \"maglev\")")
-	option.BindEnv(vp, option.LoadBalancerAlgorithm)
 
 	flags.String(option.LoadBalancerDSRDispatch, option.DSRDispatchOption, "BPF load balancing DSR dispatch method (\"opt\", \"ipip\", \"geneve\")")
 	option.BindEnv(vp, option.LoadBalancerDSRDispatch)
@@ -607,9 +591,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 		"Append NodePort range to net.ipv4.ip_local_reserved_ports if it overlaps "+
 			"with ephemeral port range (net.ipv4.ip_local_port_range)")
 	option.BindEnv(vp, option.EnableAutoProtectNodePortRange)
-
-	flags.StringSlice(option.NodePortRange, []string{fmt.Sprintf("%d", option.NodePortMinDefault), fmt.Sprintf("%d", option.NodePortMaxDefault)}, "Set the min/max NodePort port range")
-	option.BindEnv(vp, option.NodePortRange)
 
 	flags.Bool(option.NodePortBindProtection, true, "Reject application bind(2) requests to service ports in the NodePort range")
 	option.BindEnv(vp, option.NodePortBindProtection)
@@ -780,9 +761,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	option.BindEnv(vp, option.PolicyMapFullReconciliationIntervalName)
 	flags.MarkHidden(option.PolicyMapFullReconciliationIntervalName)
 
-	flags.Int(option.SockRevNatEntriesName, option.SockRevNATMapEntriesDefault, "Maximum number of entries for the SockRevNAT BPF map")
-	option.BindEnv(vp, option.SockRevNatEntriesName)
-
 	flags.Float64(option.MapEntriesGlobalDynamicSizeRatioName, 0.0025, "Ratio (0.0-1.0] of total system memory to use for dynamic sizing of CT, NAT and policy BPF maps")
 	option.BindEnv(vp, option.MapEntriesGlobalDynamicSizeRatioName)
 
@@ -874,9 +852,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Int(option.FragmentsMapEntriesName, defaults.FragmentsMapEntries, "Maximum number of entries in fragments tracking map")
 	option.BindEnv(vp, option.FragmentsMapEntriesName)
 
-	flags.Int(option.LBMapEntriesName, lbmap.DefaultMaxEntries, "Maximum number of entries in Cilium BPF lbmap")
-	option.BindEnv(vp, option.LBMapEntriesName)
-
 	flags.Int(option.BPFEventsDefaultRateLimit, 0, fmt.Sprintf("Limit of average number of messages per second that can be written to BPF events map (if set, --%s value must also be specified). If both --%s and --%s are 0 or not specified, no limit is imposed.", option.BPFEventsDefaultBurstLimit, option.BPFEventsDefaultRateLimit, option.BPFEventsDefaultBurstLimit))
 	flags.MarkHidden(option.BPFEventsDefaultRateLimit)
 	option.BindEnv(vp, option.BPFEventsDefaultRateLimit)
@@ -884,30 +859,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Int(option.BPFEventsDefaultBurstLimit, 0, fmt.Sprintf("Maximum number of messages that can be written to BPF events map in 1 second (if set, --%s value must also be specified). If both --%s and --%s are 0 or not specified, no limit is imposed.", option.BPFEventsDefaultRateLimit, option.BPFEventsDefaultBurstLimit, option.BPFEventsDefaultRateLimit))
 	flags.MarkHidden(option.BPFEventsDefaultBurstLimit)
 	option.BindEnv(vp, option.BPFEventsDefaultBurstLimit)
-
-	flags.Int(option.LBServiceMapMaxEntries, 0, fmt.Sprintf("Maximum number of entries in Cilium BPF lbmap for services (if this isn't set, the value of --%s will be used.)", option.LBMapEntriesName))
-	flags.MarkHidden(option.LBServiceMapMaxEntries)
-	option.BindEnv(vp, option.LBServiceMapMaxEntries)
-
-	flags.Int(option.LBBackendMapMaxEntries, 0, fmt.Sprintf("Maximum number of entries in Cilium BPF lbmap for service backends (if this isn't set, the value of --%s will be used.)", option.LBMapEntriesName))
-	flags.MarkHidden(option.LBBackendMapMaxEntries)
-	option.BindEnv(vp, option.LBBackendMapMaxEntries)
-
-	flags.Int(option.LBRevNatMapMaxEntries, 0, fmt.Sprintf("Maximum number of entries in Cilium BPF lbmap for reverse NAT (if this isn't set, the value of --%s will be used.)", option.LBMapEntriesName))
-	flags.MarkHidden(option.LBRevNatMapMaxEntries)
-	option.BindEnv(vp, option.LBRevNatMapMaxEntries)
-
-	flags.Int(option.LBAffinityMapMaxEntries, 0, fmt.Sprintf("Maximum number of entries in Cilium BPF lbmap for session affinities (if this isn't set, the value of --%s will be used.)", option.LBMapEntriesName))
-	flags.MarkHidden(option.LBAffinityMapMaxEntries)
-	option.BindEnv(vp, option.LBAffinityMapMaxEntries)
-
-	flags.Int(option.LBSourceRangeMapMaxEntries, 0, fmt.Sprintf("Maximum number of entries in Cilium BPF lbmap for source ranges (if this isn't set, the value of --%s will be used.)", option.LBMapEntriesName))
-	flags.MarkHidden(option.LBSourceRangeMapMaxEntries)
-	option.BindEnv(vp, option.LBSourceRangeMapMaxEntries)
-
-	flags.Int(option.LBMaglevMapMaxEntries, 0, fmt.Sprintf("Maximum number of entries in Cilium BPF lbmap for maglev (if this isn't set, the value of --%s will be used.)", option.LBMapEntriesName))
-	flags.MarkHidden(option.LBMaglevMapMaxEntries)
-	option.BindEnv(vp, option.LBMaglevMapMaxEntries)
 
 	flags.String(option.LocalRouterIPv4, "", "Link-local IPv4 used for Cilium's router devices")
 	option.BindEnv(vp, option.LocalRouterIPv4)
@@ -937,9 +888,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableCustomCallsName, false, "Enable tail call hooks for custom eBPF programs")
 	option.BindEnv(vp, option.EnableCustomCallsName)
 	flags.MarkDeprecated(option.EnableCustomCallsName, "The feature has been deprecated and it will be removed in v1.19")
-
-	flags.Bool(option.ExternalClusterIPName, false, "Enable external access to ClusterIP services (default false)")
-	option.BindEnv(vp, option.ExternalClusterIPName)
 
 	// flags.IntSlice cannot be used due to missing support for appropriate conversion in Viper.
 	// See https://github.com/cilium/cilium/pull/20282 for more information.
@@ -1033,9 +981,6 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.WireguardTrackAllIPsFallback, defaults.WireguardTrackAllIPsFallback, "Force WireGuard to track all IPs")
 	flags.MarkHidden(option.WireguardTrackAllIPsFallback)
 	option.BindEnv(vp, option.WireguardTrackAllIPsFallback)
-
-	flags.Bool(option.LBSourceRangeAllTypes, false, "Propagate loadbalancerSourceRanges to all corresponding service types")
-	option.BindEnv(vp, option.LBSourceRangeAllTypes)
 
 	flags.Bool(option.EnableEndpointLockdownOnPolicyOverflow, false, "When an endpoint's policy map overflows, shutdown all (ingress and egress) network traffic for that endpoint.")
 	option.BindEnv(vp, option.EnableEndpointLockdownOnPolicyOverflow)
@@ -1763,7 +1708,7 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 
 		ms := maps.NewMapSweeper(params.Logger, &EndpointMapManager{
 			EndpointManager: d.endpointManager,
-		}, d.bwManager)
+		}, d.bwManager, d.lbConfig)
 		ms.CollectStaleMapGarbage()
 		ms.RemoveDisabledMaps()
 
@@ -1806,17 +1751,8 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 	}
 	bootstrapStats.healthCheck.End(true)
 
-	d.startAgentHealthHTTPService()
-	if option.Config.KubeProxyReplacementHealthzBindAddr != "" {
-		if option.Config.KubeProxyReplacement != option.KubeProxyReplacementFalse {
-			d.startKubeProxyHealthzHTTPService(option.Config.KubeProxyReplacementHealthzBindAddr)
-		}
-	}
-
-	if !option.Config.DryMode {
-		if err := d.monitorAgent.SendEvent(monitorAPI.MessageTypeAgent, monitorAPI.StartMessage(time.Now())); err != nil {
-			log.WithError(err).Warn("Failed to send agent start monitor message")
-		}
+	if err := d.monitorAgent.SendEvent(monitorAPI.MessageTypeAgent, monitorAPI.StartMessage(time.Now())); err != nil {
+		log.WithError(err).Warn("Failed to send agent start monitor message")
 	}
 
 	// Watches for node neighbors link updates.
