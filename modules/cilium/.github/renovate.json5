@@ -474,6 +474,18 @@
         "main"
       ],
     },
+    // group updating renovate versions together (config validator/self hosted renovate)
+    {
+      "groupName": "renovate dependencies",
+      "groupSlug": "renovate-dependencies",
+      "matchDepNames": [
+        "renovatebot/renovate",
+        "ghcr.io/renovatebot/renovate",
+      ],
+      "matchBaseBranches": [
+        "main"
+      ],
+    },
     {
       // Separate major minor and patch so that renovate can update the patch
       // versions of the images.
@@ -761,7 +773,7 @@
         "^.github/workflows/renovate-config-validator\\.yaml$"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>.*?)\\s+RENOVATE_IMAGE=\"(?<depName>.*):(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)\""
+        "# renovate: datasource=(?<datasource>.*?)\\s+export RENOVATE_IMAGE=\"?(?<depName>.*):(?<currentValue>.*)@(?<currentDigest>sha256:[a-f0-9]+)\"?"
       ]
     },
     {
