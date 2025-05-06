@@ -32,7 +32,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	nodemapfake "github.com/cilium/cilium/pkg/maps/nodemap/fake"
-	"github.com/cilium/cilium/pkg/maps/tunnel"
 	"github.com/cilium/cilium/pkg/mtu"
 	"github.com/cilium/cilium/pkg/node"
 	nodeaddressing "github.com/cilium/cilium/pkg/node/addressing"
@@ -147,10 +146,6 @@ func setupLinuxPrivilegedBaseTestSuite(tb testing.TB, addressing datapath.NodeAd
 		RoutePostEncryptMTU: s.mtuCalc.RoutePostEncryptMTU,
 	}
 
-	tunnel.SetTunnelMap(tunnel.NewTunnelMap("test_cilium_tunnel_map"))
-	err = tunnel.TunnelMap().OpenOrCreate()
-	require.NoError(tb, err)
-
 	return s
 }
 
@@ -204,8 +199,6 @@ func tearDownTest(tb testing.TB) {
 	node.UnsetTestLocalNodeStore()
 	removeDevice(dummyHostDeviceName)
 	removeDevice(dummyExternalDeviceName)
-	err := tunnel.TunnelMap().Unpin()
-	require.NoError(tb, err)
 }
 
 func setupDummyDevice(name string, ips ...net.IP) (*tables.Device, error) {
@@ -293,10 +286,6 @@ func TestAll(t *testing.T) {
 			t.Run("TestNodeUpdateDirectRouting", func(t *testing.T) {
 				s := setup(t, tt)
 				s.TestNodeUpdateDirectRouting(t)
-			})
-			t.Run("TestAgentRestartOptionChanges", func(t *testing.T) {
-				s := setup(t, tt)
-				s.TestAgentRestartOptionChanges(t)
 			})
 			t.Run("TestNodeValidationDirectRouting", func(t *testing.T) {
 				s := setup(t, tt)
@@ -1086,106 +1075,6 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeUpdateDirectRouting(t *testing.T)
 	}
 }
 
-func (s *linuxPrivilegedBaseTestSuite) TestAgentRestartOptionChanges(t *testing.T) {
-	ip4Alloc1 := cidr.MustParseCIDR("5.5.5.0/24")
-	ip6Alloc1 := cidr.MustParseCIDR("2001:aaaa::/96")
-	underlayIP := net.ParseIP("4.4.4.4")
-
-	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
-	log := hivetest.Logger(t)
-	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
-
-	require.NotNil(t, linuxNodeHandler)
-	nodeConfig := s.nodeConfigTemplate
-	nodeConfig.EnableEncapsulation = true
-
-	err := linuxNodeHandler.NodeConfigurationChanged(nodeConfig)
-	require.NoError(t, err)
-
-	nodev1 := nodeTypes.Node{
-		Name: "node1",
-		IPAddresses: []nodeTypes.Address{
-			{IP: underlayIP, Type: nodeaddressing.NodeInternalIP},
-		},
-	}
-
-	if s.enableIPv6 {
-		nodev1.IPv6AllocCIDR = ip6Alloc1
-	}
-
-	if s.enableIPv4 {
-		nodev1.IPv4AllocCIDR = ip4Alloc1
-	}
-
-	err = linuxNodeHandler.NodeAdd(nodev1)
-	require.NoError(t, err)
-
-	if s.enableIPv4 {
-		// node routes for ip4Alloc1 range should have been installed
-		foundRoutes, err := linuxNodeHandler.lookupNodeRoute(ip4Alloc1, false)
-		require.NoError(t, err)
-		require.Len(t, foundRoutes, 1)
-	}
-
-	if s.enableIPv6 {
-		// node routes for ip6Alloc1 range should have been installed
-		foundRoutes, err := linuxNodeHandler.lookupNodeRoute(ip6Alloc1, false)
-		require.NoError(t, err)
-		require.Len(t, foundRoutes, 1)
-	}
-
-	// Simulate agent restart with address families disables
-	nodeConfig.EnableIPv4 = false
-	nodeConfig.EnableIPv6 = false
-	err = linuxNodeHandler.NodeConfigurationChanged(nodeConfig)
-	require.NoError(t, err)
-
-	// Simulate initial node addition
-	err = linuxNodeHandler.NodeAdd(nodev1)
-	require.NoError(t, err)
-
-	if s.enableIPv4 {
-		// node routes for ip4Alloc1 range should be gone
-		foundRoutes, err := linuxNodeHandler.lookupNodeRoute(ip4Alloc1, false)
-		require.NoError(t, err)
-		require.Nil(t, foundRoutes)
-	}
-
-	if s.enableIPv6 {
-		// node routes for ip6Alloc1 range should be gone
-		foundRoutes, err := linuxNodeHandler.lookupNodeRoute(ip6Alloc1, false)
-		require.NoError(t, err)
-		require.Nil(t, foundRoutes)
-	}
-
-	// Simulate agent restart with address families enabled again
-	nodeConfig.EnableIPv4 = true
-	nodeConfig.EnableIPv6 = true
-	err = linuxNodeHandler.NodeConfigurationChanged(nodeConfig)
-	require.NoError(t, err)
-
-	// Simulate initial node addition
-	err = linuxNodeHandler.NodeAdd(nodev1)
-	require.NoError(t, err)
-
-	if s.enableIPv4 {
-		// node routes for ip4Alloc1 range should have been installed
-		foundRoutes, err := linuxNodeHandler.lookupNodeRoute(ip4Alloc1, false)
-		require.NoError(t, err)
-		require.Len(t, foundRoutes, 1)
-	}
-
-	if s.enableIPv6 {
-		// node routes for ip6Alloc1 range should have been installed
-		foundRoutes, err := linuxNodeHandler.lookupNodeRoute(ip6Alloc1, false)
-		require.NoError(t, err)
-		require.Len(t, foundRoutes, 1)
-	}
-
-	err = linuxNodeHandler.NodeDelete(nodev1)
-	require.NoError(t, err)
-}
-
 func insertFakeRoute(t *testing.T, n *linuxNodeHandler, prefix *cidr.CIDR) {
 	nodeRoute, err := n.createNodeRouteSpec(prefix, false)
 	require.NoError(t, err)
@@ -1213,6 +1102,11 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeValidationDirectRouting(t *testin
 	dpConfig := DatapathConfiguration{HostDevice: dummyHostDeviceName}
 	log := hivetest.Logger(t)
 	linuxNodeHandler := newNodeHandler(log, dpConfig, nodemapfake.NewFakeNodeMapV2(), new(mockEnqueuer))
+	require.NotNil(t, linuxNodeHandler)
+
+	nodeConfig := s.nodeConfigTemplate
+	nodeConfig.EnableEncapsulation = false
+	linuxNodeHandler.nodeConfig = nodeConfig
 
 	if s.enableIPv4 {
 		insertFakeRoute(t, linuxNodeHandler, ip4Alloc1)
@@ -1222,8 +1116,6 @@ func (s *linuxPrivilegedBaseTestSuite) TestNodeValidationDirectRouting(t *testin
 		insertFakeRoute(t, linuxNodeHandler, ip6Alloc1)
 	}
 
-	nodeConfig := s.nodeConfigTemplate
-	nodeConfig.EnableEncapsulation = false
 	err := linuxNodeHandler.NodeConfigurationChanged(nodeConfig)
 	require.NoError(t, err)
 

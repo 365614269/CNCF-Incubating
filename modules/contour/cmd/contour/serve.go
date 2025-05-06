@@ -192,12 +192,6 @@ type Server struct {
 	handlerCacheSyncs []cache.InformerSynced
 }
 
-type EndpointsTranslator interface {
-	cache.ResourceEventHandler
-	xdscache.ResourceCache
-	SetObserver(observer contour.Observer)
-}
-
 // NewServer returns a Server object which contains the initial configuration
 // objects required to start an instance of Contour.
 func NewServer(log logrus.FieldLogger, ctx *serveContext) (*Server, error) {
@@ -488,13 +482,8 @@ func (s *Server) doServe() error {
 
 	contourMetrics := metrics.NewMetrics(s.registry)
 
-	// Endpoints updates are handled directly by the EndpointsTranslator/EndpointSliceTranslator due to the high update volume.
-	var endpointHandler EndpointsTranslator
-	if contourConfiguration.FeatureFlags.IsEndpointSliceEnabled() {
-		endpointHandler = xdscache_v3.NewEndpointSliceTranslator(s.log.WithField("context", "endpointslicetranslator"))
-	} else {
-		endpointHandler = xdscache_v3.NewEndpointsTranslator(s.log.WithField("context", "endpointstranslator"))
-	}
+	// Endpoints updates are handled directly by the EndpointSliceTranslator due to the high update volume.
+	endpointHandler := xdscache_v3.NewEndpointSliceTranslator(s.log.WithField("context", "endpointslicetranslator"))
 
 	envoyGen := envoy_v3.NewEnvoyGen(envoy_v3.EnvoyGenOpt{
 		XDSClusterName: envoy_v3.DefaultXDSClusterName,
@@ -655,21 +644,12 @@ func (s *Server) doServe() error {
 		s.log.WithError(err).WithField("resource", "secrets").Fatal("failed to create informer")
 	}
 
-	// Inform on endpoints/endpointSlices.
-	if contourConfiguration.FeatureFlags.IsEndpointSliceEnabled() {
-		if err := s.informOnResource(&discovery_v1.EndpointSlice{}, &contour.EventRecorder{
-			Next:    endpointHandler,
-			Counter: contourMetrics.EventHandlerOperations,
-		}); err != nil {
-			s.log.WithError(err).WithField("resource", "endpointslices").Fatal("failed to create informer")
-		}
-	} else {
-		if err := s.informOnResource(&core_v1.Endpoints{}, &contour.EventRecorder{
-			Next:    endpointHandler,
-			Counter: contourMetrics.EventHandlerOperations,
-		}); err != nil {
-			s.log.WithError(err).WithField("resource", "endpoints").Fatal("failed to create informer")
-		}
+	// Inform on endpointSlices.
+	if err := s.informOnResource(&discovery_v1.EndpointSlice{}, &contour.EventRecorder{
+		Next:    endpointHandler,
+		Counter: contourMetrics.EventHandlerOperations,
+	}); err != nil {
+		s.log.WithError(err).WithField("resource", "endpointslices").Fatal("failed to create informer")
 	}
 
 	// Register our event handler with the manager.
@@ -700,34 +680,12 @@ func (s *Server) doServe() error {
 		ingressClassNames: ingressClassNames,
 		gatewayRef:        gatewayRef,
 		statusUpdater:     sh.Writer(),
+		statusAddress:     contourConfiguration.Ingress.StatusAddress,
+		serviceName:       contourConfiguration.Envoy.Service.Name,
+		serviceNamespace:  contourConfiguration.Envoy.Service.Namespace,
 	}
 	if err := s.mgr.Add(lbsw); err != nil {
 		return err
-	}
-
-	// Register an informer to watch envoy's service if we haven't been given static details.
-	if lbAddress := contourConfiguration.Ingress.StatusAddress; len(lbAddress) > 0 {
-		s.log.WithField("loadbalancer-address", lbAddress).Info("Using supplied information for Ingress status")
-		lbsw.lbStatus <- parseStatusFlag(lbAddress)
-	} else {
-		serviceHandler := &k8s.ServiceStatusLoadBalancerWatcher{
-			ServiceName: contourConfiguration.Envoy.Service.Name,
-			LBStatus:    lbsw.lbStatus,
-			Log:         s.log.WithField("context", "serviceStatusLoadBalancerWatcher"),
-		}
-
-		var handler cache.ResourceEventHandler = serviceHandler
-		if contourConfiguration.Envoy.Service.Namespace != "" {
-			handler = k8s.NewNamespaceFilter([]string{contourConfiguration.Envoy.Service.Namespace}, handler)
-		}
-
-		if err := s.informOnResource(&core_v1.Service{}, handler); err != nil {
-			s.log.WithError(err).WithField("resource", "services").Fatal("failed to create informer")
-		}
-
-		s.log.WithField("envoy-service-name", contourConfiguration.Envoy.Service.Name).
-			WithField("envoy-service-namespace", contourConfiguration.Envoy.Service.Namespace).
-			Info("Watching Service for Ingress status")
 	}
 
 	xdsServer := &xdsServer{
