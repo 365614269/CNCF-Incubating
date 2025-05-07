@@ -27,7 +27,6 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"github.com/cilium/cilium/daemon/cmd/cni"
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/aws/eni"
 	"github.com/cilium/cilium/pkg/bpf"
@@ -51,6 +50,7 @@ import (
 	"github.com/cilium/cilium/pkg/dial"
 	"github.com/cilium/cilium/pkg/endpoint"
 	endpointcreator "github.com/cilium/cilium/pkg/endpoint/creator"
+	endpointmetadata "github.com/cilium/cilium/pkg/endpoint/metadata"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/envoy"
@@ -95,7 +95,6 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	policyDirectory "github.com/cilium/cilium/pkg/policy/directory"
 	"github.com/cilium/cilium/pkg/promise"
-	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/status"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/version"
@@ -684,6 +683,7 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	option.BindEnv(vp, option.IPv4NodeAddr)
 
 	flags.Bool(option.Restore, true, "Restores state, if possible, from previous daemon")
+	flags.MarkHidden(option.Restore)
 	option.BindEnv(vp, option.Restore)
 
 	flags.String(option.SocketPath, defaults.SockPath, "Sets daemon's socket path to listen for connections")
@@ -1179,7 +1179,7 @@ func initEnv(vp *viper.Viper) {
 	// the path to an already mounted filesystem instead. This is
 	// useful if the daemon is being round inside a namespace and the
 	// BPF filesystem is mapped into the slave namespace.
-	bpf.CheckOrMountFS(option.Config.BPFRoot)
+	bpf.CheckOrMountFS(logging.DefaultSlogLogger, option.Config.BPFRoot)
 	cgroups.CheckOrMountCgrpFS(option.Config.CGroupRoot)
 
 	option.Config.Opts.SetBool(option.Debug, debugDatapath)
@@ -1475,6 +1475,7 @@ type daemonParams struct {
 	NodeAddressing      datapath.NodeAddressing
 	EndpointCreator     endpointcreator.EndpointCreator
 	EndpointManager     endpointmanager.EndpointManager
+	EndpointMetadata    endpointmetadata.EndpointMetadataFetcher
 	CertManager         certificatemanager.CertificateManager
 	SecretManager       certificatemanager.SecretManager
 	IdentityAllocator   identitycell.CachingIdentityAllocator
@@ -1482,13 +1483,11 @@ type daemonParams struct {
 	Policy              policy.PolicyRepository
 	IPCache             *ipcache.IPCache
 	DirReadStatus       policyDirectory.DirectoryWatcherReadStatus
-	CNIConfigManager    cni.CNIConfigManager
 	CiliumHealth        health.CiliumHealthManager
 	ClusterMesh         *clustermesh.ClusterMesh
 	MonitorAgent        monitorAgent.Agent
 	ServiceManager      service.ServiceManager
 	DB                  *statedb.DB
-	APILimiterSet       *rate.APILimiterSet
 	Settings            cellSettings
 	Routes              statedb.Table[*datapathTables.Route]
 	Devices             statedb.Table[*datapathTables.Device]

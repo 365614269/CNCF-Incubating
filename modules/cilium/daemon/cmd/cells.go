@@ -33,10 +33,7 @@ import (
 	"github.com/cilium/cilium/pkg/dynamicconfig"
 	"github.com/cilium/cilium/pkg/dynamiclifecycle"
 	"github.com/cilium/cilium/pkg/egressgateway"
-	"github.com/cilium/cilium/pkg/endpoint"
-	endpointcreator "github.com/cilium/cilium/pkg/endpoint/creator"
-	"github.com/cilium/cilium/pkg/endpointcleanup"
-	"github.com/cilium/cilium/pkg/endpointmanager"
+	endpoint "github.com/cilium/cilium/pkg/endpoint/cell"
 	"github.com/cilium/cilium/pkg/envoy"
 	fqdn "github.com/cilium/cilium/pkg/fqdn/cell"
 	"github.com/cilium/cilium/pkg/fqdn/defaultdns"
@@ -126,11 +123,6 @@ var (
 		// Cilium API handlers
 		cell.Provide(ciliumAPIHandlers),
 
-		// Processes endpoint deletions that occurred while the agent was down.
-		// This starts before the API server as ciliumAPIHandlers() depends on
-		// the 'deletionQueue' provided by this cell.
-		deletionQueueCell,
-
 		// Store cell provides factory for creating watchStore/syncStore/storeManager
 		// useful for synchronizing data from/to kvstore.
 		store.Cell,
@@ -189,15 +181,8 @@ var (
 		// be synced
 		k8sSynced.Cell,
 
-		// EndpointManager maintains a collection of the locally running endpoints.
-		endpointmanager.Cell,
-
-		// EndpointCreator helps creating endpoints
-		endpointcreator.Cell,
-
-		// Register the startup procedure to remove stale CiliumEndpoints referencing pods no longer
-		// managed by Cilium.
-		endpointcleanup.Cell,
+		// Endpoint cell provides the Endpoint modules.
+		endpoint.Cell,
 
 		// NodeManager maintains a collection of other nodes in the cluster.
 		nodeManager.Cell,
@@ -282,9 +267,6 @@ var (
 		// L2announcer resolves l2announcement policies, services, node labels and devices into a list of IPs+netdevs
 		// which need to be announced on the local network.
 		l2announcer.Cell,
-
-		// RegeneratorCell provides extra options and utilities for endpoints regeneration.
-		endpoint.RegeneratorCell,
 
 		// Redirect policy manages the Local Redirect Policies.
 		redirectpolicy.Cell,

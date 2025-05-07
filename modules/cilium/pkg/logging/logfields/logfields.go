@@ -44,6 +44,12 @@ const (
 	// EndpointID is the numeric endpoint identifier
 	EndpointID = "endpointID"
 
+	// EndpointAddressing is the endpoint addressing
+	EndpointAddressing = "addressing"
+
+	// EndpointAddressing defines whether to build an endpoint synchronously or not
+	EndpointSyncBuild = "sync-build"
+
 	// EndpointState is the current endpoint state
 	EndpointState = "endpointState"
 
@@ -477,6 +483,9 @@ const (
 
 	// DatapathMode is the datapath mode name
 	DatapathMode = "datapathMode"
+
+	// DatapathConfiguration is the datapath configuration
+	DatapathConfiguration = "datapathConfiguration"
 
 	// Tunnel is the tunnel name
 	Tunnel = "tunnel"
@@ -1531,6 +1540,10 @@ const (
 
 	Candidates = "candidates"
 
+	Skipped = "skipped"
+
+	AliveEntries = "aliveEntries"
+
 	DNSRulesV2 = "dnsRulesV2"
 
 	BPFHeaderfileHashOld = "old-" + "bpfHeaderfileHash"
@@ -1583,6 +1596,10 @@ const (
 
 	PendingCompletions = "pendingCompletions"
 
+	Root = "root"
+
+	LenConfigPairs = "lenConfigPairs"
+
 	Exists = "exists"
 
 	MulticastAddr = "multicastAddr"
@@ -1614,4 +1631,30 @@ const (
 	LookupIPAddrs = "lookupIPAddrs"
 
 	MatchPattern = "matchPattern"
+
+	BPFFSRoot = "bpffsRoot"
+
+	Section = "section"
+
+	Instruction = "instruction"
+
+	Reference = "reference"
+
+	MapRenames = "mapRenames"
+
+	Constants = "constants"
+
+	Remaining = "remaining"
+
+	Resolved = "resolved"
+
+	Scanned = "scanned"
+
+	KeySize = "keySize"
+
+	ValueSize = "valueSize"
+
+	MaxEntries = "maxEntries"
+
+	Flags = "flags"
 )
