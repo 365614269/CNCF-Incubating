@@ -843,8 +843,8 @@ drop_err:
 #endif /* ENABLE_NAT_46X64_GATEWAY */
 
 static __always_inline int
-nodeport_rev_dnat_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
-		       __s8 *ext_err)
+nodeport_rev_dnat_ipv6(struct __ctx_buff *ctx, enum ct_dir dir,
+		       struct trace_ctx *trace, __s8 *ext_err)
 {
 	struct bpf_fib_lookup_padded fib_params = {
 		.l = {
@@ -895,15 +895,14 @@ nodeport_rev_dnat_ipv6(struct __ctx_buff *ctx, struct trace_ctx *trace,
 			return ret;
 
 		ret = lb6_rev_nat(ctx, l4_off, ct_state.rev_nat_index,
-				  &tuple, ipfrag_has_l4_header(fraginfo));
+				  &tuple, ipfrag_has_l4_header(fraginfo),
+				  dir);
 		if (IS_ERR(ret))
 			return ret;
 		if (!revalidate_data(ctx, &data, &data_end, &ip6))
 			return DROP_INVALID;
 		ctx_snat_done_set(ctx);
-#ifndef HAVE_FIB_IFINDEX
-		ifindex = ct_state.ifindex;
-#endif
+
 #ifdef TUNNEL_MODE
 		info = lookup_ip6_remote_endpoint((union v6addr *)&ip6->daddr, 0);
 		if (info && info->flag_has_tunnel_ep && !info->flag_skip_tunnel) {
@@ -980,9 +979,8 @@ fib_redirect:
 	return fib_redirect(ctx, true, &fib_params, allow_neigh_map, ext_err, &ifindex);
 }
 
-__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_REVNAT)
 static __always_inline
-int tail_nodeport_rev_dnat_ipv6(struct __ctx_buff *ctx)
+int __nodeport_rev_dnat_ipv6(struct __ctx_buff *ctx, enum ct_dir dir)
 {
 	struct trace_ctx trace = {
 		.reason = TRACE_REASON_CT_REPLY,
@@ -991,7 +989,7 @@ int tail_nodeport_rev_dnat_ipv6(struct __ctx_buff *ctx)
 	__s8 ext_err = 0;
 	int ret = 0;
 
-	ret = nodeport_rev_dnat_ipv6(ctx, &trace, &ext_err);
+	ret = nodeport_rev_dnat_ipv6(ctx, dir, &trace, &ext_err);
 	if (IS_ERR(ret))
 		goto drop;
 
@@ -1014,6 +1012,27 @@ int tail_nodeport_rev_dnat_ipv6(struct __ctx_buff *ctx)
 drop:
 	return send_drop_notify_error_ext(ctx, UNKNOWN_ID, ret, ext_err,
 					  METRIC_EGRESS);
+}
+
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_REVNAT_INGRESS)
+static __always_inline
+int tail_nodeport_rev_dnat_ingress_ipv6(struct __ctx_buff *ctx)
+{
+	return __nodeport_rev_dnat_ipv6(ctx, CT_INGRESS);
+}
+
+static __always_inline
+int nodeport_rev_dnat_ingress_ipv6(struct __ctx_buff *ctx,
+				   struct trace_ctx *trace, __s8 *ext_err)
+{
+	return nodeport_rev_dnat_ipv6(ctx, CT_INGRESS, trace, ext_err);
+}
+
+__section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_REVNAT_EGRESS)
+static __always_inline
+int tail_nodeport_rev_dnat_egress_ipv6(struct __ctx_buff *ctx)
+{
+	return __nodeport_rev_dnat_ipv6(ctx, CT_EGRESS);
 }
 
 __section_tail(CILIUM_MAP_CALLS, CILIUM_CALL_IPV6_NODEPORT_NAT_INGRESS)
@@ -1070,8 +1089,8 @@ int tail_nodeport_nat_ingress_ipv6(struct __ctx_buff *ctx)
 						   is_defined(IS_BPF_HOST)),
 					     __and(is_defined(ENABLE_IPV6_FRAGMENTS),
 						   is_defined(IS_BPF_XDP))),
-					CILIUM_CALL_IPV6_NODEPORT_REVNAT,
-					nodeport_rev_dnat_ipv6,
+					CILIUM_CALL_IPV6_NODEPORT_REVNAT_INGRESS,
+					nodeport_rev_dnat_ingress_ipv6,
 					&trace, &ext_err);
 	if (IS_ERR(ret))
 		goto drop_err;
@@ -1307,9 +1326,6 @@ static __always_inline int nodeport_svc_lb6(struct __ctx_buff *ctx,
 		case CT_NEW:
 			ct_state.src_sec_id = WORLD_IPV6_ID;
 			ct_state.node_port = 1;
-#ifndef HAVE_FIB_IFINDEX
-			ct_state.ifindex = (__u16)THIS_INTERFACE_IFINDEX;
-#endif
 
 			ret = ct_create6(get_ct_map6(tuple), NULL, tuple, ctx,
 					 CT_EGRESS, &ct_state, ext_err);
@@ -2174,9 +2190,7 @@ nodeport_rev_dnat_ipv4(struct __ctx_buff *ctx, struct trace_ctx *trace,
 		if (!revalidate_data(ctx, &data, &data_end, &ip4))
 			return DROP_INVALID;
 		ctx_snat_done_set(ctx);
-#ifndef HAVE_FIB_IFINDEX
-		ifindex = ct_state.ifindex;
-#endif
+
 #if defined(TUNNEL_MODE)
 		info = lookup_ip4_remote_endpoint(ip4->daddr, 0);
 		if (info && info->flag_has_tunnel_ep && !info->flag_skip_tunnel) {
@@ -2642,9 +2656,6 @@ static __always_inline int nodeport_svc_lb4(struct __ctx_buff *ctx,
 		case CT_NEW:
 			ct_state.src_sec_id = src_sec_identity;
 			ct_state.node_port = 1;
-#ifndef HAVE_FIB_IFINDEX
-			ct_state.ifindex = (__u16)THIS_INTERFACE_IFINDEX;
-#endif
 
 			ret = ct_create4(get_ct_map4(tuple), NULL, tuple, ctx,
 					 CT_EGRESS, &ct_state, ext_err);
