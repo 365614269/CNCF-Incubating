@@ -1544,6 +1544,12 @@ const (
 
 	AliveEntries = "aliveEntries"
 
+	Scope = "scope"
+
+	NewLocally = "newLocally"
+
+	Released = "released"
+
 	DNSRulesV2 = "dnsRulesV2"
 
 	BPFHeaderfileHashOld = "old-" + "bpfHeaderfileHash"
@@ -1657,4 +1663,14 @@ const (
 	MaxEntries = "maxEntries"
 
 	Flags = "flags"
+
+	ExitCode = "exitCode"
+
+	NumBufferedEvents = "numBufferedEvents"
+
+	EventHandlingDuration = "eventHandlingDuration"
+
+	EventEnqueueWaitTime = "eventEnqueueWaitTime"
+
+	EventConsumeOffQueueWaitTime = "eventConsumeOffQueueWaitTime"
 )

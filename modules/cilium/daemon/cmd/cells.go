@@ -27,6 +27,7 @@ import (
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	"github.com/cilium/cilium/pkg/datapath"
+	debugapi "github.com/cilium/cilium/pkg/debug/api"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/dial"
 	"github.com/cilium/cilium/pkg/driftchecker"
@@ -119,9 +120,6 @@ var (
 		// Cilium API served over UNIX sockets. Accessed by the 'cilium' utility (not cilium-cli).
 		server.Cell,
 		cell.Invoke(configureAPIServer),
-
-		// Cilium API handlers
-		cell.Provide(ciliumAPIHandlers),
 
 		// Store cell provides factory for creating watchStore/syncStore/storeManager
 		// useful for synchronizing data from/to kvstore.
@@ -326,6 +324,9 @@ var (
 
 		// Cilium Status Collector
 		status.Cell,
+
+		// Cilium Debuginfo API
+		debugapi.Cell,
 	)
 )
 

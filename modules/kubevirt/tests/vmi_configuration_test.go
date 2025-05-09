@@ -1381,7 +1381,7 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 				}
 				return false
 			}
-			It("[test_id:6843]should set a TSC fequency and have the CPU flag avaliable in the guest", decorators.Invtsc, decorators.TscFrequencies, func() {
+			It("[test_id:6843]should set a TSC frequency and have the CPU flag available in the guest", decorators.Invtsc, decorators.TscFrequencies, func() {
 				nodes := libnode.GetAllSchedulableNodes(virtClient)
 				Expect(featureSupportedInAtLeastOneNode(nodes, "invtsc")).To(BeTrue(), "To run this test at least one node should support invtsc feature")
 				vmi := libvmifact.NewCirros()
@@ -2849,11 +2849,11 @@ var _ = Describe("[sig-compute]Configurations", decorators.SigCompute, func() {
 			By("Check values in dmidecode")
 			// Check on the VM, if expected values are there with dmidecode
 			Expect(console.SafeExpectBatch(vmi, []expect.Batcher{
-				&expect.BSnd{S: fmt.Sprintf("[ $(sudo dmidecode -s system-family | tr -s ' ') = %s ] && echo 'pass'\n", smBIOS.Family)},
+				&expect.BSnd{S: fmt.Sprintf(`[ "$(sudo dmidecode -s system-family | tr -s ' ')" = "%s" ] && echo 'pass'`+"\n", smBIOS.Family)},
 				&expect.BExp{R: console.RetValue("pass")},
-				&expect.BSnd{S: fmt.Sprintf("[ $(sudo dmidecode -s system-product-name | tr -s ' ') = %s ] && echo 'pass'\n", smBIOS.Product)},
+				&expect.BSnd{S: fmt.Sprintf(`[ "$(sudo dmidecode -s system-product-name | tr -s ' ')" = "%s" ] && echo 'pass'`+"\n", smBIOS.Product)},
 				&expect.BExp{R: console.RetValue("pass")},
-				&expect.BSnd{S: fmt.Sprintf("[ $(sudo dmidecode -s system-manufacturer | tr -s ' ') = %s ] && echo 'pass'\n", smBIOS.Manufacturer)},
+				&expect.BSnd{S: fmt.Sprintf(`[ "$(sudo dmidecode -s system-manufacturer | tr -s ' ')" = "%s" ] && echo 'pass'`+"\n", smBIOS.Manufacturer)},
 				&expect.BExp{R: console.RetValue("pass")},
 			}, 1)).To(Succeed())
 		})
