@@ -3587,6 +3587,7 @@ __metadata:
     "@types/cors": "npm:^2.8.6"
     "@types/express": "npm:^4.17.6"
     "@types/http-errors": "npm:^2.0.0"
+    "@types/is-glob": "npm:^4.0.2"
     "@types/node-forge": "npm:^1.3.0"
     "@types/pg-format": "npm:^1.0.5"
     "@types/yauzl": "npm:^2.10.0"
@@ -3605,6 +3606,7 @@ __metadata:
     git-url-parse: "npm:^15.0.0"
     helmet: "npm:^6.0.0"
     http-errors: "npm:^2.0.0"
+    is-glob: "npm:^4.0.3"
     jose: "npm:^5.0.0"
     keyv: "npm:^5.2.1"
     knex: "npm:^3.0.0"
@@ -3944,9 +3946,9 @@ __metadata:
     "@rollup/plugin-json": "npm:^6.0.0"
     "@rollup/plugin-node-resolve": "npm:^15.0.0"
     "@rollup/plugin-yaml": "npm:^4.0.0"
-    "@rspack/core": "npm:^1.0.10"
-    "@rspack/dev-server": "npm:^1.0.9"
-    "@rspack/plugin-react-refresh": "npm:^1.0.0"
+    "@rspack/core": "npm:^1.3.9"
+    "@rspack/dev-server": "npm:^1.1.1"
+    "@rspack/plugin-react-refresh": "npm:^1.4.2"
     "@spotify/eslint-config-base": "npm:^15.0.0"
     "@spotify/eslint-config-react": "npm:^15.0.0"
     "@spotify/eslint-config-typescript": "npm:^15.0.0"
@@ -4060,7 +4062,7 @@ __metadata:
     zod: "npm:^3.22.4"
     zod-validation-error: "npm:^3.4.0"
   peerDependencies:
-    "@rspack/core": ^1.0.10
+    "@rspack/core": ^1.2.8
     "@rspack/dev-server": ^1.0.9
     "@rspack/plugin-react-refresh": ^1.0.0
   peerDependenciesMeta:
@@ -5275,6 +5277,7 @@ __metadata:
     passport: "npm:^0.7.0"
     passport-atlassian-oauth2: "npm:^2.1.0"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5314,6 +5317,7 @@ __metadata:
     jose: "npm:^5.0.0"
     msw: "npm:^2.0.8"
     node-cache: "npm:^5.1.2"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5332,6 +5336,7 @@ __metadata:
     express: "npm:^4.19.2"
     jose: "npm:^5.0.0"
     passport: "npm:^0.7.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5350,6 +5355,7 @@ __metadata:
     passport: "npm:^0.7.0"
     passport-bitbucket-oauth2: "npm:^0.1.2"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5368,6 +5374,7 @@ __metadata:
     passport: "npm:^0.7.0"
     passport-oauth2: "npm:^1.6.1"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5389,6 +5396,7 @@ __metadata:
     msw: "npm:^2.0.0"
     node-mocks-http: "npm:^1.0.0"
     uuid: "npm:^11.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5404,6 +5412,7 @@ __metadata:
     "@backstage/types": "workspace:^"
     express: "npm:^4.18.2"
     google-auth-library: "npm:^9.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5421,6 +5430,7 @@ __metadata:
     "@types/passport-github2": "npm:^1.2.4"
     passport-github2: "npm:^0.1.12"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5439,6 +5449,7 @@ __metadata:
     passport: "npm:^0.7.0"
     passport-gitlab2: "npm:^5.0.0"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5456,6 +5467,7 @@ __metadata:
     google-auth-library: "npm:^9.0.0"
     passport-google-oauth20: "npm:^2.0.0"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5493,6 +5505,7 @@ __metadata:
     msw: "npm:^1.0.0"
     passport-microsoft: "npm:^1.0.0"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5510,6 +5523,7 @@ __metadata:
     passport: "npm:^0.7.0"
     passport-oauth2: "npm:^1.6.1"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5523,6 +5537,7 @@ __metadata:
     "@backstage/errors": "workspace:^"
     "@backstage/plugin-auth-node": "workspace:^"
     jose: "npm:^5.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5547,6 +5562,7 @@ __metadata:
     openid-client: "npm:^5.5.0"
     passport: "npm:^0.7.0"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5565,6 +5581,7 @@ __metadata:
     express: "npm:^4.18.2"
     passport: "npm:^0.7.0"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5583,6 +5600,7 @@ __metadata:
     passport: "npm:^0.7.0"
     passport-onelogin-oauth: "npm:^0.0.1"
     supertest: "npm:^7.0.0"
+    zod: "npm:^3.22.4"
   languageName: unknown
   linkType: soft
 
@@ -5938,6 +5956,23 @@ __metadata:
     luxon: "npm:^3.0.0"
     msw: "npm:^1.0.0"
     p-limit: "npm:^3.1.0"
+    uuid: "npm:^11.0.0"
+  languageName: unknown
+  linkType: soft
+
+"@backstage/plugin-catalog-backend-module-gitea@workspace:plugins/catalog-backend-module-gitea":
+  version: 0.0.0-use.local
+  resolution: "@backstage/plugin-catalog-backend-module-gitea@workspace:plugins/catalog-backend-module-gitea"
+  dependencies:
+    "@backstage/backend-plugin-api": "workspace:^"
+    "@backstage/backend-test-utils": "workspace:^"
+    "@backstage/cli": "workspace:^"
+    "@backstage/config": "workspace:^"
+    "@backstage/errors": "workspace:^"
+    "@backstage/integration": "workspace:^"
+    "@backstage/plugin-catalog-common": "workspace:^"
+    "@backstage/plugin-catalog-node": "workspace:^"
+    p-limit: "npm:^3.0.2"
     uuid: "npm:^11.0.0"
   languageName: unknown
   linkType: soft
@@ -16548,82 +16583,82 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@rspack/binding-darwin-arm64@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-darwin-arm64@npm:1.3.9"
+"@rspack/binding-darwin-arm64@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-darwin-arm64@npm:1.3.10"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@rspack/binding-darwin-x64@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-darwin-x64@npm:1.3.9"
+"@rspack/binding-darwin-x64@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-darwin-x64@npm:1.3.10"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@rspack/binding-linux-arm64-gnu@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-linux-arm64-gnu@npm:1.3.9"
+"@rspack/binding-linux-arm64-gnu@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-linux-arm64-gnu@npm:1.3.10"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@rspack/binding-linux-arm64-musl@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-linux-arm64-musl@npm:1.3.9"
+"@rspack/binding-linux-arm64-musl@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-linux-arm64-musl@npm:1.3.10"
   conditions: os=linux & cpu=arm64 & libc=musl
   languageName: node
   linkType: hard
 
-"@rspack/binding-linux-x64-gnu@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-linux-x64-gnu@npm:1.3.9"
+"@rspack/binding-linux-x64-gnu@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-linux-x64-gnu@npm:1.3.10"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@rspack/binding-linux-x64-musl@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-linux-x64-musl@npm:1.3.9"
+"@rspack/binding-linux-x64-musl@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-linux-x64-musl@npm:1.3.10"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"@rspack/binding-win32-arm64-msvc@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-win32-arm64-msvc@npm:1.3.9"
+"@rspack/binding-win32-arm64-msvc@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-win32-arm64-msvc@npm:1.3.10"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"@rspack/binding-win32-ia32-msvc@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-win32-ia32-msvc@npm:1.3.9"
+"@rspack/binding-win32-ia32-msvc@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-win32-ia32-msvc@npm:1.3.10"
   conditions: os=win32 & cpu=ia32
   languageName: node
   linkType: hard
 
-"@rspack/binding-win32-x64-msvc@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding-win32-x64-msvc@npm:1.3.9"
+"@rspack/binding-win32-x64-msvc@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding-win32-x64-msvc@npm:1.3.10"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"@rspack/binding@npm:1.3.9":
-  version: 1.3.9
-  resolution: "@rspack/binding@npm:1.3.9"
+"@rspack/binding@npm:1.3.10":
+  version: 1.3.10
+  resolution: "@rspack/binding@npm:1.3.10"
   dependencies:
-    "@rspack/binding-darwin-arm64": "npm:1.3.9"
-    "@rspack/binding-darwin-x64": "npm:1.3.9"
-    "@rspack/binding-linux-arm64-gnu": "npm:1.3.9"
-    "@rspack/binding-linux-arm64-musl": "npm:1.3.9"
-    "@rspack/binding-linux-x64-gnu": "npm:1.3.9"
-    "@rspack/binding-linux-x64-musl": "npm:1.3.9"
-    "@rspack/binding-win32-arm64-msvc": "npm:1.3.9"
-    "@rspack/binding-win32-ia32-msvc": "npm:1.3.9"
-    "@rspack/binding-win32-x64-msvc": "npm:1.3.9"
+    "@rspack/binding-darwin-arm64": "npm:1.3.10"
+    "@rspack/binding-darwin-x64": "npm:1.3.10"
+    "@rspack/binding-linux-arm64-gnu": "npm:1.3.10"
+    "@rspack/binding-linux-arm64-musl": "npm:1.3.10"
+    "@rspack/binding-linux-x64-gnu": "npm:1.3.10"
+    "@rspack/binding-linux-x64-musl": "npm:1.3.10"
+    "@rspack/binding-win32-arm64-msvc": "npm:1.3.10"
+    "@rspack/binding-win32-ia32-msvc": "npm:1.3.10"
+    "@rspack/binding-win32-x64-msvc": "npm:1.3.10"
   dependenciesMeta:
     "@rspack/binding-darwin-arm64":
       optional: true
@@ -16643,16 +16678,16 @@ __metadata:
       optional: true
     "@rspack/binding-win32-x64-msvc":
       optional: true
-  checksum: 10/bf7679a324dbf67a563e27e9d441b161b0d292b64f24c47b3955a1f12f705b4a60c215735ea09cb2c4e2bfc68cb4dfb24af88daef055a683a7369a5156a2a808
+  checksum: 10/10328e405c6708f7d1eea7e8f83d7f4453bcc3e4ca77b99eb29819d9f66c51e85b8cf46daab797bea59fdafc266dab6091deb9b5e2ec3007482da11ab10dc62c
   languageName: node
   linkType: hard
 
-"@rspack/core@npm:^1.0.10":
-  version: 1.3.9
-  resolution: "@rspack/core@npm:1.3.9"
+"@rspack/core@npm:^1.3.9":
+  version: 1.3.10
+  resolution: "@rspack/core@npm:1.3.10"
   dependencies:
     "@module-federation/runtime-tools": "npm:0.13.1"
-    "@rspack/binding": "npm:1.3.9"
+    "@rspack/binding": "npm:1.3.10"
     "@rspack/lite-tapable": "npm:1.0.1"
     caniuse-lite: "npm:^1.0.30001717"
   peerDependencies:
@@ -16660,11 +16695,11 @@ __metadata:
   peerDependenciesMeta:
     "@swc/helpers":
       optional: true
-  checksum: 10/9a4c5cdd51ba66354d27a27b23736c44a5eeac13c70729ae75589cb2bc4bbe600ceb0cf4b11cb0686f8cc96f61b3bf36827b269537c134713278a22d54eb6957
+  checksum: 10/5471ced4f461936c723199006182ce9fc54a5840aa7ba46f56f137d46b1839b994a9f6e4539e1376eaaf2956cbbbe5a7846d06ab61246e38711a805f7dd56df4
   languageName: node
   linkType: hard
 
-"@rspack/dev-server@npm:^1.0.9":
+"@rspack/dev-server@npm:^1.1.1":
   version: 1.1.1
   resolution: "@rspack/dev-server@npm:1.1.1"
   dependencies:
@@ -16689,7 +16724,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@rspack/plugin-react-refresh@npm:^1.0.0":
+"@rspack/plugin-react-refresh@npm:^1.4.2":
   version: 1.4.3
   resolution: "@rspack/plugin-react-refresh@npm:1.4.3"
   dependencies:
