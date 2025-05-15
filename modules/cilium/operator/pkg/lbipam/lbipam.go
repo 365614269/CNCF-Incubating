@@ -296,7 +296,12 @@ func (ipam *LBIPAM) poolOnUpsert(ctx context.Context, pool *cilium_api_v2.Cilium
 	pool = pool.DeepCopy()
 
 	var err error
-	if _, exists := ipam.pools[pool.GetName()]; exists {
+	if existingPool, exists := ipam.pools[pool.GetName()]; exists {
+		// Spec hasn't changed, nothing to do
+		if existingPool.Spec.DeepEqual(&pool.Spec) {
+			return nil
+		}
+
 		err = ipam.handlePoolModified(ctx, pool)
 		if err != nil {
 			return fmt.Errorf("handlePoolModified: %w", err)
@@ -1355,7 +1360,7 @@ func ipRangeFromBlock(block cilium_api_v2.CiliumLoadBalancerIPPoolIPBlock) (to, 
 			return netip.Addr{}, netip.Addr{}, false, fmt.Errorf("error parsing cidr '%s': %w", block.Cidr, err)
 		}
 
-		to, from = rangeFromPrefix(prefix)
+		to, from = RangeFromPrefix(prefix)
 		return to, from, true, nil
 	}
 
@@ -1939,7 +1944,7 @@ func isIPv6(ip netip.Addr) bool {
 	return ip.BitLen() == 128
 }
 
-func rangeFromPrefix(prefix netip.Prefix) (netip.Addr, netip.Addr) {
+func RangeFromPrefix(prefix netip.Prefix) (netip.Addr, netip.Addr) {
 	prefix = prefix.Masked()
 	return prefix.Addr(), netipx.PrefixLastIP(prefix)
 }

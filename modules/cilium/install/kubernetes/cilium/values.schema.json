@@ -465,6 +465,9 @@
         },
         "routerIDAllocation": {
           "properties": {
+            "ipPool": {
+              "type": "string"
+            },
             "mode": {
               "type": "string"
             }
@@ -1287,6 +1290,9 @@
                     "Cluster"
                   ]
                 },
+                "labels": {
+                  "type": "object"
+                },
                 "loadBalancerClass": {
                   "type": [
                     "null",
@@ -2085,6 +2091,9 @@
         },
         "livenessProbe": {
           "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
             "failureThreshold": {
               "type": "integer"
             },
@@ -2315,6 +2324,9 @@
         },
         "startupProbe": {
           "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
             "failureThreshold": {
               "type": "integer"
             },

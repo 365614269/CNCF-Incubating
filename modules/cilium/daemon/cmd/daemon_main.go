@@ -254,6 +254,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableHealthChecking, defaults.EnableHealthChecking, "Enable connectivity health checking")
 	option.BindEnv(vp, option.EnableHealthChecking)
 
+	flags.Bool(option.AgentHealthRequireK8sConnectivity, true, "Require Kubernetes connectivity in agent health endpoint")
+	option.BindEnv(vp, option.AgentHealthRequireK8sConnectivity)
+
 	flags.Bool(option.EnableHealthCheckLoadBalancerIP, defaults.EnableHealthCheckLoadBalancerIP, "Enable access of the healthcheck nodePort on the LoadBalancerIP. Needs --enable-health-check-nodeport to be enabled")
 	option.BindEnv(vp, option.EnableHealthCheckLoadBalancerIP)
 
@@ -938,8 +941,11 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableBGPControlPlaneStatusReport, true, "Enable the BGP control plane status reporting")
 	option.BindEnv(vp, option.EnableBGPControlPlaneStatusReport)
 
-	flags.String(option.BGPRouterIDAllocationMode, defaults.BGPRouterIDAllocationMode, "BGP router-id allocation mode. Currently supported values: 'default' ")
+	flags.String(option.BGPRouterIDAllocationMode, option.BGPRouterIDAllocationModeDefault, "BGP router-id allocation mode. Currently supported values: 'default' or 'ip-pool'")
 	option.BindEnv(vp, option.BGPRouterIDAllocationMode)
+
+	flags.String(option.BGPRouterIDAllocationIPPool, "", "IP pool to allocate the BGP router-id from when the mode is 'ip-pool'")
+	option.BindEnv(vp, option.BGPRouterIDAllocationIPPool)
 
 	flags.Bool(option.EnablePMTUDiscovery, false, "Enable path MTU discovery to send ICMP fragmentation-needed replies to the client")
 	option.BindEnv(vp, option.EnablePMTUDiscovery)
@@ -1547,7 +1553,7 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], legacy.Dae
 				// This validation needs to be done outside of the agent until
 				// datapath.NodeAddressing is used consistently across the code base.
 				log.Info("Validating configured node address ranges")
-				if err := node.ValidatePostInit(); err != nil {
+				if err := node.ValidatePostInit(params.Logger); err != nil {
 					return fmt.Errorf("postinit failed: %w", err)
 				}
 
@@ -1668,8 +1674,8 @@ func startDaemon(d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *da
 		if !d.endpointManager.IngressEndpointExists() {
 			// Creating Ingress Endpoint depends on the Ingress IPs having been
 			// allocated first. This happens earlier in the agent bootstrap.
-			if (option.Config.EnableIPv4 && len(node.GetIngressIPv4()) == 0) ||
-				(option.Config.EnableIPv6 && len(node.GetIngressIPv6()) == 0) {
+			if (option.Config.EnableIPv4 && len(node.GetIngressIPv4(params.Logger)) == 0) ||
+				(option.Config.EnableIPv6 && len(node.GetIngressIPv6(params.Logger)) == 0) {
 				log.Warn("Ingress IPs are not available, skipping creation of the Ingress Endpoint: Policy enforcement on Cilium Ingress will not work as expected.")
 			} else {
 				log.Info("Creating ingress endpoint")

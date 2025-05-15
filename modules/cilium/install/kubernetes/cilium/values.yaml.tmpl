@@ -492,6 +492,8 @@ bgpControlPlane:
   routerIDAllocation:
     # -- BGP router-id allocation mode. In default mode, the router-id is derived from the IPv4 address if it is available, or else it is determined by the lower 32 bits of the MAC address.
     mode: "default"
+    # -- IP pool to allocate the BGP router-id from when the mode is ip-pool.
+    ipPool: ""
 pmtuDiscovery:
   # -- Enable path MTU discovery to send ICMP fragmentation-needed replies to
   # the client.
@@ -2537,12 +2539,16 @@ envoy:
   #     memory: 512Mi
 
   startupProbe:
+    # -- Enable startup probe for cilium-envoy
+    enabled: true
     # -- failure threshold of startup probe.
     # 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s)
     failureThreshold: 105
     # -- interval between checks of the startup probe
     periodSeconds: 2
   livenessProbe:
+    # -- Enable liveness probe for cilium-envoy
+    enabled: true
     # -- failure threshold of liveness probe
     failureThreshold: 10
     # -- interval between checks of the liveness probe
@@ -3398,6 +3404,8 @@ clustermesh:
       # * EKS: service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"
       # * GKE: networking.gke.io/load-balancer-type: "Internal"
       annotations: {}
+      # -- Labels for the clustermesh-apiserver service.
+      labels: {}
       # @schema
       # enum: [Local, Cluster]
       # @schema

@@ -275,7 +275,7 @@
    * - :spelling:ignore:`bgpControlPlane`
      - This feature set enables virtual BGP routers to be created via CiliumBGPPeeringPolicy CRDs.
      - object
-     - ``{"enabled":false,"routerIDAllocation":{"mode":"default"},"secretsNamespace":{"create":false,"name":"kube-system"},"statusReport":{"enabled":true}}``
+     - ``{"enabled":false,"routerIDAllocation":{"ipPool":"","mode":"default"},"secretsNamespace":{"create":false,"name":"kube-system"},"statusReport":{"enabled":true}}``
    * - :spelling:ignore:`bgpControlPlane.enabled`
      - Enables the BGP control plane.
      - bool
@@ -283,7 +283,11 @@
    * - :spelling:ignore:`bgpControlPlane.routerIDAllocation`
      - BGP router-id allocation mode
      - object
-     - ``{"mode":"default"}``
+     - ``{"ipPool":"","mode":"default"}``
+   * - :spelling:ignore:`bgpControlPlane.routerIDAllocation.ipPool`
+     - IP pool to allocate the BGP router-id from when the mode is ip-pool.
+     - string
+     - ``""``
    * - :spelling:ignore:`bgpControlPlane.routerIDAllocation.mode`
      - BGP router-id allocation mode. In default mode, the router-id is derived from the IPv4 address if it is available, or else it is determined by the lower 32 bits of the MAC address.
      - string
@@ -808,6 +812,10 @@
      - The internalTrafficPolicy of service used for apiserver access.
      - string
      - ``"Cluster"``
+   * - :spelling:ignore:`clustermesh.apiserver.service.labels`
+     - Labels for the clustermesh-apiserver service.
+     - object
+     - ``{}``
    * - :spelling:ignore:`clustermesh.apiserver.service.loadBalancerClass`
      - Configure a loadBalancerClass. Allows to configure the loadBalancerClass on the clustermesh-apiserver LB service in case the Service type is set to LoadBalancer (requires Kubernetes 1.24+).
      - string
@@ -1360,6 +1368,10 @@
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
      - ``30``
+   * - :spelling:ignore:`envoy.livenessProbe.enabled`
+     - Enable liveness probe for cilium-envoy
+     - bool
+     - ``true``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1500,6 +1512,10 @@
      - SELinux options for the ``cilium-envoy`` container
      - object
      - ``{"level":"s0","type":"spc_t"}``
+   * - :spelling:ignore:`envoy.startupProbe.enabled`
+     - Enable startup probe for cilium-envoy
+     - bool
+     - ``true``
    * - :spelling:ignore:`envoy.startupProbe.failureThreshold`
      - failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s)
      - int

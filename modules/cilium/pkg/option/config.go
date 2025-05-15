@@ -198,6 +198,9 @@ const (
 	// Intended for operating cilium with CNI-compatible orchestrators other than Kubernetes. (default is true)
 	EnableK8s = "enable-k8s"
 
+	// AgentHealthRequireK8sConnectivity determines whether the agent health endpoint requires k8s connectivity
+	AgentHealthRequireK8sConnectivity = "agent-health-require-k8s-connectivity"
+
 	// K8sAPIServer is the kubernetes api address server (for https use --k8s-kubeconfig-path instead)
 	K8sAPIServer = "k8s-api-server"
 
@@ -1030,8 +1033,11 @@ const (
 	// EnableBGPControlPlaneStatusReport enables BGP Control Plane CRD status reporting
 	EnableBGPControlPlaneStatusReport = "enable-bgp-control-plane-status-report"
 
-	// BGP router-id allocation mode in ipv6 standalone environment
+	// BGP router-id allocation mode
 	BGPRouterIDAllocationMode = "bgp-router-id-allocation-mode"
+
+	// BGP router-id allocation IP pool
+	BGPRouterIDAllocationIPPool = "bgp-router-id-allocation-ip-pool"
 
 	// EnableRuntimeDeviceDetection is the name of the option to enable detection
 	// of new and removed datapath devices during the agent runtime.
@@ -1204,6 +1210,14 @@ const (
 	IdentityManagementModeBoth = "both"
 )
 
+const (
+	// BGPRouterIDAllocationModeDefault means the router-id is allocated per node
+	BGPRouterIDAllocationModeDefault = "default"
+
+	// BGPRouterIDAllocationModeIPPool means the router-id is allocated per IP pool
+	BGPRouterIDAllocationModeIPPool = "ip-pool"
+)
+
 // getEnvName returns the environment variable to be used for the given option name.
 func getEnvName(option string) string {
 	under := strings.Replace(option, "-", "_", -1)
@@ -1330,6 +1344,9 @@ type DaemonConfig struct {
 
 	// ClusterMeshHealthPort is the TCP port for ClusterMesh apiserver health API
 	ClusterMeshHealthPort int
+
+	// AgentHealthRequireK8sConnectivity determines whether the agent health endpoint requires k8s connectivity
+	AgentHealthRequireK8sConnectivity bool
 
 	// IPv6ClusterAllocCIDR is the base CIDR used to allocate IPv6 node
 	// CIDRs if allocation is not performed by an orchestration system
@@ -2055,8 +2072,11 @@ type DaemonConfig struct {
 	// Enables BGP control plane status reporting.
 	EnableBGPControlPlaneStatusReport bool
 
-	// BGPRouterIDAllocationMode is the mode to allocate the BGP router-id in ipv6 standalone environment.
+	// BGPRouterIDAllocationMode is the mode to allocate the BGP router-id.
 	BGPRouterIDAllocationMode string
+
+	// BGPRouterIDAllocationIPPool is the IP pool to allocate the BGP router-id from.
+	BGPRouterIDAllocationIPPool string
 
 	// BPFMapEventBuffers has configuration on what BPF map event buffers to enabled
 	// and configuration options for those.
@@ -2818,6 +2838,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableIPv4EgressGateway = vp.GetBool(EnableIPv4EgressGateway)
 	c.EnableEnvoyConfig = vp.GetBool(EnableEnvoyConfig)
 	c.IPMasqAgentConfigPath = vp.GetString(IPMasqAgentConfigPath)
+	c.AgentHealthRequireK8sConnectivity = vp.GetBool(AgentHealthRequireK8sConnectivity)
 	c.InstallIptRules = vp.GetBool(InstallIptRules)
 	c.IPSecKeyFile = vp.GetString(IPSecKeyFileName)
 	c.IPsecKeyRotationDuration = vp.GetDuration(IPsecKeyRotationDuration)
@@ -3188,8 +3209,9 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	// Enable BGP control plane status reporting
 	c.EnableBGPControlPlaneStatusReport = vp.GetBool(EnableBGPControlPlaneStatusReport)
 
-	// BGP router-id allocation mode in IPv6 standalone environment
+	// BGP router-id allocation mode
 	c.BGPRouterIDAllocationMode = vp.GetString(BGPRouterIDAllocationMode)
+	c.BGPRouterIDAllocationIPPool = vp.GetString(BGPRouterIDAllocationIPPool)
 
 	// Support failure-mode for policy map overflow
 	c.EnableEndpointLockdownOnPolicyOverflow = vp.GetBool(EnableEndpointLockdownOnPolicyOverflow)
