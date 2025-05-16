@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"net/netip"
 	"sync"
 
 	"github.com/cilium/hive/job"
@@ -38,6 +37,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	identitycell "github.com/cilium/cilium/pkg/identity/cache/cell"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
+	identityrestoration "github.com/cilium/cilium/pkg/identity/restoration"
 	"github.com/cilium/cilium/pkg/ipam"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -109,8 +109,8 @@ type Daemon struct {
 	endpointInitialPolicyComplete chan struct{}
 
 	identityAllocator identitycell.CachingIdentityAllocator
-
-	ipcache *ipcache.IPCache
+	identityRestorer  *identityrestoration.LocalIdentityRestorer
+	ipcache           *ipcache.IPCache
 
 	k8sWatcher  *watchers.K8sWatcher
 	k8sSvcCache k8s.ServiceCache
@@ -122,9 +122,6 @@ type Daemon struct {
 	healthEndpointRouting *linuxrouting.RoutingInfo
 
 	ciliumHealth health.CiliumHealthManager
-
-	// CIDRs for which identities were restored during bootstrap
-	restoredCIDRs map[netip.Prefix]identity.NumericIdentity
 
 	// Controllers owned by the daemon
 	controllers *controller.Manager
@@ -254,8 +251,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// detection, might disable BPF NodePort and friends. But this is fine, as
 	// the feature does not influence the decision which BPF maps should be
 	// created.
-	if err := initKubeProxyReplacementOptions(params.Sysctl, params.TunnelConfig, params.LBConfig); err != nil {
-		log.WithError(err).Error("unable to initialize kube-proxy replacement options")
+	if err := initKubeProxyReplacementOptions(params.Logger, params.Sysctl, params.TunnelConfig, params.LBConfig); err != nil {
+		params.Logger.Error("unable to initialize kube-proxy replacement options", logfields.Error, err)
 		return nil, nil, fmt.Errorf("unable to initialize kube-proxy replacement options: %w", err)
 	}
 
@@ -300,6 +297,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		// allocator is initialized here.
 		identityAllocator: params.IdentityAllocator,
 		ipcache:           params.IPCache,
+		identityRestorer:  params.IdentityRestorer,
 		policy:            params.Policy,
 		idmgr:             params.IdentityManager,
 		clustermesh:       params.ClusterMesh,
@@ -331,7 +329,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	if option.Config.RestoreState && !option.Config.DryMode {
 		// this *must* be called before initMaps(), which will "hide"
 		// the "old" ipcache.
-		err := d.restoreLocalIdentities()
+		err := d.identityRestorer.RestoreLocalIdentities()
 		if err != nil {
 			log.WithError(err).Warn("Failed to restore existing identities from the previous ipcache. This may cause policy interruptions during restart.")
 		}
@@ -547,8 +545,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	nativeDevices, _ := datapathTables.SelectedDevices(d.devices, rxn)
-	if err := finishKubeProxyReplacementInit(params.Sysctl, nativeDevices, drdName); err != nil {
-		log.WithError(err).Error("failed to finalise LB initialization")
+	if err := finishKubeProxyReplacementInit(params.Logger, params.Sysctl, nativeDevices, drdName); err != nil {
+		d.logger.Error("failed to finalise LB initialization", logfields.Error, err)
 		return nil, nil, fmt.Errorf("failed to finalise LB initialization: %w", err)
 	}
 

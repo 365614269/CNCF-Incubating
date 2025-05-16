@@ -188,7 +188,6 @@ jobs:
         include:
           ###
           # RuntimeAgentFQDNPolicies Can update L7 DNS policy rules
-          # RuntimeAgentFQDNPolicies CNAME follow
           # RuntimeAgentFQDNPolicies DNS proxy policy works if Cilium stops
           # RuntimeAgentFQDNPolicies Interaction with other ToCIDR rules
           # RuntimeAgentFQDNPolicies toFQDNs populates toCIDRSet (data from proxy) L3-dependent L7/HTTP with toFQDN updates proxy policy
@@ -269,7 +268,7 @@ jobs:
           mem: 12G
 
       # Load Ginkgo build from GitHub
-      - name: Load ${{ matrix.name }} Ginkgo build from GitHub
+      - name: Load ${{ matrix.focus }} Ginkgo build from GitHub
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         id: cache
         with:

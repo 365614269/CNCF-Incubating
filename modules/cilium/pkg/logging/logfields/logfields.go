@@ -677,6 +677,8 @@ const (
 	// Count is a measure being compared to the Limit
 	Count = "count"
 
+	Total = "total"
+
 	// Debug is a boolean value for whether debug is set or not.
 	Debug = "debug"
 
@@ -1596,6 +1598,12 @@ const (
 
 	BootID = "bootID"
 
+	LeaseDuration = "leaseDuration"
+
+	RenewDeadline = "renewDeadline"
+
+	RetryPeriod = "retryPeriod"
+
 	Resources = "resources"
 
 	LastModifiedVersion = "lastModifiedVersion"
@@ -1669,6 +1677,14 @@ const (
 	Scanned = "scanned"
 
 	KeySize = "keySize"
+
+	Subnets = "subnets"
+
+	Ratio = "ratio"
+
+	OldName = "oldName"
+
+	NewName = "newName"
 
 	ValueSize = "valueSize"
 
