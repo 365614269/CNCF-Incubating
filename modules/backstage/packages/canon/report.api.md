@@ -7,6 +7,7 @@ import { Avatar as Avatar_2 } from '@base-ui-components/react/avatar';
 import { Breakpoint as Breakpoint_2 } from '@backstage/canon';
 import { ChangeEvent } from 'react';
 import { Collapsible as Collapsible_2 } from '@base-ui-components/react/collapsible';
+import { ComponentProps } from 'react';
 import { Context } from 'react';
 import type { CSSProperties } from 'react';
 import { FC } from 'react';
@@ -15,6 +16,7 @@ import { ForwardRefExoticComponent } from 'react';
 import { HTMLAttributes } from 'react';
 import { JSX as JSX_2 } from 'react/jsx-runtime';
 import { Menu as Menu_2 } from '@base-ui-components/react/menu';
+import type { MouseEventHandler } from 'react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { RefAttributes } from 'react';
@@ -626,6 +628,8 @@ export interface HeadingProps {
   // (undocumented)
   style?: React.CSSProperties;
   // (undocumented)
+  truncate?: boolean;
+  // (undocumented)
   variant?:
     | 'display'
     | 'title1'
@@ -891,6 +895,27 @@ export type MarginProps = GetPropDefTypes<typeof marginPropDefs>;
 export const Menu: MenuComponent;
 
 // @public (undocumented)
+export type MenuComboboxOption = {
+  label: string;
+  value: string;
+  disabled?: boolean;
+};
+
+// @public (undocumented)
+export interface MenuComboboxProps extends ComponentProps<'div'> {
+  // (undocumented)
+  closeParentOnEsc?: boolean;
+  // (undocumented)
+  multiselect?: boolean;
+  // (undocumented)
+  onValueChange?: (value: string[]) => void;
+  // (undocumented)
+  options: MenuComboboxOption[];
+  // (undocumented)
+  value?: string[];
+}
+
+// @public (undocumented)
 export type MenuComponent = {
   Root: typeof Menu_2.Root;
   Trigger: typeof Menu_2.Trigger;
@@ -909,6 +934,9 @@ export type MenuComponent = {
   CheckboxItemIndicator: typeof Menu_2.CheckboxItemIndicator;
   SubmenuTrigger: typeof Menu_2.SubmenuTrigger;
   Separator: typeof Menu_2.Separator;
+  Combobox: ForwardRefExoticComponent<
+    MenuComboboxProps & RefAttributes<HTMLDivElement>
+  >;
 };
 
 // @public (undocumented)
@@ -1220,10 +1248,10 @@ export interface TextFieldProps
   className?: string;
   description?: string;
   error?: string | null;
-  icon?: IconNames;
+  icon?: ReactNode;
   label?: string;
   name: string;
-  onClear?: React.MouseEventHandler<HTMLButtonElement>;
+  onClear?: MouseEventHandler<HTMLButtonElement>;
   size?: 'small' | 'medium' | Partial<Record<Breakpoint, 'small' | 'medium'>>;
 }
 
@@ -1248,6 +1276,8 @@ export interface TextProps {
       >;
   // (undocumented)
   style?: CSSProperties;
+  // (undocumented)
+  truncate?: boolean;
   // (undocumented)
   variant?:
     | 'subtitle'

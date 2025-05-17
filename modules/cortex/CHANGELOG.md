@@ -13,7 +13,7 @@
 * [FEATURE] Support Parquet format: Implement parquet converter service to convert a TSDB block into Parquet. #6716
 * [FEATURE] Distributor/Ingester: Implemented experimental feature to use gRPC stream connection for push requests. This can be enabled by setting `-distributor.use-stream-push=true`. #6580
 * [ENHANCEMENT] Query Frontend: Change to return 400 when the tenant resolving fail. #6715
-* [ENHANCEMENT] Querier: Support query parameters to metadata api (/api/v1/metadata) to allow user to limit metadata to return. #6681
+* [ENHANCEMENT] Querier: Support query parameters to metadata api (/api/v1/metadata) to allow user to limit metadata to return. Add a `-ingester.return-all-metadata` flag to make the metadata API run when the deployment. Please set this flag to `false` to use the metadata API with the limits later. #6681 #6744
 * [ENHANCEMENT] Ingester: Add a `cortex_ingester_active_native_histogram_series` metric to track # of active NH series. #6695
 * [ENHANCEMENT] Query Frontend: Add new limit `-frontend.max-query-response-size` for total query response size after decompression in query frontend. #6607
 * [ENHANCEMENT] Alertmanager: Add nflog and silences maintenance metrics. #6659
@@ -29,6 +29,7 @@
 * [ENHANCEMENT] OTLP: Support otlp metadata ingestion. #6617
 * [ENHANCEMENT] AlertManager: Add `keep_instance_in_the_ring_on_shutdown` and `tokens_file_path` configs for alertmanager ring. #6628
 * [ENHANCEMENT] Querier: Add metric and enhanced logging for query partial data. #6676
+* [ENHANCEMENT] Ingester: Push request should fail when label set is out of order #6746
 * [BUGFIX] Ingester: Avoid error or early throttling when READONLY ingesters are present in the ring #6517
 * [BUGFIX] Ingester: Fix labelset data race condition. #6573
 * [BUGFIX] Compactor: Cleaner should not put deletion marker for blocks with no-compact marker. #6576
