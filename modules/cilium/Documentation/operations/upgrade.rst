@@ -314,6 +314,7 @@ communicating via the proxy must reconnect to re-establish connections.
   this option to ``true``, or use a value strictly lower than 1.18 for
   ``upgradeCompatibility``.  
 * This Cilium version now requires a v5.10 Linux kernel or newer.
+* CiliumIdentity CRD does not contain Security Labels in metadata anymore except for the namespace label.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -348,6 +349,11 @@ Deprecated Options
   be removed in Cilium 1.19.
 * The flag ``--bpf-lb-proto-diff`` has been deprecated and will be removed in Cilium 1.19.
   Service protocol differentiation will be unconditionally enabled.
+* The flag ``--enable-recorder`` has been deprecated and will be removed in Cilium 1.19.
+  You can use `pwru <https://github.com/cilium/pwru>`_ with ``--filter-trace-xdp`` to trace XDP requests.
+* The flags ``--enable-node-port``, ``--enable-host-port``, ``--enable-external-ips`` have been deprecated
+  and will be removed in Cilium 1.19. The kube-proxy replacement features will be only enabled when
+  ``--kube-proxy-replacent`` is set to ``true``. 
 
 Helm Options
 ~~~~~~~~~~~~

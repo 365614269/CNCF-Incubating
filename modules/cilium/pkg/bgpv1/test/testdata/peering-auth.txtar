@@ -23,6 +23,14 @@ gobgp/wait-state fd00::aa:bb:cc:102 ESTABLISHED
 gobgp/peers -o peers.actual
 * cmp gobgp-peers.expected peers.actual
 
+# Validate IPv4 routes
+gobgp/routes -o routes.actual ipv4 unicast
+* cmp gobgp-routes-ipv4.expected routes.actual
+
+# Validate IPv6 routes
+gobgp/routes -o routes.actual ipv6 unicast
+* cmp gobgp-routes-ipv6.expected routes.actual
+
 #####
 
 -- cilium-node.yaml --
@@ -104,3 +112,9 @@ data:
 -- gobgp-peers.expected --
 PeerAddress          RouterID   PeerASN   SessionState   KeepAlive   HoldTime   GracefulRestartTime
 fd00::aa:bb:cc:102   5.6.7.8    65001     ESTABLISHED    30          90         0
+-- gobgp-routes-ipv4.expected --
+Prefix          NextHop              Attrs
+10.244.0.0/24   fd00::aa:bb:cc:102   [{Origin: i} {AsPath: } {LocalPref: 100} {MpReach(ipv4-unicast): {Nexthop: fd00::aa:bb:cc:102, NLRIs: [10.244.0.0/24]}}]
+-- gobgp-routes-ipv6.expected --
+Prefix            NextHop              Attrs
+fd00:11:22::/64   fd00::aa:bb:cc:102   [{Origin: i} {AsPath: } {LocalPref: 100} {MpReach(ipv6-unicast): {Nexthop: fd00::aa:bb:cc:102, NLRIs: [fd00:11:22::/64]}}]

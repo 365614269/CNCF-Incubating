@@ -48,7 +48,6 @@ func noopParser(t *testing.T) *parser.Parser {
 		&testutils.NoopServiceGetter,
 		&testutils.NoopLinkGetter,
 		&testutils.NoopPodMetadataGetter,
-		true,
 	)
 	require.NoError(t, err)
 	return pp
@@ -377,10 +376,8 @@ func TestLocalObserverServer_GetAgentEvents(t *testing.T) {
 		var msg monitorAPI.AgentNotifyMessage
 		if i == 0 {
 			msg = monitorAPI.StartMessage(time.Unix(42, 1))
-		} else if i%2 == 1 {
-			msg = monitorAPI.IPCacheUpsertedMessage(cidr, uint32(i), nil, net.ParseIP("10.1.5.4"), nil, 0xff, "default", "foobar")
 		} else {
-			msg = monitorAPI.ServiceDeleteMessage(uint32(i))
+			msg = monitorAPI.IPCacheUpsertedMessage(cidr, uint32(i), nil, net.ParseIP("10.1.5.4"), nil, 0xff, "default", "foobar")
 		}
 		m <- &observerTypes.MonitorEvent{
 			Timestamp: ts,
@@ -787,7 +784,6 @@ func Benchmark_TrackNamespaces(b *testing.B) {
 		&testutils.NoopServiceGetter,
 		&testutils.NoopLinkGetter,
 		&testutils.NoopPodMetadataGetter,
-		true,
 	)
 	if err != nil {
 		b.Fatal(err)

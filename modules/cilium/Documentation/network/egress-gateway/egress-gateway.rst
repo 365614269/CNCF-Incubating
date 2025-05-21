@@ -10,9 +10,9 @@
 Egress Gateway
 **************
 
-The egress gateway feature routes all IPv4 connections originating from pods and
-destined to specific cluster-external CIDRs through particular nodes, from now
-on called "gateway nodes".
+The egress gateway feature routes all IPv4 and IPv6 connections originating from
+pods and destined to specific cluster-external CIDRs through particular nodes,
+from now on called "gateway nodes".
 
 When the egress gateway feature is enabled and egress gateway policies are in
 place, matching packets that leave the cluster are masqueraded with selected,
@@ -53,8 +53,7 @@ adequately route traffic flowing from and to the instances. Other cloud
 providers have similar networking requirements and constructs.
 
 Additionally, the enablement of the egress gateway feature requires that both
-BPF masquerading and the kube-proxy replacement are enabled, which may not be
-possible in all environments (due to, e.g., incompatible kernel versions).
+BPF masquerading and the kube-proxy replacement are enabled.
 
 Delay for enforcement of egress policies on new pods
 ----------------------------------------------------
@@ -79,8 +78,6 @@ by an egress gateway policy must be in the same cluster as the selected pods.
 
 Egress gateway is not compatible with the CiliumEndpointSlice feature
 (see :gh-issue:`24833` for details).
-
-Egress gateway is not supported for IPv6 traffic.
 
 Enable egress gateway
 =====================
@@ -193,13 +190,14 @@ To only select pods on certain nodes, you can use the ``nodeSelector``:
 Selecting the destination
 -------------------------
 
-One or more IPv4 destination CIDRs can be specified with ``destinationCIDRs``:
+One or more destination CIDRs can be specified with ``destinationCIDRs``:
 
 .. code-block:: yaml
 
     destinationCIDRs:
     - "a.b.c.d/32"
     - "e.f.g.0/24"
+    - "a:b::/48"
 
 .. note::
 
@@ -214,8 +212,10 @@ It's possible to specify exceptions to the ``destinationCIDRs`` list with
 
     destinationCIDRs:
     - "a.b.0.0/16"
+    - "a:b::/48"
     excludedCIDRs:
     - "a.b.c.0/24"
+    - "a:b:c::/64"
 
 In this case traffic destined to the ``a.b.0.0/16`` CIDR, except for the
 ``a.b.c.0/24`` destination, will go through egress gateway and leave the cluster
@@ -258,7 +258,8 @@ There are 3 different ways this can be achieved:
            testLabel: testVal
        interface: ethX
 
-   In this case the first IPv4 address assigned to the ``ethX`` interface will be used.
+   In this case the first IPv4 and IPv6 addresses assigned to the ``ethX`` interface
+   will be used.
 
 2. By explicitly specifying the egress IP:
 
@@ -275,7 +276,8 @@ There are 3 different ways this can be achieved:
      The egress IP must be assigned to a network device on the node.
 
 3. By omitting both ``egressIP`` and ``interface`` properties, which will make
-   the agent use the first IPv4 assigned to the interface for the default route.
+   the agent use the first IPv4 and IPv6 addresses assigned to the interface
+   for the default route.
 
    .. code-block:: yaml
 
@@ -332,6 +334,7 @@ the specification above:
     # Multiple CIDRs can be specified.
     destinationCIDRs:
     - "0.0.0.0/0"
+    - "::/0"
 
     # Configure the gateway node.
     egressGateway:
@@ -345,12 +348,13 @@ the specification above:
       egressIP: 10.168.60.100
 
       # Alternatively it's possible to specify the interface to be used for egress traffic.
-      # In this case the first IPv4 assigned to that interface will be used as egress IP.
+      # In this case the first IPv4 and IPv6 addresses assigned to that interface will be used
+      # as egress IP.
       # interface: enp0s8
 
 Creating the ``CiliumEgressGatewayPolicy`` resource above would cause all
 traffic originating from pods with the ``org: empire`` and ``class: mediabot``
-labels in the ``default`` namespace on node ``node1``  and destined to ``0.0.0.0/0``
+labels in the ``default`` namespace on node ``node1`` and destined to ``0.0.0.0/0`` or ``::/0``
 (i.e. all traffic leaving the cluster) to be routed through the gateway node with the
 ``node.kubernetes.io/name: node2`` label, which will then SNAT said
 traffic with the ``10.168.60.100`` egress IP.
@@ -361,16 +365,6 @@ Selection of the egress network interface
 For gateway nodes with multiple network interfaces, Cilium selects the egress
 network interface based on the node's routing setup
 (``ip route get <externalIP> from <egressIP>``).
-
-.. warning::
-
-   Redirecting to the correct egress network interface can fail under certain
-   conditions when using a pre-5.10 kernel. In this case Cilium falls back to
-   the current (== default) network interface.
-
-   For environments that strictly require traffic to leave through the
-   correct egress interface (for example EKS in ENI mode), it is recommended to use
-   a 5.10 kernel or newer.
 
 Testing the egress gateway feature
 ==================================
@@ -443,8 +437,8 @@ designated external service is running on.
 
 Specifying an IP address in the ``egressIP`` field is optional.
 To make things easier in this example, it is possible to comment out that line.
-This way, the agent will use the first IPv4 assigned to the interface for the
-default route.
+This way, the agent will use the first IPv4 and IPv6 addresses assigned to the interface
+for the default route.
 
 To let the policy select the node designated to be the Egress Gateway, apply the
 label ``egress-node: true`` to it:
