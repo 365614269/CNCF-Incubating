@@ -16,10 +16,13 @@ cilium-agent hive [flags]
       --api-rate-limit string                                     API rate limiting configuration (example: --api-rate-limit endpoint-create=rate-limit:10/m,rate-burst:2)
       --bpf-lb-algorithm string                                   BPF load balancing algorithm ("random", "maglev") (default "random")
       --bpf-lb-algorithm-annotation                               Enable service-level annotation for configuring BPF load balancing algorithm
+      --bpf-lb-dsr-dispatch string                                BPF load balancing DSR dispatch method ("opt", "ipip", "geneve") (default "opt")
       --bpf-lb-external-clusterip                                 Enable external access to ClusterIP services (default false)
       --bpf-lb-maglev-hash-seed string                            Maglev cluster-wide hash seed (base64 encoded) (default "JLfvgnHc2kaSUFaI")
       --bpf-lb-maglev-table-size uint                             Maglev per service backend table size (parameter M, one of: [251 509 1021 2039 4093 8191 16381 32749 65521 131071]) (default 16381)
       --bpf-lb-map-max int                                        Maximum number of entries in Cilium BPF lbmap (default 65536)
+      --bpf-lb-mode string                                        BPF load balancing mode ("snat", "dsr", "hybrid") (default "snat")
+      --bpf-lb-mode-annotation                                    Enable service-level annotation for configuring BPF load balancing mode
       --bpf-lb-source-range-all-types                             Propagate loadbalancerSourceRanges to all corresponding service types
       --bpf-node-map-max uint32                                   Sets size of node bpf map which will be the max number of unique Node IPs in the cluster (default 16384)
       --bpf-policy-map-max int                                    Maximum number of entries in endpoint policy map (per endpoint) (default 16384)
@@ -58,7 +61,6 @@ cilium-agent hive [flags]
       --enable-health-check-nodeport                              Enables a healthcheck nodePort server for NodePort services with 'healthCheckNodePort' being set (default true)
       --enable-hubble                                             Enable hubble server
       --enable-hubble-open-metrics                                Enable exporting hubble metrics in OpenMetrics format
-      --enable-hubble-recorder-api                                Enable the Hubble recorder API (default true)
       --enable-ingress-controller                                 Enables Envoy secret sync for Ingress controller related TLS secrets
       --enable-ipv4-big-tcp                                       Enable IPv4 BIG TCP option which increases device's maximum GRO/GSO limits for IPv4
       --enable-ipv6-big-tcp                                       Enable IPv6 BIG TCP option which increases device's maximum GRO/GSO limits for IPv6
@@ -121,8 +123,6 @@ cilium-agent hive [flags]
       --hubble-monitor-events strings                             Cilium monitor events for Hubble to observe: [drop debug capture trace policy-verdict recorder trace-sock l7 agent]. By default, Hubble observes all monitor events.
       --hubble-network-policy-correlation-enabled                 Enable network policy correlation of Hubble flows (default true)
       --hubble-prefer-ipv6                                        Prefer IPv6 addresses for announcing nodes when both address types are available.
-      --hubble-recorder-sink-queue-size int                       Queue size of each Hubble recorder sink (default 1024)
-      --hubble-recorder-storage-path string                       Directory in which pcap files created via the Hubble Recorder API are stored (default "/var/run/cilium/pcaps")
       --hubble-redact-enabled                                     Hubble redact sensitive information from flows
       --hubble-redact-http-headers-allow strings                  HTTP headers to keep visible in flows
       --hubble-redact-http-headers-deny strings                   HTTP headers to redact from flows
