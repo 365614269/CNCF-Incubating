@@ -11,8 +11,9 @@
 * [FEATURE] Ingester: Support out-of-order native histogram ingestion. It automatically enabled when `-ingester.out-of-order-time-window > 0` and `-blocks-storage.tsdb.enable-native-histograms=true`. #6626 #6663
 * [FEATURE] Ruler: Add support for percentage based sharding for rulers. #6680
 * [FEATURE] Ruler: Add support for group labels. #6665
-* [FEATURE] Support Parquet format: Implement parquet converter service to convert a TSDB block into Parquet. #6716
+* [FEATURE] Experimental Support Parquet format: Implement parquet converter service to convert a TSDB block into Parquet and Parquet Queryable. #6716 #6743
 * [FEATURE] Distributor/Ingester: Implemented experimental feature to use gRPC stream connection for push requests. This can be enabled by setting `-distributor.use-stream-push=true`. #6580
+* [FEATURE] Compactor: Add support for percentage based sharding for compactors. #6738
 * [ENHANCEMENT] Query Frontend: Change to return 400 when the tenant resolving fail. #6715
 * [ENHANCEMENT] Querier: Support query parameters to metadata api (/api/v1/metadata) to allow user to limit metadata to return. Add a `-ingester.return-all-metadata` flag to make the metadata API run when the deployment. Please set this flag to `false` to use the metadata API with the limits later. #6681 #6744
 * [ENHANCEMENT] Ingester: Add a `cortex_ingester_active_native_histogram_series` metric to track # of active NH series. #6695
@@ -43,6 +44,7 @@
 * [BUGFIX] Querier: Fix panic when marshaling QueryResultRequest. #6601
 * [BUGFIX] Ingester: Avoid resharding for query when restart readonly ingesters. #6642
 * [BUGFIX] Query Frontend: Fix query frontend per `user` metrics clean up. #6698
+* [BUGFIX] Add `__markers__` tenant ID validation. #6761
 
 ## 1.19.0 2025-02-27
 
