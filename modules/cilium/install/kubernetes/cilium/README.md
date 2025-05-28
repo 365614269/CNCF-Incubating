@@ -341,7 +341,6 @@ contributors across the globe, there is almost always someone available to help.
 | enableLBIPAM | bool | `true` | Enable LoadBalancer IP Address Management |
 | enableMasqueradeRouteSource | bool | `false` | Enables masquerading to the source of the route for traffic leaving the node from endpoints. |
 | enableNonDefaultDenyPolicies | bool | `true` | Enable Non-Default-Deny policies |
-| enableRuntimeDeviceDetection | bool | `true` | Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered.  This option has been deprecated and is a no-op. |
 | enableXTSocketFallback | bool | `true` | Enables the fallback compatibility solution for when the xt_socket kernel module is missing and it is needed for the datapath L7 redirection to work properly. See documentation for details on when this can be disabled: https://docs.cilium.io/en/stable/operations/system_requirements/#linux-kernel. |
 | encryption.enabled | bool | `false` | Enable transparent network encryption. |
 | encryption.ipsec.encryptedOverlay | bool | `false` | Enable IPsec encrypted overlay |
@@ -446,7 +445,6 @@ contributors across the globe, there is almost always someone available to help.
 | etcd.enabled | bool | `false` | Enable etcd mode for the agent. |
 | etcd.endpoints | list | `["https://CHANGE-ME:2379"]` | List of etcd endpoints |
 | etcd.ssl | bool | `false` | Enable use of TLS/SSL for connectivity to etcd. |
-| externalIPs.enabled | bool | `false` | Enable ExternalIPs service support. |
 | extraArgs | list | `[]` | Additional agent container arguments. |
 | extraConfig | object | `{}` | extraConfig allows you to specify additional configuration parameters to be included in the cilium-config configmap. |
 | extraContainers | list | `[]` | Additional containers added to the cilium DaemonSet. |
@@ -475,7 +473,6 @@ contributors across the globe, there is almost always someone available to help.
 | healthPort | int | `9879` | TCP port for the agent health API. This is not the port for cilium-health. |
 | hostFirewall | object | `{"enabled":false}` | Configure the host firewall. |
 | hostFirewall.enabled | bool | `false` | Enables the enforcement of host policies in the eBPF datapath. |
-| hostPort.enabled | bool | `false` | Enable hostPort service support. |
 | hubble.annotations | object | `{}` | Annotations to be added to all top-level hubble objects (resources under templates/hubble) |
 | hubble.dropEventEmitter | object | `{"enabled":false,"interval":"2m","reasons":["auth_required","policy_denied"]}` | Emit v1.Events related to pods on detection of packet drops.    This feature is alpha, please provide feedback at https://github.com/cilium/cilium/issues/33975. |
 | hubble.dropEventEmitter.interval | string | `"2m"` | - Minimum time between emitting same events. |

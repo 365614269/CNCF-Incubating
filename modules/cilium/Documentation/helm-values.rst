@@ -1164,10 +1164,6 @@
      - Enable Non-Default-Deny policies
      - bool
      - ``true``
-   * - :spelling:ignore:`enableRuntimeDeviceDetection`
-     - Enables experimental support for the detection of new and removed datapath devices. When devices change the eBPF datapath is reloaded and services updated. If "devices" is set then only those devices, or devices matching a wildcard will be considered.  This option has been deprecated and is a no-op.
-     - bool
-     - ``true``
    * - :spelling:ignore:`enableXTSocketFallback`
      - Enables the fallback compatibility solution for when the xt_socket kernel module is missing and it is needed for the datapath L7 redirection to work properly. See documentation for details on when this can be disabled: https://docs.cilium.io/en/stable/operations/system_requirements/#linux-kernel.
      - bool
@@ -1584,10 +1580,6 @@
      - Enable use of TLS/SSL for connectivity to etcd.
      - bool
      - ``false``
-   * - :spelling:ignore:`externalIPs.enabled`
-     - Enable ExternalIPs service support.
-     - bool
-     - ``false``
    * - :spelling:ignore:`extraArgs`
      - Additional agent container arguments.
      - list
@@ -1698,10 +1690,6 @@
      - ``{"enabled":false}``
    * - :spelling:ignore:`hostFirewall.enabled`
      - Enables the enforcement of host policies in the eBPF datapath.
-     - bool
-     - ``false``
-   * - :spelling:ignore:`hostPort.enabled`
-     - Enable hostPort service support.
      - bool
      - ``false``
    * - :spelling:ignore:`hubble.annotations`
