@@ -163,7 +163,7 @@ func NewPushInstance(evtC <-chan source.PushEvent, options ...func(*<unexported-
 `source.NewPullInstance` and `source.NewPushInstance` are two constructors for SDK-provided `source.Instance` implementations that cover the following use cases:
 
 - **Pull Model**: for when the event source can be implemented sequentially and the time required to generate a sequence of event is deterministic. This is implemented with a functional design, where the passed-in callback is expected to be non-suspensive and to return quickly
-- **Push Model**: for when the event source can be suspensive and there is no time guarantee reguarding when an event gets produced. For instance, this applies for all event sources that generate events from webhook events. Given the event-driven nature of this use case, this is implemented by passing event data in the form of byte slices through a channel
+- **Push Model**: for when the event source can be suspensive and there is no time guarantee regarding when an event gets produced. For instance, this applies for all event sources that generate events from webhook events. Given the event-driven nature of this use case, this is implemented by passing event data in the form of byte slices through a channel
 
 The prebuilt `source.Instance`s can be configured in the function constructors by using the Go *options pattern*. The SDK provides options for configuring and overriding all the default values:
 
@@ -609,7 +609,7 @@ This simple rule prints a Falco alert any time the event number is between 0 and
 - rule: My Dummy Rule
   desc: My Desc
   condition: evt.num > 0 and evt.num < 10 and dummy.divisible[3] = 1
-  output: A dummy event (event=%evt.plugininfo sample=%dummy.value sample_str=%dummy.strvalue num=%evt.num)
+  output: A dummy event | event=%evt.plugininfo sample=%dummy.value sample_str=%dummy.strvalue num=%evt.num
   priority: INFO
   source: dummy
 ```
