@@ -360,6 +360,8 @@ Deprecated Options
   ``--kube-proxy-replacent`` is set to ``true``.
 * The flag ``--enable-k8s-endpoint-slice`` have been deprecated and will be removed in Cilium 1.19.
   The K8s Endpoint Slice feature will be unconditionally enabled.
+* The flag ``--enable-internal-traffic-policy`` has been deprecated and will be removed in Cilium 1.19. The
+  ``internalTrafficPolicy`` field in a Kubernetes Service object will be unconditionally respected.
 
 Helm Options
 ~~~~~~~~~~~~
@@ -383,6 +385,8 @@ Helm Options
 * The Helm option ``l2PodAnnouncements.interface`` has been deprecated in favor of ``l2PodAnnouncements.interfacePattern``
   and will be removed in Cilium 1.19.
 * The Helm value of ``enableIPv4Masquerade`` in ``eni`` mode changes from ``true`` to ``false`` by default from 1.18.
+* The Helm option ``clustermesh.apiserver.kvstoremesh.enabled`` has been deprecated and will be removed in Cilium 1.19.
+  Starting from 1.19 KVStoreMesh will be unconditionally enabled when the Cluster Mesh API Server is enabled.
 
 Agent Options
 ~~~~~~~~~~~~~
