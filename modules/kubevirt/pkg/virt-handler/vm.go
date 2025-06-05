@@ -2228,10 +2228,10 @@ func (c *VirtualMachineController) isLauncherClientUnresponsive(vmi *v1.VirtualM
 			// use cached socket if we previously established a connection
 			socketFile = clientInfo.SocketFile
 		} else {
-			socketFile, err = cmdclient.FindSocketOnHost(vmi)
+			socketFile, err = cmdclient.FindSocket(vmi)
 			if err != nil {
 				// socket does not exist, but let's see if the pod is still there
-				if _, err = cmdclient.FindPodDirOnHost(vmi); err != nil {
+				if _, err = cmdclient.FindPodDirOnHost(vmi, cmdclient.SocketDirectoryOnHost); err != nil {
 					// no pod meanst that waiting for it to initialize makes no sense
 					return true, true, nil
 				}
@@ -2252,11 +2252,11 @@ func (c *VirtualMachineController) isLauncherClientUnresponsive(vmi *v1.VirtualM
 		}
 		c.launcherClients.Store(vmi.UID, clientInfo)
 		// attempt to find the socket if the established connection doesn't currently exist.
-		socketFile, err = cmdclient.FindSocketOnHost(vmi)
+		socketFile, err = cmdclient.FindSocket(vmi)
 		// no socket file, no VMI, so it's unresponsive
 		if err != nil {
 			// socket does not exist, but let's see if the pod is still there
-			if _, err = cmdclient.FindPodDirOnHost(vmi); err != nil {
+			if _, err = cmdclient.FindPodDirOnHost(vmi, cmdclient.SocketDirectoryOnHost); err != nil {
 				// no pod meanst that waiting for it to initialize makes no sense
 				return true, true, nil
 			}
@@ -2276,7 +2276,7 @@ func (c *VirtualMachineController) getLauncherClient(vmi *v1.VirtualMachineInsta
 		return clientInfo.Client, nil
 	}
 
-	socketFile, err := cmdclient.FindSocketOnHost(vmi)
+	socketFile, err := cmdclient.FindSocket(vmi)
 	if err != nil {
 		return nil, err
 	}

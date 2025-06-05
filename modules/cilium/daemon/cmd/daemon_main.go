@@ -1027,7 +1027,7 @@ func initDaemonConfigAndLogging(vp *viper.Viper) {
 	option.Config.Populate(logging.DefaultSlogLogger, vp)
 
 	// add hooks after setting up metrics in the option.Config
-	logging.AddHooks(metrics.NewLoggingHook())
+	logging.AddHandlers(metrics.NewLoggingHook())
 
 	time.MaxInternalTimerDelay = vp.GetDuration(option.MaxInternalTimerDelay)
 }
@@ -1494,6 +1494,7 @@ type daemonParams struct {
 	MonitorAgent        monitorAgent.Agent
 	ServiceManager      service.ServiceManager
 	DB                  *statedb.DB
+	Namespaces          statedb.Table[agentK8s.Namespace]
 	Routes              statedb.Table[*datapathTables.Route]
 	Devices             statedb.Table[*datapathTables.Device]
 	NodeAddrs           statedb.Table[datapathTables.NodeAddress]

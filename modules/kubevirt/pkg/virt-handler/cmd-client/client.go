@@ -34,6 +34,7 @@ import (
 	"net/rpc"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -196,26 +197,30 @@ func SocketFilePathOnHost(podUID string) string {
 }
 
 // gets the cmd socket for a VMI
-func FindPodDirOnHost(vmi *v1.VirtualMachineInstance) (string, error) {
+func FindPodDirOnHost(vmi *v1.VirtualMachineInstance, socketDirFunc func(string) string) (string, error) {
 
+	var socketDirsForErrorReporting []string
 	// It is possible for multiple pods to be active on a single VMI
 	// during migrations. This loop will discover the active pod on
 	// this particular local node if it exists. A active pod not
 	// running on this node will not have a kubelet pods directory,
 	// so it will not be found.
 	for podUID := range vmi.Status.ActivePods {
-		socketPodDir := SocketDirectoryOnHost(string(podUID))
+		socketPodDir := socketDirFunc(string(podUID))
+		socketDirsForErrorReporting = append(socketDirsForErrorReporting, socketPodDir)
 		exists, _ := diskutils.FileExists(socketPodDir)
 		if exists {
 			return socketPodDir, nil
 		}
 	}
 
-	return "", fmt.Errorf("No command socketdir for vmi %s", vmi.UID)
+	return "", fmt.Errorf("No pod dir found for vmi %s in paths [%s]", vmi.UID, strings.Join(socketDirsForErrorReporting, ","))
 }
 
-// gets the cmd socket for a VMI
-func FindSocketOnHost(vmi *v1.VirtualMachineInstance) (string, error) {
+// Finds exactly one socket on a host based on the hostname.
+// A empty hostname is wildcard.
+// Returns error otherwise.
+func FindSocketOnHost(vmi *v1.VirtualMachineInstance, host string) (string, error) {
 	socketsFound := 0
 	foundSocket := ""
 	// It is possible for multiple pods to be active on a single VMI
@@ -223,7 +228,10 @@ func FindSocketOnHost(vmi *v1.VirtualMachineInstance) (string, error) {
 	// this particular local node if it exists. A active pod not
 	// running on this node will not have a kubelet pods directory,
 	// so it will not be found.
-	for podUID := range vmi.Status.ActivePods {
+	for podUID, phost := range vmi.Status.ActivePods {
+		if host != "" && host != phost {
+			continue
+		}
 		socket := SocketFilePathOnHost(string(podUID))
 		exists, _ := diskutils.FileExists(socket)
 		if exists {
@@ -239,6 +247,12 @@ func FindSocketOnHost(vmi *v1.VirtualMachineInstance) (string, error) {
 	}
 
 	return "", fmt.Errorf("No command socket found for vmi %s", vmi.UID)
+}
+
+// Finds exactly one socket on a host based on the NODE_NAME env. Returns error otherwise.
+func FindSocket(vmi *v1.VirtualMachineInstance) (string, error) {
+	host, _ := os.LookupEnv("NODE_NAME")
+	return FindSocketOnHost(vmi, host)
 }
 
 func SocketOnGuest() string {
