@@ -16,12 +16,12 @@ import (
 
 	"github.com/cilium/cilium/pkg/byteorder"
 	"github.com/cilium/cilium/pkg/loadbalancer"
+	"github.com/cilium/cilium/pkg/loadbalancer/legacy/lbmap"
 	"github.com/cilium/cilium/pkg/loadbalancer/legacy/service"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/act"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
-	"github.com/cilium/cilium/pkg/maps/lbmap"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/metrics/metric"
 	"github.com/cilium/cilium/pkg/option"
@@ -354,7 +354,7 @@ func (a *ACT) countFailed(svc uint16, key lbmap.BackendKey) {
 		logfields.BackendID, key.GetID(),
 	)
 
-	val, err := key.Map().Lookup(key)
+	val, err := lbmap.BackendMap(key).Lookup(key)
 	if err != nil {
 		msg := "lookup of purged entry failed"
 		errMetric := a.metrics.Errors.WithLabelValues(msg)
