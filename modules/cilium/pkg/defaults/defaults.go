@@ -166,6 +166,9 @@ const (
 	// option.IdentityChangeGracePeriod
 	IdentityChangeGracePeriod = 5 * time.Second
 
+	// CiliumIdentityMaxJitter is the maximum duration to delay processing a CiliumIdentity under certain conditions.
+	CiliumIdentityMaxJitter = 30 * time.Second
+
 	// IdentityRestoreGracePeriodKvstore is the default value for
 	// option.IdentityRestoreGracePeriod when kvstore is enabled.
 	IdentityRestoreGracePeriodKvstore = 10 * time.Minute
@@ -287,12 +290,6 @@ const (
 
 	// AlignCheckerName is the BPF object name for the alignchecker.
 	AlignCheckerName = "bpf_alignchecker.o"
-
-	// KVstorePeriodicSync is the default kvstore periodic sync interval
-	KVstorePeriodicSync = 5 * time.Minute
-
-	// KVstoreConnectivityTimeout is the timeout when performing kvstore operations
-	KVstoreConnectivityTimeout = 2 * time.Minute
 
 	// KVStoreStaleLockTimeout is the timeout for when a lock is held for
 	// a kvstore path for too long.

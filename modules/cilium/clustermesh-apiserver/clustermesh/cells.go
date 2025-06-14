@@ -15,10 +15,8 @@ import (
 	"github.com/cilium/cilium/pkg/gops"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/synced"
-	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/heartbeat"
 	"github.com/cilium/cilium/pkg/pprof"
-	"github.com/cilium/cilium/pkg/promise"
 )
 
 var Cell = cell.Module(
@@ -45,21 +43,16 @@ var Cell = cell.Module(
 	// Allows cells to wait for CRDs before trying to list Cilium resources.
 	synced.CRDSyncCell,
 
-	cell.Provide(func() heartbeat.Config {
-		return heartbeat.Config{
-			EnableHeartBeat: true, // always enabled
-		}
-	}),
+	heartbeat.Enabled,
 	heartbeat.Cell,
 
 	HealthAPIEndpointsCell,
 
 	cell.Group(
 		cell.Provide(
-			func(backend promise.Promise[kvstore.BackendOperations], syncState syncstate.SyncState) operatorWatchers.ServiceSyncConfig {
+			func(syncState syncstate.SyncState) operatorWatchers.ServiceSyncConfig {
 				return operatorWatchers.ServiceSyncConfig{
 					Enabled: true,
-					Backend: backend,
 					Synced:  syncState.WaitForResource(),
 				}
 			},

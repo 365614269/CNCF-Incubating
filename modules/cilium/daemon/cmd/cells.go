@@ -4,11 +4,14 @@
 package cmd
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
 	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/cilium/statedb"
+	"google.golang.org/grpc"
 
 	healthApi "github.com/cilium/cilium/api/v1/health/server"
 	"github.com/cilium/cilium/api/v1/server"
@@ -21,7 +24,6 @@ import (
 	"github.com/cilium/cilium/pkg/bgpv1"
 	cgroup "github.com/cilium/cilium/pkg/cgroups/manager"
 	"github.com/cilium/cilium/pkg/ciliumenvoyconfig"
-	ciliumenvoyconfig_legacy "github.com/cilium/cilium/pkg/ciliumenvoyconfig/legacy"
 	"github.com/cilium/cilium/pkg/clustermesh"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/controller"
@@ -43,15 +45,14 @@ import (
 	identity "github.com/cilium/cilium/pkg/identity/cell"
 	ipamcell "github.com/cilium/cilium/pkg/ipam/cell"
 	ipcache "github.com/cilium/cilium/pkg/ipcache/cell"
-	"github.com/cilium/cilium/pkg/k8s"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	k8sSynced "github.com/cilium/cilium/pkg/k8s/synced"
 	"github.com/cilium/cilium/pkg/k8s/watchers"
 	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
+	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/l2announcer"
 	loadbalancer_cell "github.com/cilium/cilium/pkg/loadbalancer/cell"
-	loadbalancer_legacy "github.com/cilium/cilium/pkg/loadbalancer/legacy"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maglev"
 	"github.com/cilium/cilium/pkg/maps/metricsmap"
@@ -100,6 +101,17 @@ var (
 
 		// Provides Clientset, API for accessing Kubernetes objects.
 		k8sClient.Cell,
+
+		// Provide the logic to map DNS names matching Kubernetes services to the
+		// corresponding ClusterIP, without depending on CoreDNS. Leveraged by etcd
+		// and clustermesh. Note that it depends on k8s.ServiceResource, which is
+		// currently provided as part of the ControlPlane module.
+		dial.ServiceResolverCell,
+
+		// Provides the Client to access the KVStore.
+		cell.Provide(kvstoreExtraOptions),
+		kvstore.Cell(kvstore.DisabledBackendName),
+		cell.Invoke(kvstoreLocksGC),
 
 		cni.Cell,
 
@@ -197,9 +209,6 @@ var (
 		// Control-plane for configuring service load-balancing
 		loadbalancer_cell.Cell,
 
-		// Legacy version of the load-balancing control-plane
-		loadbalancer_legacy.Cell,
-
 		// Proxy provides the proxy port allocation and related datapath coordination and
 		// makes different L7 proxies (Envoy, DNS proxy) usable to Cilium endpoints through
 		// a common Proxy 'redirect' abstraction.
@@ -212,7 +221,6 @@ var (
 		// CiliumEnvoyConfig provides support for the CRD CiliumEnvoyConfig that backs Ingress, Gateway API
 		// and L7 loadbalancing.
 		ciliumenvoyconfig.Cell,
-		ciliumenvoyconfig_legacy.Cell,
 
 		// Cilium REST API handlers
 		restapi.Cell,
@@ -237,9 +245,6 @@ var (
 
 		// Egress Gateway allows originating traffic from specific IPv4 addresses.
 		egressgateway.Cell,
-
-		// ServiceCache holds the list of known services correlated with the matching endpoints.
-		k8s.ServiceCacheCell,
 
 		// Provides PolicyRepository (List of policy rules)
 		policy.Cell,
@@ -270,11 +275,6 @@ var (
 
 		// NAT stats provides stat computation and tables for NAT map bpf maps.
 		natStats.Cell,
-
-		// Provide the logic to map DNS names matching Kubernetes services to the
-		// corresponding ClusterIP, without depending on CoreDNS. Leveraged by etcd
-		// and clustermesh.
-		dial.ServiceResolverCell,
 
 		// Provide resource groups to watch.
 		cell.Provide(func() watchers.ResourceGroupFunc { return allResourceGroups }),
@@ -366,9 +366,6 @@ var pprofConfig = pprof.Config{
 // which the Cilium agent watches to implement CNI functionality.
 func allResourceGroups(logger *slog.Logger, cfg watchers.WatcherConfiguration) (resourceGroups, waitForCachesOnly []string) {
 	k8sGroups := []string{
-		// To perform the service translation and have the BPF LB datapath
-		// with the right service -> backend (k8s endpoints) translation.
-		resources.K8sAPIGroupServiceV1Core,
 		// Pods can contain labels which are essential for endpoints
 		// being restored to have the right identity.
 		resources.K8sAPIGroupPodV1Core,
@@ -389,4 +386,40 @@ func allResourceGroups(logger *slog.Logger, cfg watchers.WatcherConfiguration) (
 	waitForCachesOnly = append(waitForCachesOnly, waitOnlyList...)
 
 	return append(k8sGroups, ciliumGroups...), waitForCachesOnly
+}
+
+// kvstoreExtraOptions provides the extra options to initialize the kvstore client.
+func kvstoreExtraOptions(in struct {
+	cell.In
+
+	Logger *slog.Logger
+
+	NodeManager nodeManager.NodeManager
+	ClientSet   k8sClient.Clientset
+	Resolver    *dial.ServiceResolver
+}) (kvstore.ExtraOptions, kvstore.BootstrapStat) {
+	goopts := kvstore.ExtraOptions{
+		ClusterSizeDependantInterval: in.NodeManager.ClusterSizeDependantInterval,
+	}
+
+	// If K8s is enabled we can do the service translation automagically by
+	// looking at services from k8s and retrieve the service IP from that.
+	// This makes cilium to not depend on kube dns to interact with etcd
+	if in.ClientSet.IsEnabled() {
+		goopts.DialOption = []grpc.DialOption{
+			grpc.WithContextDialer(dial.NewContextDialer(in.Logger, in.Resolver)),
+		}
+	}
+
+	return goopts, &bootstrapStats.kvstore
+}
+
+// kvstoreLocksGC registers the kvstore locks GC logic.
+func kvstoreLocksGC(logger *slog.Logger, jg job.Group, client kvstore.Client) {
+	if client.IsEnabled() {
+		jg.Add(job.Timer("kvstore-locks-gc", func(ctx context.Context) error {
+			kvstore.RunLockGC(logger)
+			return nil
+		}, defaults.KVStoreStaleLockTimeout))
+	}
 }

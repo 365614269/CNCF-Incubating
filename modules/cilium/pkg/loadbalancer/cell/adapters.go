@@ -8,15 +8,17 @@ import (
 	"iter"
 	"log/slog"
 	"net"
-	"net/netip"
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
 	"github.com/cilium/statedb"
 	"github.com/cilium/statedb/reconciler"
 	"github.com/cilium/stream"
+	"github.com/go-openapi/runtime/middleware"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/cilium/cilium/api/v1/models"
+	serviceapi "github.com/cilium/cilium/api/v1/server/restapi/service"
 	"github.com/cilium/cilium/pkg/clustermesh/store"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/k8s"
@@ -54,31 +56,9 @@ type adapterParams struct {
 	TestConfig   *loadbalancer.TestConfig `optional:"true"`
 }
 
-type decorateParams struct {
-	cell.In
-
-	Config loadbalancer.Config
-	SCA    *serviceCacheAdapter
-	SC     k8s.ServiceCache `optional:"true"`
-	SMA    *serviceManagerAdapter
-	SM     service.ServiceManager `optional:"true"`
-}
-
-func decorateAdapters(p decorateParams) (k8s.ServiceCache, service.ServiceManager) {
-	if !p.Config.EnableExperimentalLB {
-		return p.SC, p.SM
-	}
-	return p.SCA, p.SMA
-}
-
-// newAdapters constructs the ServiceCache and ServiceManager adapters. This is separate
-// from [decorateAdapters] in order to have access to the module's job.Group which is not
-// accessible in the [cell.DecorateAll] scope.
-func newAdapters(p adapterParams) (sca *serviceCacheAdapter, sma *serviceManagerAdapter) {
-	if !p.Config.EnableExperimentalLB {
-		return nil, nil
-	}
-	sca = &serviceCacheAdapter{
+// newAdapters constructs the ServiceCache and ServiceManager adapters
+func newAdapters(p adapterParams) (k8s.ServiceCache, service.ServiceManager) {
+	sca := &serviceCacheAdapter{
 		log:      p.Log,
 		db:       p.DB,
 		services: p.Services,
@@ -88,26 +68,15 @@ func newAdapters(p adapterParams) (sca *serviceCacheAdapter, sma *serviceManager
 	sca.notifications, sca.emit, sca.complete = stream.Multicast[k8s.ServiceNotification]()
 	p.JobGroup.Add(job.OneShot("adapter-notifications", sca.feedNotifications))
 
-	// If we are not running in tests we should register a table initializer to
-	// delay pruning until ClusterMesh has catched up. This happens via
-	// (*Daemon).initRestore in daemon/cmd/state.go. Once ClusterMesh has switched
-	// to using the Writer directly this can be removed.
-	var initDone func(writer.WriteTxn)
-	if p.TestConfig == nil && p.Clientset.IsEnabled() {
-		initDone = p.Writer.RegisterInitializer("adapters")
-	} else {
-		initDone = func(writer.WriteTxn) {}
-	}
-	sma = &serviceManagerAdapter{
+	sma := &serviceManagerAdapter{
 		log:          p.Log,
 		daemonConfig: p.DaemonConfig,
 		db:           p.DB,
 		services:     p.Services,
 		frontends:    p.Frontends,
 		writer:       p.Writer,
-		initDone:     initDone,
 	}
-	return
+	return sca, sma
 }
 
 type serviceCacheAdapter struct {
@@ -351,51 +320,12 @@ type serviceManagerAdapter struct {
 	services     statedb.Table[*loadbalancer.Service]
 	frontends    statedb.Table[*loadbalancer.Frontend]
 	writer       *writer.Writer
-
-	initDone func(writer.WriteTxn)
-}
-
-// DeleteService implements service.ServiceManager.
-func (s *serviceManagerAdapter) DeleteService(frontend loadbalancer.L3n4Addr) (bool, error) {
-	s.log.Debug("serviceManagerAdapter: Ignoring DeleteService", logfields.Frontend, frontend.StringWithProtocol())
-	return true, nil
-}
-
-// DeleteServiceByID implements service.ServiceManager.
-func (s *serviceManagerAdapter) DeleteServiceByID(id loadbalancer.ServiceID) (bool, error) {
-	// Used by REST API.
-	s.log.Debug("serviceManagerAdapter: Ignoring DeleteServiceByID", logfields.ID, id)
-	return true, nil
-}
-
-// DeregisterL7LBServiceBackendSync implements service.ServiceManager.
-func (s *serviceManagerAdapter) DeregisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSyncer) error {
-	// Used by ciliumenvoyconfig, but not when new implementation is enabled.
-	panic("unimplemented")
-}
-
-// DeregisterL7LBServiceRedirect implements service.ServiceManager.
-func (s *serviceManagerAdapter) DeregisterL7LBServiceRedirect(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName) error {
-	// Used by ciliumenvoyconfig, but not when new implementation is enabled.
-	panic("unimplemented")
 }
 
 // GetCurrentTs implements service.ServiceManager.
 func (s *serviceManagerAdapter) GetCurrentTs() time.Time {
 	// Used by kubeproxyhealthz.
 	return time.Now()
-}
-
-// GetDeepCopyServiceByFrontend implements service.ServiceManager.
-func (s *serviceManagerAdapter) GetDeepCopyServiceByFrontend(frontend loadbalancer.L3n4Addr) (*loadbalancer.LegacySVC, bool) {
-	// Used by pod watcher, which will be replaced when new implementation is enabled.
-	return nil, false
-}
-
-// GetDeepCopyServiceByID implements service.ServiceManager.
-func (s *serviceManagerAdapter) GetDeepCopyServiceByID(id loadbalancer.ServiceID) (*loadbalancer.LegacySVC, bool) {
-	// Used by REST API
-	return nil, false
 }
 
 // GetDeepCopyServices implements service.ServiceManager.
@@ -474,67 +404,6 @@ func (s *serviceManagerAdapter) GetLastUpdatedTs() time.Time {
 	return time.Now()
 }
 
-// InitMaps implements service.ServiceManager.
-func (s *serviceManagerAdapter) InitMaps(ipv6 bool, ipv4 bool, sockMaps bool, restore bool) error {
-	// No need for this since new implementation manages its own maps. Called from daemon/cmd/datapath.go.
-	s.log.Debug("serviceManagerAdapter: Ignoring InitMaps")
-	return nil
-}
-
-// RegisterL7LBServiceBackendSync implements service.ServiceManager.
-func (s *serviceManagerAdapter) RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSyncer) error {
-	// Used by ciliumenvoyconfig, but not when new implementation is enabled.
-	panic("unimplemented")
-}
-
-// RegisterL7LBServiceRedirect implements service.ServiceManager.
-func (s *serviceManagerAdapter) RegisterL7LBServiceRedirect(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName, proxyPort uint16, frontendPorts []uint16) error {
-	// Used by ciliumenvoyconfig, but not when new implementation is enabled.
-	panic("unimplemented")
-}
-
-// RestoreServices implements service.ServiceManager.
-func (s *serviceManagerAdapter) RestoreServices() error {
-	s.log.Debug("serviceManagerAdapter: Ignoring RestoreServices")
-	return nil
-}
-
-// SyncNodePortFrontends implements service.ServiceManager.
-func (s *serviceManagerAdapter) SyncNodePortFrontends(sets.Set[netip.Addr]) error {
-	s.log.Debug("serviceManagerAdapter: Ignoring SyncNodePortFrontends")
-	return nil
-}
-
-// SyncWithK8sFinished implements service.ServiceManager.
-func (s *serviceManagerAdapter) SyncWithK8sFinished(localOnly bool, localServices sets.Set[k8s.ServiceID]) (stale []k8s.ServiceID, err error) {
-	if !localOnly {
-		txn := s.writer.WriteTxn()
-		s.initDone(txn)
-		txn.Commit()
-	}
-	return
-}
-
-// TerminateUDPConnectionsToBackend implements service.ServiceManager.
-func (s *serviceManagerAdapter) TerminateUDPConnectionsToBackend(l3n4Addr *loadbalancer.L3n4Addr) error {
-	// Used by LRP, but not when new implementation is enabled.
-	panic("unimplemented")
-}
-
-// UpdateBackendsState implements service.ServiceManager.
-func (s *serviceManagerAdapter) UpdateBackendsState(backends []*loadbalancer.LegacyBackend) ([]loadbalancer.L3n4Addr, error) {
-	// Used by REST API.
-	s.log.Debug("serviceManagerAdapter: Ignoring UpdateBackendsState")
-	return nil, nil
-}
-
-// UpsertService implements service.ServiceManager.
-func (s *serviceManagerAdapter) UpsertService(svc *loadbalancer.LegacySVC) (bool, loadbalancer.ID, error) {
-	// Used by pod watcher, LRP and REST API
-	s.log.Debug("serviceManagerAdapter: Ignoring UpsertService", logfields.Name, svc.Name)
-	return true, 0, nil
-}
-
 // GetServiceIDs implements service.ServiceReader.
 func (s *serviceManagerAdapter) GetServiceIDs() []loadbalancer.ServiceID {
 	// Used by pkg/act.
@@ -563,3 +432,63 @@ func (s *serviceManagerAdapter) GetServiceNameByAddr(addr loadbalancer.L3n4Addr)
 }
 
 var _ service.ServiceManager = &serviceManagerAdapter{}
+
+type serviceRestApiHandlerParams struct {
+	cell.In
+
+	Logger         *slog.Logger
+	ServiceManager service.ServiceManager
+}
+
+type serviceRestApiHandlerOut struct {
+	cell.Out
+
+	GetServiceIDHandler serviceapi.GetServiceIDHandler
+	GetServiceHandler   serviceapi.GetServiceHandler
+}
+
+func newServiceRestApiHandler(params serviceRestApiHandlerParams) serviceRestApiHandlerOut {
+	return serviceRestApiHandlerOut{
+		GetServiceIDHandler: &getServiceIDHandler{
+			logger:         params.Logger,
+			serviceManager: params.ServiceManager,
+		},
+		GetServiceHandler: &getServiceHandler{
+			logger:         params.Logger,
+			serviceManager: params.ServiceManager,
+		},
+	}
+}
+
+type getServiceIDHandler struct {
+	logger         *slog.Logger
+	serviceManager service.ServiceManager
+}
+
+func (h *getServiceIDHandler) Handle(params serviceapi.GetServiceIDParams) middleware.Responder {
+	// Lookups by ID not supported.
+	return serviceapi.NewGetServiceIDNotFound()
+}
+
+type getServiceHandler struct {
+	logger         *slog.Logger
+	serviceManager service.ServiceManager
+}
+
+func (h *getServiceHandler) Handle(params serviceapi.GetServiceParams) middleware.Responder {
+	h.logger.Debug(
+		"GET /service request",
+		logfields.Params, params,
+	)
+	list := GetServiceModelList(h.serviceManager)
+	return serviceapi.NewGetServiceOK().WithPayload(list)
+}
+
+func GetServiceModelList(svc service.ServiceManager) []*models.Service {
+	svcs := svc.GetDeepCopyServices()
+	list := make([]*models.Service, 0, len(svcs))
+	for _, v := range svcs {
+		list = append(list, v.GetModel())
+	}
+	return list
+}

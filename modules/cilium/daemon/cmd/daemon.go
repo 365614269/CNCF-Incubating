@@ -43,11 +43,8 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/watchers"
-	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/loadbalancer"
-	"github.com/cilium/cilium/pkg/loadbalancer/legacy/redirectpolicy"
-	"github.com/cilium/cilium/pkg/loadbalancer/legacy/service"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maglev"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
@@ -77,7 +74,6 @@ type Daemon struct {
 	metricsRegistry *metrics.Registry
 	clientset       k8sClient.Clientset
 	db              *statedb.DB
-	svc             service.ServiceManager
 	policy          policy.PolicyRepository
 	idmgr           identitymanager.IDManager
 
@@ -128,7 +124,6 @@ type Daemon struct {
 
 	bwManager datapath.BandwidthManager
 
-	lrpManager   *redirectpolicy.Manager
 	maglevConfig maglev.Config
 
 	lbConfig loadbalancer.Config
@@ -298,7 +293,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		idmgr:             params.IdentityManager,
 		clustermesh:       params.ClusterMesh,
 		monitorAgent:      params.MonitorAgent,
-		svc:               params.ServiceManager,
 		bwManager:         params.BandwidthManager,
 		endpointCreator:   params.EndpointCreator,
 		endpointManager:   params.EndpointManager,
@@ -306,7 +300,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		k8sWatcher:        params.K8sWatcher,
 		k8sSvcCache:       params.K8sSvcCache,
 		ipam:              params.IPAM,
-		lrpManager:        params.LRPManager,
 		maglevConfig:      params.MaglevConfig,
 		lbConfig:          params.LBConfig,
 		ciliumHealth:      params.CiliumHealth,
@@ -361,24 +354,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		return nil, nil, fmt.Errorf("error while opening/creating BPF maps: %w", err)
 	}
 
-	// Read the service IDs of existing services from the BPF map and
-	// reserve them. This must be done *before* connecting to the
-	// Kubernetes apiserver and serving the API to ensure service IDs are
-	// not changing across restarts or that a new service could accidentally
-	// use an existing service ID.
-	// Also, create missing v2 services from the corresponding legacy ones.
-	if option.Config.RestoreState && !option.Config.DryMode {
-		bootstrapStats.restore.Start()
-		if err := d.svc.RestoreServices(); err != nil {
-			d.logger.Warn("Failed to restore services from BPF maps", logfields.Error, err)
-		}
-		bootstrapStats.restore.End(true)
-	}
-
 	debug.RegisterStatusObject("k8s-service-cache", d.k8sSvcCache)
 	debug.RegisterStatusObject("ipam", d.ipam)
-
-	d.k8sWatcher.RunK8sServiceHandler()
 
 	if option.Config.DNSPolicyUnloadOnShutdown {
 		d.logger.Debug(
@@ -614,15 +591,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.logger.Warn("Unable to clean stale endpoint interfaces", logfields.Error, err)
 	}
 
-	// Must init kvstore before starting node discovery
-	if option.Config.KVStore == "" {
-		d.logger.Info("Skipping kvstore configuration")
-	} else {
-		bootstrapStats.kvstore.Start()
-		d.initKVStore(params.ServiceResolver)
-		bootstrapStats.kvstore.End(true)
-	}
-
 	// Fetch the router (`cilium_host`) IPs in case they were set a priori from
 	// the Kubernetes or CiliumNode resource in the K8s subsystem from call
 	// k8s.WaitForNodeInformation(). These will be used later after starting
@@ -652,7 +620,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	// Must occur after d.allocateIPs(), see GH-14245 and its fix.
-	d.nodeDiscovery.StartDiscovery()
+	d.nodeDiscovery.StartDiscovery(ctx)
 
 	// Annotation of the k8s node must happen after discovery of the
 	// PodCIDR range and allocation of the health IPs.
@@ -704,7 +672,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	if option.Config.IdentityAllocationMode != option.IdentityAllocationModeCRD ||
 		params.Clientset.IsEnabled() {
 		realIdentityAllocator := d.identityAllocator
-		realIdentityAllocator.InitIdentityAllocator(params.Clientset)
+		realIdentityAllocator.InitIdentityAllocator(params.Clientset, params.KVStoreClient)
 	}
 
 	// Must be done at least after initializing BPF LB-related maps
@@ -737,12 +705,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	// Start watcher for endpoint IP --> identity mappings in key-value store.
-	// this needs to be done *after* init() for the daemon in that function,
-	// we populate the IPCache with the host's IP(s).
-	if option.Config.KVStore != "" {
+	// this needs to be done *after* that the ipcache map has been recreated
+	// by initMaps.
+	if params.IPIdentityWatcher.IsEnabled() {
 		go func() {
 			d.logger.Info("Starting IP identity watcher")
-			params.IPIdentityWatcher.Watch(ctx, kvstore.Client(), ipcache.WithSelfDeletionProtection(params.IPIdentitySyncer))
+			params.IPIdentityWatcher.Watch(ctx)
 		}()
 	}
 

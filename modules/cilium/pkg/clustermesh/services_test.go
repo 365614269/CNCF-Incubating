@@ -67,6 +67,28 @@ type ClusterMeshServicesTestSuite struct {
 	randomName string
 }
 
+type svcCacheMerger struct {
+	sc *k8s.ServiceCacheImpl
+}
+
+var stoppedWaitGroup = func() *lock.StoppableWaitGroup {
+	swg := lock.NewStoppableWaitGroup()
+	swg.Stop()
+	return swg
+}()
+
+// MergeExternalServiceDelete implements ServiceMerger.
+func (s svcCacheMerger) MergeExternalServiceDelete(service *serviceStore.ClusterService) {
+	s.sc.MergeExternalServiceDelete(service, stoppedWaitGroup)
+}
+
+// MergeExternalServiceUpdate implements ServiceMerger.
+func (s svcCacheMerger) MergeExternalServiceUpdate(service *serviceStore.ClusterService) {
+	s.sc.MergeExternalServiceUpdate(service, stoppedWaitGroup)
+}
+
+var _ ServiceMerger = svcCacheMerger{}
+
 func setup(tb testing.TB) *ClusterMeshServicesTestSuite {
 	testutils.IntegrationTest(tb)
 
@@ -92,9 +114,9 @@ func setup(tb testing.TB) *ClusterMeshServicesTestSuite {
 
 	s.svcCache = k8s.NewServiceCache(logger, loadbalancer.DefaultConfig, db, nodeAddrs, k8s.NewSVCMetricsNoop())
 
-	mgr := cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.AllocatorConfig{})
+	mgr := cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.NewTestAllocatorConfig())
 	// The nils are only used by k8s CRD identities. We default to kvstore.
-	<-mgr.InitIdentityAllocator(nil)
+	<-mgr.InitIdentityAllocator(nil, client)
 	dir := tb.TempDir()
 
 	for i, cluster := range []string{clusterName1, clusterName2} {
@@ -125,8 +147,9 @@ func setup(tb testing.TB) *ClusterMeshServicesTestSuite {
 	s.mesh = NewClusterMesh(hivetest.Lifecycle(tb), Configuration{
 		Config:                common.Config{ClusterMeshConfig: dir},
 		ClusterInfo:           cmtypes.ClusterInfo{ID: localClusterID, Name: localClusterName, MaxConnectedClusters: 255},
+		RemoteClientFactory:   common.DefaultRemoteClientFactory(kvstore.Config{}),
 		NodeObserver:          newNodesObserver(),
-		ServiceMerger:         s.svcCache,
+		ServiceMerger:         svcCacheMerger{s.svcCache},
 		RemoteIdentityWatcher: mgr,
 		IPCache:               ipc,
 		ClusterIDsManager:     NewClusterMeshUsedIDs(localClusterID),

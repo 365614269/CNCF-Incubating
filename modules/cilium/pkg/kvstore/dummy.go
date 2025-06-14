@@ -22,7 +22,7 @@ var (
 // the creation of two clients at the same time, to avoid interferences in case
 // different tests are run in parallel. A cleanup function is automatically
 // registered to delete all keys and close the client when the test terminates.
-func SetupDummy(tb testing.TB, dummyBackend string) BackendOperations {
+func SetupDummy(tb testing.TB, dummyBackend string) Client {
 	return SetupDummyWithConfigOpts(tb, dummyBackend, nil)
 }
 
@@ -32,7 +32,11 @@ func SetupDummy(tb testing.TB, dummyBackend string) BackendOperations {
 // in case different tests are run in parallel. A cleanup function is
 // automatically registered to delete all keys and close the client when the
 // test terminates.
-func SetupDummyWithConfigOpts(tb testing.TB, dummyBackend string, opts map[string]string) BackendOperations {
+func SetupDummyWithConfigOpts(tb testing.TB, dummyBackend string, opts map[string]string) Client {
+	if dummyBackend == DisabledBackendName {
+		return &clientImpl{enabled: false}
+	}
+
 	module := getBackend(dummyBackend)
 	if module == nil {
 		tb.Fatalf("Unknown dummy kvstore backend %s", dummyBackend)
@@ -47,11 +51,25 @@ func SetupDummyWithConfigOpts(tb testing.TB, dummyBackend string, opts map[strin
 		}
 	}
 
-	if err := initClient(context.Background(), hivetest.Logger(tb), module, nil); err != nil {
-		tb.Fatalf("Unable to initialize kvstore client: %v", err)
+	client, errCh := module.newClient(context.Background(), hivetest.Logger(tb), ExtraOptions{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	var err error
+	select {
+	case err = <-errCh:
+	case <-ctx.Done():
+		err = ctx.Err()
 	}
 
-	client := Client()
+	if err != nil {
+		if client != nil {
+			client.Close()
+		}
+
+		tb.Fatalf("Failed waiting for kvstore connection to be established: %v", err)
+	}
 
 	tb.Cleanup(func() {
 		if err := client.DeletePrefix(context.Background(), ""); err != nil {
@@ -60,13 +78,6 @@ func SetupDummyWithConfigOpts(tb testing.TB, dummyBackend string, opts map[strin
 
 		client.Close()
 	})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	if err := <-client.Connected(ctx); err != nil {
-		tb.Fatalf("Failed waiting for kvstore connection to be established: %v", err)
-	}
 
 	// Multiple tests might be running in parallel by go test if they are part of
 	// different packages. Let's implement a locking mechanism to ensure that only
@@ -81,7 +92,7 @@ func SetupDummyWithConfigOpts(tb testing.TB, dummyBackend string, opts map[strin
 		}
 
 		if succeeded {
-			return client
+			return &clientImpl{enabled: true, BackendOperations: client}
 		}
 
 		select {

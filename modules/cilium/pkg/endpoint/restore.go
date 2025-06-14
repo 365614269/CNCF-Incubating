@@ -30,7 +30,6 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labelsfilter"
-	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/mac"
 	"github.com/cilium/cilium/pkg/node"
@@ -272,9 +271,7 @@ func (e *Endpoint) restoreIdentity(regenerator *Regenerator) error {
 		controller.ControllerParams{
 			Group: restoreEndpointIdentityControllerGroup,
 			DoFunc: func(ctx context.Context) (err error) {
-				allocateCtx, cancel := context.WithTimeout(ctx, option.Config.KVstoreConnectivityTimeout)
-				defer cancel()
-				id, _, err = e.allocator.AllocateIdentity(allocateCtx, l, true, identity.InvalidIdentity)
+				id, _, err = e.allocator.AllocateIdentity(ctx, l, true, identity.InvalidIdentity)
 				if err != nil {
 					return err
 				}
@@ -306,10 +303,7 @@ func (e *Endpoint) restoreIdentity(regenerator *Regenerator) error {
 			controller.ControllerParams{
 				Group: initialGlobalIdentitiesControllerGroup,
 				DoFunc: func(ctx context.Context) (err error) {
-					identityCtx, cancel := context.WithTimeout(ctx, option.Config.KVstoreConnectivityTimeout)
-					defer cancel()
-
-					err = e.allocator.WaitForInitialGlobalIdentities(identityCtx)
+					err = e.allocator.WaitForInitialGlobalIdentities(ctx)
 					if err != nil {
 						e.getLogger().Warn("Failed while waiting for initial global identities", logfields.Error, err)
 						return err
@@ -563,7 +557,7 @@ func (ep *Endpoint) UnmarshalJSON(raw []byte) error {
 		Labels:     labels.NewOpLabels(),
 		Options:    option.NewIntOptions(&EndpointMutableOptionLibrary),
 		DNSHistory: fqdn.NewDNSCacheWithLimit(option.Config.ToFQDNsMinTTL, option.Config.ToFQDNsMaxIPsPerHost),
-		DNSZombies: fqdn.NewDNSZombieMappings(logging.DefaultSlogLogger, option.Config.ToFQDNsMaxDeferredConnectionDeletes, option.Config.ToFQDNsMaxIPsPerHost),
+		DNSZombies: fqdn.NewDNSZombieMappings(ep.getLogger(), option.Config.ToFQDNsMaxDeferredConnectionDeletes, option.Config.ToFQDNsMaxIPsPerHost),
 	}
 	if err := json.Unmarshal(raw, restoredEp); err != nil {
 		return fmt.Errorf("error unmarshaling serializableEndpoint from base64 representation: %w", err)

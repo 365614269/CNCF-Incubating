@@ -319,6 +319,7 @@ communicating via the proxy must reconnect to re-establish connections.
 * This Cilium version now requires a v5.10 Linux kernel or newer.
 * CiliumIdentity CRD does not contain Security Labels in metadata anymore except for the namespace label.
 * The support for Envoy Go Extensions (proxylib) is deprecated, and will be removed in a future release.
+* The kube_proxy_healthz endpoint no longer requires Kubernetes control plane connectivity to succeed.
 
 Removed Options
 ~~~~~~~~~~~~~~~
@@ -373,6 +374,8 @@ Deprecated Options
 * The flag ``--egress-multi-home-ip-rule-compat`` and the old IP rule scheme has been deprecated and will be removed
   in Cilium 1.19. Running Cilium 1.18 with the flag set to ``false`` (default value) will migrate any existing IP rules
   to the new scheme.
+* The flag ``--enable-ipv4-egress-gateway`` has been deprecated in favor of ``--enable-egress-gateway`` and will
+  be removed in Cilium 1.19.
 
 Helm Options
 ~~~~~~~~~~~~
@@ -405,6 +408,14 @@ Agent Options
 * The new agent flag ``underlay-protocol`` allows selecting the IP family for the underlay. It defaults to IPv4.
 * ``k8s-api-server-urls``: This option specifies a list of URLs for Kubernetes API server instances to support high availability
   for the servers. The agent will fail over to an active instance in case of connectivity failures at runtime.
+* The ``kvstore-connectivity-timeout`` flag is renamed to ``identity-allocation-timeout`` to better reflect its purpose.
+* The ``kvstore-periodic-sync`` flag is renamed to ``identity-allocation-sync-interval`` to better reflect its purpose.
+
+Cluster Mesh API Server Options
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* The previously unused ``kvstore-connectivity-timeout`` and ``kvstore-periodic-sync``
+  flags have been removed from the apiserver and kvstoremesh commands.
 
 Bugtool Options
 ~~~~~~~~~~~~~~~
