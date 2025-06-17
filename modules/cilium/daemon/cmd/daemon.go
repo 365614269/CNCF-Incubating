@@ -42,6 +42,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/watchers"
+	"github.com/cilium/cilium/pkg/kpr"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -106,8 +107,7 @@ type Daemon struct {
 	identityRestorer  *identityrestoration.LocalIdentityRestorer
 	ipcache           *ipcache.IPCache
 
-	k8sWatcher  *watchers.K8sWatcher
-	k8sSvcCache k8s.ServiceCache
+	k8sWatcher *watchers.K8sWatcher
 
 	endpointMetadata endpointmetadata.EndpointMetadataFetcher
 
@@ -126,6 +126,7 @@ type Daemon struct {
 	maglevConfig maglev.Config
 
 	lbConfig loadbalancer.Config
+	kprCfg   kpr.KPRConfig
 }
 
 func (d *Daemon) init() error {
@@ -236,18 +237,36 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		}
 	}
 
+	// IPAMENI IPSec is configured from Reinitialize() to pull in devices
+	// that may be added or removed at runtime.
+	if option.Config.EnableIPSec &&
+		!option.Config.TunnelingEnabled() &&
+		len(option.Config.EncryptInterface) == 0 &&
+		// If devices are required, we don't look at the EncryptInterface, as we
+		// don't load bpf_network in loader.reinitializeIPSec. Instead, we load
+		// bpf_host onto physical devices as chosen by configuration.
+		!option.Config.AreDevicesRequired(params.KPRConfig) &&
+		option.Config.IPAM != ipamOption.IPAMENI {
+		link, err := linuxdatapath.NodeDeviceNameWithDefaultRoute(params.Logger)
+		if err != nil {
+			return nil, nil,
+				fmt.Errorf("Ipsec default interface lookup failed, consider \"encrypt-interface\" to manually configure interface. Err: %w", err)
+		}
+		option.Config.EncryptInterface = append(option.Config.EncryptInterface, link)
+	}
+
 	// Do the partial kube-proxy replacement initialization before creating BPF
 	// maps. Otherwise, some maps might not be created (e.g. session affinity).
 	// finishKubeProxyReplacementInit(), which is called later after the device
 	// detection, might disable BPF NodePort and friends. But this is fine, as
 	// the feature does not influence the decision which BPF maps should be
 	// created.
-	if err := initKubeProxyReplacementOptions(params.Logger, params.Sysctl, params.TunnelConfig, params.LBConfig); err != nil {
+	if err := initKubeProxyReplacementOptions(params.Logger, params.Sysctl, params.TunnelConfig, params.LBConfig, params.KPRConfig); err != nil {
 		params.Logger.Error("unable to initialize kube-proxy replacement options", logfields.Error, err)
 		return nil, nil, fmt.Errorf("unable to initialize kube-proxy replacement options: %w", err)
 	}
 
-	ctmap.InitMapInfo(params.MetricsRegistry, option.Config.EnableIPv4, option.Config.EnableIPv6, option.Config.EnableNodePort)
+	ctmap.InitMapInfo(params.MetricsRegistry, option.Config.EnableIPv4, option.Config.EnableIPv6, params.KPRConfig.EnableNodePort)
 
 	identity.IterateReservedIdentities(func(_ identity.NumericIdentity, _ *identity.Identity) {
 		metrics.Identity.WithLabelValues(identity.ReservedIdentityType).Inc()
@@ -286,10 +305,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		endpointManager:   params.EndpointManager,
 		endpointMetadata:  params.EndpointMetadata,
 		k8sWatcher:        params.K8sWatcher,
-		k8sSvcCache:       params.K8sSvcCache,
 		ipam:              params.IPAM,
 		maglevConfig:      params.MaglevConfig,
 		lbConfig:          params.LBConfig,
+		kprCfg:            params.KPRConfig,
 		ciliumHealth:      params.CiliumHealth,
 	}
 
@@ -342,7 +361,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		return nil, nil, fmt.Errorf("error while opening/creating BPF maps: %w", err)
 	}
 
-	debug.RegisterStatusObject("k8s-service-cache", d.k8sSvcCache)
 	debug.RegisterStatusObject("ipam", d.ipam)
 
 	if option.Config.DNSPolicyUnloadOnShutdown {
@@ -489,15 +507,13 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	// The kube-proxy replacement and host-fw devices detection should happen after
 	// establishing a connection to kube-apiserver, but before starting a k8s watcher.
-	// This is because the device detection requires self (Cilium)Node object,
-	// and the k8s service watcher depends on option.Config.EnableNodePort flag
-	// which can be modified after the device detection.
+	// This is because the device detection requires self (Cilium)Node object.
 
 	rxn := d.db.ReadTxn()
 	drdName := ""
 	directRoutingDevice, _ := params.DirectRoutingDevice.Get(ctx, rxn)
 	if directRoutingDevice == nil {
-		if option.Config.AreDevicesRequired() {
+		if option.Config.AreDevicesRequired(params.KPRConfig) {
 			// Fail hard if devices are required to function.
 			return nil, nil, fmt.Errorf("unable to determine direct routing device. Use --%s to specify it",
 				option.DirectRoutingDevice)
@@ -511,7 +527,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	nativeDevices, _ := datapathTables.SelectedDevices(d.devices, rxn)
-	if err := finishKubeProxyReplacementInit(params.Logger, params.Sysctl, nativeDevices, drdName, d.lbConfig); err != nil {
+	if err := finishKubeProxyReplacementInit(params.Logger, params.Sysctl, nativeDevices, drdName, d.lbConfig, d.kprCfg); err != nil {
 		d.logger.Error("failed to finalise LB initialization", logfields.Error, err)
 		return nil, nil, fmt.Errorf("failed to finalise LB initialization: %w", err)
 	}
@@ -522,7 +538,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 		var err error
 		switch {
-		case !option.Config.EnableNodePort:
+		case !params.KPRConfig.EnableNodePort:
 			err = fmt.Errorf("BPF masquerade requires NodePort (--%s=\"true\")",
 				option.EnableNodePort)
 		case len(option.Config.MasqueradeInterfaces) > 0:
