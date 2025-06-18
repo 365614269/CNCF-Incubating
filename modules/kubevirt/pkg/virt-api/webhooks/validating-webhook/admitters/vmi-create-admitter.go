@@ -166,6 +166,8 @@ func ValidateVirtualMachineInstancePerArch(field *k8sfield.Path, spec *v1.Virtua
 		causes = append(causes, webhooks.ValidateVirtualMachineInstanceS390XSetting(field, spec)...)
 	case "arm64":
 		causes = append(causes, webhooks.ValidateVirtualMachineInstanceArm64Setting(field, spec)...)
+	case "ppc64le":
+		causes = append(causes, webhooks.ValidateVirtualMachineInstancePPC64LESetting(field, spec)...)
 	default:
 		causes = append(causes, metav1.StatusCause{
 			Type:    metav1.CauseTypeFieldValueInvalid,
@@ -237,6 +239,7 @@ func ValidateVirtualMachineInstanceSpec(field *k8sfield.Path, spec *v1.VirtualMa
 	causes = append(causes, validatePersistentReservation(field, spec, config)...)
 	causes = append(causes, validateDownwardMetrics(field, spec, config)...)
 	causes = append(causes, validateFilesystemsWithVirtIOFSEnabled(field, spec, config)...)
+	causes = append(causes, validateVideoConfig(field, spec, config)...)
 
 	return causes
 }
@@ -1458,30 +1461,45 @@ func validateFirmwareACPI(field *k8sfield.Path, spec *v1.VirtualMachineInstanceS
 	}
 
 	acpi := spec.Domain.Firmware.ACPI
-	for _, volume := range spec.Volumes {
-		if acpi.SlicNameRef != volume.Name {
+	if acpi.SlicNameRef == "" && acpi.MsdmNameRef == "" {
+		return append(causes, metav1.StatusCause{
+			Type:    metav1.CauseTypeFieldValueInvalid,
+			Message: fmt.Sprintf("ACPI was set but no SLIC nor MSDM volume reference was set"),
+			Field:   field.String(),
+		})
+	}
+
+	causes = append(causes, validateACPIRef(field, acpi.SlicNameRef, spec.Volumes, "slicNameRef")...)
+	causes = append(causes, validateACPIRef(field, acpi.MsdmNameRef, spec.Volumes, "msdmNameRef")...)
+	return causes
+}
+
+func validateACPIRef(field *k8sfield.Path, nameRef string, volumes []v1.Volume, fieldName string) []metav1.StatusCause {
+	if nameRef == "" {
+		return nil
+	}
+
+	for _, volume := range volumes {
+		if nameRef != volume.Name {
 			continue
 		}
 
-		switch {
-		case volume.Secret != nil:
-		default:
-			causes = append(causes, metav1.StatusCause{
-				Type:    metav1.CauseTypeFieldValueInvalid,
-				Message: fmt.Sprintf("%s refers to Volume of unsupported type.", field.String()),
-				Field:   field.Child("slicNameRef").String(),
-			})
+		if volume.Secret != nil {
+			return nil
 		}
-		return causes
+
+		return []metav1.StatusCause{{
+			Type:    metav1.CauseTypeFieldValueInvalid,
+			Message: fmt.Sprintf("%s refers to Volume of unsupported type.", field.String()),
+			Field:   field.Child(fieldName).String(),
+		}}
 	}
 
-	causes = append(causes, metav1.StatusCause{
+	return []metav1.StatusCause{{
 		Type:    metav1.CauseTypeFieldValueInvalid,
 		Message: fmt.Sprintf("%s does not have a matching Volume.", field.String()),
-		Field:   field.String(),
-	})
-
-	return causes
+		Field:   field.Child(fieldName).String(),
+	}}
 }
 
 func validateFirmware(field *k8sfield.Path, firmware *v1.Firmware) []metav1.StatusCause {
@@ -2388,5 +2406,32 @@ func validateCPUHotplug(field *k8sfield.Path, spec *v1.VirtualMachineInstanceSpe
 			})
 		}
 	}
+	return causes
+}
+
+func validateVideoConfig(field *k8sfield.Path, spec *v1.VirtualMachineInstanceSpec, config *virtconfig.ClusterConfig) []metav1.StatusCause {
+	var causes []metav1.StatusCause
+
+	if spec.Domain.Devices.Video == nil {
+		return causes
+	}
+
+	if !config.VideoConfigEnabled() {
+		causes = append(causes, metav1.StatusCause{
+			Type:    metav1.CauseTypeFieldValueInvalid,
+			Message: fmt.Sprintf("Video configuration is specified but the %s feature gate is not enabled", featuregate.VideoConfig),
+			Field:   field.Child("video").String(),
+		})
+		return causes
+	}
+
+	if spec.Domain.Devices.AutoattachGraphicsDevice != nil && !*spec.Domain.Devices.AutoattachGraphicsDevice {
+		causes = append(causes, metav1.StatusCause{
+			Type:    metav1.CauseTypeFieldValueInvalid,
+			Message: "Video configuration is not allowed when autoattachGraphicsDevice is set to false",
+			Field:   field.Child("video").String(),
+		})
+	}
+
 	return causes
 }

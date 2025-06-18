@@ -1929,6 +1929,15 @@ var _ = Describe("Converter", func() {
 			MultiArchEntry("and not add the graphics and video device if it is set to false", pointer.P(false), 0),
 		)
 
+		DescribeTable("should check video device", func(arch string) {
+			const expectedVideoType = "test-video"
+			vmi := libvmi.New(libvmi.WithAutoattachGraphicsDevice(true), libvmi.WithVideo(expectedVideoType))
+			domain := vmiToDomain(vmi, &ConverterContext{AllowEmulation: true, Architecture: archconverter.NewConverter(arch)})
+			Expect(domain.Spec.Devices.Video[0].Model.Type).To(Equal(expectedVideoType))
+		},
+			MultiArchEntry("and use the explicitly set video device"),
+		)
+
 		DescribeTable("Should have one vnc", func(arch string) {
 			vmi := v1.VirtualMachineInstance{
 				ObjectMeta: k8smeta.ObjectMeta{
@@ -2932,40 +2941,106 @@ var _ = Describe("Converter", func() {
 			Entry("VGA on ppc64le with EFI and BochsDisplayForEFIGuests set", ppc64le, v1.Bootloader{EFI: &v1.EFI{}}, true, "vga"),
 		)
 
-		DescribeTable("slic ACPI table should be set to", func(source v1.VolumeSource, isSupported bool, path string) {
-			slicName := "slic"
-			vmi.Spec.Domain.Firmware = &v1.Firmware{ACPI: &v1.ACPI{SlicNameRef: slicName}}
-			vmi.Spec.Volumes = []v1.Volume{
-				{
-					Name:         slicName,
-					VolumeSource: source,
-				},
+		DescribeTable("ACPI table should be set to", func(
+			slicVolumeName string, slicVol *v1.Volume,
+			msdmVolumeName string, msdmVol *v1.Volume,
+			errMatch string,
+		) {
+			acpi := &v1.ACPI{}
+			if slicVolumeName != "" {
+				acpi.SlicNameRef = slicVolumeName
+				vmi.Spec.Volumes = append(vmi.Spec.Volumes, *slicVol)
 			}
+			if msdmVolumeName != "" {
+				acpi.MsdmNameRef = msdmVolumeName
+				vmi.Spec.Volumes = append(vmi.Spec.Volumes, *msdmVol)
+			}
+			vmi.Spec.Domain.Firmware = &v1.Firmware{ACPI: acpi}
+
 			c = &ConverterContext{
 				Architecture:   archconverter.NewConverter(runtime.GOARCH),
 				VirtualMachine: vmi,
 				AllowEmulation: true,
 			}
-			if isSupported {
-				domainSpec := vmiToDomainXMLToDomainSpec(vmi, c)
-				Expect(domainSpec.OS.ACPI.Table.Type).To(Equal("slic"))
-				Expect(domainSpec.OS.ACPI.Table.Path).To(Equal(path))
-			} else {
+
+			if errMatch != "" {
+				// The error should be catch by webhook.
 				domain := &api.Domain{}
 				err := Convert_v1_VirtualMachineInstance_To_api_Domain(vmi, domain, c)
-				Expect(err).To(MatchError(ContainSubstring("Firmware's slic volume type is unsupported")))
+				Expect(err.Error()).To(ContainSubstring(errMatch))
+				return
+			}
+
+			domainSpec := vmiToDomainXMLToDomainSpec(vmi, c)
+			if slicVolumeName != "" {
+				Expect(domainSpec.OS.ACPI.Table).To(ContainElement(api.ACPITable{
+					Type: "slic",
+					Path: filepath.Join(config.GetSecretSourcePath(slicVolumeName), "slic.bin"),
+				}))
+			}
+
+			if msdmVolumeName != "" {
+				Expect(domainSpec.OS.ACPI.Table).To(ContainElement(api.ACPITable{
+					Type: "msdm",
+					Path: filepath.Join(config.GetSecretSourcePath(msdmVolumeName), "msdm.bin"),
+				}))
 			}
 		},
-			Entry("Secret set",
-				v1.VolumeSource{
-					Secret: &v1.SecretVolumeSource{SecretName: "secret-slic"},
-				}, true, filepath.Join(config.GetSecretSourcePath("slic"), "slic.bin")),
-			Entry("ConfigMap unset",
-				v1.VolumeSource{
-					ConfigMap: &v1.ConfigMapVolumeSource{
-						LocalObjectReference: k8sv1.LocalObjectReference{Name: "configmap-slic"},
+			// with Valid Secret volumes
+			Entry("slic with secret",
+				"vol-slic", &v1.Volume{
+					Name: "vol-slic",
+					VolumeSource: v1.VolumeSource{
+						Secret: &v1.SecretVolumeSource{
+							SecretName: "secret-slic",
+						},
 					},
-				}, false, ""),
+				}, "", nil, ""),
+			Entry("msdm with secret", "", nil,
+				"vol-msdm", &v1.Volume{
+					Name: "vol-msdm",
+					VolumeSource: v1.VolumeSource{
+						Secret: &v1.SecretVolumeSource{
+							SecretName: "secret-msdm",
+						},
+					},
+				}, ""),
+			// with not valid Volume source
+			Entry("slic with configmap",
+				"vol-slic", &v1.Volume{
+					Name: "vol-slic",
+					VolumeSource: v1.VolumeSource{
+						ConfigMap: &v1.ConfigMapVolumeSource{},
+					},
+				}, "", nil, "Firmware's volume type is unsupported for slic"),
+			Entry("msdm with configmap", "", nil,
+				"vol-msdm", &v1.Volume{
+					Name: "vol-msdm",
+					VolumeSource: v1.VolumeSource{
+						ConfigMap: &v1.ConfigMapVolumeSource{},
+					},
+				}, "Firmware's volume type is unsupported for msdm"),
+			// without matching volume source
+			Entry("slic without volume", "vol-slic", &v1.Volume{}, "", &v1.Volume{}, "Firmware's volume for slic was not found"),
+			Entry("msdm without volume", "", &v1.Volume{}, "vol-msdm", &v1.Volume{}, "Firmware's volume for msdm was not found"),
+			// try both togeter, correct input
+			Entry("slic and msdm with secret",
+				"vol-slic", &v1.Volume{
+					Name: "vol-slic",
+					VolumeSource: v1.VolumeSource{
+						Secret: &v1.SecretVolumeSource{
+							SecretName: "secret-slic",
+						},
+					},
+				},
+				"vol-msdm", &v1.Volume{
+					Name: "vol-msdm",
+					VolumeSource: v1.VolumeSource{
+						Secret: &v1.SecretVolumeSource{
+							SecretName: "secret-msdm",
+						},
+					},
+				}, ""),
 		)
 	})
 
