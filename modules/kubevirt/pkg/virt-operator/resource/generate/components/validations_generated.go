@@ -6996,7 +6996,7 @@ var CRDsValidation map[string]string = map[string]string{
                     - "None": No action will be taken, according to the specified 'RunStrategy' the VirtualMachine will be restarted or shutdown.
                     - "LiveMigrate": the VirtualMachineInstance will be migrated instead of being shutdown.
                     - "LiveMigrateIfPossible": the same as "LiveMigrate" but only if the VirtualMachine is Live-Migratable, otherwise it will behave as "None".
-                    - "External": the VirtualMachineInstance will be protected by a PDB and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
+                    - "External": the VirtualMachineInstance will be protected and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
                   type: string
                 hostname:
                   description: |-
@@ -12322,7 +12322,7 @@ var CRDsValidation map[string]string = map[string]string{
             - "None": No action will be taken, according to the specified 'RunStrategy' the VirtualMachine will be restarted or shutdown.
             - "LiveMigrate": the VirtualMachineInstance will be migrated instead of being shutdown.
             - "LiveMigrateIfPossible": the same as "LiveMigrate" but only if the VirtualMachine is Live-Migratable, otherwise it will behave as "None".
-            - "External": the VirtualMachineInstance will be protected by a PDB and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
+            - "External": the VirtualMachineInstance will be protected and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
           type: string
         hostname:
           description: |-
@@ -18263,7 +18263,7 @@ var CRDsValidation map[string]string = map[string]string{
                     - "None": No action will be taken, according to the specified 'RunStrategy' the VirtualMachine will be restarted or shutdown.
                     - "LiveMigrate": the VirtualMachineInstance will be migrated instead of being shutdown.
                     - "LiveMigrateIfPossible": the same as "LiveMigrate" but only if the VirtualMachine is Live-Migratable, otherwise it will behave as "None".
-                    - "External": the VirtualMachineInstance will be protected by a PDB and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
+                    - "External": the VirtualMachineInstance will be protected and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
                   type: string
                 hostname:
                   description: |-
@@ -19653,6 +19653,28 @@ var CRDsValidation map[string]string = map[string]string{
             zero and not specified. Defaults to 1.
           format: int32
           type: integer
+        scaleInStrategy:
+          description: ScaleInStrategy specifies how the VMPool controller manages
+            scaling in VMs within a VMPool
+          properties:
+            proactive:
+              description: Proactive scale-in by forcing VMs to shutdown during scale-in
+                (Default)
+              properties:
+                selectionPolicy:
+                  description: |-
+                    SelectionPolicy defines the priority in which VM instances are selected for proactive scale-in
+                    Defaults to "Random" base policy when no SelectionPolicy is configured
+                  properties:
+                    basePolicy:
+                      description: BasePolicy is a catch-all policy [Random|DescendingOrder]
+                      enum:
+                      - Random
+                      - DescendingOrder
+                      type: string
+                  type: object
+              type: object
+          type: object
         selector:
           description: |-
             Label selector for pods. Existing Poolss whose pods are
@@ -22818,7 +22840,7 @@ var CRDsValidation map[string]string = map[string]string{
                             - "None": No action will be taken, according to the specified 'RunStrategy' the VirtualMachine will be restarted or shutdown.
                             - "LiveMigrate": the VirtualMachineInstance will be migrated instead of being shutdown.
                             - "LiveMigrateIfPossible": the same as "LiveMigrate" but only if the VirtualMachine is Live-Migratable, otherwise it will behave as "None".
-                            - "External": the VirtualMachineInstance will be protected by a PDB and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
+                            - "External": the VirtualMachineInstance will be protected and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
                           type: string
                         hostname:
                           description: |-
@@ -28082,7 +28104,7 @@ var CRDsValidation map[string]string = map[string]string{
                                 - "None": No action will be taken, according to the specified 'RunStrategy' the VirtualMachine will be restarted or shutdown.
                                 - "LiveMigrate": the VirtualMachineInstance will be migrated instead of being shutdown.
                                 - "LiveMigrateIfPossible": the same as "LiveMigrate" but only if the VirtualMachine is Live-Migratable, otherwise it will behave as "None".
-                                - "External": the VirtualMachineInstance will be protected by a PDB and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
+                                - "External": the VirtualMachineInstance will be protected and 'vmi.Status.EvacuationNodeName' will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.
                               type: string
                             hostname:
                               description: |-

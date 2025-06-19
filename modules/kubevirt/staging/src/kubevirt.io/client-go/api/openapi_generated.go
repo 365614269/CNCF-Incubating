@@ -675,6 +675,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolCondition":                                  schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolCondition(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolList":                                       schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolList(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolNameGeneration":                             schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolNameGeneration(ref),
+		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolProactiveScaleInStrategy":                   schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolProactiveScaleInStrategy(ref),
+		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolScaleInStrategy":                            schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolScaleInStrategy(ref),
+		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolSelectionPolicy":                            schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSelectionPolicy(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolSpec":                                       schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSpec(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolStatus":                                     schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolStatus(ref),
 		"kubevirt.io/api/pool/v1alpha1.VirtualMachineTemplateSpec":                                   schema_kubevirtio_api_pool_v1alpha1_VirtualMachineTemplateSpec(ref),
@@ -27118,7 +27121,7 @@ func schema_kubevirtio_api_core_v1_VirtualMachineInstanceSpec(ref common.Referen
 					},
 					"evictionStrategy": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EvictionStrategy describes the strategy to follow when a node drain occurs. The possible options are: - \"None\": No action will be taken, according to the specified 'RunStrategy' the VirtualMachine will be restarted or shutdown. - \"LiveMigrate\": the VirtualMachineInstance will be migrated instead of being shutdown. - \"LiveMigrateIfPossible\": the same as \"LiveMigrate\" but only if the VirtualMachine is Live-Migratable, otherwise it will behave as \"None\". - \"External\": the VirtualMachineInstance will be protected by a PDB and `vmi.Status.EvacuationNodeName` will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.",
+							Description: "EvictionStrategy describes the strategy to follow when a node drain occurs. The possible options are: - \"None\": No action will be taken, according to the specified 'RunStrategy' the VirtualMachine will be restarted or shutdown. - \"LiveMigrate\": the VirtualMachineInstance will be migrated instead of being shutdown. - \"LiveMigrateIfPossible\": the same as \"LiveMigrate\" but only if the VirtualMachine is Live-Migratable, otherwise it will behave as \"None\". - \"External\": the VirtualMachineInstance will be protected and `vmi.Status.EvacuationNodeName` will be set on eviction. This is mainly useful for cluster-api-provider-kubevirt (capk) which needs a way for VMI's to be blocked from eviction, yet signal capk that eviction has been called on the VMI so the capk controller can handle tearing the VMI down. Details can be found in the commit description https://github.com/kubevirt/kubevirt/commit/c1d77face705c8b126696bac9a3ee3825f27f1fa.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -32862,6 +32865,68 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolNameGeneration(ref co
 	}
 }
 
+func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolProactiveScaleInStrategy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "VirtualMachinePoolProactiveScaleInStrategy represents proactive scale-in strategy",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"selectionPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SelectionPolicy defines the priority in which VM instances are selected for proactive scale-in Defaults to \"Random\" base policy when no SelectionPolicy is configured",
+							Ref:         ref("kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolSelectionPolicy"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolSelectionPolicy"},
+	}
+}
+
+func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolScaleInStrategy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "VirtualMachinePoolScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"proactive": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Proactive scale-in by forcing VMs to shutdown during scale-in (Default)",
+							Ref:         ref("kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolProactiveScaleInStrategy"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolProactiveScaleInStrategy"},
+	}
+}
+
+func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSelectionPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "VirtualMachinePoolSelectionPolicy defines the priority in which VM instances are selected for scale-in",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"basePolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BasePolicy is a catch-all policy [Random|DescendingOrder]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -32906,12 +32971,18 @@ func schema_kubevirtio_api_pool_v1alpha1_VirtualMachinePoolSpec(ref common.Refer
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
+					"scaleInStrategy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ScaleInStrategy specifies how the VMPool controller manages scaling in VMs within a VMPool",
+							Ref:         ref("kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolScaleInStrategy"),
+						},
+					},
 				},
 				Required: []string{"selector", "virtualMachineTemplate"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector", "k8s.io/apimachinery/pkg/util/intstr.IntOrString", "kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolNameGeneration", "kubevirt.io/api/pool/v1alpha1.VirtualMachineTemplateSpec"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector", "k8s.io/apimachinery/pkg/util/intstr.IntOrString", "kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolNameGeneration", "kubevirt.io/api/pool/v1alpha1.VirtualMachinePoolScaleInStrategy", "kubevirt.io/api/pool/v1alpha1.VirtualMachineTemplateSpec"},
 	}
 }
 

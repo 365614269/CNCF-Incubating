@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <bpf/config/node.h>
+
 #include "lib/common.h"
 #include "lib/ipv4.h"
 #include "lib/ipv6.h"
@@ -36,7 +38,53 @@ enum {
 		 (TUNNEL_PROTOCOL) == TUNNEL_PROTOCOL_GENEVE ? CLS_FLAG_GENEVE : \
 		 (__throw_build_bug(), 0))                        \
 	: (__throw_build_bug(), 0))
-#endif
+
+/**
+ * can_observe_overlay_mark
+ * @obs_point: trace observation point (TRACE_{FROM,TO}_*)
+ *
+ * Returns true whether the provided observation point can observe overlay traffic marked
+ * with MARK_MAGIC_OVERLAY. This mark used in to-{netdev,wireguard}.
+ */
+static __always_inline bool
+can_observe_overlay_mark(enum trace_point obs_point __maybe_unused)
+{
+# if __ctx_is == __ctx_skb
+	if (is_defined(IS_BPF_HOST) && (obs_point == TRACE_TO_NETWORK ||
+					obs_point == TRACE_POINT_UNKNOWN))
+		return true;
+
+	if (is_defined(IS_BPF_WIREGUARD) && (obs_point == TRACE_TO_CRYPTO ||
+					     obs_point == TRACE_POINT_UNKNOWN))
+		return true;
+# endif /* __ctx_is == __ctx_skb */
+
+	return false;
+}
+
+/**
+ * can_observe_overlay_hdr
+ * @obs_point: trace observation point (TRACE_{FROM,TO}_*)
+ *
+ * Returns true whether the provided observation point can observe overlay traffic via raw packet
+ * parsing of L2/L3/L4 headers. Such packets are traced in from-{netdev,wireguard}, and in to-stack
+ * events with ENABLE_IPSEC (VinE).
+ */
+static __always_inline bool
+can_observe_overlay_hdr(enum trace_point obs_point)
+{
+	if (is_defined(IS_BPF_HOST) && (obs_point == TRACE_FROM_NETWORK ||
+					obs_point == TRACE_POINT_UNKNOWN ||
+					(is_defined(ENABLE_IPSEC) && obs_point == TRACE_TO_STACK)))
+		return true;
+
+	if (is_defined(IS_BPF_WIREGUARD) && (obs_point == TRACE_FROM_CRYPTO ||
+					     obs_point == TRACE_POINT_UNKNOWN))
+		return true;
+
+	return false;
+}
+#endif /* HAVE_ENCAP */
 
 /**
  * ctx_classify
@@ -84,11 +132,7 @@ ctx_classify(struct __ctx_buff *ctx, __be16 proto, enum trace_point obs_point __
 /* ctx->mark not available in XDP. */
 #if __ctx_is == __ctx_skb
 # ifdef HAVE_ENCAP
-	/* MARK_MAGIC_OVERLAY is used in to-{netdev,wireguard}. */
-	if (((is_defined(IS_BPF_HOST) &&
-	      (obs_point == TRACE_TO_NETWORK || obs_point == TRACE_POINT_UNKNOWN)) ||
-	     (is_defined(IS_BPF_WIREGUARD) &&
-	      (obs_point == TRACE_TO_CRYPTO || obs_point == TRACE_POINT_UNKNOWN))) &&
+	if (can_observe_overlay_mark(obs_point) &&
 	    (ctx->mark & MARK_MAGIC_HOST_MASK) == MARK_MAGIC_OVERLAY) {
 		flags |= CLS_FLAG_TUNNEL;
 		goto out;
@@ -97,12 +141,7 @@ ctx_classify(struct __ctx_buff *ctx, __be16 proto, enum trace_point obs_point __
 #endif /* __ctx_skb */
 
 #ifdef HAVE_ENCAP
-	/* Enable parsing packet headers for Overlay in from-{netdev,wireguard} and to-stack. */
-	if ((is_defined(IS_BPF_HOST) &&
-	     (obs_point == TRACE_FROM_NETWORK || obs_point == TRACE_POINT_UNKNOWN ||
-	      (is_defined(ENABLE_IPSEC) && obs_point == TRACE_TO_STACK))) ||
-	    (is_defined(IS_BPF_WIREGUARD) &&
-	     (obs_point == TRACE_FROM_CRYPTO || obs_point == TRACE_POINT_UNKNOWN)))
+	if (can_observe_overlay_hdr(obs_point))
 		parse_overlay = true;
 #endif /* HAVE_ENCAP */
 
@@ -159,4 +198,36 @@ ctx_classify(struct __ctx_buff *ctx, __be16 proto, enum trace_point obs_point __
 
 out:
 	return flags;
+}
+
+/**
+ * compute_capture_len
+ * @ctx: socket buffer
+ * @monitor: the monitor value
+ * @flags: the classifier flags (CLS_FLAG_*)
+ * @obs_point: the trace observation point (TRACE_{FROM,TO}_*)
+ *
+ * Compute capture length for the trace/drop notification event.
+ * Return at most `ctx_full_len` bytes.
+ * With monitor=0, use the config value `trace_payload_len` for native packets, and
+ * `trace_payload_len_overlay` for overlay packets with CLS_FLAG_{VXLAN,GENEVE} set. For overlay
+ * packets, reuse the `obs_point` to save complexity.
+ */
+static __always_inline __u64
+compute_capture_len(struct __ctx_buff *ctx, __u64 monitor,
+		    cls_flags_t flags __maybe_unused,
+		    enum trace_point obs_point __maybe_unused)
+{
+	__u32 cap_len_default = CONFIG(trace_payload_len);
+
+#ifdef HAVE_ENCAP
+	if ((can_observe_overlay_mark(obs_point) || can_observe_overlay_hdr(obs_point)) &&
+	    flags & CLS_FLAG_TUNNEL)
+		cap_len_default = CONFIG(trace_payload_len_overlay);
+#endif
+
+	if (monitor == 0 || monitor == CONFIG(trace_payload_len))
+		monitor = cap_len_default;
+
+	return min_t(__u64, monitor, ctx_full_len(ctx));
 }
