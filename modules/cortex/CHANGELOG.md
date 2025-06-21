@@ -42,6 +42,8 @@
 * [ENHANCEMENT] Parquet Storage: Add some metrics for parquet blocks and converter. #6809 #6821
 * [ENHANCEMENT] Compactor: Optimize cleaner run time. #6815
 * [ENHANCEMENT] Parquet Storage: Allow percentage based dynamic shard size for Parquet Converter. #6817
+* [ENHANCEMENT] Query Frontend: Enhance the performance of the JSON codec. #6816
+* [ENHANCEMENT] Store Gateway: Allow to ignore syncing blocks older than certain time using `ignore_blocks_before`. #6830
 * [BUGFIX] Ingester: Avoid error or early throttling when READONLY ingesters are present in the ring #6517
 * [BUGFIX] Ingester: Fix labelset data race condition. #6573
 * [BUGFIX] Compactor: Cleaner should not put deletion marker for blocks with no-compact marker. #6576
@@ -58,6 +60,7 @@
 * [BUGFIX] Fix race condition in active user. #6773
 * [BUGFIX] Ruler: Prevent counting 2xx and 4XX responses as failed writes. #6785
 * [BUGFIX] Ingester: Allow shipper to skip corrupted blocks. #6786
+* [BUGFIX] Compactor: Delete the prefix `blocks_meta` from the metadata fetcher metrics. #6832
 
 ## 1.19.0 2025-02-27
 

@@ -6,6 +6,7 @@ weight: 1
 This page lists important notes for Longhorn v{{< current-version >}}.
 Please see [here](https://github.com/longhorn/longhorn/releases/tag/v{{< current-version >}}) for the full release note.
 
+- [Warning](#warning)
 - [Removal](#removal)
   - [Environment Check Script](#environment-check-script)
   - [Orphan-Auto-Deletion Setting](#orphan-auto-deletion-setting)
@@ -35,6 +36,24 @@ Please see [here](https://github.com/longhorn/longhorn/releases/tag/v{{< current
     - [Performance Enhancement](#performance-enhancement)
     - [Rebuilding](#rebuilding)
     - [Networking](#networking)
+
+## Warning
+
+The longhorn-manager v1.9.0 is impacted by a [regression issue](https://github.com/longhorn/longhorn/issues/11016), which causes failures of recurring jobs. To resolve this issue, replace `longhorn-manager:v1.9.0` with the hotfixed image `longhorn-manager:v1.9.0-hotfix-1`.
+
+You can apply the update by following these steps:
+
+1. **Disable the upgrade version check**
+   - Helm users: Set `upgradeVersionCheck` to `false` in the `values.yaml` file.
+   - Manifest users: Remove the `--upgrade-version-check` flag from the deployment manifest.
+
+2. **Update the `longhorn-manager` image**
+   - Change the image tag from `v1.9.0` to `v1.9.0-hotfix-1` in the appropriate file:
+     - For Helm: Update `values.yaml`
+     - For manifests: Update the deployment manifest directly.
+
+3. **Proceed with the upgrade**
+   - Apply the changes using your standard Helm upgrade command or reapply the updated manifest.
 
 ## Removal
 

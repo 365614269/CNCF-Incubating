@@ -319,8 +319,8 @@ github.com/cilium/lumberjack/v2
 ## explicit; go 1.23.0
 github.com/cilium/proxy/go/cilium/api
 github.com/cilium/proxy/pkg/policy/api/kafka
-# github.com/cilium/statedb v0.4.0
-## explicit; go 1.23
+# github.com/cilium/statedb v0.4.1
+## explicit; go 1.24
 github.com/cilium/statedb
 github.com/cilium/statedb/index
 github.com/cilium/statedb/internal
@@ -959,9 +959,9 @@ github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
-# github.com/google/go-github/v71 v71.0.0
+# github.com/google/go-github/v72 v72.0.0
 ## explicit; go 1.23.0
-github.com/google/go-github/v71/github
+github.com/google/go-github/v72/github
 # github.com/google/go-licenses v1.6.1-0.20230903011517-706b9c60edd4
 ## explicit; go 1.19
 github.com/google/go-licenses/internal/third_party/pkgsite/derrors
