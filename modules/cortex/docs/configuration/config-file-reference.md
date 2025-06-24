@@ -1450,8 +1450,8 @@ bucket_store:
     [backend: <string> | default = ""]
 
     inmemory:
-      # Maximum size in bytes of in-memory chunk cache used to speed up chunk
-      # lookups (shared between all tenants).
+      # Maximum size in bytes of in-memory chunks cache used (shared between all
+      # tenants).
       # CLI flag: -blocks-storage.bucket-store.chunks-cache.inmemory.max-size-bytes
       [max_size_bytes: <int> | default = 1073741824]
 
@@ -1688,10 +1688,18 @@ bucket_store:
     [subrange_ttl: <duration> | default = 24h]
 
   metadata_cache:
-    # Backend for metadata cache, if not empty. Supported values: memcached,
-    # redis, and '' (disable).
+    # The metadata cache backend type. Single or Multiple cache backend can be
+    # provided. Supported values in single cache: memcached, redis, inmemory,
+    # and '' (disable). Supported values in multi level cache: a comma-separated
+    # list of (inmemory, memcached, redis)
     # CLI flag: -blocks-storage.bucket-store.metadata-cache.backend
     [backend: <string> | default = ""]
+
+    inmemory:
+      # Maximum size in bytes of in-memory metadata cache used (shared between
+      # all tenants).
+      # CLI flag: -blocks-storage.bucket-store.metadata-cache.inmemory.max-size-bytes
+      [max_size_bytes: <int> | default = 1073741824]
 
     memcached:
       # Comma separated list of memcached addresses. Supported prefixes are:
@@ -1892,6 +1900,21 @@ bucket_store:
         # CLI flag: -blocks-storage.bucket-store.metadata-cache.redis.set-async.circuit-breaker.failure-percent
         [failure_percent: <float> | default = 0.05]
 
+    multilevel:
+      # The maximum number of concurrent asynchronous operations can occur when
+      # backfilling cache items.
+      # CLI flag: -blocks-storage.bucket-store.metadata-cache.multilevel.max-async-concurrency
+      [max_async_concurrency: <int> | default = 3]
+
+      # The maximum number of enqueued asynchronous operations allowed when
+      # backfilling cache items.
+      # CLI flag: -blocks-storage.bucket-store.metadata-cache.multilevel.max-async-buffer-size
+      [max_async_buffer_size: <int> | default = 10000]
+
+      # The maximum number of items to backfill per asynchronous operation.
+      # CLI flag: -blocks-storage.bucket-store.metadata-cache.multilevel.max-backfill-items
+      [max_backfill_items: <int> | default = 10000]
+
     # How long to cache list of tenants in the bucket.
     # CLI flag: -blocks-storage.bucket-store.metadata-cache.tenants-list-ttl
     [tenants_list_ttl: <duration> | default = 15m]
@@ -1945,6 +1968,11 @@ bucket_store:
     # same limit in the caching backend).
     # CLI flag: -blocks-storage.bucket-store.metadata-cache.bucket-index-max-size-bytes
     [bucket_index_max_size_bytes: <int> | default = 1048576]
+
+    # How long to cache list of partitioned groups for an user. 0 disables
+    # caching
+    # CLI flag: -blocks-storage.bucket-store.metadata-cache.partitioned-groups-list-ttl
+    [partitioned_groups_list_ttl: <duration> | default = 0s]
 
   # Maximum number of entries in the regex matchers cache. 0 to disable.
   # CLI flag: -blocks-storage.bucket-store.matchers-cache-max-items
