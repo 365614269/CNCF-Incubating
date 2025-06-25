@@ -48,6 +48,7 @@ export * from './components/TextField';
 export * from './components/Tooltip';
 export * from './components/Menu';
 export * from './components/ScrollArea';
+export * from './components/SearchField';
 export * from './components/Link';
 export * from './components/Select';
 export * from './components/Switch';
@@ -58,3 +59,6 @@ export * from './props';
 
 // Hooks
 export { useBreakpoint } from './hooks/useBreakpoint';
+
+// Component Definitions
+export * from './utils/componentDefinitions';
