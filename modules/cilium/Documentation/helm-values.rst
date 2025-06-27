@@ -1371,7 +1371,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:e84291745110ea1996bda91a952cea8f38d3cc2d0b761817e2c379316cb21fea","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.33.3-1750078589-90c5ed94f3a41c0fd0aaf58c46eac484cfb450a6","useDigest":true}``
+     - ``{"digest":"sha256:892cab92ffaf8499be90bd227bf07181e4b460ecd97750032ea7e91710a8acce","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.34.1-1750869463-42c7e8cf0f93ea19c9cb7e4d0ad2a339b3f81ad2","useDigest":true}``
    * - :spelling:ignore:`envoy.initialFetchTimeoutSeconds`
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
@@ -2732,8 +2732,16 @@
      - List of ports from service to be automatically redirected to above backend. Any service exposing one of these ports will be automatically redirected. Fine-grained control can be achieved by using the service annotation.
      - list
      - ``[]``
+   * - :spelling:ignore:`localRedirectPolicies.addressMatcherCIDRs`
+     - Limit the allowed addresses in Address Matcher rule of Local Redirect Policies to the given CIDRs. @schema@ type: [null, array] @schema@
+     - string
+     - ``nil``
+   * - :spelling:ignore:`localRedirectPolicies.enabled`
+     - Enable local redirect policies.
+     - bool
+     - ``false``
    * - :spelling:ignore:`localRedirectPolicy`
-     - Enable Local Redirect Policy.
+     - Enable Local Redirect Policy (deprecated, please use 'localRedirectPolicies.enabled' instead)
      - bool
      - ``false``
    * - :spelling:ignore:`logSystemLoad`
@@ -3151,7 +3159,7 @@
    * - :spelling:ignore:`preflight.envoy.image`
      - Envoy pre-flight image.
      - object
-     - ``{"digest":"sha256:e84291745110ea1996bda91a952cea8f38d3cc2d0b761817e2c379316cb21fea","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.33.3-1750078589-90c5ed94f3a41c0fd0aaf58c46eac484cfb450a6","useDigest":true}``
+     - ``{"digest":"sha256:892cab92ffaf8499be90bd227bf07181e4b460ecd97750032ea7e91710a8acce","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.34.1-1750869463-42c7e8cf0f93ea19c9cb7e4d0ad2a339b3f81ad2","useDigest":true}``
    * - :spelling:ignore:`preflight.extraEnv`
      - Additional preflight environment variables.
      - list
