@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	dario.cat/mergo v1.0.2
-	github.com/Masterminds/semver/v3 v3.3.1
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.1-0.20241111191808-71fefeed8910
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/bombsimon/logrusr/v4 v4.1.0
@@ -25,7 +25,7 @@ require (
 	github.com/projectcontour/yages v0.1.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
-	github.com/prometheus/common v0.64.0
+	github.com/prometheus/common v0.65.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	github.com/tsaarni/certyaml v0.10.0

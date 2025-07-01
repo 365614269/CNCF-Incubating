@@ -1,8 +1,8 @@
 # Changelog
 
 ## master / unreleased
-* [CHANGE] Ingester: Remove EnableNativeHistograms config flag and instead gate keep through new per-tenant limit at ingestion. #6718
 * [CHANGE] StoreGateway/Alertmanager: Add default 5s connection timeout on client. #6603
+* [CHANGE] Ingester: Remove EnableNativeHistograms config flag and instead gate keep through new per-tenant limit at ingestion. #6718
 * [CHANGE] Validate a tenantID when to use a single tenant resolver. #6727
 * [FEATURE] Query Frontend: Add dynamic interval size for query splitting. This is enabled by configuring experimental flags `querier.max-shards-per-query` and/or `querier.max-fetched-data-duration-per-query`. The split interval size is dynamically increased to maintain a number of shards and total duration fetched below the configured values. #6458
 * [FEATURE] Querier/Ruler: Add `query_partial_data` and `rules_partial_data` limits to allow queries/rules to be evaluated with data from a single zone, if other zones are not available. #6526
@@ -18,6 +18,7 @@
 * [FEATURE] Distributor/Ingester: Implemented experimental feature to use gRPC stream connection for push requests. This can be enabled by setting `-distributor.use-stream-push=true`. #6580
 * [FEATURE] Compactor: Add support for percentage based sharding for compactors. #6738
 * [FEATURE] Querier: Allow choosing PromQL engine via header. #6777
+* [ENHANCEMENT] Tenant Federation: Add a # of query result limit logic when the `-tenant-federation.regex-matcher-enabled` is enabled. #6845
 * [ENHANCEMENT] Query Frontend: Change to return 400 when the tenant resolving fail. #6715
 * [ENHANCEMENT] Querier: Support query parameters to metadata api (/api/v1/metadata) to allow user to limit metadata to return. Add a `-ingester.return-all-metadata` flag to make the metadata API run when the deployment. Please set this flag to `false` to use the metadata API with the limits later. #6681 #6744
 * [ENHANCEMENT] Ingester: Add a `cortex_ingester_active_native_histogram_series` metric to track # of active NH series. #6695
@@ -37,10 +38,11 @@
 * [ENHANCEMENT] Querier: Add metric and enhanced logging for query partial data. #6676
 * [ENHANCEMENT] Ingester: Push request should fail when label set is out of order #6746
 * [ENHANCEMENT] Querier: Add `querier.ingester-query-max-attempts` to retry on partial data. #6714
-* [ENHANCEMENT] Distributor: Add min/max schema validation for NativeHistograms. #6766
+* [ENHANCEMENT] Distributor: Add min/max schema validation for Native Histogram. #6766
 * [ENHANCEMENT] Ingester: Handle runtime errors in query path #6769
 * [ENHANCEMENT] Compactor: Support metadata caching bucket for Cleaner. Can be enabled via `-compactor.cleaner-caching-bucket-enabled` flag. #6778
-* [ENHANCEMENT] Distributor: Add ingestion rate limit for Native Histograms. #6794
+* [ENHANCEMENT] Distributor: Add ingestion rate limit for Native Histogram. #6794
+* [ENHANCEMENT] Ingester: Add active series limit specifically for Native Histogram. #6796
 * [ENHANCEMENT] Compactor, Store Gateway: Introduce user scanner strategy and user index. #6780
 * [ENHANCEMENT] Querier: Support chunks cache for parquet queryable. #6805
 * [ENHANCEMENT] Parquet Storage: Add some metrics for parquet blocks and converter. #6809 #6821
@@ -51,6 +53,7 @@
 * [ENHANCEMENT] Metadata Cache: Support inmemory and multi level cache backend. #6829
 * [ENHANCEMENT] Store Gateway: Allow to ignore syncing blocks older than certain time using `ignore_blocks_before`. #6830
 * [ENHANCEMENT] Distributor: Add native histograms max sample size bytes limit validation. #6834
+* [ENHANCEMENT] Querier: Support caching parquet labels file in parquet queryable. #6835
 * [BUGFIX] Ingester: Avoid error or early throttling when READONLY ingesters are present in the ring #6517
 * [BUGFIX] Ingester: Fix labelset data race condition. #6573
 * [BUGFIX] Compactor: Cleaner should not put deletion marker for blocks with no-compact marker. #6576
