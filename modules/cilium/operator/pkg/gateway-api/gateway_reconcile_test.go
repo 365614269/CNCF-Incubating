@@ -4,13 +4,17 @@
 package gateway_api
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cilium/hive/hivetest"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/testing/protocmp"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,6 +24,7 @@ import (
 
 	"github.com/cilium/cilium/operator/pkg/model/translation"
 	gatewayApiTranslation "github.com/cilium/cilium/operator/pkg/model/translation/gateway-api"
+	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 )
 
 var gwFixture = []client.Object{
@@ -296,6 +301,212 @@ var tlsRouteFixtures = []client.Object{
 			},
 		},
 	},
+}
+
+func Test_Conformance(t *testing.T) {
+	logger := hivetest.Logger(t)
+	cecTranslator := translation.NewCECTranslator(translation.Config{
+		RouteConfig: translation.RouteConfig{
+			HostNameSuffixMatch: true,
+		},
+		ListenerConfig: translation.ListenerConfig{
+			StreamIdleTimeoutSeconds: 300,
+		},
+		ClusterConfig: translation.ClusterConfig{
+			IdleTimeoutSeconds: 60,
+		},
+	})
+	gatewayAPITranslator := gatewayApiTranslation.NewTranslator(cecTranslator, translation.Config{
+		ServiceConfig: translation.ServiceConfig{
+			ExternalTrafficPolicy: string(corev1.ServiceExternalTrafficPolicyCluster),
+		},
+	})
+
+	tests := []struct {
+		name    string
+		gateway []types.NamespacedName
+		wantErr bool
+	}{
+		{
+			name: "gateway-http-listener-isolation",
+			gateway: []types.NamespacedName{
+				{Name: "http-listener-isolation", Namespace: "gateway-conformance-infra"},
+				{Name: "http-listener-isolation-with-hostname-intersection", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name:    "gateway-infrastructure",
+			gateway: []types.NamespacedName{{Name: "gateway-with-infrastructure-metadata", Namespace: "gateway-conformance-infra"}},
+		},
+		{
+			name: "gateway-invalid-route-kind",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-only-invalid-route-kind", Namespace: "gateway-conformance-infra"},
+				{Name: "gateway-supported-and-invalid-route-kind", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-invalid-tls-configuration",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-certificate-nonexistent-secret", Namespace: "gateway-conformance-infra"},
+				{Name: "gateway-certificate-unsupported-group", Namespace: "gateway-conformance-infra"},
+				{Name: "gateway-certificate-unsupported-kind", Namespace: "gateway-conformance-infra"},
+				{Name: "gateway-certificate-malformed-secret", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-modify-listeners",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-add-listener", Namespace: "gateway-conformance-infra"},
+				{Name: "gateway-remove-listener", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-observed-generation-bump",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-observed-generation-bump", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-secret-invalid-reference-grant",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-secret-invalid-reference-grant", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-secret-missing-reference-grant",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-secret-missing-reference-grant", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		// gateway-secret-reference-grant-all-in-namespace
+		{
+			name: "gateway-secret-reference-grant-all-in-namespace",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-secret-reference-grant-all-in-namespace", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-secret-reference-grant-specific",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-secret-reference-grant-specific", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-static-addresses",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-static-addresses", Namespace: "gateway-conformance-infra"},
+			},
+		},
+		{
+			name: "gateway-static-addresses",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-static-addresses-invalid", Namespace: "gateway-conformance-infra"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "gateway-with-attached-routes",
+			gateway: []types.NamespacedName{
+				{Name: "gateway-with-one-attached-route", Namespace: "gateway-conformance-infra"},
+				{Name: "gateway-with-two-attached-routes", Namespace: "gateway-conformance-infra"},
+				{Name: "unresolved-gateway-with-one-attached-unresolved-route", Namespace: "gateway-conformance-infra"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, gw := range tt.gateway {
+				t.Run(gw.Name, func(t *testing.T) {
+					base := readInputDir(t, "testdata/gateway/base")
+					input := readInputDir(t, fmt.Sprintf("testdata/gateway/%s/input", tt.name))
+
+					c := fake.NewClientBuilder().
+						WithScheme(testScheme()).
+						WithObjects(append(base, input...)...).
+						WithStatusSubresource(&corev1.Service{}).
+						WithStatusSubresource(&gatewayv1.GRPCRoute{}).
+						WithStatusSubresource(&gatewayv1.HTTPRoute{}).
+						WithStatusSubresource(&gatewayv1alpha2.TLSRoute{}).
+						WithStatusSubresource(&gatewayv1.Gateway{}).
+						WithStatusSubresource(&gatewayv1.GatewayClass{}).
+						Build()
+
+					hrReconciler := &httpRouteReconciler{
+						Client: c,
+						logger: logger,
+					}
+
+					r := &gatewayReconciler{
+						Client:     c,
+						translator: gatewayAPITranslator,
+						logger:     logger,
+					}
+
+					// Reconcile all related HTTPRoute objects
+					hrList := &gatewayv1.HTTPRouteList{}
+					err := c.List(t.Context(), hrList)
+					require.NoError(t, err)
+					filterList := filterHTTPRoute(hrList, gw.Name, gw.Namespace)
+					for _, hr := range filterList {
+						_, _ = hrReconciler.Reconcile(t.Context(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(&hr)})
+					}
+
+					// Reconcile the gateway under test
+					result, err := r.Reconcile(t.Context(), ctrl.Request{NamespacedName: gw})
+					require.Equal(t, tt.wantErr, err != nil)
+					require.Equal(t, ctrl.Result{}, result)
+
+					// Checking the output for Gateway
+					actualGateway := &gatewayv1.Gateway{}
+					err = c.Get(t.Context(), gw, actualGateway)
+					require.NoError(t, err)
+					expectedGateway := &gatewayv1.Gateway{}
+					readOutput(t, fmt.Sprintf("testdata/gateway/%s/output/%s.yaml", tt.name, gw.Name), expectedGateway)
+					require.Empty(t, cmp.Diff(expectedGateway, actualGateway, cmpIgnoreFields...))
+
+					// Checking the output for related HTTPRoute objects
+					for _, hr := range filterList {
+						actualHR := &gatewayv1.HTTPRoute{}
+						err = c.Get(t.Context(), client.ObjectKeyFromObject(&hr), actualHR)
+						require.NoError(t, err, "error getting HTTPRoute %s/%s: %v", hr.Namespace, hr.Name, err)
+
+						expectedHR := &gatewayv1.HTTPRoute{}
+						readOutput(t, fmt.Sprintf("testdata/gateway/%s/output/httproute-%s.yaml", tt.name, hr.Name), expectedHR)
+						require.Empty(t, cmp.Diff(expectedHR, actualHR, cmpIgnoreFields...))
+					}
+
+					if !tt.wantErr {
+						// Checking the output for CiliumEnvoyConfig
+						actualCEC := &ciliumv2.CiliumEnvoyConfig{}
+						err = c.Get(t.Context(), client.ObjectKey{Namespace: gw.Namespace, Name: "cilium-gateway-" + gw.Name}, actualCEC)
+						expectedCEC := &ciliumv2.CiliumEnvoyConfig{}
+						readOutput(t, fmt.Sprintf("testdata/gateway/%s/output/cec-%s.yaml", tt.name, gw.Name), expectedCEC)
+
+						require.NoError(t, err)
+						require.Empty(t, cmp.Diff(expectedCEC, actualCEC, protocmp.Transform()))
+					}
+				})
+			}
+		})
+	}
+}
+
+func filterHTTPRoute(hrList *gatewayv1.HTTPRouteList, gatewayName string, namespace string) []gatewayv1.HTTPRoute {
+	var filterList []gatewayv1.HTTPRoute
+	for _, hr := range hrList.Items {
+		if len(hr.Spec.CommonRouteSpec.ParentRefs) > 0 {
+			for _, parentRef := range hr.Spec.CommonRouteSpec.ParentRefs {
+				if string(parentRef.Name) == gatewayName &&
+					((parentRef.Namespace == nil && hr.Namespace == namespace) || string(*parentRef.Namespace) == namespace) {
+					filterList = append(filterList, hr)
+					break
+				}
+			}
+		}
+	}
+	return filterList
 }
 
 func Test_gatewayReconciler_Reconcile(t *testing.T) {

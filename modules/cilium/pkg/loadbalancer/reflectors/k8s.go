@@ -238,7 +238,7 @@ func runServiceEndpointsReflector(ctx context.Context, health cell.Health, p ref
 			svc, fes := convertService(p.Config, p.ExtConfig, p.Log, p.LocalNodeStore, obj, source.Kubernetes)
 			if svc == nil {
 				// The service should not be provisioned on this agent. Try to delete if it was previously.
-				name := loadbalancer.ServiceName{Namespace: obj.Namespace, Name: obj.Name}
+				name := loadbalancer.NewServiceName(obj.Namespace, obj.Name)
 				rh.update("svc:"+name.String(), nil)
 
 				oldSvc, err := p.Writer.DeleteServiceAndFrontends(txn, name)
@@ -262,7 +262,7 @@ func runServiceEndpointsReflector(ctx context.Context, health cell.Health, p ref
 			rh.update("svc:"+svc.Name.String(), err)
 
 		case resource.Delete:
-			name := loadbalancer.ServiceName{Namespace: obj.Namespace, Name: obj.Name}
+			name := loadbalancer.NewServiceName(obj.Namespace, obj.Name)
 			rh.update("svc:"+name.String(), nil)
 
 			svc, err := p.Writer.DeleteServiceAndFrontends(txn, name)
@@ -276,57 +276,57 @@ func runServiceEndpointsReflector(ctx context.Context, health cell.Health, p ref
 		}
 	}
 
-	currentBackends := map[string]sets.Set[loadbalancer.L3n4Addr]{}
+	currentEndpoints := map[string]endpointsEvent{}
 	processEndpointsEvent := func(txn writer.WriteTxn, key bufferKey, kind resource.EventKind, allEps allEndpoints) {
 		switch kind {
 		case resource.Sync:
 			initEndpoints(txn)
 
 		case resource.Upsert:
-			name := loadbalancer.ServiceName{
-				Name:      key.key.Name,
-				Namespace: key.key.Namespace,
-			}
+			name := loadbalancer.NewServiceName(
+				key.key.Namespace,
+				key.key.Name,
+			)
 			var err error
 
-			// Upsert new or changed backends
+			// Convert [k8s.Endpoints] to [loadbalancer.BackendParams]
 			backends := convertEndpoints(p.Log, p.ExtConfig, name, allEps.Backends())
-			if len(backends) > 0 {
-				err = p.Writer.UpsertBackends(
-					txn,
-					name,
-					source.Kubernetes,
-					backends...)
 
-			}
-
-			// Release orphaned backends
-			for ep := range allEps.All() {
-				var newAddrs sets.Set[loadbalancer.L3n4Addr]
-				old, foundOld := currentBackends[ep.name]
-				if len(ep.backends) > 0 {
-					newAddrs = sets.New[loadbalancer.L3n4Addr]()
-					for addr, be := range ep.backends {
-						for _, l4Addr := range be.Ports {
-							l3n4Addr := loadbalancer.L3n4Addr{
-								AddrCluster: addr,
-								L4Addr:      *l4Addr,
+			// Find orphaned backends. We are using iter.Seq to avoid unnecessary allocations.
+			var orphans iter.Seq[loadbalancer.L3n4Addr] = func(yield func(loadbalancer.L3n4Addr) bool) {
+				for ep := range allEps.All() {
+					previous, found := currentEndpoints[ep.name]
+					if !found {
+						continue
+					}
+					for addr, prevBe := range previous.backends {
+						be, foundBe := ep.backends[addr]
+						for l4Addr := range prevBe.Ports {
+							foundPort := false
+							if foundBe {
+								_, foundPort = be.Ports[l4Addr]
 							}
-							newAddrs.Insert(l3n4Addr)
-							old.Delete(l3n4Addr)
+							if !foundPort {
+								if !yield(
+									loadbalancer.L3n4Addr{
+										AddrCluster: addr,
+										L4Addr:      l4Addr,
+									}) {
+									return
+								}
+							}
 						}
 					}
 				}
-				if len(old) > 0 {
-					err = errors.Join(
-						err,
-						p.Writer.ReleaseBackends(txn, name, old.UnsortedList()...),
-					)
-				}
-				if newAddrs.Len() == 0 && foundOld {
-					delete(currentBackends, ep.name)
+			}
+
+			err = p.Writer.UpsertAndReleaseBackends(txn, name, source.Kubernetes, backends, orphans)
+
+			for ep := range allEps.All() {
+				if len(ep.backends) == 0 {
+					delete(currentEndpoints, ep.name)
 				} else {
-					currentBackends[ep.name] = newAddrs
+					currentEndpoints[ep.name] = ep
 				}
 			}
 
@@ -432,7 +432,7 @@ func (ae allEndpoints) insert(deleted bool, ep *k8s.Endpoints) allEndpoints {
 	return ae
 }
 
-func (ae allEndpoints) All() iter.Seq[endpointsEvent] {
+func (ae *allEndpoints) All() iter.Seq[endpointsEvent] {
 	return func(yield func(endpointsEvent) bool) {
 		if ae.head.name != "" {
 			if !yield(ae.head) {
@@ -447,7 +447,7 @@ func (ae allEndpoints) All() iter.Seq[endpointsEvent] {
 	}
 }
 
-func (ae allEndpoints) Backends() iter.Seq2[cmtypes.AddrCluster, *k8s.Backend] {
+func (ae *allEndpoints) Backends() iter.Seq2[cmtypes.AddrCluster, *k8s.Backend] {
 	return func(yield func(cmtypes.AddrCluster, *k8s.Backend) bool) {
 		for ep := range ae.All() {
 			for addr, be := range ep.backends {
@@ -470,7 +470,7 @@ func bufferInsert(buf buffer, ev resource.Event[runtime.Object]) buffer {
 			return buf
 		}
 		key := bufferKey{
-			resource.Key{Name: obj.ServiceID.Name, Namespace: obj.ServiceID.Namespace},
+			resource.Key{Name: obj.ServiceName.Name(), Namespace: obj.ServiceName.Namespace()},
 			false,
 		}
 		var allEps allEndpoints
@@ -541,10 +541,10 @@ func (rh *reflectorHealth) report() {
 // HostPort entries for a pod. This handles the pod recreation where name stays but UID
 // changes, which we might see only as an update without any deletion.
 func hostPortServiceNamePrefix(pod *slim_corev1.Pod) loadbalancer.ServiceName {
-	return loadbalancer.ServiceName{
-		Name:      fmt.Sprintf("%s:host-port:", pod.ObjectMeta.Name),
-		Namespace: pod.ObjectMeta.Namespace,
-	}
+	return loadbalancer.NewServiceName(
+		pod.ObjectMeta.Namespace,
+		fmt.Sprintf("%s:host-port:", pod.ObjectMeta.Name),
+	)
 }
 
 func upsertHostPort(netnsCookie lbmaps.HaveNetNSCookieSupport, config loadbalancer.Config, extConfig loadbalancer.ExternalConfig, log *slog.Logger, wtxn writer.WriteTxn, writer *writer.Writer, pod *slim_corev1.Pod) error {
@@ -576,10 +576,11 @@ func upsertHostPort(netnsCookie lbmaps.HaveNetNSCookieSupport, config loadbalanc
 
 			// HostPort service names are of form:
 			// <namespace>/<name>:host-port:<port>:<uid>.
-			serviceName := serviceNamePrefix
-			serviceName.Name += fmt.Sprintf("%d:%s",
-				p.HostPort,
-				pod.ObjectMeta.UID)
+			serviceName := serviceNamePrefix.AppendSuffix(
+				fmt.Sprintf("%d:%s",
+					p.HostPort,
+					pod.ObjectMeta.UID),
+			)
 
 			var ipv4, ipv6 bool
 
