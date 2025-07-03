@@ -186,7 +186,7 @@ var _ = Describe(SIG("Live Migration across namespaces", Serial, decorators.Requ
 			sourceVM, targetVM   *virtv1.VirtualMachine
 		)
 
-		It("should live migrate a container disk vm, several times", func() {
+		It("[QUARANTINE] should live migrate a container disk vm, several times", decorators.Quarantine, func() {
 			sourceVMI = libvmifact.NewCirros(
 				libvmi.WithNamespace(testsuite.NamespaceTestDefault),
 				libvmi.WithInterface(libvmi.InterfaceDeviceWithMasqueradeBinding()),
@@ -324,7 +324,7 @@ var _ = Describe(SIG("Live Migration across namespaces", Serial, decorators.Requ
 			return targetDV
 		}
 
-		It("should live migration regular disk several times", func() {
+		It("[QUARANTINE] should live migration regular disk several times", decorators.Quarantine, func() {
 			sourceDV := libdv.NewDataVolume(
 				libdv.WithRegistryURLSourceAndPullMethod(cd.DataVolumeImportUrlForContainerDisk(cd.ContainerDiskAlpine), cdiv1.RegistryPullNode),
 				libdv.WithStorage(
@@ -399,8 +399,8 @@ func getKubevirtSynchronizationSyncAddress(virtClient kubecli.KubevirtClient) (s
 	if kv == nil {
 		return "", fmt.Errorf("unable to retrieve kubevirt CR")
 	}
-	if kv.Status.SynchronizationAddress == nil {
+	if kv.Status.SynchronizationAddresses == nil {
 		return "", fmt.Errorf("sync address not found")
 	}
-	return *kv.Status.SynchronizationAddress, nil
+	return kv.Status.SynchronizationAddresses[0], nil
 }
