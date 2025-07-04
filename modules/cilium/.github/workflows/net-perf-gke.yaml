@@ -249,6 +249,13 @@ jobs:
           native_cidr="$(gcloud container clusters describe ${{ env.clusterName }}-${{ matrix.index }} --zone ${{ env.gcp_zone }} --format 'value(clusterIpv4Cidr)')"
           echo native_cidr=${native_cidr} >> $GITHUB_OUTPUT
 
+      - name: Create ESP allow firewall rule
+        if: ${{ matrix.name == 'tunnel-ipsec' }}
+        uses: ./.github/actions/gke-create-esp-rule
+        with:
+          cluster_name: ${{ env.clusterName }}-${{ matrix.index }}
+          cluster_zone: ${{ env.gcp_zone }}
+
       - name: Get cluster credentials
         run: |
           gcloud container clusters get-credentials ${{ env.clusterName }}-${{ matrix.index }} --zone ${{ env.gcp_zone }}
@@ -260,7 +267,7 @@ jobs:
           kubeconfig: "~/.kube/config"
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@6e65fa094c051aee03959dc9a75e66213e9050c7 # v0.18.4
+        uses: cilium/cilium-cli@011bd4acc9dd898b40bca93faf2986ea4b55a95a # v0.18.5
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
@@ -302,6 +309,13 @@ jobs:
           always_capture_sysdump: true
           artifacts_suffix: "${{ env.job_name }} (${{ join(matrix.*, ', ') }})"
           job_status: "${{ job.status }}"
+
+      - name: Clean up ESP allow firewall rule
+        if: ${{ always() && matrix.name == 'tunnel-ipsec' }}
+        uses: ./.github/actions/gke-clean-esp-rule
+        with:
+          cluster_name: ${{ env.clusterName }}-${{ matrix.index }}
+          cluster_zone: ${{ env.gcp_zone }}
 
       - name: Clean up GKE
         if: ${{ always() }}

@@ -508,6 +508,26 @@ export const componentDefinitions: {
       readonly disabled: readonly [true, false];
     };
   };
+  readonly Header: {
+    readonly classNames: {
+      readonly toolbar: 'canon-HeaderToolbar';
+      readonly toolbarWrapper: 'canon-HeaderToolbarWrapper';
+      readonly toolbarContent: 'canon-HeaderToolbarContent';
+      readonly toolbarOptions: 'canon-HeaderToolbarOptions';
+      readonly toolbarIcon: 'canon-HeaderToolbarIcon';
+      readonly toolbarName: 'canon-HeaderToolbarName';
+      readonly breadcrumbs: 'canon-HeaderBreadcrumbs';
+      readonly breadcrumb: 'canon-HeaderBreadcrumb';
+      readonly breadcrumbLink: 'canon-HeaderBreadcrumbLink';
+      readonly breadcrumbSeparator: 'canon-HeaderBreadcrumbSeparator';
+      readonly tabs: 'canon-HeaderTabs';
+      readonly tabList: 'canon-HeaderTabList';
+      readonly tab: 'canon-HeaderTab';
+      readonly tabActive: 'canon-HeaderTabActive';
+      readonly tabHovered: 'canon-HeaderTabHovered';
+      readonly subNav: 'canon-HeaderSubNav';
+    };
+  };
   readonly Tooltip: {
     readonly classNames: {
       readonly trigger: 'canon-TooltipTrigger';
@@ -916,12 +936,91 @@ export interface GridProps extends SpaceProps {
   style?: React.CSSProperties;
 }
 
+// @public
+export const Header: (props: HeaderProps) => JSX_2.Element;
+
+// @public
+export interface HeaderBreadcrumb {
+  // (undocumented)
+  href: string;
+  // (undocumented)
+  label: string;
+}
+
+// @public
+export interface HeaderOption {
+  // (undocumented)
+  label: string;
+  // (undocumented)
+  onClick?: () => void;
+  // (undocumented)
+  value: string;
+}
+
+// @public
+export const HeaderPage: (props: HeaderPageProps) => JSX_2.Element;
+
+// @public
+export interface HeaderPageOption {
+  // (undocumented)
+  label: string;
+  // (undocumented)
+  onClick?: () => void;
+  // (undocumented)
+  value: string;
+}
+
+// @public
+export interface HeaderPageProps {
+  // (undocumented)
+  description?: string;
+  // (undocumented)
+  options?: HeaderPageOption[];
+  // (undocumented)
+  tabs?: HeaderPageTab[];
+  // (undocumented)
+  title?: string;
+}
+
+// @public
+export interface HeaderPageTab {
+  // (undocumented)
+  href?: string;
+  // (undocumented)
+  label: string;
+}
+
+// @public
+export interface HeaderProps {
+  // (undocumented)
+  breadcrumbs?: HeaderBreadcrumb[];
+  // (undocumented)
+  icon?: React.ReactNode;
+  // (undocumented)
+  options?: HeaderOption[];
+  // (undocumented)
+  tabs?: HeaderTab[];
+  // (undocumented)
+  title?: string;
+}
+
+// @public
+export interface HeaderTab {
+  // (undocumented)
+  href?: string;
+  // (undocumented)
+  label: string;
+}
+
 // @public (undocumented)
-export const Heading: <T extends ElementType = 'h1'>(
-  props: HeadingProps<T> & {
-    ref?: React.Ref<any>;
-  },
-) => React.ReactElement | null;
+export const Heading: {
+  <T extends ElementType = 'h1'>(
+    props: HeadingProps<T> & {
+      ref?: React.ComponentPropsWithRef<T>['ref'];
+    },
+  ): React.ReactElement<HeadingProps<T>, T>;
+  displayName: string;
+};
 
 // @public (undocumented)
 export type HeadingOwnProps = {
@@ -1576,11 +1675,14 @@ export interface TabsRootWithoutOrientation
   > {}
 
 // @public (undocumented)
-const Text_2: <T extends ElementType = 'p'>(
-  props: TextProps<T> & {
-    ref?: React.Ref<any>;
-  },
-) => React.ReactElement | null;
+const Text_2: {
+  <T extends ElementType = 'p'>(
+    props: TextProps<T> & {
+      ref?: React.ComponentPropsWithRef<T>['ref'];
+    },
+  ): React.ReactElement<TextProps<T>, T>;
+  displayName: string;
+};
 export { Text_2 as Text };
 
 // @public (undocumented)

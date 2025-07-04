@@ -302,24 +302,10 @@ jobs:
 
       - name: Create ESP allow firewall rule
         if: ${{ matrix.config.type == 'tunnel-ipsec' }}
-        run: |
-          cluster_name=${{ env.clusterName }}-${{ matrix.config.index }}
-          cluster_zone=${{ matrix.k8s.zone }}
-          hash=$(gcloud container clusters describe $cluster_name --zone=$cluster_zone --format="value(id)")
-          hash="${hash:0:8}"
-          echo $hash
-          cluster_node_target_tag=gke-${cluster_name}-${hash}-node
-          echo $cluster_node_target_tag
-          firewall_rule_name=gke-${cluster_name}-${hash}-allow-esp
-
-          gcloud compute firewall-rules create $firewall_rule_name \
-            --network default \
-            --direction INGRESS \
-            --action ALLOW \
-            --rules esp \
-            --priority 1000 \
-            --source-ranges 0.0.0.0/0 \
-            --target-tags $cluster_node_target_tag
+        uses: ./.github/actions/gke-create-esp-rule
+        with:
+          cluster_name: ${{ env.clusterName }}-${{ matrix.config.index }}
+          cluster_zone: ${{ matrix.k8s.zone }}
 
       - name: Get cluster credentials
         run: |
@@ -332,7 +318,7 @@ jobs:
           kubeconfig: "~/.kube/config"
 
       - name: Install Cilium CLI
-        uses: cilium/cilium-cli@6e65fa094c051aee03959dc9a75e66213e9050c7 # v0.18.4
+        uses: cilium/cilium-cli@011bd4acc9dd898b40bca93faf2986ea4b55a95a # v0.18.5
         with:
           skip-build: ${{ env.CILIUM_CLI_SKIP_BUILD }}
           image-repo: ${{ env.CILIUM_CLI_IMAGE_REPO }}
@@ -386,16 +372,11 @@ jobs:
           job_status: "${{ job.status }}"
 
       - name: Clean up ESP allow firewall rule
-        if: ${{ matrix.config.type == 'tunnel-ipsec' }}
-        run: |
-          cluster_name=${{ env.clusterName }}-${{ matrix.config.index }}
-          cluster_zone=${{ matrix.k8s.zone }}
-          hash=$(gcloud container clusters describe $cluster_name --zone=$cluster_zone --format="value(id)")
-          hash="${hash:0:8}"
-          firewall_rule_name=gke-${cluster_name}-${hash}-allow-esp
-
-          gcloud compute firewall-rules delete --quiet $firewall_rule_name
-        shell: bash {0} # Disable default fail-fast behavior so that all commands run independently
+        if: ${{ always() && matrix.config.type == 'tunnel-ipsec' }}
+        uses: ./.github/actions/gke-clean-esp-rule
+        with:
+          cluster_name: ${{ env.clusterName }}-${{ matrix.config.index }}
+          cluster_zone: ${{ matrix.k8s.zone }}
 
       - name: Clean up GKE
         if: ${{ always() }}
