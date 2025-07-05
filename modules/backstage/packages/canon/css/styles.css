@@ -9288,10 +9288,11 @@
   align-items: center;
   gap: var(--canon-space-1_5);
   border: none;
+  flex-shrink: 0;
   padding: 0;
   display: inline-flex;
 
-  &:disabled {
+  &[data-disabled="true"] {
     cursor: not-allowed;
   }
 }
@@ -9299,10 +9300,10 @@
 .canon-Button[data-variant="primary"] {
   background-color: var(--canon-bg-solid);
   color: var(--canon-fg-solid);
-  transition: background-color .15s, box-shadow .15s;
 
   &:hover {
     background-color: var(--canon-bg-solid-hover);
+    transition: background-color .15s;
   }
 
   &:active {
@@ -9314,7 +9315,7 @@
     outline-offset: 2px;
   }
 
-  &:disabled {
+  &[data-disabled="true"] {
     background-color: var(--canon-bg-solid-disabled);
     color: var(--canon-fg-solid-disabled);
   }
@@ -9324,10 +9325,10 @@
   background-color: var(--canon-bg-surface-1);
   box-shadow: inset 0 0 0 1px var(--canon-border);
   color: var(--canon-fg-primary);
-  transition: box-shadow .15s;
 
   &:hover {
     box-shadow: inset 0 0 0 1px var(--canon-border-hover);
+    transition: box-shadow .15s;
   }
 
   &:active {
@@ -9340,9 +9341,34 @@
     transition: none;
   }
 
-  &:disabled {
+  &[data-disabled="true"] {
     box-shadow: inset 0 0 0 1px var(--canon-border-disabled);
     color: var(--canon-fg-disabled);
+  }
+}
+
+.canon-Button[data-variant="tertiary"] {
+  color: var(--canon-fg-primary);
+  background-color: #0000;
+
+  &:hover {
+    background-color: var(--canon-bg-surface-1);
+    transition: background-color .2s;
+  }
+
+  &:active {
+    background-color: var(--canon-bg-surface-2);
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--canon-ring);
+    outline: none;
+    transition: none;
+  }
+
+  &[data-disabled="true"] {
+    color: var(--canon-fg-disabled);
+    background-color: #0000;
   }
 }
 
@@ -9542,7 +9568,6 @@
 
 .canon-HeaderToolbar {
   z-index: 10;
-  padding-top: 8px;
   position: sticky;
   top: 0;
 
@@ -9562,8 +9587,7 @@
   z-index: 1;
   background-color: var(--canon-bg-surface-1);
   padding-inline: var(--canon-space-3);
-  border-radius: var(--canon-radius-2);
-  border: 1px solid var(--canon-border);
+  border-bottom: 1px solid var(--canon-border);
   color: var(--canon-fg-primary);
   flex-direction: row;
   justify-content: space-between;
@@ -9601,7 +9625,7 @@
   }
 }
 
-.canon-HeaderToolbarOptions {
+.canon-HeaderToolbarControls {
   right: var(--canon-space-2);
   position: absolute;
   top: 50%;
@@ -9643,8 +9667,7 @@
 .canon-HeaderTabs {
   background-color: var(--canon-bg-surface-1);
   padding-inline: var(--canon-space-1);
-  border-radius: var(--canon-radius-2);
-  border: 1px solid var(--canon-border);
+  border-bottom: 1px solid var(--canon-border);
   --active-tab-left: 0px;
   --active-tab-right: 0px;
   --active-tab-top: 0px;
@@ -9661,7 +9684,6 @@
   --hovered-transition-duration: 0s;
   flex-direction: row;
   align-items: center;
-  margin-top: 8px;
   display: flex;
   position: relative;
 }
@@ -9673,7 +9695,7 @@
 
 .canon-HeaderTab {
   font-size: var(--canon-font-size-3);
-  color: var(--canon-fg-primary);
+  color: var(--canon-fg-secondary);
   cursor: pointer;
   z-index: 2;
   height: 36px;
@@ -9682,6 +9704,10 @@
   align-items: center;
   display: flex;
   position: relative;
+
+  &[data-selected="true"] {
+    color: var(--canon-fg-primary);
+  }
 }
 
 .canon-HeaderTabActive {

@@ -62,6 +62,12 @@ var Cell = cell.Module(
 	cell.Config(defaultConfig),
 	cell.Provide(NewEgressGatewayManager),
 	cell.Provide(newPolicyResource),
+	cell.Provide(func(dcfg *option.DaemonConfig) tunnel.EnablerOut {
+		if !dcfg.EnableEgressGateway {
+			return tunnel.EnablerOut{}
+		}
+		return tunnel.NewEnabler(true)
+	}),
 )
 
 type eventType int
@@ -161,6 +167,7 @@ type Params struct {
 
 	Config            Config
 	DaemonConfig      *option.DaemonConfig
+	TunnelConfig      tunnel.Config
 	IdentityAllocator identityCache.IdentityAllocator
 	PolicyMap4        *egressmap.PolicyMap4
 	PolicyMap6        *egressmap.PolicyMap6
@@ -177,7 +184,6 @@ func NewEgressGatewayManager(p Params) (out struct {
 
 	*Manager
 	defines.NodeOut
-	tunnel.EnablerOut
 }, err error) {
 	dcfg := p.DaemonConfig
 
@@ -199,6 +205,10 @@ func NewEgressGatewayManager(p Params) (out struct {
 		return out, fmt.Errorf("egress gateway requires --%s=\"true\" and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableBPFMasquerade)
 	}
 
+	if p.TunnelConfig.UnderlayProtocol() != tunnel.IPv4 {
+		return out, errors.New("egress gateway requires an IPv4 underlay")
+	}
+
 	if !dcfg.EnableIPv6Masquerade {
 		p.Logger.Info(fmt.Sprintf("egress gateway ipv6 policies require --%s=\"true\"", option.EnableIPv6Masquerade))
 	}
@@ -211,8 +221,6 @@ func NewEgressGatewayManager(p Params) (out struct {
 	out.NodeDefines = map[string]string{
 		"ENABLE_EGRESS_GATEWAY": "1",
 	}
-
-	out.EnablerOut = tunnel.NewEnabler(true)
 
 	return out, nil
 }
