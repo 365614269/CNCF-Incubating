@@ -517,8 +517,8 @@ var _ = Describe("Restore controller", func() {
 				rc2.Status = &snapshotv1.VirtualMachineRestoreStatus{
 					Complete: pointer.P(false),
 					Conditions: []snapshotv1.Condition{
-						newProgressingCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
-						newReadyCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
+						newProgressingCondition(corev1.ConditionFalse, "Waiting for target VM to be powered off. Please stop the restore target to proceed with restore, or the operation will fail after 5m0s"),
+						newReadyCondition(corev1.ConditionFalse, "Waiting for target VM to be powered off. Please stop the restore target to proceed with restore, or the operation will fail after 5m0s"),
 					},
 				}
 				updateStatusCalls := expectVMRestoreUpdateStatus(kubevirtClient, rc2)
@@ -674,7 +674,7 @@ var _ = Describe("Restore controller", func() {
 					Spec: corev1.PersistentVolumeClaimSpec{
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceName(corev1.ResourceStorage): resource.MustParse("2Gi"),
+								corev1.ResourceStorage: resource.MustParse("2Gi"),
 							},
 						},
 						VolumeName:       "volume2",
@@ -836,13 +836,38 @@ var _ = Describe("Restore controller", func() {
 			It("volume is set to be overwritten when volume restore policy is InPlace", func() {
 				r := createRestoreWithOwner()
 				r.Status.Conditions = []snapshotv1.Condition{
-					newProgressingCondition(corev1.ConditionTrue, "Initializing VirtualMachineRestore"),
-					newReadyCondition(corev1.ConditionFalse, "Initializing VirtualMachineRestore"),
+					newProgressingCondition(corev1.ConditionTrue, "Creating new PVCs"),
+					newReadyCondition(corev1.ConditionFalse, "Waiting for new PVCs"),
 				}
 				r.Spec.VolumeRestorePolicy = pointer.P(snapshotv1.VolumeRestorePolicyInPlace)
+				r.Status.Restores = []snapshotv1.VolumeRestore{
+					{
+						VolumeName:                diskName,
+						PersistentVolumeClaimName: "alpine-dv",
+						VolumeSnapshotName:        "vmsnapshot-snapshot-uid-volume-disk1",
+					},
+				}
 
 				vm := createRestoreInProgressVM()
 				vmSource.Add(vm)
+
+				dv := &cdiv1.DataVolume{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      vm.Spec.DataVolumeTemplates[0].Name,
+						Namespace: vm.Namespace,
+					},
+					Status: cdiv1.DataVolumeStatus{
+						Phase: cdiv1.Succeeded,
+					},
+				}
+
+				pvc := getRestorePVCs(r)[0]
+				pvc.OwnerReferences = []metav1.OwnerReference{
+					*metav1.NewControllerRef(dv, schema.GroupVersionKind{Group: "cdi.kubevirt.io", Version: "v1beta1", Kind: "DataVolume"}),
+				}
+
+				dataVolumeSource.Add(dv)
+				pvcSource.Add(&pvc)
 
 				ur := r.DeepCopy()
 				ur.ResourceVersion = "1"
@@ -855,14 +880,20 @@ var _ = Describe("Restore controller", func() {
 						VolumeName:                diskName,
 						PersistentVolumeClaimName: "alpine-dv", // Name is identical to the original PVC
 						VolumeSnapshotName:        "vmsnapshot-snapshot-uid-volume-disk1",
+						DataVolumeName:            pointer.P("alpine-dv"),
 					},
 				}
 
 				addVirtualMachineRestore(r)
 
 				updateStatusCalls := expectVMRestoreUpdateStatus(kubevirtClient, ur)
+				patchDataVolumeCalls := expectDataVolumePatch(cdiClient, dv, dv)
+				deletePVCCalls := expectPVCDeletion(k8sClient, r)
 				controller.processVMRestoreWorkItem()
-				Expect(*updateStatusCalls).To(Equal(1))
+				Expect(*updateStatusCalls).To(Equal(1))    // Restore is updated to mark DV owns the PVC
+				Expect(*patchDataVolumeCalls).To(Equal(0)) // DV not set to prepopulated yet
+				Expect(*deletePVCCalls).To(Equal(0))       // PVC hasn't been deleted yet
+
 			})
 
 			It("source volume/DV gets deleted when volume restore policy is InPlace", func() {
@@ -877,6 +908,7 @@ var _ = Describe("Restore controller", func() {
 						VolumeName:                diskName,
 						PersistentVolumeClaimName: "alpine-dv", // Name is identical to the original PVC
 						VolumeSnapshotName:        "vmsnapshot-snapshot-uid-volume-disk1",
+						DataVolumeName:            pointer.P(diskName),
 					},
 				}
 
@@ -923,7 +955,7 @@ var _ = Describe("Restore controller", func() {
 
 				updatedDV := dv.DeepCopy()
 				updatedDV.Annotations[RestoreNameAnnotation] = r.Name
-				updatedDV.Annotations[cdiv1.AnnPrePopulated] = "true"
+				updatedDV.Annotations[cdiv1.AnnPrePopulated] = dv.Name
 				patchDVCalls := expectDataVolumePatch(cdiClient, dv, updatedDV)
 
 				controller.processVMRestoreWorkItem()
@@ -1806,8 +1838,8 @@ var _ = Describe("Restore controller", func() {
 					rc.Status = &snapshotv1.VirtualMachineRestoreStatus{
 						Complete: pointer.P(false),
 						Conditions: []snapshotv1.Condition{
-							newProgressingCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
-							newReadyCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
+							newProgressingCondition(corev1.ConditionFalse, "Waiting for target VM to be powered off. Please stop the restore target to proceed with restore"),
+							newReadyCondition(corev1.ConditionFalse, "Waiting for target VM to be powered off. Please stop the restore target to proceed with restore"),
 						},
 					}
 					vmSource.Add(vm)
@@ -1829,8 +1861,8 @@ var _ = Describe("Restore controller", func() {
 					rc.Status = &snapshotv1.VirtualMachineRestoreStatus{
 						Complete: pointer.P(false),
 						Conditions: []snapshotv1.Condition{
-							newProgressingCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
-							newReadyCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
+							newProgressingCondition(corev1.ConditionFalse, "Automatically stopping restore target for restore operation"),
+							newReadyCondition(corev1.ConditionFalse, "Automatically stopping restore target for restore operation"),
 						},
 					}
 					vmSource.Add(vm)
@@ -1858,9 +1890,9 @@ var _ = Describe("Restore controller", func() {
 					rc.Status = &snapshotv1.VirtualMachineRestoreStatus{
 						Complete: pointer.P(false),
 						Conditions: []snapshotv1.Condition{
-							newProgressingCondition(corev1.ConditionFalse, "Operation failed"),
-							newReadyCondition(corev1.ConditionFalse, "Operation failed"),
-							newFailureCondition(corev1.ConditionTrue, "Restore target failed to be ready within 5m0s"),
+							newProgressingCondition(corev1.ConditionFalse, "Restore target failed to be ready within 5m0s. Please power off the target VM before attempting restore"),
+							newReadyCondition(corev1.ConditionFalse, "Restore target failed to be ready within 5m0s. Please power off the target VM before attempting restore"),
+							newFailureCondition(corev1.ConditionTrue, "Restore target failed to be ready within 5m0s. Please power off the target VM before attempting restore"),
 						},
 					}
 					vmSource.Add(vm)
@@ -1868,7 +1900,7 @@ var _ = Describe("Restore controller", func() {
 					updateStatusCalls := expectVMRestoreUpdateStatus(kubevirtClient, rc)
 					addVirtualMachineRestore(r)
 					controller.processVMRestoreWorkItem()
-					testutils.ExpectEvent(recorder, "RestoreTargetNotReady")
+					testutils.ExpectEvent(recorder, "Operation failed")
 					Expect(*updateStatusCalls).To(Equal(1))
 				})
 
@@ -1877,8 +1909,8 @@ var _ = Describe("Restore controller", func() {
 					r.Status = &snapshotv1.VirtualMachineRestoreStatus{
 						Complete: pointer.P(false),
 						Conditions: []snapshotv1.Condition{
-							newProgressingCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
-							newReadyCondition(corev1.ConditionFalse, "Waiting for target to be ready"),
+							newProgressingCondition(corev1.ConditionFalse, "Waiting for target VM to be powered off. Please stop the restore target to proceed with restore, or the operation will fail after 5m0s"),
+							newReadyCondition(corev1.ConditionFalse, "Waiting for target VM to be powered off. Please stop the restore target to proceed with restore, or the operation will fail after 5m0s"),
 						},
 					}
 					//change creation time such that it will make the default grace period pass
@@ -1915,9 +1947,9 @@ var _ = Describe("Restore controller", func() {
 					rc.Status = &snapshotv1.VirtualMachineRestoreStatus{
 						Complete: pointer.P(false),
 						Conditions: []snapshotv1.Condition{
-							newProgressingCondition(corev1.ConditionFalse, "Operation failed"),
-							newReadyCondition(corev1.ConditionFalse, "Operation failed"),
-							newFailureCondition(corev1.ConditionTrue, "Restore target not ready"),
+							newProgressingCondition(corev1.ConditionFalse, "Restore target VMI must be powered off before restore operation"),
+							newReadyCondition(corev1.ConditionFalse, "Restore target VMI must be powered off before restore operation"),
+							newFailureCondition(corev1.ConditionTrue, "Restore target VMI must be powered off before restore operation"),
 						},
 					}
 					vmSource.Add(vm)
@@ -1925,8 +1957,32 @@ var _ = Describe("Restore controller", func() {
 					updateStatusCalls := expectVMRestoreUpdateStatus(kubevirtClient, rc)
 					addVirtualMachineRestore(r)
 					controller.processVMRestoreWorkItem()
-					testutils.ExpectEvent(recorder, "RestoreTargetNotReady")
+					testutils.ExpectEvent(recorder, "Operation failed")
 					Expect(*updateStatusCalls).To(Equal(1))
+				})
+
+				It("should not change from failure status even if VM becomes ready", func() {
+					r := createRestoreWithOwner()
+					r.Spec.TargetReadinessPolicy = pointer.P(snapshotv1.VirtualMachineRestoreFailImmediate)
+					// Set up restore with failure condition already present
+					r.Status = &snapshotv1.VirtualMachineRestoreStatus{
+						Complete: pointer.P(false),
+						Conditions: []snapshotv1.Condition{
+							newProgressingCondition(corev1.ConditionFalse, "Restore target VMI must be powered off before restore operation"),
+							newReadyCondition(corev1.ConditionFalse, "Restore target VMI must be powered off before restore operation"),
+							newFailureCondition(corev1.ConditionTrue, "Restore target VMI must be powered off before restore operation"),
+						},
+					}
+					vm := createModifiedVM()
+					// Add VM without VMI (VM is ready), but restore already has failure condition
+					vmSource.Add(vm)
+
+					updateStatusCalls := expectVMRestoreUpdateStatus(kubevirtClient, r)
+
+					addVirtualMachineRestore(r)
+					controller.processVMRestoreWorkItem()
+					// Verify no status update occurred since restore is already in terminal failure state
+					Expect(*updateStatusCalls).To(Equal(0))
 				})
 			})
 
@@ -1936,9 +1992,9 @@ var _ = Describe("Restore controller", func() {
 				r.Status = &snapshotv1.VirtualMachineRestoreStatus{
 					Complete: pointer.P(false),
 					Conditions: []snapshotv1.Condition{
-						newProgressingCondition(corev1.ConditionFalse, "Operation failed"),
-						newReadyCondition(corev1.ConditionFalse, "Operation failed"),
-						newFailureCondition(corev1.ConditionTrue, "Restore target not ready"),
+						newProgressingCondition(corev1.ConditionFalse, "Restore target VMI must be powered off before restore operation"),
+						newReadyCondition(corev1.ConditionFalse, "Restore target VMI must be powered off before restore operation"),
+						newFailureCondition(corev1.ConditionTrue, "Restore target VMI must be powered off before restore operation"),
 					},
 				}
 				vm := createModifiedVM()
