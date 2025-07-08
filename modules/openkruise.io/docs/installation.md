@@ -2,6 +2,26 @@
 title: Installation
 ---
 
+## Versioning and Compatibility
+
+| Kruise Version | 1.18 | 1.20 | 1.22 | 1.24 | 1.26 | 1.28 | 1.30 | 1.32 |
+|----------------|------|------|------|------|------|------|------|------|
+| 1.4.x          | +    | +    | ✓    | -    | ?    | ?    | ?    | ?    |
+| 1.5.x          | +    | +    | +    | ✓    | -    | ?    | ?    | ?    |
+| 1.6.x          | +    | +    | +    | +    | ✓    | ?    | ?    | ?    |
+| 1.7.x          | +    | +    | +    | +    | +    | ✓    | ?    | ?    |
+| 1.8.x          | +    | +    | +    | +    | +    | +    | ✓    | ?    |
+| HEAD           | ?    | ?    | ?    | +    | +    | +    | +    | ✓    |
+
+
+Key:
+* ✓: Exactly the same API objects/fields in both Kruise and the Kubernetes version.
+* +: Kruise has api objects/fields that may not be present in the Kubernetes cluster, but everything they have in common will work.
+* -: The Kubernetes cluster has features the Kruise can't use (additional API objects and fields, etc).
+* ?: It is not tested against the Kubernetes cluster.
+
+Here is some important notes about the compatibility between Kruise and Kubernetes:
+
 - Since v1.0.0 (alpha/beta), OpenKruise requires **Kubernetes version >= 1.16**.
 
 - Since v1.5.0(alpha/beta), OpenKruise no longer supports dockershim. If you still use Docker Engine to run containers
@@ -310,6 +330,24 @@ Or, if `helm install ... --set manager.loggingFormat=json`, it will result in th
   "updateReadyPods": 0
 }
 ```
+## Versioning and Compatibility
+
+| Kruise Version | 1.18 | 1.20 | 1.22 | 1.24 | 1.26 | 1.28 | 1.30 | 1.32 |
+|----------------|------|------|------|------|------|------|------|------|
+| 1.4.x          | +    | +    | ✓    | -    | ?    | ?    | ?    | ?    |
+| 1.5.x          | +    | +    | +    | ✓    | -    | ?    | ?    | ?    |
+| 1.6.x          | +    | +    | +    | +    | ✓    | ?    | ?    | ?    |
+| 1.7.x          | +    | +    | +    | +    | +    | ✓    | ?    | ?    |
+| 1.8.x          | +    | +    | +    | +    | +    | +    | ✓    | ?    |
+| HEAD           | ?    | ?    | ?    | +    | +    | +    | +    | ✓    |
+
+
+Key:
+* ✓: Exactly the same API objects/fields in both Kruise and the Kubernetes version.
+* +: Kruise has api objects/fields that may not be present in the Kubernetes cluster, but everything they have in common will work.
+* -: The Kubernetes cluster has features the Kruise can't use (additional API objects and fields, etc).
+* ?: It is not tested against the Kubernetes cluster.
+
 
 ## Uninstall
 
@@ -326,22 +364,4 @@ To uninstall kruise if it is installed with helm charts:
 ```bash
 $ helm uninstall kruise
 release "kruise" uninstalled
-```
-
-## Kruise State Metrics
-
-[kruise-state-metrics](https://github.com/openkruise/kruise-state-metrics) is a simple service that listens to the
-Kubernetes API server and generates metrics about the state of the objects.
-It is not focused on the health of the individual OpenKruise components, but rather on the health of the various objects
-inside, such as clonesets, advanced statefulsets and sidecarsets.
-
-```bash
-# Firstly add openkruise charts repository if you haven't do this.
-$ helm repo add openkruise https://openkruise.github.io/charts/
-
-# [Optional]
-$ helm repo update
-
-# Install the latest version.
-$ helm install kruise openkruise/kruise-state-metrics --version 0.1.0
 ```
