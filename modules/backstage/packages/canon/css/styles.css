@@ -9088,6 +9088,12 @@
   text-decoration: none;
 }
 
+@keyframes pulse {
+  50% {
+    opacity: .5;
+  }
+}
+
 :root {
   --canon-font-regular: system-ui;
   --canon-font-monospace: ui-monospace, "Menlo", "Monaco", "Consolas", "Liberation Mono", "Courier New", monospace;
@@ -9173,6 +9179,7 @@
   --canon-ring: #1f5493;
   --canon-scrollbar: #a0a0a03b;
   --canon-scrollbar-thumb: #a0a0a0;
+  --canon-animate-pulse: pulse 2s cubic-bezier(.4, 0, .6, 1) infinite;
 }
 
 [data-theme="dark"] {
@@ -9407,6 +9414,30 @@
 .canon-ButtonIcon[data-size="medium"] {
   width: 2.5rem;
   padding: 0;
+}
+
+.canon-Card {
+  gap: var(--canon-space-3);
+  background-color: var(--canon-bg-surface-1);
+  border-radius: var(--canon-radius-3);
+  padding-block: var(--canon-space-3);
+  color: var(--canon-fg-primary);
+  border: 1px solid var(--canon-border);
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.canon-CardBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.canon-CardHeader, .canon-CardFooter {
+  padding-inline: var(--canon-space-3);
 }
 
 .canon-CheckboxRoot {
@@ -10460,6 +10491,16 @@
   height: 1rem;
 }
 
+.canon-Skeleton {
+  animation: var(--canon-animate-pulse);
+  background-color: var(--canon-bg-surface-2);
+  border-radius: var(--canon-radius-2);
+}
+
+.canon-Skeleton[data-rounded="true"] {
+  border-radius: var(--canon-radius-full);
+}
+
 .canon-Tooltip {
   background: var(--canon-bg-surface-2);
   forced-color-adjust: none;
@@ -10519,9 +10560,7 @@
 
 .canon-ScrollAreaRoot {
   box-sizing: border-box;
-  width: 24rem;
   max-width: calc(100vw - 8rem);
-  height: 8.5rem;
 }
 
 .canon-ScrollAreaViewport {

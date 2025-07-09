@@ -169,9 +169,22 @@ func ConvertTSDBBlock(
 	if err != nil {
 		return 0, err
 	}
-
 	defer func() { _ = rr.Close() }()
-	w := NewShardedWrite(rr, rr.Schema(), bkt, &cfg)
+
+	labelsProjection, err := rr.Schema().LabelsProjection()
+	if err != nil {
+		return 0, errors.Wrap(err, "error getting labels projection from tsdb schema")
+	}
+	chunksProjection, err := rr.Schema().ChunksProjection()
+	if err != nil {
+		return 0, errors.Wrap(err, "error getting chunks projection from tsdb schema")
+	}
+	outSchemaProjections := []*schema.TSDBProjection{
+		labelsProjection, chunksProjection,
+	}
+
+	pipeReaderWriter := NewPipeReaderBucketWriter(bkt)
+	w := NewShardedWrite(rr, rr.Schema(), outSchemaProjections, pipeReaderWriter, &cfg)
 	return w.currentShard, errors.Wrap(w.Write(ctx), "error writing block")
 }
 
@@ -213,25 +226,25 @@ func NewTsdbRowReader(ctx context.Context, mint, maxt, colDuration int64, blks [
 	for _, blk := range blks {
 		indexr, err := blk.Index()
 		if err != nil {
-			return nil, fmt.Errorf("unable to get index reader from block: %s", err)
+			return nil, fmt.Errorf("unable to get index reader from block: %w", err)
 		}
 		closers = append(closers, indexr)
 
 		chunkr, err := blk.Chunks()
 		if err != nil {
-			return nil, fmt.Errorf("unable to get chunk reader from block: %s", err)
+			return nil, fmt.Errorf("unable to get chunk reader from block: %w", err)
 		}
 		closers = append(closers, chunkr)
 
 		tombsr, err := blk.Tombstones()
 		if err != nil {
-			return nil, fmt.Errorf("unable to get tombstone reader from block: %s", err)
+			return nil, fmt.Errorf("unable to get tombstone reader from block: %w", err)
 		}
 		closers = append(closers, tombsr)
 
 		lblns, err := indexr.LabelNames(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("unable to get label names from block: %s", err)
+			return nil, fmt.Errorf("unable to get label names from block: %w", err)
 		}
 
 		postings := sortedPostings(ctx, indexr, compareFunc, ops.sortedLabels...)
@@ -245,7 +258,7 @@ func NewTsdbRowReader(ctx context.Context, mint, maxt, colDuration int64, blks [
 
 	s, err := b.Build()
 	if err != nil {
-		return nil, fmt.Errorf("unable to build index reader from block: %s", err)
+		return nil, fmt.Errorf("unable to build index reader from block: %w", err)
 	}
 
 	return &TsdbRowReader{
