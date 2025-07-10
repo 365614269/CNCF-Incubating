@@ -1371,7 +1371,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:46a7980faed77a568242b761533d3eef75f45ea2e5d02d82cde057367dd467a0","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.34.1-1751619162-a185e384e856a29585a1493f585ccd67d40a35e9","useDigest":true}``
+     - ``{"digest":"sha256:84bdfde77e6edc32364d15fa909b26b4b9a48e25098e8295d5cf0dc415a91945","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.34.1-1752029260-6675448d88d49594fff5ac5d9786c51378263b9d","useDigest":true}``
    * - :spelling:ignore:`envoy.initialFetchTimeoutSeconds`
      - Time in seconds after which the initial fetch on an xDS stream is considered timed out
      - int
@@ -3085,9 +3085,9 @@
      - bool
      - ``false``
    * - :spelling:ignore:`operator.tolerations`
-     - Node tolerations for cilium-operator scheduling to nodes with taints ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+     - Node tolerations for cilium-operator scheduling to nodes with taints ref: https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ @schema type: [null, array] @schema
      - list
-     - ``[{"operator":"Exists"}]``
+     - ``[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists"},{"key":"node-role.kubernetes.io/master","operator":"Exists"},{"key":"node.kubernetes.io/not-ready","operator":"Exists"},{"key":"node.cilium.io/agent-not-ready","operator":"Exists"}]``
    * - :spelling:ignore:`operator.topologySpreadConstraints`
      - Pod topology spread constraints for cilium-operator
      - list
@@ -3159,7 +3159,7 @@
    * - :spelling:ignore:`preflight.envoy.image`
      - Envoy pre-flight image.
      - object
-     - ``{"digest":"sha256:46a7980faed77a568242b761533d3eef75f45ea2e5d02d82cde057367dd467a0","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.34.1-1751619162-a185e384e856a29585a1493f585ccd67d40a35e9","useDigest":true}``
+     - ``{"digest":"sha256:84bdfde77e6edc32364d15fa909b26b4b9a48e25098e8295d5cf0dc415a91945","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.34.1-1752029260-6675448d88d49594fff5ac5d9786c51378263b9d","useDigest":true}``
    * - :spelling:ignore:`preflight.extraEnv`
      - Additional preflight environment variables.
      - list
