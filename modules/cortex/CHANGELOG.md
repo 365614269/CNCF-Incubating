@@ -55,6 +55,7 @@
 * [ENHANCEMENT] Store Gateway: Allow to ignore syncing blocks older than certain time using `ignore_blocks_before`. #6830
 * [ENHANCEMENT] Distributor: Add native histograms max sample size bytes limit validation. #6834
 * [ENHANCEMENT] Querier: Support caching parquet labels file in parquet queryable. #6835
+* [ENHANCEMENT] Querier: Support query limits in parquet queryable. #6870
 * [BUGFIX] Ingester: Avoid error or early throttling when READONLY ingesters are present in the ring #6517
 * [BUGFIX] Ingester: Fix labelset data race condition. #6573
 * [BUGFIX] Compactor: Cleaner should not put deletion marker for blocks with no-compact marker. #6576
@@ -72,6 +73,7 @@
 * [BUGFIX] Ruler: Prevent counting 2xx and 4XX responses as failed writes. #6785
 * [BUGFIX] Ingester: Allow shipper to skip corrupted blocks. #6786
 * [BUGFIX] Compactor: Delete the prefix `blocks_meta` from the metadata fetcher metrics. #6832
+* [BUGFIX] Store Gateway: Avoid race condition by deduplicating entries in bucket stores user scan. #6863
 
 ## 1.19.0 2025-02-27
 
