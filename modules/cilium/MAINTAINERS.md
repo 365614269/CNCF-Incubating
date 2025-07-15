@@ -11,7 +11,6 @@ to learn how to level up through the project.
  * [Aditi Ghag] (Isovalent)
  * [Alexandre Perrin] (Isovalent)
  * [André Martins] (Isovalent)
- * [Beatriz Martínez] (Isovalent)
  * [Bill Mulligan] (Isovalent)
  * [Bruno M. Custódio] (Isovalent)
  * [Casey Callendrello] (Isovalent)
@@ -19,13 +18,13 @@ to learn how to level up through the project.
  * [Chris Tarazi] (Isovalent)
  * [Daniel Borkmann] (Isovalent)
  * [Dan Wendlandt] (Isovalent)
- * [Deepesh Pathak]
+ * [Deepesh Pathak] (Isovalent)
  * [Dorde Lapcevic] (Google)
  * [Dylan Reimerink] (Isovalent)
  * [Fabio Falzoi] (Isovalent)
  * [Gilberto Bertin] (Isovalent)
  * [Glib Smaga] (Isovalent)
- * [Hemanth Malla] (Datadog)
+ * [Hemanth Malla] (Microsoft)
  * [Ian Vernon]
  * [Jarno Rajahalme] (Isovalent)
  * [Joe Stringer] (Isovalent)
@@ -40,7 +39,7 @@ to learn how to level up through the project.
  * [Maciej Kwiek] (Isovalent)
  * [Marco Iorio] (Isovalent)
  * [Martynas Pumputis] (Isovalent)
- * [Michal Rostecki] (Deepfence)
+ * [Michal Rostecki] (Anza)
  * [Michi Mutsuzaki] (Isovalent)
  * [Natália Réka Ivánkó] (Isovalent)
  * [Nathan Sweet] (Isovalent)
@@ -63,6 +62,7 @@ to learn how to level up through the project.
 
 We would like to acknowledge previous committers and their huge contributions to our collective success:
 
+ * [Beatriz Martínez] (Isovalent)
  * [Eloy Coto] (Red Hat)
  * [Ilya Dmitrichenko] (Docker)
  * [Ray Bejjani]
