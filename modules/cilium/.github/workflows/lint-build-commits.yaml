@@ -27,7 +27,7 @@ concurrency:
 jobs:
   compute-vars:
     name: Compute variables
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       commits: ${{ steps.commits.outputs.commits }}
       head-commit: ${{ steps.commits.outputs.head-commit }}
@@ -85,7 +85,7 @@ jobs:
 
   build-commits-cilium:
     name: Check if cilium builds for every commit
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [compute-vars]
     timeout-minutes: 180
     steps:
@@ -171,7 +171,7 @@ jobs:
 
   build-commits-hubble-cli:
     name: Check if hubble-cli builds for every commit
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [compute-vars]
     timeout-minutes: 180
     steps:
@@ -263,7 +263,7 @@ jobs:
 
   build-commits-bpf:
     name: Check if bpf builds for every commit
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [compute-vars]
     # Runs only if code under bpf/ is changed.
     if: needs.compute-vars.outputs.build-bpf == 'true'
@@ -356,7 +356,7 @@ jobs:
 
   build-commits-test:
     name: Check if test builds for every commit
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [compute-vars]
     # Runs only if code under test/ is changed.
     if: needs.compute-vars.outputs.build-test == 'true'
@@ -396,7 +396,7 @@ jobs:
       - name: Install LLVM and Clang prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libtinfo5
+          sudo apt-get install -y --no-install-recommends libtinfo6
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@a7a1a882e2d06ebe05d5bb97c3e1f8c984ae96fc # v2.0.7
