@@ -65,9 +65,10 @@ type ciliumNodeSynchronizer struct {
 
 	k8sCiliumNodesCacheSynced    chan struct{}
 	ciliumNodeManagerQueueSynced chan struct{}
+	workqueueMetricsProvider     workqueue.MetricsProvider
 }
 
-func newCiliumNodeSynchronizer(logger *slog.Logger, clientset k8sClient.Clientset, kvstoreClient kvstore.Client, nodeManager allocator.NodeEventHandler, withKVStore bool) *ciliumNodeSynchronizer {
+func newCiliumNodeSynchronizer(logger *slog.Logger, clientset k8sClient.Clientset, kvstoreClient kvstore.Client, nodeManager allocator.NodeEventHandler, withKVStore bool, workqueueMetricsProvider workqueue.MetricsProvider) *ciliumNodeSynchronizer {
 	return &ciliumNodeSynchronizer{
 		logger:        logger,
 		clientset:     clientset,
@@ -77,6 +78,7 @@ func newCiliumNodeSynchronizer(logger *slog.Logger, clientset k8sClient.Clientse
 
 		k8sCiliumNodesCacheSynced:    make(chan struct{}),
 		ciliumNodeManagerQueueSynced: make(chan struct{}),
+		workqueueMetricsProvider:     workqueueMetricsProvider,
 	}
 }
 
@@ -98,8 +100,8 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 	}
 
 	if operatorOption.Config.EnableMetrics {
-		ciliumNodeManagerQueueConfig.MetricsProvider = NewWorkqueuePrometheusMetricsProvider()
-		kvStoreQueueConfig.MetricsProvider = NewWorkqueuePrometheusMetricsProvider()
+		ciliumNodeManagerQueueConfig.MetricsProvider = s.workqueueMetricsProvider
+		kvStoreQueueConfig.MetricsProvider = s.workqueueMetricsProvider
 	}
 
 	var ciliumNodeManagerQueue = workqueue.NewTypedRateLimitingQueueWithConfig[string](workqueue.DefaultTypedControllerRateLimiter[string](), ciliumNodeManagerQueueConfig)
@@ -119,7 +121,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 		go func() {
 			defer wg.Done()
 
-			s.logger.Info("Starting to synchronize CiliumNode custom resources to KVStore")
+			s.logger.InfoContext(ctx, "Starting to synchronize CiliumNode custom resources to KVStore")
 
 			ciliumNodeKVStore, err = store.JoinSharedStore(s.logger,
 				store.Configuration{
@@ -153,7 +155,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 			}
 
 			if len(listOfCiliumNodes) == 0 && len(kvStoreNodes) != 0 {
-				s.logger.Warn("Preventing GC of nodes in the KVStore due the nonexistence of any CiliumNodes in kube-apiserver")
+				s.logger.WarnContext(ctx, "Preventing GC of nodes in the KVStore due the nonexistence of any CiliumNodes in kube-apiserver")
 				return
 			}
 
@@ -165,7 +167,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 			}
 		}()
 	} else {
-		s.logger.Info("Starting to synchronize CiliumNode custom resources")
+		s.logger.InfoContext(ctx, "Starting to synchronize CiliumNode custom resources")
 	}
 
 	if s.nodeManager != nil {
@@ -231,7 +233,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 			AddFunc: func(obj any) {
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 				if err != nil {
-					s.logger.Warn("Unable to process CiliumNode Add event", logfields.Error, err)
+					s.logger.WarnContext(ctx, "Unable to process CiliumNode Add event", logfields.Error, err)
 					return
 				}
 				if s.nodeManager != nil {
@@ -249,7 +251,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 						}
 						key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(newObj)
 						if err != nil {
-							s.logger.Warn("Unable to process CiliumNode Update event", logfields.Error, err)
+							s.logger.WarnContext(ctx, "Unable to process CiliumNode Update event", logfields.Error, err)
 							return
 						}
 						if s.nodeManager != nil {
@@ -259,14 +261,14 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 							kvStoreQueue.Add(key)
 						}
 					} else {
-						s.logger.Warn(
+						s.logger.WarnContext(ctx,
 							"Unknown CiliumNode object type received",
 							logfields.Type, reflect.TypeOf(newNode),
 							logfields.Node, newNode,
 						)
 					}
 				} else {
-					s.logger.Warn(
+					s.logger.WarnContext(ctx,
 						"Unknown CiliumNode object type received",
 						logfields.Type, reflect.TypeOf(oldNode),
 						logfields.Node, oldNode,
@@ -276,7 +278,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 			DeleteFunc: func(obj any) {
 				key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 				if err != nil {
-					s.logger.Warn("Unable to process CiliumNode Delete event", logfields.Error, err)
+					s.logger.WarnContext(ctx, "Unable to process CiliumNode Delete event", logfields.Error, err)
 					return
 				}
 				if s.nodeManager != nil {
@@ -308,7 +310,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 		cache.WaitForCacheSync(ctx.Done(), ciliumNodeInformer.HasSynced)
 		close(s.k8sCiliumNodesCacheSynced)
 		ciliumNodeManagerQueue.Add(ciliumNodeManagerQueueSyncedKey)
-		s.logger.Info("CiliumNodes caches synced with Kubernetes")
+		s.logger.InfoContext(ctx, "CiliumNodes caches synced with Kubernetes")
 		// Only handle events if nodeManagerSyncHandler is not nil. If it is nil
 		// then there isn't any event handler set for CiliumNodes events.
 		if nodeManagerSyncHandler != nil {
@@ -324,7 +326,7 @@ func (s *ciliumNodeSynchronizer) Start(ctx context.Context, wg *sync.WaitGroup, 
 		// then there isn't any event handler set for CiliumNodes events.
 		if s.withKVStore && kvStoreSyncHandler != nil {
 			<-connectedToKVStore
-			s.logger.Info("Connected to the KVStore, syncing CiliumNodes to the KVStore")
+			s.logger.InfoContext(ctx, "Connected to the KVStore, syncing CiliumNodes to the KVStore")
 			// infinite loop it will block code execution
 			for s.processNextWorkItem(kvStoreQueue, kvStoreSyncHandler) {
 			}
