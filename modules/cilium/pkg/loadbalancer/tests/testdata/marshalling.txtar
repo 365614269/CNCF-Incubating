@@ -94,13 +94,12 @@ Address              Instances
       ],
       "Weight": 100,
       "NodeName": "nodeport-worker",
-      "Zone": "",
-      "ForZones": null,
+      "Zone": null,
       "ClusterID": 0,
       "Source": "k8s",
       "State": 0,
       "Unhealthy": false,
-      "UnhealthyUpdatedAt": "0001-01-01T00:00:00Z"
+      "UnhealthyUpdatedAt": null
     }
   ],
   "ID": 1,
@@ -125,13 +124,12 @@ Address              Instances
       ],
       "Weight": 100,
       "NodeName": "nodeport-worker",
-      "Zone": "",
-      "ForZones": null,
+      "Zone": null,
       "ClusterID": 0,
       "Source": "k8s",
       "State": 0,
       "Unhealthy": false,
-      "UnhealthyUpdatedAt": "0001-01-01T00:00:00Z"
+      "UnhealthyUpdatedAt": null
     }
   ],
   "ID": 2,
@@ -153,13 +151,12 @@ Address              Instances
         ],
         "Weight": 100,
         "NodeName": "nodeport-worker",
-        "Zone": "",
-        "ForZones": null,
+        "Zone": null,
         "ClusterID": 0,
         "Source": "k8s",
         "State": 0,
         "Unhealthy": false,
-        "UnhealthyUpdatedAt": "0001-01-01T00:00:00Z"
+        "UnhealthyUpdatedAt": null
       }
     }
   ]
@@ -179,13 +176,12 @@ Address              Instances
         ],
         "Weight": 100,
         "NodeName": "nodeport-worker",
-        "Zone": "",
-        "ForZones": null,
+        "Zone": null,
         "ClusterID": 0,
         "Source": "k8s",
         "State": 0,
         "Unhealthy": false,
-        "UnhealthyUpdatedAt": "0001-01-01T00:00:00Z"
+        "UnhealthyUpdatedAt": null
       }
     }
   ]
@@ -228,13 +224,12 @@ backends:
         - http
       weight: 100
       nodename: nodeport-worker
-      zone: ""
-      forzones: []
+      zone: null
       clusterid: 0
       source: k8s
       state: 0
       unhealthy: false
-      unhealthyupdatedat: 0001-01-01T00:00:00Z
+      unhealthyupdatedat: null
 id: 1
 redirectto: null
 ---
@@ -254,13 +249,12 @@ backends:
         - http
       weight: 100
       nodename: nodeport-worker
-      zone: ""
-      forzones: []
+      zone: null
       clusterid: 0
       source: k8s
       state: 0
       unhealthy: false
-      unhealthyupdatedat: 0001-01-01T00:00:00Z
+      unhealthyupdatedat: null
 id: 2
 redirectto: null
 -- backends-expected.yaml --
@@ -275,13 +269,12 @@ instances:
             - http
         weight: 100
         nodename: nodeport-worker
-        zone: ""
-        forzones: []
+        zone: null
         clusterid: 0
         source: k8s
         state: 0
         unhealthy: false
-        unhealthyupdatedat: 0001-01-01T00:00:00Z
+        unhealthyupdatedat: null
 ---
 address: '[2002::2]:8080/TCP'
 instances:
@@ -294,13 +287,12 @@ instances:
             - http
         weight: 100
         nodename: nodeport-worker
-        zone: ""
-        forzones: []
+        zone: null
         clusterid: 0
         source: k8s
         state: 0
         unhealthy: false
-        unhealthyupdatedat: 0001-01-01T00:00:00Z
+        unhealthyupdatedat: null
 -- service.yaml --
 apiVersion: v1
 kind: Service

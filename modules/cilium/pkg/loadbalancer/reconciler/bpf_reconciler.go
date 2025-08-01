@@ -911,7 +911,7 @@ func (ops *BPFOps) updateFrontend(fe *loadbalancer.Frontend) error {
 			}
 		}
 
-		if !be.UnhealthyUpdatedAt.IsZero() {
+		if be.UnhealthyUpdatedAt != nil {
 			ops.deleteRestoredQuarantinedBackends(fe.Address, be.Address)
 		}
 
@@ -1130,13 +1130,13 @@ func (ops *BPFOps) upsertBackend(id loadbalancer.BackendID, be *loadbalancer.Bac
 
 	if be.Address.AddrCluster().Is6() {
 		lbbe, err = maps.NewBackend6V3(id, be.Address.AddrCluster(), be.Address.Port(), proto,
-			be.State, ops.extCfg.GetZoneID(be.Zone))
+			be.State, ops.extCfg.GetZoneID(be.GetZone()))
 		if err != nil {
 			return err
 		}
 	} else {
 		lbbe, err = maps.NewBackend4V3(id, be.Address.AddrCluster(), be.Address.Port(), proto,
-			be.State, ops.extCfg.GetZoneID(be.Zone))
+			be.State, ops.extCfg.GetZoneID(be.GetZone()))
 		if err != nil {
 			return err
 		}
@@ -1321,7 +1321,9 @@ func (ops *BPFOps) sortedBackends(fe *loadbalancer.Frontend) []backendWithRevisi
 
 	bes := []backendWithRevision{}
 	for be, rev := range fe.Backends {
-		if be.UnhealthyUpdatedAt.IsZero() && quarantined.Has(be.Address) {
+		if be.UnhealthyUpdatedAt == nil && quarantined.Has(be.Address) {
+			// Backend was previously quarantined and we have not health checked it
+			// yet. Use the restored health until health check is performed.
 			be.Unhealthy = true
 		}
 		bes = append(bes, backendWithRevision{&be, rev})

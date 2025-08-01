@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Starts three Prometheus servers scraping themselves and sidecars for each.
+# Starts three Prometheus servers scraping themselves and sidecars or receivers for each.
 # Two query nodes are started and all are clustered together.
 
 trap 'kill 0' SIGTERM
@@ -20,6 +20,18 @@ fi
 if [ ! $(command -v "$THANOS_EXECUTABLE") ]; then
   echo "Cannot find or execute Thanos binary $THANOS_EXECUTABLE, you can override it by setting the THANOS_EXECUTABLE env variable"
   exit 1
+fi
+
+OBJSTORECFG=""
+if [ -n "${MINIO_ENABLED}" ]; then
+  OBJSTORECFG="--objstore.config-file      data/bucket.yml"
+else
+  if [ ! -e "$OBJSTORECFG_FILE" ]; then
+    echo "Cannot find ObjStore config file at path \"$OBJSTORECFG_FILE\". Create a config following https://thanos.io/tip/thanos/storage.md/ and set the OBJSTORECFG_FILE env variable to the file's location."
+    exit 1
+  fi
+
+  OBJSTORECFG="--objstore.config-file      ${OBJSTORECFG_FILE}"
 fi
 
 # Start local object storage, if desired.
@@ -150,33 +162,30 @@ done
 
 sleep 0.5
 
-OBJSTORECFG=""
-if [ -n "${MINIO_ENABLED}" ]; then
-  OBJSTORECFG="--objstore.config-file      data/bucket.yml"
+if [ ! -n "${REMOTE_WRITE_ENABLED}" ]; then
+  # Start one sidecar for each Prometheus server.
+  for i in $(seq 0 2); do
+    if [ -z ${CODESPACE_NAME+x} ]; then
+      PROMETHEUS_URL="http://localhost:909${i}"
+    else
+      PROMETHEUS_URL="https://${CODESPACE_NAME}-909${i}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
+    fi
+    ${THANOS_EXECUTABLE} sidecar \
+      --debug.name sidecar-"${i}" \
+      --log.level debug \
+      --grpc-address 0.0.0.0:109"${i}"1 \
+      --grpc-grace-period 1s \
+      --http-address 0.0.0.0:109"${i}"2 \
+      --http-grace-period 1s \
+      --prometheus.url "${PROMETHEUS_URL}" \
+      --tsdb.path data/prom"${i}" \
+      ${OBJSTORECFG} &
+
+    STORES="${STORES} --endpoint 127.0.0.1:109${i}1"
+
+    sleep 0.25
+  done
 fi
-
-# Start one sidecar for each Prometheus server.
-for i in $(seq 0 2); do
-  if [ -z ${CODESPACE_NAME+x} ]; then
-    PROMETHEUS_URL="http://localhost:909${i}"
-  else
-    PROMETHEUS_URL="https://${CODESPACE_NAME}-909${i}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
-  fi
-  ${THANOS_EXECUTABLE} sidecar \
-    --debug.name sidecar-"${i}" \
-    --log.level debug \
-    --grpc-address 0.0.0.0:109"${i}"1 \
-    --grpc-grace-period 1s \
-    --http-address 0.0.0.0:109"${i}"2 \
-    --http-grace-period 1s \
-    --prometheus.url "${PROMETHEUS_URL}" \
-    --tsdb.path data/prom"${i}" \
-    ${OBJSTORECFG} &
-
-  STORES="${STORES} --endpoint 127.0.0.1:109${i}1"
-
-  sleep 0.25
-done
 
 sleep 0.5
 
@@ -212,7 +221,7 @@ sleep 0.5
 
 if [ -n "${REMOTE_WRITE_ENABLED}" ]; then
 
-  for i in $(seq 0 1 2); do
+  for i in $(seq 0 2); do
     ${THANOS_EXECUTABLE} receive \
       --debug.name receive${i} \
       --log.level debug \
