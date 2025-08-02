@@ -25,7 +25,7 @@ type reconciler struct {
 	logger     *slog.Logger
 	client     clientset.CiliumV2alpha1Interface
 	context    context.Context
-	cesManager operations
+	cesManager *cesManager
 	cepStore   resource.Store[*cilium_v2.CiliumEndpoint]
 	cesStore   resource.Store[*cilium_v2a1.CiliumEndpointSlice]
 	metrics    *Metrics
@@ -35,7 +35,7 @@ type reconciler struct {
 func newReconciler(
 	ctx context.Context,
 	client clientset.CiliumV2alpha1Interface,
-	cesMgr operations,
+	cesMgr *cesManager,
 	logger *slog.Logger,
 	ciliumEndpoint resource.Resource[*cilium_v2.CiliumEndpoint],
 	ciliumEndpointSlice resource.Resource[*cilium_v2a1.CiliumEndpointSlice],
@@ -89,8 +89,7 @@ func (r *reconciler) reconcileCESCreate(cesName CESName) (err error) {
 		Endpoints: make([]cilium_v2a1.CoreCiliumEndpoint, 0, len(ceps)),
 	}
 
-	cesData := r.cesManager.getCESData(cesName)
-	newCES.Namespace = cesData.ns
+	newCES.Namespace = r.cesManager.getCESNamespace(cesName)
 
 	for _, cepName := range ceps {
 		ccep := r.getCoreEndpointFromStore(cepName)
@@ -163,9 +162,9 @@ func (r *reconciler) reconcileCESUpdate(cesName CESName, cesObj *cilium_v2a1.Cil
 	)
 
 	cesEqual := cepInserted == 0 && cepUpdated == 0 && cepRemoved == 0
-	data := r.cesManager.getCESData(cesName)
-	if updatedCES.Namespace != data.ns {
-		updatedCES.Namespace = data.ns
+	ns := r.cesManager.getCESNamespace(cesName)
+	if updatedCES.Namespace != ns {
+		updatedCES.Namespace = ns
 		cesEqual = false
 	}
 
