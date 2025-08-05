@@ -378,6 +378,11 @@ generate-k8s-api: ## Generate Cilium k8s API client, deepcopy and deepequal Go s
 	contrib/scripts/builder.sh \
 		$(MAKE) -C /go/src/github.com/cilium/cilium/ generate-k8s-api-local
 
+.PHONY: generate-bpf
+generate-bpf: ## Generate config structs from BPF objects using dpgen and Go skeletons with bpf2go
+	contrib/scripts/builder.sh \
+		$(MAKE) -C /go/src/github.com/cilium/cilium/bpf generate
+
 check-k8s-clusterrole: ## Ensures there is no diff between preflight's clusterrole and runtime's clusterrole.
 	./contrib/scripts/check-preflight-clusterrole.sh
 
@@ -399,6 +404,12 @@ govet: ## Run govet on Go source files in the repository.
 	@$(ECHO_CHECK) vetting all packages...
 	$(QUIET) $(GO_VET) ./...
 
+.PHONY: custom-lint
+custom-lint: ## Run extra local linters
+	$(ECHO_CHECK) metricslint
+	$(QUIET)$(MAKE) -C tools/metricslint
+	$(QUIET)tools/metricslint/metricslint ./...
+
 golangci-lint: ## Run golangci-lint
 ifneq (,$(findstring $(GOLANGCILINT_WANT_VERSION:v%=%),$(GOLANGCILINT_VERSION)))
 	@$(ECHO_CHECK) golangci-lint $(GOLANGCI_LINT_ARGS)
@@ -410,7 +421,8 @@ endif
 golangci-lint-fix: ## Run golangci-lint to automatically fix warnings
 	$(QUIET)$(MAKE) golangci-lint GOLANGCI_LINT_ARGS="--fix"
 
-lint: golangci-lint
+.PHONY: lint
+lint: golangci-lint custom-lint
 
 lint-fix: golangci-lint-fix
 
@@ -546,7 +558,7 @@ BPF_TEST_DUMP_CTX ?= ""
 BPF_TEST_VERBOSE ?= 0
 
 run_bpf_tests: ## Build and run the BPF unit tests using the cilium-builder container image.
-	DOCKER_ARGS=--privileged RUN_AS_ROOT=1 contrib/scripts/builder.sh \
+	DOCKER_ARGS="--privileged -v /sys:/sys" RUN_AS_ROOT=1 contrib/scripts/builder.sh \
 		$(MAKE) $(SUBMAKEOPTS) -j$(shell nproc) -C bpf/tests/ run \
 			"BPF_TEST_FILE=$(BPF_TEST_FILE)" \
 			"BPF_TEST_DUMP_CTX=$(BPF_TEST_DUMP_CTX)" \
@@ -555,7 +567,7 @@ run_bpf_tests: ## Build and run the BPF unit tests using the cilium-builder cont
 			"V=$(BPF_TEST_VERBOSE)"
 
 run-builder: ## Drop into a shell inside a container running the cilium-builder image.
-	DOCKER_ARGS=-it contrib/scripts/builder.sh bash
+	DOCKER_ARGS="-it" contrib/scripts/builder.sh bash
 
 .PHONY: renovate-local
 renovate-local: ## Run a local linter for the renovate configuration

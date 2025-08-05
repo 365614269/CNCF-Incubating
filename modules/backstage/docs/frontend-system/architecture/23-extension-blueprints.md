@@ -18,7 +18,7 @@ The following is a simple example of how one might use the blueprint `make` meth
 ```tsx
 const myPageExtension = PageBlueprint.make({
   params: {
-    defaultPath: '/my-page',
+    path: '/my-page',
     loader: () => import('./components/MyPage').then(m => <m.MyPage />),
   },
 });
@@ -44,7 +44,7 @@ const myPageExtension = PageBlueprint.makeWithOverrides({
     // Call and forward the result from the original factory, providing
     // the blueprint parameters as the first argument.
     return originalFactory({
-      defaultPath: '/my-page',
+      path: '/my-page',
       loader: () =>
         import('./components/MyPage').then(m => (
           // We can now access values from the factory context when providing
@@ -62,14 +62,14 @@ Apart from the addition of the blueprint parameters of the first argument to the
 
 ### Creating an extension from a blueprint with advanced parameter types
 
-Some blueprints may be defined with something known as "advanced parameter types". This is a feature that enables type inference and transform of the blueprint parameters, and the way that you pass the parameters look a little bit different. Rather than passing the parameters directly, they are instead passed as a callback function of the form `define => define(<params>)`.
+Some blueprints may be defined with something known as "advanced parameter types". This is a feature that enables type inference and transform of the blueprint parameters, and the way that you pass the parameters look a little bit different. Rather than passing the parameters directly, they are instead passed as a callback function of the form `defineParams => defineParams(<params>)`.
 
 An example of a blueprint that uses advanced parameter types is the `ApiBlueprint` blueprint. Using it to create a simple implementation for the `AlertApi` might look like this:
 
 ```ts
 const alertApiBlueprint = ApiBlueprint.make({
-  params: define =>
-    define({
+  params: defineParams =>
+    defineParams({
       api: alertApiRef,
       deps: {},
       factory: () => new MyAlertApi(),
@@ -82,8 +82,8 @@ This also works with `makeWithOverrides`, where the define callback is passed as
 ```ts
 const alertApiBlueprint = ApiBlueprint.makeWithOverrides({
   factory(originalFactory, { config }) {
-    return originalFactory(define =>
-      define({
+    return originalFactory(defineParams =>
+      defineParams({
         api: alertApiRef,
         deps: {},
         factory: () => new MyAlertApi(config),
@@ -101,7 +101,7 @@ The following is an example of how one might create a new extension blueprint:
 
 ```tsx
 export interface MyWidgetBlueprintParams {
-  defaultTitle: string;
+  title: string;
   element: JSX.Element;
 }
 
@@ -119,7 +119,7 @@ export const MyWidgetBlueprint = createExtensionBlueprint({
       // Note that while this is a valid pattern, you might often want to
       // return separate pieces of data instead, more on that below.
       coreExtensionData.reactElement(
-        <MyWidgetContainer title={config.title ?? params.defaultTitle}>
+        <MyWidgetContainer title={config.title ?? params.title}>
           {params.element}
         </MyWidgetContainer>,
       ),
@@ -175,7 +175,7 @@ To do that, we create a new extension data reference for our widget title. This 
 
 ```tsx
 export interface MyWidgetBlueprintParams {
-  defaultTitle: string;
+  title: string;
   element: JSX.Element;
 }
 
@@ -194,7 +194,7 @@ export const MyWidgetBlueprint = createExtensionBlueprint({
   output: [widgetTitleRef, coreExtensionData.reactElement],
   factory(params: MyWidgetBlueprintParams, { config }) {
     return [
-      widgetTitleRef(config.title ?? params.defaultTitle),
+      widgetTitleRef(config.title ?? params.title),
       coreExtensionData.reactElement(params.element),
     ];
   },

@@ -4,7 +4,6 @@
 
 ```ts
 import { AnyApiFactory } from '@backstage/frontend-plugin-api';
-import { AnyExtensionDataRef } from '@backstage/frontend-plugin-api';
 import { AnyRouteRefParams } from '@backstage/frontend-plugin-api';
 import { ApiFactory } from '@backstage/frontend-plugin-api';
 import { AppTheme } from '@backstage/frontend-plugin-api';
@@ -12,6 +11,7 @@ import { ComponentRef } from '@backstage/frontend-plugin-api';
 import { ComponentType } from 'react';
 import { ConfigurableExtensionDataRef } from '@backstage/frontend-plugin-api';
 import { ExtensionBlueprintParams } from '@backstage/frontend-plugin-api';
+import { ExtensionDataRef } from '@backstage/frontend-plugin-api';
 import { ExtensionDefinition } from '@backstage/frontend-plugin-api';
 import { ExtensionInput } from '@backstage/frontend-plugin-api';
 import { FrontendPlugin } from '@backstage/frontend-plugin-api';
@@ -130,9 +130,7 @@ const appPlugin: FrontendPlugin<
       inputs: {
         router: ExtensionInput<
           ConfigurableExtensionDataRef<
-            ComponentType<{
-              children?: ReactNode | undefined;
-            }>,
+            (props: { children: ReactNode }) => JSX.Element | null,
             'app.router.wrapper',
             {}
           >,
@@ -168,9 +166,7 @@ const appPlugin: FrontendPlugin<
         >;
         wrappers: ExtensionInput<
           ConfigurableExtensionDataRef<
-            ComponentType<{
-              children?: ReactNode | undefined;
-            }>,
+            (props: { children: ReactNode }) => JSX.Element | null,
             'app.root.wrapper',
             {}
           >,
@@ -806,7 +802,7 @@ const appPlugin: FrontendPlugin<
       >;
       inputs: {
         [x: string]: ExtensionInput<
-          AnyExtensionDataRef,
+          ExtensionDataRef,
           {
             optional: boolean;
             singleton: boolean;
@@ -816,7 +812,7 @@ const appPlugin: FrontendPlugin<
       kind: 'app-root-element';
       name: 'alert-display';
       params: {
-        element: JSX.Element | (() => JSX.Element);
+        element: JSX.Element;
       };
     }>;
     'app-root-element:app/dialog-display': ExtensionDefinition<{
@@ -829,7 +825,7 @@ const appPlugin: FrontendPlugin<
       >;
       inputs: {
         [x: string]: ExtensionInput<
-          AnyExtensionDataRef,
+          ExtensionDataRef,
           {
             optional: boolean;
             singleton: boolean;
@@ -839,7 +835,7 @@ const appPlugin: FrontendPlugin<
       kind: 'app-root-element';
       name: 'dialog-display';
       params: {
-        element: JSX.Element | (() => JSX.Element);
+        element: JSX.Element;
       };
     }>;
     'app-root-element:app/oauth-request-dialog': ExtensionDefinition<{
@@ -854,7 +850,7 @@ const appPlugin: FrontendPlugin<
       >;
       inputs: {};
       params: {
-        element: JSX.Element | (() => JSX.Element);
+        element: JSX.Element;
       };
     }>;
     'sign-in-page:app': ExtensionDefinition<{
