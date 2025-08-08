@@ -308,8 +308,7 @@ func svcKeyToAddr(svcKey maps.ServiceKey) loadbalancer.L3n4Addr {
 }
 
 func beValueToAddr(beValue maps.BackendValue) loadbalancer.L3n4Addr {
-	beIP := beValue.GetAddress()
-	beAddrCluster := cmtypes.MustAddrClusterFromIP(beIP)
+	beAddrCluster := beValue.GetAddress()
 	proto := loadbalancer.NewL4TypeFromNumber(beValue.GetProtocol())
 	beL3n4Addr := loadbalancer.NewL3n4Addr(proto, beAddrCluster, beValue.GetPort(), 0)
 	return beL3n4Addr
@@ -1337,7 +1336,7 @@ func (ops *BPFOps) sortedBackends(fe *loadbalancer.Frontend) []backendWithRevisi
 		case a.State > b.State:
 			return false
 		default:
-			switch a.Address.Addr().Compare(b.Address.Addr()) {
+			switch a.Address.AddrCluster().Compare(b.Address.AddrCluster()) {
 			case -1:
 				return true
 			case 0:

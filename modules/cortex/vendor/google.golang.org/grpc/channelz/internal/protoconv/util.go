@@ -1,5 +1,6 @@
 /*
- * Copyright 2024 The Backstage Authors
+ *
+ * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,12 +13,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/**
- * Components used by Backstage plugins and apps
  *
- * @packageDocumentation
  */
 
-export * from '@backstage/ui';
+// Package protoconv supports converting between the internal channelz
+// implementation and the protobuf representation of all the entities.
+package protoconv
+
+func strFromPointer(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
