@@ -45,18 +45,20 @@ describe('createApp', () => {
 
   it('should allow themes to be installed', async () => {
     const app = createApp({
-      configLoader: async () => ({
-        config: mockApis.config({
-          data: {
-            app: {
-              extensions: [
-                { 'theme:app/light': false },
-                { 'theme:app/dark': false },
-              ],
+      advanced: {
+        configLoader: async () => ({
+          config: mockApis.config({
+            data: {
+              app: {
+                extensions: [
+                  { 'theme:app/light': false },
+                  { 'theme:app/dark': false },
+                ],
+              },
             },
-          },
+          }),
         }),
-      }),
+      },
       features: [
         createFrontendPlugin({
           pluginId: 'test',
@@ -85,7 +87,9 @@ describe('createApp', () => {
   it('should deduplicate features keeping the last received one', async () => {
     const duplicatedFeatureId = 'test';
     const app = createApp({
-      configLoader: async () => ({ config: mockApis.config() }),
+      advanced: {
+        configLoader: async () => ({ config: mockApis.config() }),
+      },
       features: [
         createFrontendPlugin({
           pluginId: duplicatedFeatureId,
@@ -138,7 +142,6 @@ describe('createApp', () => {
     }
 
     const app = createApp({
-      configLoader: async () => ({ config: mockApis.config() }),
       features: [
         appPlugin,
         createFrontendPlugin({
@@ -153,12 +156,15 @@ describe('createApp', () => {
           ],
         }),
       ],
-      pluginInfoResolver: async () => {
-        return {
-          info: {
-            packageName: '@test/test',
-          },
-        };
+      advanced: {
+        configLoader: async () => ({ config: mockApis.config() }),
+        pluginInfoResolver: async () => {
+          return {
+            info: {
+              packageName: '@test/test',
+            },
+          };
+        },
       },
     });
 
@@ -187,9 +193,11 @@ describe('createApp', () => {
     });
 
     const app = createApp({
-      configLoader: async () => ({
-        config: mockApis.config({ data: { key: 'config-value' } }),
-      }),
+      advanced: {
+        configLoader: async () => ({
+          config: mockApis.config({ data: { key: 'config-value' } }),
+        }),
+      },
       features: [appPlugin, loader],
     });
 
@@ -208,9 +216,11 @@ describe('createApp', () => {
     });
 
     const app = createApp({
-      configLoader: async () => ({
-        config: mockApis.config(),
-      }),
+      advanced: {
+        configLoader: async () => ({
+          config: mockApis.config(),
+        }),
+      },
       features: [loader],
     });
 
@@ -221,7 +231,9 @@ describe('createApp', () => {
 
   it('should register feature flags', async () => {
     const app = createApp({
-      configLoader: async () => ({ config: mockApis.config() }),
+      advanced: {
+        configLoader: async () => ({ config: mockApis.config() }),
+      },
       features: [
         appPlugin.withOverrides({
           extensions: [
@@ -273,15 +285,6 @@ describe('createApp', () => {
 
   it('should allow unknown extension config if the flag is set', async () => {
     const app = createApp({
-      configLoader: async () => ({
-        config: mockApis.config({
-          data: {
-            app: {
-              extensions: [{ 'unknown:lols/wut': false }],
-            },
-          },
-        }),
-      }),
       features: [
         appPlugin,
         createFrontendPlugin({
@@ -296,7 +299,18 @@ describe('createApp', () => {
           ],
         }),
       ],
-      flags: { allowUnknownExtensionConfig: true },
+      advanced: {
+        allowUnknownExtensionConfig: true,
+        configLoader: async () => ({
+          config: mockApis.config({
+            data: {
+              app: {
+                extensions: [{ 'unknown:lols/wut': false }],
+              },
+            },
+          }),
+        }),
+      },
     });
 
     await renderWithEffects(app.createRoot());
@@ -307,7 +321,9 @@ describe('createApp', () => {
     let appTreeApi: AppTreeApi | undefined = undefined;
 
     const app = createApp({
-      configLoader: async () => ({ config: mockApis.config() }),
+      advanced: {
+        configLoader: async () => ({ config: mockApis.config() }),
+      },
       features: [
         appPlugin,
         createFrontendPlugin({
@@ -366,13 +382,13 @@ describe('createApp', () => {
               <theme:app/light out=[core.theme.theme] />
             ]
           </api:app/app-theme>
-          <api:app/components out=[core.api.factory]>
+          <api:app/swappable-components out=[core.api.factory]>
             components [
-              <component:app/core.components.progress out=[core.component.component] />
-              <component:app/core.components.notFoundErrorPage out=[core.component.component] />
-              <component:app/core.components.errorBoundaryFallback out=[core.component.component] />
+              <component:app/core.components.progress out=[core.swappableComponent] />
+              <component:app/core.components.notFoundErrorPage out=[core.swappableComponent] />
+              <component:app/core.components.errorBoundary out=[core.swappableComponent] />
             ]
-          </api:app/components>
+          </api:app/swappable-components>
           <api:app/icons out=[core.api.factory] />
           <api:app/feature-flags out=[core.api.factory] />
           <api:app/translations out=[core.api.factory] />
@@ -413,7 +429,9 @@ describe('createApp', () => {
 
   it('should use "Loading..." as the default suspense fallback', async () => {
     const app = createApp({
-      configLoader: () => new Promise(() => {}),
+      advanced: {
+        configLoader: () => new Promise(() => {}),
+      },
     });
 
     await renderWithEffects(app.createRoot());
@@ -423,8 +441,10 @@ describe('createApp', () => {
 
   it('should use no suspense fallback if the "loadingComponent" is null', async () => {
     const app = createApp({
-      configLoader: () => new Promise(() => {}),
-      loadingComponent: null,
+      advanced: {
+        configLoader: () => new Promise(() => {}),
+        loadingComponent: null,
+      },
     });
 
     await renderWithEffects(app.createRoot());
@@ -434,8 +454,10 @@ describe('createApp', () => {
 
   it('should use a custom "loadingComponent"', async () => {
     const app = createApp({
-      configLoader: () => new Promise(() => {}),
-      loadingComponent: <span>"Custom loading message"</span>,
+      advanced: {
+        configLoader: () => new Promise(() => {}),
+        loadingComponent: <span>"Custom loading message"</span>,
+      },
     });
 
     await renderWithEffects(app.createRoot());
@@ -445,7 +467,9 @@ describe('createApp', () => {
 
   it('should allow overriding the app plugin', async () => {
     const app = createApp({
-      configLoader: () => new Promise(() => {}),
+      advanced: {
+        configLoader: () => new Promise(() => {}),
+      },
       features: [
         appPlugin.withOverrides({
           extensions: [
@@ -468,7 +492,6 @@ describe('createApp', () => {
 
   it('should use a custom extensionFactoryMiddleware', async () => {
     const app = createApp({
-      configLoader: async () => ({ config: mockApis.config() }),
       features: [
         appPlugin,
         createFrontendPlugin({
@@ -484,18 +507,21 @@ describe('createApp', () => {
           ],
         }),
       ],
-      *extensionFactoryMiddleware(originalFactory, context) {
-        const output = originalFactory();
-        yield* output;
-        const element = output.get(coreExtensionData.reactElement);
+      advanced: {
+        configLoader: async () => ({ config: mockApis.config() }),
+        *extensionFactoryMiddleware(originalFactory, context) {
+          const output = originalFactory();
+          yield* output;
+          const element = output.get(coreExtensionData.reactElement);
 
-        if (element) {
-          yield coreExtensionData.reactElement(
-            <div data-testid={`wrapped(${context.node.spec.id})`}>
-              {element}
-            </div>,
-          );
-        }
+          if (element) {
+            yield coreExtensionData.reactElement(
+              <div data-testid={`wrapped(${context.node.spec.id})`}>
+                {element}
+              </div>,
+            );
+          }
+        },
       },
     });
 
@@ -522,7 +548,9 @@ describe('createApp', () => {
       });
 
       const app = createApp({
-        configLoader: () => new Promise(() => {}),
+        advanced: {
+          configLoader: () => new Promise(() => {}),
+        },
         features: [mod],
       });
 
@@ -549,7 +577,9 @@ describe('createApp', () => {
       });
 
       const app = createApp({
-        configLoader: () => new Promise(() => {}),
+        advanced: {
+          configLoader: () => new Promise(() => {}),
+        },
         features: [mod],
       });
 
