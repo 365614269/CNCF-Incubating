@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/cilium/pkg/metrics/metric"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy/api"
+	"github.com/cilium/cilium/pkg/version"
 	wgTypes "github.com/cilium/cilium/pkg/wireguard/types"
 )
 
@@ -28,10 +29,12 @@ type Metrics struct {
 	CPIdentityAllocation          metric.Vec[metric.Gauge]
 	CPCiliumEndpointSlicesEnabled metric.Gauge
 
-	DPMode         metric.Vec[metric.Gauge]
-	DPChaining     metric.Vec[metric.Gauge]
-	DPIP           metric.Vec[metric.Gauge]
-	DPDeviceConfig metric.Vec[metric.Gauge]
+	DPMode           metric.Vec[metric.Gauge]
+	DPChaining       metric.Vec[metric.Gauge]
+	DPIP             metric.Vec[metric.Gauge]
+	DPDeviceConfig   metric.Vec[metric.Gauge]
+	DPEndpointRoutes metric.Gauge
+	DPKernelVersion  metric.Vec[metric.Gauge]
 
 	NPHostFirewallEnabled        metric.Gauge
 	NPLocalRedirectPolicyEnabled metric.Gauge
@@ -122,6 +125,8 @@ const (
 	advConnClusterMeshModeETCD            = clustermesh.ClusterMeshModeETCD
 	advConnClusterMeshModeKVStoreMesh     = clustermesh.ClusterMeshModeKVStoreMesh
 	advConnClusterMeshModeAPIServerOrETCD = clustermesh.ClusterMeshModeClusterMeshAPIServerOrETCD
+
+	kernelVersionUnknown = "unknown"
 )
 
 var (
@@ -346,6 +351,24 @@ func NewMetrics(withDefaults bool) Metrics {
 			},
 		}),
 
+		DPEndpointRoutes: metric.NewGauge(metric.GaugeOpts{
+			Help:      "Endpoint Routes enabled in the datapath",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemDP,
+			Name:      "endpoint_routes_enabled",
+		}),
+
+		DPKernelVersion: metric.NewGaugeVecWithLabels(metric.GaugeOpts{
+			Help:      "Kernel version used by the datapath",
+			Namespace: metrics.Namespace,
+			Subsystem: subsystemDP,
+			Name:      "kernel_version",
+		}, metric.Labels{
+			{
+				Name: "version",
+			},
+		}),
+
 		NPHostFirewallEnabled: metric.NewGauge(metric.GaugeOpts{
 			Help:      "Host firewall enabled on the agent",
 			Namespace: metrics.Namespace,
@@ -410,6 +433,17 @@ func NewMetrics(withDefaults bool) Metrics {
 			},
 			{
 				Name: "node2node_enabled", Values: func() metric.Values {
+					if !withDefaults {
+						return nil
+					}
+					return metric.NewValues(
+						"true",
+						"false",
+					)
+				}(),
+			},
+			{
+				Name: "strict_mode_enabled", Values: func() metric.Values {
 					if !withDefaults {
 						return nil
 					}
@@ -987,6 +1021,18 @@ func (m Metrics) update(params enabledFeatures, config *option.DaemonConfig, lbC
 	deviceMode := config.DatapathMode
 	m.DPDeviceConfig.WithLabelValues(deviceMode).Add(1)
 
+	if config.EnableEndpointRoutes {
+		m.DPEndpointRoutes.Add(1)
+	}
+
+	// Get kernel version - this would need to be implemented to detect actual kernel version
+	kernelVersion, err := version.GetKernelVersion()
+	if err != nil || kernelVersion.String() == "" {
+		m.DPKernelVersion.WithLabelValues(kernelVersionUnknown).Add(1)
+	} else if kernelVersion.String() != "" {
+		m.DPKernelVersion.WithLabelValues(kernelVersion.String()).Add(1)
+	}
+
 	if config.EnableHostFirewall {
 		m.NPHostFirewallEnabled.Add(1)
 	}
@@ -1007,19 +1053,21 @@ func (m Metrics) update(params enabledFeatures, config *option.DaemonConfig, lbC
 		m.NPCIDRPoliciesToNodes.WithLabelValues(mode).Add(1)
 	}
 
+	strictMode := "false"
+	if config.EnableEncryptionStrictMode {
+		strictMode = "true"
+	}
+
+	node2nodeEnabled := "false"
+	if config.EncryptNode {
+		node2nodeEnabled = "true"
+	}
+
 	if config.EnableIPSec {
-		if config.EncryptNode {
-			m.ACLBTransparentEncryption.WithLabelValues(advConnNetEncIPSec, "true").Add(1)
-		} else {
-			m.ACLBTransparentEncryption.WithLabelValues(advConnNetEncIPSec, "false").Add(1)
-		}
+		m.ACLBTransparentEncryption.WithLabelValues(advConnNetEncIPSec, node2nodeEnabled, strictMode).Add(1)
 	}
 	if wgCfg.Enabled() {
-		if config.EncryptNode {
-			m.ACLBTransparentEncryption.WithLabelValues(advConnNetEncWireGuard, "true").Add(1)
-		} else {
-			m.ACLBTransparentEncryption.WithLabelValues(advConnNetEncWireGuard, "false").Add(1)
-		}
+		m.ACLBTransparentEncryption.WithLabelValues(advConnNetEncWireGuard, node2nodeEnabled, strictMode).Add(1)
 	}
 
 	if kprCfg.KubeProxyReplacement == option.KubeProxyReplacementTrue {
