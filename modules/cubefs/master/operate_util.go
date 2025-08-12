@@ -89,6 +89,14 @@ func newStopDataPartitionRepairRequest(ID uint64, stop bool) (req *proto.StopDat
 	return
 }
 
+func newSetRepairingStatusRequest(ID uint64, repairingStatus bool) (req *proto.SetDataPartitionRepairingStatusRequest) {
+	req = &proto.SetDataPartitionRepairingStatusRequest{
+		PartitionId:     ID,
+		RepairingStatus: repairingStatus,
+	}
+	return
+}
+
 func newRecoverDataReplicaMetaRequest(ID uint64, peers []proto.Peer, hosts []string) (req *proto.RecoverDataReplicaMetaRequest) {
 	req = &proto.RecoverDataReplicaMetaRequest{
 		PartitionId: ID,
@@ -129,6 +137,10 @@ func unmarshalTaskResponse(task *proto.AdminTask) (err error) {
 		response = &proto.LcNodeRuleTaskResponse{}
 	case proto.OpLcNodeSnapshotVerDel:
 		response = &proto.SnapshotVerDelTaskResponse{}
+	case proto.OpFlashNodeHeartbeat:
+		response = &proto.FlashNodeHeartbeatResponse{}
+	case proto.OpFlashNodeScan:
+		response = &proto.FlashNodeManualTaskResponse{}
 
 	default:
 		log.LogError(fmt.Sprintf("unknown operate code(%v)", task.OpCode))
@@ -279,6 +291,20 @@ func newRecoverBadDiskRequest(disk string) (req *proto.RecoverBadDiskRequest) {
 
 func newDeleteBackupDirectoriesRequest(disk string) (req *proto.DeleteBackupDirectoriesRequest) {
 	req = &proto.DeleteBackupDirectoriesRequest{
+		DiskPath: disk,
+	}
+	return
+}
+
+func newDeleteLostDiskRequest(disk string) (req *proto.DeleteLostDiskRequest) {
+	req = &proto.DeleteLostDiskRequest{
+		DiskPath: disk,
+	}
+	return
+}
+
+func newReloadDiskRequest(disk string) (req *proto.ReloadDiskRequest) {
+	req = &proto.ReloadDiskRequest{
 		DiskPath: disk,
 	}
 	return

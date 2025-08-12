@@ -29,6 +29,7 @@ import (
 	masterSDK "github.com/cubefs/cubefs/sdk/master"
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/auth"
+	"github.com/cubefs/cubefs/util/bloom"
 	"github.com/cubefs/cubefs/util/btree"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
@@ -189,9 +190,10 @@ type MetaWrapper struct {
 	Client              wrapper.SimpleClientInfo
 	IsSnapshotEnabled   bool
 	DefaultStorageClass uint32
-	CacheDpStorageClass uint32
 	InnerReq            bool
 	FollowerRead        bool
+
+	RemoteCacheBloom func() *bloom.BloomFilter
 }
 
 type uniqidRange struct {
@@ -333,6 +335,10 @@ func (mw *MetaWrapper) initMetaWrapper() (err error) {
 
 func (mw *MetaWrapper) Owner() string {
 	return mw.owner
+}
+
+func (mw *MetaWrapper) DirCacheLen() int {
+	return len(mw.dirCache)
 }
 
 func (mw *MetaWrapper) enableTx(mask proto.TxOpMask) bool {

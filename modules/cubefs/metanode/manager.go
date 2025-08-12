@@ -50,8 +50,8 @@ const sampleDuration = 1 * time.Second
 const UpdateVolTicket = 2 * time.Minute
 
 const (
-	gcTimerDuration  = 10 * time.Second
-	gcRecyclePercent = 0.90
+	gcTimerDuration         = 10 * time.Second
+	defaultGcRecyclePercent = 0.90
 )
 
 // MetadataManager manages all the meta partitions.
@@ -68,11 +68,12 @@ type MetadataManager interface {
 
 // MetadataManagerConfig defines the configures in the metadata manager.
 type MetadataManagerConfig struct {
-	NodeID        uint64
-	RootDir       string
-	ZoneName      string
-	EnableGcTimer bool
-	RaftStore     raftstore.RaftStore
+	NodeID           uint64
+	RootDir          string
+	ZoneName         string
+	EnableGcTimer    bool
+	GcRecyclePercent float64
+	RaftStore        raftstore.RaftStore
 }
 
 type verOp2Phase struct {
@@ -94,7 +95,7 @@ type metadataManager struct {
 	mu                   sync.RWMutex
 	partitions           map[uint64]MetaPartition // Key: metaRangeId, Val: metaPartition
 	metaNode             *MetaNode
-	fileStatsEnable      bool
+	fileStatsConfig      *fileStatsConfig
 	curQuotaGoroutineNum int32
 	maxQuotaGoroutineNum int32
 	cpuUtil              atomicutil.Float64
@@ -102,6 +103,9 @@ type metadataManager struct {
 	volUpdating          *sync.Map // map[string]*verOp2Phase
 	verUpdateChan        chan string
 	enableGcTimer        bool
+	useLocalGOGC         bool
+	gogcValue            int
+	gcRecyclePercent     float64
 	gcTimer              *util.RecycleTimer
 }
 
@@ -126,17 +130,22 @@ func (m *metadataManager) getDataPartitions(volName string) (view *proto.DataPar
 func (m *metadataManager) getVolumeView(volName string) (view *proto.SimpleVolView, err error) {
 	view, err = masterClient.AdminAPI().GetVolumeSimpleInfo(volName)
 	if err != nil {
-		log.LogErrorf("action[getVolumeView]: failed to get view of volume %v", volName)
+		log.LogWarnf("action[getVolumeView]: failed to get view of volume %v", volName)
 	}
 	return
 }
 
 func (m *metadataManager) getVolumeUpdateInfo(volName string) (dataView *proto.DataPartitionsView, volView *proto.SimpleVolView, err error) {
-	dataView, err = m.getDataPartitions(volName)
+	volView, err = m.getVolumeView(volName)
 	if err != nil {
 		return
 	}
-	volView, err = m.getVolumeView(volName)
+	if (volView.Status == proto.VolStatusMarkDelete && !volView.Forbidden) ||
+		(volView.Status == proto.VolStatusMarkDelete && volView.Forbidden && time.Until(volView.DeleteExecTime) <= 0) {
+		err = errors.NewErrorf("vol %v is already deleted", volName)
+		return
+	}
+	dataView, err = m.getDataPartitions(volName)
 	return
 }
 
@@ -148,7 +157,7 @@ func (m *metadataManager) updateVolumes() {
 		vol := k.(string)
 		dataView, volView, err := m.getVolumeUpdateInfo(vol)
 		if err != nil {
-			log.LogErrorf("action[updateVolumes]: failed to update volume %v", vol)
+			log.LogWarnf("action[updateVolumes]: failed to update volume %v err %v", vol, err)
 			return true
 		}
 		dataViews[vol] = dataView
@@ -305,8 +314,16 @@ func (m *metadataManager) HandleMetadataOperation(conn net.Conn, p *Packet, remo
 		err = m.opMetaBatchExtentsAdd(conn, p, remoteAddr)
 	case proto.OpMetaBatchObjExtentsAdd:
 		err = m.opMetaBatchObjExtentsAdd(conn, p, remoteAddr)
-	case proto.OpMetaClearInodeCache:
-		err = m.opMetaClearInodeCache(conn, p, remoteAddr)
+	case proto.OpMetaUpdateInodeMeta:
+		err = m.opMetaUpdateInodeMeta(conn, p, remoteAddr)
+	case proto.OpFreezeEmptyMetaPartition:
+		err = m.opFreezeEmptyMetaPartition(conn, p, remoteAddr)
+	case proto.OpBackupEmptyMetaPartition:
+		err = m.opBackupEmptyMetaPartition(conn, p, remoteAddr)
+	case proto.OpRemoveBackupMetaPartition:
+		err = m.opRemoveBackupMetaPartition(conn, p, remoteAddr)
+	case proto.OpIsRaftStatusOk:
+		err = m.opIsRaftStatusOk(conn, p, remoteAddr)
 	// operations for extend attributes
 	case proto.OpMetaSetXAttr:
 		err = m.opMetaSetXAttr(conn, p, remoteAddr)
@@ -480,7 +497,7 @@ func (m *metadataManager) startGcTimer() {
 		log.LogWarnf("[startGcTimer] swap memory is enable")
 		return
 	}
-	if m.gcTimer, err = util.NewRecycleTimer(gcTimerDuration, gcRecyclePercent, 1*util.GB); err != nil {
+	if m.gcTimer, err = util.NewRecycleTimer(gcTimerDuration, m.gcRecyclePercent, 1*util.GB); err != nil {
 		log.LogErrorf("[startGcTimer] failed to start gc timer, err(%v)", err)
 		return
 	}
@@ -512,6 +529,7 @@ func (m *metadataManager) startSnapshotVersionPromote() {
 // onStart creates the connection pool and loads the partitions.
 func (m *metadataManager) onStart() (err error) {
 	m.connPool = util.NewConnectPool()
+	m.initFileStatsConfig()
 	err = m.loadPartitions()
 	if err != nil {
 		return
@@ -845,7 +863,9 @@ func NewMetadataManager(conf MetadataManagerConfig, metaNode *MetaNode) Metadata
 		metaNode:             metaNode,
 		maxQuotaGoroutineNum: defaultMaxQuotaGoroutine,
 		volUpdating:          new(sync.Map),
+		gogcValue:            DefaultGOGCValue,
 		enableGcTimer:        conf.EnableGcTimer,
+		gcRecyclePercent:     conf.GcRecyclePercent,
 	}
 }
 

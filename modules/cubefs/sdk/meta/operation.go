@@ -1142,6 +1142,14 @@ func (mw *MetaWrapper) readDir(mp *MetaPartition, parentID uint64) (status int, 
 	bgTime := stat.BeginStat()
 	defer func() {
 		stat.EndStat("readDir", err, bgTime, 1)
+		//if err == nil && mw.RemoteCacheBloom != nil {
+		//	cacheBloom := mw.RemoteCacheBloom()
+		//	if cacheBloom.TestUint64(parentID) {
+		//		for _, c := range children {
+		//			cacheBloom.AddUint64(c.Inode)
+		//		}
+		//	}
+		//}
 	}()
 
 	req := &proto.ReadDirRequest{
@@ -1191,6 +1199,19 @@ func (mw *MetaWrapper) readDir(mp *MetaPartition, parentID uint64) (status int, 
 
 // read limit dentries start from
 func (mw *MetaWrapper) readDirLimit(mp *MetaPartition, parentID uint64, from string, limit uint64, verSeq uint64, verOpt uint8) (status int, children []proto.Dentry, err error) {
+	bgTime := stat.BeginStat()
+	defer func() {
+		stat.EndStat("readDirLimit", err, bgTime, 1)
+		//if err == nil && mw.RemoteCacheBloom != nil {
+		//	cacheBloom := mw.RemoteCacheBloom()
+		//	if cacheBloom.TestUint64(parentID) {
+		//		for _, c := range children {
+		//			cacheBloom.AddUint64(c.Inode)
+		//		}
+		//	}
+		//}
+	}()
+
 	req := &proto.ReadDirLimitRequest{
 		VolName:     mw.volname,
 		PartitionID: mp.PartitionID,
@@ -3143,4 +3164,33 @@ func (mw *MetaWrapper) deleteMigrationExtentKey(mp *MetaPartition, inode uint64,
 
 func (mw *MetaWrapper) forbiddenMigration(mp *MetaPartition, inode uint64) (status int, err error) {
 	return mw.renewalForbiddenMigration(mp, inode)
+}
+
+func (mw *MetaWrapper) UpdateInodeMeta(ino uint64) (err error) {
+	mp := mw.getPartitionByInode(ino)
+	req := &proto.UpdateInodeMetaRequest{
+		Inode:       ino,
+		PartitionID: mp.PartitionID,
+	}
+
+	packet := proto.NewPacketReqID()
+	packet.Opcode = proto.OpMetaUpdateInodeMeta
+	packet.PartitionID = mp.PartitionID
+	err = packet.MarshalData(req)
+	if err != nil {
+		return
+	}
+
+	packet, err = mw.sendToMetaPartition(mp, packet)
+	if err != nil {
+		log.LogErrorf("UpdateInodeMeta: packet(%v) mp(%v) req(%v) err(%v)", packet, mp, *req, err)
+		return
+	}
+
+	status := parseStatus(packet.ResultCode)
+	if status != statusOK {
+		err = fmt.Errorf("UpdateInodeMeta: packet(%v) mp(%v) req(%v) result(%v)", packet, mp, *req, packet.GetResultMsg())
+		return
+	}
+	return err
 }

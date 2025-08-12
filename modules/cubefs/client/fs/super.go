@@ -15,6 +15,7 @@
 package fs
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net/http"
@@ -39,6 +40,7 @@ import (
 	"github.com/cubefs/cubefs/util/auditlog"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
+	"github.com/cubefs/cubefs/util/stat"
 	"github.com/cubefs/cubefs/util/ump"
 )
 
@@ -73,14 +75,13 @@ type Super struct {
 	// data lake
 	volType             int
 	ebsEndpoint         string
-	CacheAction         int
-	CacheThreshold      int
 	EbsBlockSize        int
 	enableBcache        bool
 	bcacheDir           string
 	bcacheFilterFiles   string
 	bcacheCheckInterval int64
 	bcacheBatchCnt      int64
+	runningMonitor      *RunningMonitor
 
 	readThreads  int
 	writeThreads int
@@ -90,8 +91,6 @@ type Super struct {
 
 	taskPool []common.TaskPool
 	closeC   chan struct{}
-
-	cacheDpStorageClass uint32
 }
 
 // Functions that Super needs to implement
@@ -169,6 +168,8 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 	s.bcacheBatchCnt = opt.BcacheBatchCnt
 	s.closeC = make(chan struct{}, 1)
 	s.taskPool = []common.TaskPool{common.New(DefaultTaskPoolSize, DefaultTaskPoolSize), common.New(DefaultTaskPoolSize, DefaultTaskPoolSize)}
+	s.runningMonitor = NewRunningMonitor(opt.ClientOpTimeOut)
+	s.runningMonitor.Start()
 
 	if s.mw.EnableSummary {
 		s.sc = NewSummaryCache(DefaultSummaryExpiration, MaxSummaryCache)
@@ -205,8 +206,6 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 
 	s.volType = opt.VolType
 	s.ebsEndpoint = opt.EbsEndpoint
-	s.CacheAction = opt.CacheAction
-	s.CacheThreshold = opt.CacheThreshold
 	s.EbsBlockSize = opt.EbsBlockSize
 	s.enableBcache = opt.EnableBcache
 
@@ -217,19 +216,19 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		s.bc = bcache.NewBcacheClient()
 	}
 
-	s.cacheDpStorageClass = opt.VolCacheDpStorageClass
-
 	extentConfig := &stream.ExtentConfig{
 		Volume:            opt.Volname,
 		Masters:           masters,
 		FollowerRead:      opt.FollowerRead,
 		NearRead:          opt.NearRead,
+		MaximallyRead:     opt.MaximallyRead,
 		ReadRate:          opt.ReadRate,
 		WriteRate:         opt.WriteRate,
 		BcacheEnable:      opt.EnableBcache,
 		BcacheDir:         opt.BcacheDir,
 		MaxStreamerLimit:  opt.MaxStreamerLimit,
 		VerReadSeq:        opt.VerReadSeq,
+		MetaWrapper:       s.mw,
 		OnAppendExtentKey: s.mw.AppendExtentKey,
 		OnSplitExtentKey:  s.mw.SplitExtentKey,
 		OnGetExtents:      s.mw.GetExtents,
@@ -239,14 +238,12 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		OnCacheBcache:     s.bc.Put,
 		OnEvictBcache:     s.bc.Evict,
 
-		DisableMetaCache:             DisableMetaCache,
-		MinWriteAbleDataPartitionCnt: opt.MinWriteAbleDataPartitionCnt,
-		StreamRetryTimeout:           opt.StreamRetryTimeout,
-		OnRenewalForbiddenMigration:  s.mw.RenewalForbiddenMigration,
-		VolStorageClass:              opt.VolStorageClass,
-		VolAllowedStorageClass:       opt.VolAllowedStorageClass,
-		VolCacheDpStorageClass:       s.cacheDpStorageClass,
-		OnForbiddenMigration:         s.mw.ForbiddenMigration,
+		DisableMetaCache:            DisableMetaCache,
+		StreamRetryTimeout:          opt.StreamRetryTimeout,
+		OnRenewalForbiddenMigration: s.mw.RenewalForbiddenMigration,
+		VolStorageClass:             opt.VolStorageClass,
+		VolAllowedStorageClass:      opt.VolAllowedStorageClass,
+		OnForbiddenMigration:        s.mw.ForbiddenMigration,
 
 		OnGetInodeInfo:      s.InodeGet,
 		BcacheOnlyForNotSSD: opt.BcacheOnlyForNotSSD,
@@ -255,7 +252,10 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		AheadReadTotalMem:     opt.AheadReadTotalMem,
 		AheadReadBlockTimeOut: opt.AheadReadBlockTimeOut,
 		AheadReadWindowCnt:    opt.AheadReadWindowCnt,
+		NeedRemoteCache:       true,
 	}
+
+	log.LogWarnf("ahead info enable %+v, totalMem %+v, timeout %+v, winCnt %+v", opt.AheadReadEnable, opt.AheadReadTotalMem, opt.AheadReadBlockTimeOut, opt.AheadReadWindowCnt)
 
 	s.ec, err = stream.NewExtentClient(extentConfig)
 	if err != nil {
@@ -286,6 +286,7 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 			Logger: &access.Logger{
 				Filename: path.Join(opt.Logpath, "client/ebs.log"),
 			},
+			LogLevel: log.GetBlobLogLevel(),
 		})
 		if err != nil {
 			log.LogErrorf("[NewSuper] create blobstore client err: %v", err)
@@ -315,9 +316,11 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		atomic.StoreUint32((*uint32)(&s.state), uint32(fs.FSStatRestore))
 	}
 
-	log.LogInfof("NewSuper: cluster(%v) volname(%v) icacheExpiration(%v) LookupValidDuration(%v) AttrValidDuration(%v) state(%v) cacheDpStorageClass(%v)",
-		s.cluster, s.volname, inodeExpiration, LookupValidDuration, AttrValidDuration, s.state, s.cacheDpStorageClass)
-
+	log.LogInfof("NewSuper: cluster(%v) volname(%v) icacheExpiration(%v) LookupValidDuration(%v) AttrValidDuration(%v) state(%v)",
+		s.cluster, s.volname, inodeExpiration, LookupValidDuration, AttrValidDuration, s.state)
+	stat.PrintModuleStat = func(writer *bufio.Writer) {
+		fmt.Fprintf(writer, "ic:%d dc:%d nodecache:%d dircache:%d\n", s.ic.lruList.Len(), s.dc.lruList.Len(), len(s.nodeCache), s.mw.DirCacheLen())
+	}
 	go s.loopSyncMeta()
 
 	return s, nil
@@ -330,6 +333,7 @@ func (s *Super) scheduleFlush() {
 		{
 			ctx := context.Background()
 			s.fslock.Lock()
+			// var flushedInos []uint64
 			for ino, node := range s.nodeCache {
 				if _, ok := node.(*File); !ok {
 					continue
@@ -338,12 +342,16 @@ func (s *Super) scheduleFlush() {
 				if atomic.LoadInt32(&file.idle) >= BlobWriterIdleTimeoutPeriod {
 					if file.fWriter != nil {
 						atomic.StoreInt32(&file.idle, 0)
+						// flushedInos = append(flushedInos, ino)
 						go file.fWriter.Flush(ino, ctx)
 					}
 				} else {
 					atomic.AddInt32(&file.idle, 1)
 				}
 			}
+			// for _, ino := range flushedInos {
+			//	delete(s.nodeCache, ino)
+			// }
 			s.fslock.Unlock()
 		}
 	}
@@ -356,6 +364,9 @@ func (s *Super) Root() (fs.Node, error) {
 		return nil, err
 	}
 	root := NewDir(s, inode, inode.Inode, "")
+	root.(*Dir).setFullPath(s.subDir)
+	root.(*Dir).addParentInode([]uint64{inode.Inode})
+	log.LogInfof("Super:root path is(%v)", s.subDir)
 	return root, nil
 }
 

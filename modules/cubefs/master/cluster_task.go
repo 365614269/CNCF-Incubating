@@ -168,13 +168,13 @@ func (c *Cluster) migrateMetaPartition(srcAddr, targetAddr string, mp *MetaParti
 		}
 	}
 
-	finalHosts = append(oldHosts, newPeers[0].Addr) // add new one
-	for i, host := range finalHosts {
-		if host == srcAddr {
-			finalHosts = append(finalHosts[:i], finalHosts[i+1:]...) // remove old one
-			break
+	finalHosts = make([]string, 0, len(oldHosts))
+	for _, host := range oldHosts {
+		if host != srcAddr {
+			finalHosts = append(finalHosts, host) // remove old one
 		}
 	}
+	finalHosts = append(finalHosts, newPeers[0].Addr) // add new one
 	if err = c.checkMultipleReplicasOnSameMachine(finalHosts); err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func (c *Cluster) checkReplicaMetaPartitions() (
 
 		vol.mpsLock.RLock()
 		for _, mp := range vol.MetaPartitions {
-			if uint8(len(mp.Hosts)) < mp.ReplicaNum || uint8(len(mp.getActiveAddrs())) < mp.ReplicaNum {
+			if uint8(len(mp.Hosts)) < mp.ReplicaNum || uint8(len(mp.getActiveAddrs(defaultMetaPartitionTimeOutSec))) < mp.ReplicaNum {
 				lackReplicaMetaPartitions = append(lackReplicaMetaPartitions, mp)
 			}
 
@@ -1146,7 +1146,7 @@ func (c *Cluster) updateInodeIDUpperBound(mp *MetaPartition, mr *proto.MetaParti
 		return
 	}
 
-	maxPartitionID := vol.maxPartitionID()
+	maxPartitionID := vol.maxMetaPartitionID()
 	if mr.PartitionID < maxPartitionID {
 		return
 	}

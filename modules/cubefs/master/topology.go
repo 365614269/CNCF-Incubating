@@ -1247,48 +1247,35 @@ func (ns *nodeSet) traverseDecommissionDisk(c *Cluster) {
 				}
 				return true
 			})
+
+			decommissionDiskCnt, allDecommissionDisks := ns.manualDecommissionDiskList.PopMarkDecommissionDisk(0)
+			if c.AutoDecommissionDiskIsEnabled() {
+				autoDecommissionDiskCnt, allAutoDecommissionDisks := ns.autoDecommissionDiskList.PopMarkDecommissionDisk(0)
+				allDecommissionDisks = append(allDecommissionDisks, allAutoDecommissionDisks...)
+				decommissionDiskCnt += autoDecommissionDiskCnt
+			}
+			sort.Slice(allDecommissionDisks, func(i, j int) bool {
+				return allDecommissionDisks[i].DecommissionWeight > allDecommissionDisks[j].DecommissionWeight
+			})
 			maxDiskDecommissionCnt := int(c.GetDecommissionDiskLimit())
 			if maxDiskDecommissionCnt == 0 && ns.dataNodeLen() != 0 {
-				manualCnt, manualDisks := ns.manualDecommissionDiskList.PopMarkDecommissionDisk(0)
-				log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse manualCnt %v",
-					ns.ID, ns, manualCnt)
-				if manualCnt > 0 {
-					for _, disk := range manualDisks {
-						c.TryDecommissionDisk(disk)
-					}
-				}
-				if c.AutoDecommissionDiskIsEnabled() {
-					autoCnt, autoDisks := ns.autoDecommissionDiskList.PopMarkDecommissionDisk(0)
-					log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse autoCnt %v",
-						ns.ID, ns, autoCnt)
-					if autoCnt > 0 {
-						for _, disk := range autoDisks {
-							c.TryDecommissionDisk(disk)
-						}
+				log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse allDecommissionDiskCnt %v",
+					ns.ID, ns, len(allDecommissionDisks))
+				if decommissionDiskCnt > 0 {
+					for _, decommissionDisk := range allDecommissionDisks {
+						c.TryDecommissionDisk(decommissionDisk)
 					}
 				}
 			} else {
 				newDiskDecommissionCnt := maxDiskDecommissionCnt - runningCnt
 				log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse DiskDecommissionCnt %v",
 					ns.ID, ns, newDiskDecommissionCnt)
-				if newDiskDecommissionCnt > 0 {
-					manualCnt, manualDisks := ns.manualDecommissionDiskList.PopMarkDecommissionDisk(newDiskDecommissionCnt)
-					log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse manualCnt %v",
-						ns.ID, ns, manualCnt)
-					if manualCnt > 0 {
-						for _, disk := range manualDisks {
-							c.TryDecommissionDisk(disk)
-						}
+				if newDiskDecommissionCnt > 0 && decommissionDiskCnt > 0 {
+					if newDiskDecommissionCnt > decommissionDiskCnt {
+						newDiskDecommissionCnt = decommissionDiskCnt
 					}
-					if newDiskDecommissionCnt-manualCnt > 0 && c.AutoDecommissionDiskIsEnabled() {
-						autoCnt, autoDisks := ns.autoDecommissionDiskList.PopMarkDecommissionDisk(newDiskDecommissionCnt - manualCnt)
-						log.LogDebugf("ns %v(%p) traverseDecommissionDisk traverse autoCnt %v",
-							ns.ID, ns, autoCnt)
-						if autoCnt > 0 {
-							for _, disk := range autoDisks {
-								c.TryDecommissionDisk(disk)
-							}
-						}
+					for i := 0; i < newDiskDecommissionCnt; i++ {
+						c.TryDecommissionDisk(allDecommissionDisks[i])
 					}
 				}
 			}
@@ -2205,13 +2192,16 @@ func (l *DecommissionDataPartitionList) Put(id uint64, value *DataPartition, c *
 		// keep origin error msg, DecommissionErrorMessage would be replaced by "no node set available" e.g. if
 		// execute TryAcquireDecommissionToken failed
 		msg := value.DecommissionErrorMessage
-		if !value.TryAcquireDecommissionToken(c) {
-			value.DecommissionErrorMessage = msg
+		if value.AcquireDecommissionFirstHostToken(c) {
+			if !value.TryAcquireDecommissionToken(c) {
+				value.DecommissionErrorMessage = msg
+				value.ReleaseDecommissionFirstHostToken(c)
+			}
 		}
 	}
 
 	// restore special replica decommission progress
-	if value.isSpecialReplicaCnt() && value.GetDecommissionStatus() == DecommissionRunning {
+	if value.isSpecialReplicaCnt() && value.GetDecommissionStatus() == DecommissionRunning && !value.DecommissionRaftForce {
 		value.SetDecommissionStatus(markDecommission)
 		value.isRecover = false // can pass decommission validate check
 		log.LogInfof("action[DecommissionDataPartitionListPut] ns[%v]  dp[%v] set status from DecommissionRunning to markDecommission",
@@ -2338,6 +2328,42 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 				return
 			}
 			allDecommissionDP := l.GetAllDecommissionDataPartitions()
+
+			for _, dp := range allDecommissionDP {
+				if dp.IsDiscard {
+					dp.SetDecommissionStatus(DecommissionSuccess)
+					log.LogWarnf("action[DecommissionListTraverse] skip dp(%v) discard(%v)", dp.PartitionID, dp.IsDiscard)
+					continue
+				}
+				diskErrReplicaNum := dp.getReplicaDiskErrorNum()
+				if diskErrReplicaNum == dp.ReplicaNum || diskErrReplicaNum == uint8(len(dp.Peers)) {
+					log.LogWarnf("action[DecommissionListTraverse] dp[%v] all live replica is unavaliable", dp.decommissionInfo())
+					err := proto.ErrAllReplicaUnavailable
+					dp.DecommissionErrorMessage = err.Error()
+					dp.markRollbackFailed(false)
+					continue
+				}
+				if dp.DecommissionType == AutoDecommission {
+					diskErrReplicas := dp.getAllDiskErrorReplica()
+					if isReplicasContainsHost(diskErrReplicas, dp.DecommissionSrcAddr) {
+						if dp.ReplicaNum == 3 {
+							if (diskErrReplicaNum == 2 && len(dp.Hosts) == 3) || (diskErrReplicaNum == 1 && len(dp.Hosts) == 2) {
+								dp.DecommissionWeight = highestPriorityDecommissionWeight
+							} else if diskErrReplicaNum == 1 && len(dp.Hosts) == 3 {
+								dp.DecommissionWeight = highPriorityDecommissionWeight
+							}
+						} else if dp.ReplicaNum == 2 {
+							if diskErrReplicaNum == 1 && len(dp.Hosts) == 2 {
+								dp.DecommissionWeight = highPriorityDecommissionWeight
+							}
+						}
+					}
+				}
+			}
+
+			sort.Slice(allDecommissionDP, func(i, j int) bool {
+				return allDecommissionDP[i].DecommissionWeight > allDecommissionDP[j].DecommissionWeight
+			})
 			log.LogDebugf("[DecommissionListTraverse]ns %v(%p) traverse dp len (%v)", l.nsId, l, len(allDecommissionDP))
 			for _, dp := range allDecommissionDP {
 				select {
@@ -2350,9 +2376,12 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 				}
 				log.LogDebugf("[DecommissionListTraverse]ns %v(%p) traverse dp(%v)", l.nsId, l, dp.decommissionInfo())
 				if dp.IsDecommissionSuccess() {
-
+					if err := c.setDpRepairingStatus(dp, false, false); err != nil {
+						log.LogWarnf("action[DecommissionListTraverse]ns %v(%p) dp[%v] set repairStatus to false failed, err %v", l.nsId, l, dp.decommissionInfo(), err)
+					}
 					l.Remove(dp)
 					dp.ReleaseDecommissionToken(c)
+					dp.ReleaseDecommissionFirstHostToken(c)
 					msg := fmt.Sprintf("ns %v(%p) dp %v decommission success, cost %v",
 						l.nsId, l, dp.decommissionInfo(), time.Since(dp.RecoverStartTime))
 					dp.ResetDecommissionStatus()
@@ -2371,6 +2400,9 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 					if !dp.tryRollback(c) {
 						log.LogDebugf("action[DecommissionListTraverse]ns %v(%p) Remove dp[%v] for fail",
 							l.nsId, l, dp.PartitionID)
+						if err := c.setDpRepairingStatus(dp, false, false); err != nil {
+							log.LogWarnf("action[DecommissionListTraverse]ns %v(%p) dp[%v] set repairStatus to false failed, err %v", l.nsId, l, dp.decommissionInfo(), err)
+						}
 						l.Remove(dp)
 						// if dp is not removed from decommission list, do not reset RestoreReplica
 						dp.setRestoreReplicaStop()
@@ -2378,6 +2410,7 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 					}
 					// rollback fail/success need release token
 					dp.ReleaseDecommissionToken(c)
+					dp.ReleaseDecommissionFirstHostToken(c)
 					c.syncUpdateDataPartition(dp)
 					msg := fmt.Sprintf("ns %v(%p) dp %v decommission failed, remove %v", l.nsId, l, dp.decommissionInfo(), remove)
 					auditlog.LogMasterOp("TraverseDataPartition", msg, nil)
@@ -2385,17 +2418,34 @@ func (l *DecommissionDataPartitionList) traverse(c *Cluster) {
 					log.LogDebugf("action[DecommissionListTraverse]ns %v(%p) Remove dp[%v] for paused ",
 						l.nsId, l, dp.PartitionID)
 					dp.ReleaseDecommissionToken(c)
+					dp.ReleaseDecommissionFirstHostToken(c)
+					if err := c.setDpRepairingStatus(dp, false, false); err != nil {
+						log.LogWarnf("action[DecommissionListTraverse]ns %v(%p) dp[%v] set repairStatus to false failed, err %v", l.nsId, l, dp.decommissionInfo(), err)
+					}
 					l.Remove(dp)
 					dp.setRestoreReplicaStop()
 					c.syncUpdateDataPartition(dp)
 				} else if dp.IsDecommissionInitial() { // fixed done ,not release token
+					if err := c.setDpRepairingStatus(dp, false, false); err != nil {
+						log.LogWarnf("action[DecommissionListTraverse]ns %v(%p) dp[%v] set repairStatus to false failed, err %v", l.nsId, l, dp.decommissionInfo(), err)
+					}
 					l.Remove(dp)
 					dp.ResetDecommissionStatus()
 					c.syncUpdateDataPartition(dp)
-				} else if dp.IsMarkDecommission() && dp.TryAcquireDecommissionToken(c) {
-					go func(dp *DataPartition) {
-						dp.TryToDecommission(c)
-					}(dp) // special replica cnt cost some time from prepare to running
+				} else if dp.IsMarkDecommission() {
+					if time.Since(dp.DecommissionRetryTime) < defaultDecommissionRetryInternal {
+						log.LogWarnf("[traverse] dp %v should wait for decommissionRetry,lasetDecommissionRetryTime %v", dp.PartitionID, dp.DecommissionRetryTime)
+						continue
+					}
+					if dp.AcquireDecommissionFirstHostToken(c) {
+						if dp.TryAcquireDecommissionToken(c) {
+							go func(dp *DataPartition) {
+								dp.TryToDecommission(c)
+							}(dp) // special replica cnt cost some time from prepare to running
+						} else {
+							dp.ReleaseDecommissionFirstHostToken(c)
+						}
+					}
 				}
 			}
 		}

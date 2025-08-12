@@ -299,21 +299,23 @@ spec:
       {{- end }}
       {{- if and (or .Values.clustermesh.enableEndpointSliceSynchronization .Values.clustermesh.mcsapi.enabled .Values.clustermesh.enableMCSAPISupport) .Values.clustermesh.config.enabled (not (and .Values.clustermesh.useAPIServer .Values.clustermesh.apiserver.kvstoremesh.enabled )) }}
       hostAliases:
-      {{- range $cluster := .Values.clustermesh.config.clusters }}
+      {{- range $_, $cluster := (include "clustermesh-clusters" . | fromJson) }}
       {{- range $ip := $cluster.ips }}
       - ip: {{ $ip }}
         hostnames: [ "{{ $cluster.name }}.{{ $.Values.clustermesh.config.domain }}" ]
       {{- end }}
       {{- end }}
       {{- end }}
-      {{- with .Values.operator.tolerations }}
+      {{- if or (.Values.operator.tolerations) (hasKey .Values "agentNotReadyTaintKey") }}
       tolerations:
+      {{- with .Values.operator.tolerations }}
         {{- toYaml . | trim | nindent 8 }}
       {{- end }}
       {{- if hasKey .Values "agentNotReadyTaintKey" }}
         - key: {{ .Values.agentNotReadyTaintKey }}
           operator: Exists
       {{ end}}
+      {{- end}}
       volumes:
         # To read the configuration from the config map
       - name: cilium-config-path

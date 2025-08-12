@@ -32,7 +32,6 @@ const (
 	OriginalName        = "OriginalName"
 	DefaultReaddirLimit = 4096
 	TrashPathIgnore     = "trashPathIgnore"
-	OneDayMinutes       = 24 * 60
 	LockExpireSeconds   = 3600 // 1 hour
 )
 
@@ -104,7 +103,9 @@ func (trash *Trash) InitTrashRoot() (err error) {
 	log.LogDebugf("action[InitTrashRoot] %v ", trash.trashRoot)
 	// check trash root exist
 	if trash.pathIsExist(trash.trashRoot) {
-		trash.initTrashRootInodeInfo()
+		if err = trash.initTrashRootInodeInfo(); err != nil {
+			return err
+		}
 		log.LogDebugf("action[InitTrashRoot] trash root is exist")
 		return nil
 	}
@@ -120,16 +121,19 @@ func (trash *Trash) InitTrashRoot() (err error) {
 		log.LogErrorf("action[InitTrashRoot]create trash root failed: %v", err.Error())
 		return err
 	}
-	trash.initTrashRootInodeInfo()
-	return nil
+	return trash.initTrashRootInodeInfo()
 }
 
-func (trash *Trash) initTrashRootInodeInfo() {
-	trashRootInfo, _ := trash.LookupPath(trash.trashRoot, true)
+func (trash *Trash) initTrashRootInodeInfo() error {
+	trashRootInfo, err := trash.LookupPath(trash.trashRoot, true)
+	if err != nil {
+		return err
+	}
 	trash.trashRootIno = trashRootInfo.Inode
 	trash.trashRootMode = trashRootInfo.Mode
 	trash.trashRootUid = trashRootInfo.Uid
 	trash.trashRootGid = trashRootInfo.Gid
+	return nil
 }
 
 func (trash *Trash) createCurrent(ingoreExist bool) (err error) {
@@ -280,13 +284,6 @@ func (trash *Trash) getDeleteInterval() int64 {
 		checkPointInterval = 1
 	}
 	rand.Seed(time.Now().UnixNano())
-	randomNumber := rand.Intn(50)
-	// If the time interval is longer than one day
-	if checkPointInterval > OneDayMinutes {
-		checkPointInterval += int64(randomNumber * 30)
-	} else {
-		checkPointInterval += int64(randomNumber)
-	}
 	return checkPointInterval
 }
 

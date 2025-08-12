@@ -38,6 +38,8 @@ type RaftStore interface {
 	RaftStatus(raftID uint64) (raftStatus *raft.Status)
 	NodeManager
 	RaftServer() *raft.RaftServer
+	RemoveBackup(id uint64) error
+	GetPeers(id uint64) (nodes []uint64)
 }
 
 type raftStore struct {
@@ -193,4 +195,14 @@ func (s *raftStore) CreatePartition(cfg *PartitionConfig) (p Partition, err erro
 	}
 	p = newPartition(cfg, s.raftServer, walPath)
 	return
+}
+
+func (s *raftStore) RemoveBackup(id uint64) error {
+	dirName := "del_" + strconv.FormatUint(id, 10)
+	dirPath := path.Join(s.raftPath, dirName)
+	return os.RemoveAll(dirPath)
+}
+
+func (s *raftStore) GetPeers(id uint64) (nodes []uint64) {
+	return s.raftServer.GetPeers(id)
 }

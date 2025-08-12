@@ -86,7 +86,7 @@ func newListDisksCmd(client *master.MasterClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   CliOpList + " [DATANODE_IP:PORT]",
 		Short: cmdListDisksShort,
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var (
 				infos *proto.DiskInfos
@@ -150,6 +150,7 @@ const (
 )
 
 func newDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
+	var weight int
 	cmd := &cobra.Command{
 		Use:   CliOpDecommission + " [DATA NODE ADDR] [DISK]",
 		Short: cmdDecommissionDisksShort,
@@ -159,12 +160,13 @@ func newDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 			defer func() {
 				errout(err)
 			}()
-			if err = client.AdminAPI().DecommissionDisk(args[0], args[1]); err != nil {
+			if err = client.AdminAPI().DecommissionDisk(args[0], args[1], weight); err != nil {
 				return
 			}
 			stdout("Mark disk %v:%v to be decommissioned\n", args[0], args[1])
 		},
 	}
+	cmd.Flags().IntVar(&weight, CliFLagDecommissionWeight, lowPriorityDecommissionWeight, "decommission weight")
 	return cmd
 }
 
@@ -173,6 +175,7 @@ const (
 )
 
 func newRecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
+	var recommissionType string
 	cmd := &cobra.Command{
 		Use:   CliOpRecommission + " [DATA NODE ADDR] [DISK]",
 		Short: cmdRecommissionDisksShort,
@@ -182,12 +185,17 @@ func newRecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 			defer func() {
 				errout(err)
 			}()
-			if err = client.AdminAPI().RecommissionDisk(args[0], args[1]); err != nil {
+			if recommissionType == "" {
+				stdout("no change has been set")
 				return
 			}
-			stdout("Mark disk %v:%v to be recommissioned\n", args[0], args[1])
+			if err = client.AdminAPI().RecommissionDisk(args[0], args[1], recommissionType); err != nil {
+				return
+			}
+			stdout("Mark disk %v:%v recommissionType %v to be recommissioned\n", args[0], args[1], recommissionType)
 		},
 	}
+	cmd.Flags().StringVar(&recommissionType, CliFLagRecommissionType, "", "recommission type [decommissioned or decommissionSuccess]")
 	return cmd
 }
 
