@@ -138,34 +138,36 @@ func newClusterValue(c *Cluster) (cv *clusterValue) {
 }
 
 type metaPartitionValue struct {
-	PartitionID   uint64
-	Start         uint64
-	End           uint64
-	VolID         uint64
-	ReplicaNum    uint8
-	Status        int8
-	VolName       string
-	Hosts         string
-	OfflinePeerID uint64
-	Peers         []proto.Peer
-	IsRecover     bool
-	IsFreeze      bool
+	PartitionID        uint64
+	Start              uint64
+	End                uint64
+	VolID              uint64
+	ReplicaNum         uint8
+	Status             int8
+	VolName            string
+	Hosts              string
+	OfflinePeerID      uint64
+	Peers              []proto.Peer
+	IsRecover          bool
+	Freeze             int8
+	LastDelReplicaTime int64
 }
 
 func newMetaPartitionValue(mp *MetaPartition) (mpv *metaPartitionValue) {
 	mpv = &metaPartitionValue{
-		PartitionID:   mp.PartitionID,
-		Start:         mp.Start,
-		End:           mp.End,
-		VolID:         mp.volID,
-		ReplicaNum:    mp.ReplicaNum,
-		Status:        mp.Status,
-		VolName:       mp.volName,
-		Hosts:         mp.hostsToString(),
-		Peers:         mp.Peers,
-		OfflinePeerID: mp.OfflinePeerID,
-		IsRecover:     mp.IsRecover,
-		IsFreeze:      mp.IsFreeze,
+		PartitionID:        mp.PartitionID,
+		Start:              mp.Start,
+		End:                mp.End,
+		VolID:              mp.volID,
+		ReplicaNum:         mp.ReplicaNum,
+		Status:             mp.Status,
+		VolName:            mp.volName,
+		Hosts:              mp.hostsToString(),
+		Peers:              mp.Peers,
+		OfflinePeerID:      mp.OfflinePeerID,
+		IsRecover:          mp.IsRecover,
+		Freeze:             mp.Freeze,
+		LastDelReplicaTime: mp.LastDelReplicaTime,
 	}
 	return
 }
@@ -184,6 +186,7 @@ type dataPartitionValue struct {
 	PartitionType                  int
 	RdOnly                         bool
 	IsDiscard                      bool
+	DecommissionDiskRetryMap       map[string]int
 	DecommissionRetry              int
 	DecommissionStatus             uint32
 	DecommissionSrcAddr            string
@@ -194,6 +197,7 @@ type dataPartitionValue struct {
 	DecommissionWeight             int
 	SpecialReplicaDecommissionStep uint32
 	DecommissionDstAddrSpecify     bool
+	DecommissionDstNodeSet         uint64
 	DecommissionNeedRollback       bool
 	RecoverStartTime               int64
 	RecoverUpdateTime              int64
@@ -232,6 +236,7 @@ func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
 	dp.DecommissionWeight = dpv.DecommissionWeight
 	dp.SpecialReplicaDecommissionStep = dpv.SpecialReplicaDecommissionStep
 	dp.DecommissionDstAddrSpecify = dpv.DecommissionDstAddrSpecify
+	dp.DecommissionDstNodeSet = dpv.DecommissionDstNodeSet
 	dp.DecommissionNeedRollback = dpv.DecommissionNeedRollback
 	dp.RecoverStartTime = time.Unix(dpv.RecoverStartTime, 0)
 	dp.RecoverUpdateTime = time.Unix(dpv.RecoverUpdateTime, 0)
@@ -253,6 +258,9 @@ func (dpv *dataPartitionValue) Restore(c *Cluster) (dp *DataPartition) {
 			continue
 		}
 		dp.afterCreation(rv.Addr, rv.DiskPath, c)
+	}
+	for disk, retryTimes := range dpv.DecommissionDiskRetryMap {
+		dp.DecommissionDiskRetryMap[disk] = retryTimes
 	}
 	return dp
 }
@@ -277,6 +285,7 @@ func newDataPartitionValue(dp *DataPartition) (dpv *dataPartitionValue) {
 		PartitionType:                  dp.PartitionType,
 		RdOnly:                         dp.RdOnly,
 		IsDiscard:                      dp.IsDiscard,
+		DecommissionDiskRetryMap:       make(map[string]int),
 		DecommissionRetry:              dp.DecommissionRetry,
 		DecommissionStatus:             atomic.LoadUint32(&dp.DecommissionStatus),
 		DecommissionSrcAddr:            dp.DecommissionSrcAddr,
@@ -287,6 +296,7 @@ func newDataPartitionValue(dp *DataPartition) (dpv *dataPartitionValue) {
 		DecommissionWeight:             dp.DecommissionWeight,
 		SpecialReplicaDecommissionStep: dp.SpecialReplicaDecommissionStep,
 		DecommissionDstAddrSpecify:     dp.DecommissionDstAddrSpecify,
+		DecommissionDstNodeSet:         dp.DecommissionDstNodeSet,
 		DecommissionNeedRollback:       dp.DecommissionNeedRollback,
 		RecoverStartTime:               dp.RecoverStartTime.Unix(),
 		RecoverUpdateTime:              dp.RecoverUpdateTime.Unix(),
@@ -301,6 +311,10 @@ func newDataPartitionValue(dp *DataPartition) (dpv *dataPartitionValue) {
 	for _, replica := range dp.Replicas {
 		rv := &replicaValue{Addr: replica.Addr, DiskPath: replica.DiskPath}
 		dpv.Replicas = append(dpv.Replicas, rv)
+	}
+	retryTimesMap := dp.cloneDecommissionDiskRetryMap()
+	for disk, retryTimes := range retryTimesMap {
+		dpv.DecommissionDiskRetryMap[disk] = retryTimes
 	}
 	return
 }
@@ -1334,6 +1348,10 @@ func (c *Cluster) loadClusterValue() (err error) {
 		c.cfg.metaNodeGOGC = cv.MetaNodeGOGC
 		c.cfg.dataNodeGOGC = cv.DataNodeGOGC
 
+		if c.DecommissionFirstHostDiskParallelLimit == 0 {
+			c.DecommissionFirstHostDiskParallelLimit = defaultDecommissionFirstHostDiskParallelLimit
+		}
+
 		if c.cfg.metaNodeGOGC <= 0 {
 			c.cfg.metaNodeGOGC = defaultMetaNodeGOGC
 		}
@@ -1829,7 +1847,8 @@ func (c *Cluster) loadMetaPartitions() (err error) {
 		mp.setPeers(mpv.Peers)
 		mp.OfflinePeerID = mpv.OfflinePeerID
 		mp.IsRecover = mpv.IsRecover
-		mp.IsFreeze = mpv.IsFreeze
+		mp.Freeze = mpv.Freeze
+		mp.LastDelReplicaTime = mpv.LastDelReplicaTime
 		vol.addMetaPartition(mp)
 		c.addBadMetaParitionIdMap(mp)
 		log.LogInfof("action[loadMetaPartitions],vol[%v],mp[%v]", vol.Name, mp.PartitionID)

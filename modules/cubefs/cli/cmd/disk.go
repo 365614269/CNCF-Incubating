@@ -150,7 +150,10 @@ const (
 )
 
 func newDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
-	var weight int
+	var (
+		weight       int
+		raftForceDel bool
+	)
 	cmd := &cobra.Command{
 		Use:   CliOpDecommission + " [DATA NODE ADDR] [DISK]",
 		Short: cmdDecommissionDisksShort,
@@ -160,13 +163,14 @@ func newDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 			defer func() {
 				errout(err)
 			}()
-			if err = client.AdminAPI().DecommissionDisk(args[0], args[1], weight); err != nil {
+			if err = client.AdminAPI().DecommissionDisk(args[0], args[1], weight, raftForceDel); err != nil {
 				return
 			}
 			stdout("Mark disk %v:%v to be decommissioned\n", args[0], args[1])
 		},
 	}
 	cmd.Flags().IntVar(&weight, CliFLagDecommissionWeight, lowPriorityDecommissionWeight, "decommission weight")
+	cmd.Flags().BoolVarP(&raftForceDel, CliFlagDecommissionRaftForce, "r", false, "true for raftForceDel")
 	return cmd
 }
 
@@ -175,7 +179,6 @@ const (
 )
 
 func newRecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
-	var recommissionType string
 	cmd := &cobra.Command{
 		Use:   CliOpRecommission + " [DATA NODE ADDR] [DISK]",
 		Short: cmdRecommissionDisksShort,
@@ -185,17 +188,12 @@ func newRecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 			defer func() {
 				errout(err)
 			}()
-			if recommissionType == "" {
-				stdout("no change has been set")
+			if err = client.AdminAPI().RecommissionDisk(args[0], args[1]); err != nil {
 				return
 			}
-			if err = client.AdminAPI().RecommissionDisk(args[0], args[1], recommissionType); err != nil {
-				return
-			}
-			stdout("Mark disk %v:%v recommissionType %v to be recommissioned\n", args[0], args[1], recommissionType)
+			stdout("Mark disk %v:%v to be recommissioned\n", args[0], args[1])
 		},
 	}
-	cmd.Flags().StringVar(&recommissionType, CliFLagRecommissionType, "", "recommission type [decommissioned or decommissionSuccess]")
 	return cmd
 }
 
@@ -240,6 +238,7 @@ func newCancelDecommissionDiskCmd(client *master.MasterClient) *cobra.Command {
 
 			err = client.AdminAPI().AbortDiskDecommission(args[0], args[1])
 			if err != nil {
+				err = fmt.Errorf("%v, please exec curl -v http://masterAddr:17010/disk/queryDecommissionProgress?addr=dataAddr:17310&disk=dataPath to check if the disk has been canceled", err)
 				return
 			}
 			stdout("%v\n", "cancel decommission successfully")

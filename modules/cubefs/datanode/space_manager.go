@@ -20,11 +20,10 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/cubefs/cubefs/datanode/storage"
 
 	syslog "log"
 
@@ -376,7 +375,9 @@ func (manager *SpaceManager) GetDiskUtils() map[string]float64 {
 func (manager *SpaceManager) GetDiskUtil(disk *Disk) (util float64) {
 	manager.diskMutex.RLock()
 	defer manager.diskMutex.RUnlock()
-	util = manager.diskUtils[disk.diskPartition.Device].Load()
+	if disk.diskPartition != nil {
+		util = manager.diskUtils[disk.diskPartition.Device].Load()
+	}
 	return
 }
 
@@ -470,11 +471,13 @@ func (manager *SpaceManager) LoadDisk(path string, reservedSpace, diskRdonlySpac
 		disk, err = NewDisk(path, reservedSpace, diskRdonlySpace, maxErrCnt, manager, diskEnableReadRepairExtentLimit)
 		if err != nil {
 			log.LogErrorf("NewDisk fail err:[%v]", err)
+			os.Remove(filepath.Join(path, DiskStatusFile))
 			return
 		}
 		err = disk.RestorePartition(visitor)
 		if err != nil {
 			log.LogErrorf("RestorePartition fail err:[%v]", err)
+			os.Remove(filepath.Join(path, DiskStatusFile))
 			return
 		}
 		manager.putDisk(disk)
@@ -577,11 +580,16 @@ func (manager *SpaceManager) selectDisk(decommissionedDisks []string) (d *Disk) 
 	maxStraw := float64(0)
 	for _, disk := range manager.disks {
 		if _, ok := decommissionedDiskMap[disk.Path]; ok {
-			log.LogInfof("action[minPartitionCnt] exclude decommissioned disk[%v]", disk.Path)
+			log.LogInfof("action[selectDisk] exclude decommissioned disk[%v]", disk.Path)
 			continue
 		}
 		if disk.Status != proto.ReadWrite {
-			log.LogInfof("[minPartitionCnt] disk(%v) is not writable", disk.Path)
+			log.LogInfof("[selectDisk] disk(%v) is not writable", disk.Path)
+			continue
+		}
+
+		if disk.isLost {
+			log.LogInfof("[selectDisk] disk(%v) is lost", disk.Path)
 			continue
 		}
 
@@ -759,7 +767,7 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 			TriggerDiskError:           atomic.LoadUint64(&partition.diskErrCnt) > 0,
 			ForbidWriteOpOfProtoVer0:   dpForbid,
 			ReadOnlyReasons:            partition.ReadOnlyReasons(),
-			IsMissingTinyExtent:        partition.extentStore.AvailableTinyExtentCnt()+partition.extentStore.BrokenTinyExtentCnt() < storage.TinyExtentCount,
+			IsMissingTinyExtent:        partition.isMissingTinyExtent,
 			IsRepairing:                partition.isRepairing,
 		}
 		log.LogDebugf("action[Heartbeats] dpid(%v), status(%v) total(%v) used(%v) leader(%v) isLeader(%v) "+
@@ -836,10 +844,14 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 		log.LogInfof("[buildHeartBeatResponse] disk(%v) status(%v) broken dp len(%v)", d.Path, d.Status, brokenDpsCnt)
 		if d.Status == proto.Unavailable || brokenDpsCnt != 0 {
 			response.BadDisks = append(response.BadDisks, d.Path)
+			if d.BadDiskFirstReportTime.IsZero() {
+				d.BadDiskFirstReportTime = time.Now()
+			}
 			bds := proto.BadDiskStat{
 				DiskPath:             d.Path,
 				TotalPartitionCnt:    d.PartitionCount(),
 				DiskErrPartitionList: brokenDps,
+				FirstReportTime:      d.BadDiskFirstReportTime,
 			}
 			response.BadDiskStats = append(response.BadDiskStats, bds)
 			log.LogErrorf("[buildHeartBeatResponse] disk(%v) total(%v) broken dp len(%v) %v",
@@ -849,6 +861,18 @@ func (s *DataNode) buildHeartBeatResponse(response *proto.DataNodeHeartbeatRespo
 			response.LostDisks = append(response.LostDisks, d.Path)
 			log.LogErrorf("[buildHeartBeatResponse] disk(%v) lost", d.Path)
 		}
+		bds := proto.DiskStat{
+			Status:            d.Status,
+			DiskPath:          d.Path,
+			Total:             d.Total,
+			Used:              d.Used,
+			Available:         d.Available,
+			IOUtil:            d.space.GetDiskUtil(d),
+			TotalPartitionCnt: d.PartitionCount(),
+
+			DiskErrPartitionList: d.GetDiskErrPartitionList(),
+		}
+		response.DiskStats = append(response.DiskStats, bds)
 		response.BackupDataPartitions = append(response.BackupDataPartitions, d.GetBackupPartitionDirList()...)
 	}
 }

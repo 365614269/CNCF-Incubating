@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -798,11 +799,6 @@ func (mp *metaPartition) onStart(isCreate bool) (err error) {
 		return
 	}
 	mp.startScheduleTask()
-	if err = mp.startFreeList(); err != nil {
-		err = errors.NewErrorf("[onStart] start free list id=%d: %s",
-			mp.config.PartitionId, err.Error())
-		return
-	}
 
 	retryCnt := 0
 	for ; retryCnt < 200; retryCnt++ {
@@ -822,6 +818,9 @@ func (mp *metaPartition) onStart(isCreate bool) (err error) {
 			mp.config.VolName, mp.config.PartitionId, retryCnt, err)
 		return
 	}
+
+	log.LogWarnf("[onStart] vol(%v) mpId(%d) retryCnt(%v), GetVolumeSimpleInfo succ",
+		mp.config.VolName, mp.config.PartitionId, retryCnt)
 
 	volInfo := mp.vol.GetVolView()
 	mp.vol.volDeleteLockTime = volInfo.DeleteLockTime
@@ -857,21 +856,27 @@ func (mp *metaPartition) onStart(isCreate bool) (err error) {
 				mp.config.PartitionId, gClusterInfo.EbsAddr, err)
 			// not return err here, blobstore client may be created latter
 		} else {
-			log.LogInfof("action[onStart] mp(%v) blobStoreAddr(%v), create blobstore client success",
+			log.LogWarnf("action[onStart] mp(%v) blobStoreAddr(%v), create blobstore client success",
 				mp.config.PartitionId, gClusterInfo.EbsAddr)
 		}
 	}
 
+	if err = mp.startFreeList(); err != nil {
+		err = errors.NewErrorf("[onStart] start free list id=%d: %s",
+			mp.config.PartitionId, err.Error())
+		return
+	}
+
 	go mp.startCheckerEvict()
 
-	log.LogDebugf("[before raft] get mp[%v] applied(%d),inodeCount(%d),dentryCount(%d)", mp.config.PartitionId, mp.applyID, mp.inodeTree.Len(), mp.dentryTree.Len())
+	log.LogWarnf("[before raft] get mp[%v] applied(%d),inodeCount(%d),dentryCount(%d)", mp.config.PartitionId, mp.applyID, mp.inodeTree.Len(), mp.dentryTree.Len())
 
-	if err = mp.startRaft(); err != nil {
+	if err = mp.startRaft(isCreate); err != nil {
 		err = errors.NewErrorf("[onStart] start raft id=%d: %s",
 			mp.config.PartitionId, err.Error())
 		return
 	}
-	log.LogDebugf("[after raft] get mp[%v] applied(%d),inodeCount(%d),dentryCount(%d)", mp.config.PartitionId, mp.applyID, mp.inodeTree.Len(), mp.dentryTree.Len())
+	log.LogWarnf("[after raft] get mp[%v] applied(%d),inodeCount(%d),dentryCount(%d)", mp.config.PartitionId, mp.applyID, mp.inodeTree.Len(), mp.dentryTree.Len())
 
 	mp.updateSize()
 
@@ -896,7 +901,7 @@ func (mp *metaPartition) onStop() {
 	}
 }
 
-func (mp *metaPartition) startRaft() (err error) {
+func (mp *metaPartition) startRaft(isCreate bool) (err error) {
 	var (
 		heartbeatPort int
 		replicaPort   int
@@ -930,10 +935,11 @@ func (mp *metaPartition) startRaft() (err error) {
 	log.LogInfof("start partition id=%d,applyID:%v raft peers: %s",
 		mp.config.PartitionId, mp.applyID, peers)
 	pc := &raftstore.PartitionConfig{
-		ID:      mp.config.PartitionId,
-		Applied: mp.applyID,
-		Peers:   peers,
-		SM:      mp,
+		ID:       mp.config.PartitionId,
+		Applied:  mp.applyID,
+		Peers:    peers,
+		SM:       mp,
+		IsCreate: isCreate,
 	}
 	mp.raftPartition, err = mp.config.RaftStore.CreatePartition(pc)
 	if err == nil {
@@ -944,9 +950,7 @@ func (mp *metaPartition) startRaft() (err error) {
 
 func (mp *metaPartition) stopRaft() {
 	if mp.raftPartition != nil {
-		// TODO Unhandled errors
-		// mp.raftPartition.Stop()
-		_ = struct{}{}
+		mp.raftPartition.Stop()
 	}
 }
 
@@ -1170,10 +1174,10 @@ func (mp *metaPartition) LoadSnapshot(snapshotPath string) (err error) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.LogWarnf("action[LoadSnapshot] recovered when load partition partition: %v, failed: %v",
-						mp.config.PartitionId, r)
+					log.LogWarnf("action[LoadSnapshot] recovered when load partition partition: %v, failed: %v, i %d, stack %s",
+						mp.config.PartitionId, r, i, debug.Stack())
 
-					errs[i] = errors.NewErrorf("%v", r)
+					errs[i] = errors.NewErrorf("%v, i %d, stack %s", r, i, debug.Stack())
 				}
 
 				wg.Done()
@@ -1242,17 +1246,27 @@ func (mp *metaPartition) load(isCreate bool) (err error) {
 	return nil
 }
 
-func (mp *metaPartition) doFileStats() {
-	mp.fileRange = make([]int64, len(mp.manager.fileStatsConfig.thresholds)+1)
+func (mp *metaPartition) doFileStats(thresholds []uint64) {
+	fileRange := make([]int64, len(thresholds)+1)
 	mp.GetInodeTree().Ascend(func(i BtreeItem) bool {
 		ino := i.(*Inode)
-		mp.fileStats(ino)
+		if proto.IsRegular(ino.Type) && ino.NLink > 0 {
+			index := calculateFileRangeIndex(ino.Size, thresholds)
+			if index >= 0 && index < len(fileRange) {
+				fileRange[index]++
+			}
+		}
 		return true
 	})
+	mp.fileRange = fileRange
 }
 
 func (mp *metaPartition) store(sm *storeMsg) (err error) {
 	log.LogWarnf("metaPartition %d store apply %v", mp.config.PartitionId, sm.applyIndex)
+	defer func() {
+		log.LogWarnf("metaPartition %d store apply %v finish", mp.config.PartitionId, sm.applyIndex)
+	}()
+
 	tmpDir := path.Join(mp.config.RootDir, snapshotDirTmp)
 	if _, err = os.Stat(tmpDir); err == nil {
 		// TODO Unhandled errors
@@ -1430,6 +1444,14 @@ func (mp *metaPartition) ResponseLoadMetaPartition(p *Packet) (err error) {
 	resp.DentryCount = uint64(mp.GetDentryTreeLen())
 	resp.ApplyID = mp.getApplyID()
 	resp.CommittedID = mp.getCommittedID()
+
+	resp.RaftInfo.DownReplicas = mp.config.RaftStore.RaftServer().GetDownReplicas(mp.config.PartitionId)
+	resp.RaftInfo.PendingPeers = mp.config.RaftStore.RaftServer().GetPendingReplica(mp.config.PartitionId)
+	if rStatus := mp.config.RaftStore.RaftStatus(mp.config.PartitionId); rStatus != nil {
+		resp.RaftInfo.RaftStatus = *rStatus
+	}
+	resp.RaftInfo.Hosts = mp.config.Peers
+
 	if err != nil {
 		err = errors.Trace(err,
 			"[ResponseLoadMetaPartition] check snapshot")
@@ -1761,8 +1783,6 @@ func (mp *metaPartition) CloseAndBackupRaft() (err error) {
 }
 
 func (mp *metaPartition) SetFreeze(req *proto.FreezeMetaPartitionRequest) (err error) {
-	mp.config.Freeze = req.Freeze
-
 	reqData, err := json.Marshal(*req)
 	if err != nil {
 		return
@@ -1779,4 +1799,10 @@ func (mp *metaPartition) SetFreeze(req *proto.FreezeMetaPartitionRequest) (err e
 	}
 
 	return nil
+}
+
+func (mp *metaPartition) getFileRange() []int64 {
+	fileRangeCopy := make([]int64, len(mp.fileRange))
+	copy(fileRangeCopy, mp.fileRange)
+	return fileRangeCopy
 }

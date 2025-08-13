@@ -154,8 +154,9 @@ type DataPartition struct {
 	responseStatus     uint32
 	PersistApplyIdChan chan PersistApplyIdRequest
 
-	readOnlyReasons uint32
-	isRepairing     bool
+	readOnlyReasons     uint32
+	isMissingTinyExtent bool
+	isRepairing         bool
 }
 
 type PersistApplyIdRequest struct {
@@ -457,11 +458,11 @@ func newDataPartition(dpCfg *dataPartitionCfg, disk *Disk, isCreate bool) (dp *D
 	partition.replicasInit()
 	partition.extentStore, err = storage.NewExtentStore(partition.path, dpCfg.PartitionID, dpCfg.PartitionSize,
 		partition.partitionType, disk.dataNode.cacheCap, isCreate)
-	partition.extentStore.IsEnableSnapshot = dpCfg.IsEnableSnapshot
 	if err != nil {
 		log.LogWarnf("action[newDataPartition] dp %v NewExtentStore failed %v", partitionID, err.Error())
 		return
 	}
+	partition.extentStore.IsEnableSnapshot = dpCfg.IsEnableSnapshot
 	// store applyid
 	if isCreate {
 		log.LogInfof("action[newDataPartition] init apply id when create dp directly. dp %d", partitionID)
@@ -1051,6 +1052,10 @@ func (dp *DataPartition) LaunchRepair(extentType uint8) {
 		return
 	}
 	if err := dp.updateReplicas(false); err != nil {
+		if strings.Contains(err.Error(), proto.ErrDataPartitionNotExists.Error()) {
+			log.LogWarnf("action[LaunchRepair] partition(%v) err(%v).", dp.partitionID, err)
+			return
+		}
 		log.LogErrorf("action[LaunchRepair] partition(%v) err(%v).", dp.partitionID, err)
 		return
 	}

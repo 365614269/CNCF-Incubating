@@ -41,12 +41,10 @@ type File struct {
 	idle      int32
 	parentIno uint64
 	name      string
-	fullPath  string
 	sync.RWMutex
 	fReader *blobstore.Reader
 	fWriter *blobstore.Writer
 	flag    uint32
-	pinos   []uint64
 }
 
 // Functions that File needs to implement
@@ -67,6 +65,34 @@ var (
 	_ fs.NodeSetxattrer    = (*File)(nil)
 	_ fs.NodeRemovexattrer = (*File)(nil)
 )
+
+func isWriteEio(err error) bool {
+	if err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP || strings.Contains(err.Error(), syscall.ENOENT.Error()) {
+		return false
+	}
+
+	if err == syscall.EBADF || err == syscall.EDQUOT {
+		return false
+	}
+
+	if strings.Contains(err.Error(), "stream writer in error status") {
+		return false
+	}
+
+	return true
+}
+
+func isReadEio(err error) bool {
+	if err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP || strings.Contains(err.Error(), "ExtentNotFoundError") || strings.Contains(err.Error(), syscall.ENOENT.Error()) {
+		return false
+	}
+
+	if err == syscall.EBADF {
+		return false
+	}
+
+	return true
+}
 
 // NewFile returns a new file.
 func NewFile(s *Super, i *proto.InodeInfo, flag uint32, pino uint64, filename string) fs.Node {
@@ -109,30 +135,35 @@ func NewFile(s *Super, i *proto.InodeInfo, flag uint32, pino uint64, filename st
 		log.LogDebugf("Trace NewFile:fReader(%v) fWriter(%v) ", fReader, fWriter)
 		return &File{
 			super: s, info: i, fWriter: fWriter, fReader: fReader, parentIno: pino, name: filename,
-			flag: flag, fullPath: "Invalid",
+			flag: flag,
 		}
 	}
 	log.LogDebugf("Trace NewFile:ino(%v) flag(%v) ", i, flag)
 	return &File{
 		super: s, info: i, parentIno: pino, name: filename,
-		flag: flag, fullPath: "Invalid",
+		flag: flag,
 	}
 }
 
 // get file parentPath
 func (f *File) getParentPath() string {
-	return path.Dir(f.fullPath)
-}
-
-func (f *File) setFullPath(fullPath string) {
-	f.fullPath = fixUnixPath(fullPath)
-}
-
-func (f *File) addParentInode(inos []uint64) {
-	if f.pinos == nil {
-		f.pinos = make([]uint64, 0)
+	if f.parentIno == f.super.rootIno {
+		return "/"
 	}
-	f.pinos = append(f.pinos, inos...)
+
+	f.super.fslock.Lock()
+	node, ok := f.super.nodeCache[f.parentIno]
+	f.super.fslock.Unlock()
+	if !ok {
+		log.LogWarnf("Get node cache failed: ino(%v)", f.parentIno)
+		return "unknown"
+	}
+	parentDir, ok := node.(*Dir)
+	if !ok {
+		log.LogErrorf("Type error: Can not convert node -> *Dir, ino(%v)", f.parentIno)
+		return "unknown"
+	}
+	return parentDir.getCwd()
 }
 
 // Attr sets the attributes of a file.
@@ -179,11 +210,11 @@ func (f *File) Forget() {
 		log.LogDebugf("TRACE Forget: ino(%v) %v", ino, f.name)
 	}()
 
-	//TODO:why cannot close fwriter
-	//log.LogErrorf("TRACE Forget: ino(%v)", ino)
-	//if f.fWriter != nil {
+	// TODO:why cannot close fwriter
+	// log.LogErrorf("TRACE Forget: ino(%v)", ino)
+	// if f.fWriter != nil {
 	//	f.fWriter.Close()
-	//}
+	// }
 
 	if DisableMetaCache {
 		f.super.ic.Delete(ino)
@@ -217,12 +248,12 @@ func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenR
 	}()
 
 	ino := f.info.Inode
-	log.LogDebugf("TRACE open ino(%v) info(%v) fullPath(%v)", ino, f.info, f.fullPath)
+	log.LogDebugf("TRACE open ino(%v) info(%v) fullPath(%v)", ino, f.info, path.Join(f.getParentPath(), f.name))
 	start := time.Now()
 
 	if f.super.bcacheDir != "" && !f.filterFilesSuffix(f.super.bcacheFilterFiles) {
 		parentPath := f.getParentPath()
-		log.LogDebugf("TRACE open ino(%v) fullpath(%v)", ino, f.fullPath)
+		log.LogDebugf("TRACE open ino(%v) fullpath(%v)", ino, path.Join(f.getParentPath(), f.name))
 		if parentPath != "" && !strings.HasSuffix(parentPath, "/") {
 			parentPath = parentPath + "/"
 		}
@@ -240,9 +271,9 @@ func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenR
 		isCache = true
 	}
 	if needBCache {
-		f.super.ec.OpenStreamWithCache(ino, needBCache, openForWrite, isCache, f.fullPath)
+		f.super.ec.OpenStreamWithCache(ino, needBCache, openForWrite, isCache, path.Join(f.getParentPath(), f.name))
 	} else {
-		f.super.ec.OpenStream(ino, openForWrite, isCache, f.fullPath)
+		f.super.ec.OpenStream(ino, openForWrite, isCache, path.Join(f.getParentPath(), f.name))
 	}
 	log.LogDebugf("TRACE open ino(%v) f.super.bcacheDir(%v) needBCache(%v)", ino, f.super.bcacheDir, needBCache)
 
@@ -305,25 +336,27 @@ func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) (err error
 		stat.EndStat("Release:file", err, bgTime, 1)
 		log.LogInfof("action[Release] %v", f.fWriter)
 		f.fWriter.FreeCache()
-		// keep nodeCache hold the latest inode info
-		f.super.fslock.Lock()
-		delete(f.super.nodeCache, ino)
-		f.super.fslock.Unlock()
-		if DisableMetaCache {
-			f.super.ic.Delete(ino)
-		}
-		f.super.fslock.Lock()
-		delete(f.super.nodeCache, ino)
-		node, ok := f.super.nodeCache[f.parentIno]
-		if ok {
-			parent, ok := node.(*Dir)
-			if ok {
-				parent.dcache.Delete(f.name)
-				log.LogDebugf("TRACE Release exit: ino(%v) name(%v) decache(%v)",
-					parent.info.Inode, parent.name, parent.dcache.Len())
+		if f.super.ec.RefCnt(ino) == 0 {
+			// keep nodeCache hold the latest inode info
+			f.super.fslock.Lock()
+			delete(f.super.nodeCache, ino)
+			f.super.fslock.Unlock()
+			if DisableMetaCache {
+				f.super.ic.Delete(ino)
 			}
+			f.super.fslock.Lock()
+			delete(f.super.nodeCache, ino)
+			node, ok := f.super.nodeCache[f.parentIno]
+			if ok {
+				parent, ok := node.(*Dir)
+				if ok {
+					parent.dcache.Delete(f.name)
+					log.LogDebugf("TRACE Release exit: ino(%v) name(%v) decache(%v)",
+						parent.info.Inode, parent.name, parent.dcache.Len())
+				}
+			}
+			f.super.fslock.Unlock()
 		}
-		f.super.fslock.Unlock()
 		f.super.runningMonitor.SubClientOp(runningStat, err)
 	}()
 
@@ -331,22 +364,18 @@ func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) (err error
 
 	start := time.Now()
 
-	//log.LogErrorf("TRACE Release close stream: ino(%v) req(%v)", ino, req)
-	//if f.fWriter != nil {
+	// log.LogErrorf("TRACE Release close stream: ino(%v) req(%v)", ino, req)
+	// if f.fWriter != nil {
 	//	f.fWriter.Close()
-	//}
-	// if proto.IsCold(f.super.volType) {
-	//	err = f.fWriter.Flush(ino, ctx)
-	// } else {
-	//	err = f.super.ec.CloseStream(ino)
 	// }
-	f.super.ec.CloseStream(ino)
+
+	err = f.super.ec.CloseStream(ino)
 	if err != nil {
 		log.LogErrorf("Release: close writer failed, ino(%v) req(%v) err(%v)", ino, req, err)
 		return ParseError(err)
 	}
 	elapsed := time.Since(start)
-	log.LogDebugf("TRACE Release: ino(%v) req(%v) name(%v)(%v)ns", ino, req, f.fullPath, elapsed.Nanoseconds())
+	log.LogDebugf("TRACE Release: ino(%v) req(%v) name(%v)(%v)ns", ino, req, path.Join(f.getParentPath(), f.name), elapsed.Nanoseconds())
 
 	return nil
 }
@@ -398,7 +427,7 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 		msg := fmt.Sprintf("Read: ino(%v) req(%v) err(%v) size(%v)", f.info.Inode, req, err, size)
 		f.super.handleError("Read", msg)
 		errMetric := exporter.NewCounter("fileReadFailed")
-		if err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP || strings.Contains(err.Error(), "ExtentNotFoundError") {
+		if !isReadEio(err) {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "NOTSUP"})
 		} else {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "EIO"})
@@ -410,9 +439,7 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 	if f.info.Size > uint64(req.Offset) && uint64(req.Offset+int64(req.Size)) >= f.info.Size {
 		// at least read bytes: f.info.Size - req.Offset
 		if size > 0 && uint64(size) < f.info.Size-uint64(req.Offset) {
-			log.LogErrorf("Read: error data size, ino(%v) offset(%v) filesize(%v) reqsize(%v) size(%v)\n", f.info.Inode, req.Offset, f.info.Size, req.Size, size)
-			errMetric := exporter.NewCounter("fileReadFailed")
-			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "EIO"})
+			log.LogWarnf("Read: error data size, ino(%v) offset(%v) filesize(%v) reqsize(%v) size(%v)\n", f.info.Inode, req.Offset, f.info.Size, req.Size, size)
 		}
 	}
 
@@ -524,7 +551,7 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 		msg := fmt.Sprintf("Write: ino(%v) offset(%v) len(%v) err(%v)", ino, req.Offset, reqlen, err)
 		f.super.handleError("Write", msg)
 		errMetric := exporter.NewCounter("fileWriteFailed")
-		if err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP {
+		if !isWriteEio(err) {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "NOTSUP"})
 		} else {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "EIO"})
@@ -547,7 +574,7 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 			msg := fmt.Sprintf("Write: failed to wait for flush, ino(%v) offset(%v) len(%v) err(%v) req(%v)", ino, req.Offset, reqlen, err, req)
 			f.super.handleError("Wrtie", msg)
 			errMetric := exporter.NewCounter("fileWriteFailed")
-			if err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP {
+			if !isWriteEio(err) {
 				errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "NOTSUP"})
 			} else {
 				errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "EIO"})
@@ -594,7 +621,7 @@ func (f *File) Flush(ctx context.Context, req *fuse.FlushRequest) (err error) {
 		log.LogErrorf("TRACE Flush err: ino(%v) err(%v)", f.info.Inode, err)
 
 		errMetric := exporter.NewCounter("fileWriteFailed")
-		if err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP {
+		if !isReadEio(err) {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "NOTSUP"})
 		} else {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "EIO"})
@@ -634,7 +661,7 @@ func (f *File) Fsync(ctx context.Context, req *fuse.FsyncRequest) (err error) {
 		f.super.handleError("Fsync", msg)
 
 		errMetric := exporter.NewCounter("fileWriteFailed")
-		if err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP {
+		if !isWriteEio(err) {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "NOTSUP"})
 		} else {
 			errMetric.AddWithLabels(1, map[string]string{exporter.Vol: f.super.volname, exporter.Err: "EIO"})
@@ -671,7 +698,7 @@ func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse
 	if req.Valid.Size() && (proto.IsHot(f.super.volType) || proto.IsStorageClassReplica(f.info.StorageClass)) {
 		// when use trunc param in open request through nfs client and mount on cfs mountPoint, cfs client may not recv open message but only setAttr,
 		// the streamer may not open and cause io error finally,so do a open no matter the stream be opened or not
-		if err := f.super.ec.OpenStream(ino, openForWrite, isCache, f.fullPath); err != nil {
+		if err := f.super.ec.OpenStream(ino, openForWrite, isCache, path.Join(f.getParentPath(), f.name)); err != nil {
 			log.LogErrorf("Setattr: OpenStream ino(%v) size(%v) err(%v)", ino, req.Size, err)
 			return ParseError(err)
 		}
@@ -895,7 +922,7 @@ func (f *File) filterFilesSuffix(filterFiles string) bool {
 	}
 	suffixs := strings.Split(filterFiles, ";")
 	for _, suffix := range suffixs {
-		//.py means one type of file
+		// .py means one type of file
 		suffix = "." + suffix
 		if suffix != "." && strings.Contains(f.name, suffix) {
 			log.LogDebugf("fileName:%s,filter:%s,suffix:%s,suffixs:%v", f.name, filterFiles, suffix, suffixs)

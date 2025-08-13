@@ -67,7 +67,7 @@ type MetaPartition struct {
 	ReplicaNum                uint8
 	Status                    int8
 	IsRecover                 bool
-	IsFreeze                  bool
+	Freeze                    int8
 	volID                     uint64
 	volName                   string
 	Hosts                     []string
@@ -84,6 +84,8 @@ type MetaPartition struct {
 	StatByStorageClass        []*proto.StatOfStorageClass
 	StatByMigrateStorageClass []*proto.StatOfStorageClass
 	sync.RWMutex
+
+	LastDelReplicaTime int64
 }
 
 func newMetaReplica(start, end uint64, metaNode *MetaNode) (mr *MetaReplica) {
@@ -109,6 +111,14 @@ func newMetaPartition(partitionID, start, end uint64, replicaNum uint8, volName 
 	mp.EqualCheckPass = true
 	mp.StatByStorageClass = make([]*proto.StatOfStorageClass, 0)
 	return
+}
+
+func (mp *MetaPartition) CheckLastDelReplicaTime() bool {
+	return mp.GetLastDelTime()+mpReplicaDelInterval < time.Now().Unix()
+}
+
+func (mp *MetaPartition) GetLastDelTime() int64 {
+	return mp.LastDelReplicaTime
 }
 
 func (mp *MetaPartition) setPeers(peers []proto.Peer) {
@@ -300,7 +310,7 @@ func (mp *MetaPartition) checkLeader(clusterID string, timeOutSec int64) {
 }
 
 func (mp *MetaPartition) checkStatus(clusterID string, writeLog bool, replicaNum int, maxPartitionID uint64, metaPartitionInodeIdStep uint64, forbiddenVol bool, timeOutSec int64) (doSplit bool) {
-	if mp.IsFreeze {
+	if mp.IsMetaPartitionFreezed() {
 		return
 	}
 
@@ -309,6 +319,8 @@ func (mp *MetaPartition) checkStatus(clusterID string, writeLog bool, replicaNum
 
 	mp.checkReplicas(timeOutSec)
 	liveReplicas := mp.getLiveReplicas(timeOutSec)
+
+	log.LogDebugf("checkStatus: start check mp %d", mp.PartitionID)
 
 	if len(liveReplicas) <= replicaNum/2 {
 		mp.Status = proto.Unavailable
@@ -1065,4 +1077,8 @@ func (mr *MetaReplica) createTaskToGetRaftStatus(partitionID uint64, replicaNum 
 	t = proto.NewAdminTask(proto.OpIsRaftStatusOk, mr.Addr, req)
 	resetMetaPartitionTaskID(t, partitionID)
 	return
+}
+
+func (mp *MetaPartition) IsMetaPartitionFreezed() bool {
+	return mp.Freeze != proto.FreezeMetaPartitionInit
 }

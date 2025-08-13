@@ -31,43 +31,44 @@ import (
 
 // metrics
 const (
-	StatPeriod                      = time.Minute * time.Duration(1)
-	MetricDataNodesUsedGB           = "dataNodes_used_GB"
-	MetricDataNodesTotalGB          = "dataNodes_total_GB"
-	MetricDataNodesStat             = "dataNodes_stats"
-	MetricDataNodesIncreasedGB      = "dataNodes_increased_GB"
-	MetricMetaNodesUsedGB           = "metaNodes_used_GB"
-	MetricMetaNodesTotalGB          = "metaNodes_total_GB"
-	MetricMetaNodesIncreasedGB      = "metaNodes_increased_GB"
-	MetricDataNodesCount            = "dataNodes_count"
-	MetricMetaNodesCount            = "metaNodes_count"
-	MetricNodeStat                  = "node_stat"
-	MetricVolCount                  = "vol_count"
-	MetricVolTotalGB                = "vol_total_GB"
-	MetricVolUsedGB                 = "vol_used_GB"
-	MetricVolUsageGB                = "vol_usage_ratio"
-	MetricVolStats                  = "vol_stats"
-	MetricVolMetaCount              = "vol_meta_count"
-	MetricBadMpCount                = "bad_mp_count"
-	MetricBadDpCount                = "bad_dp_count"
-	MetricDiskError                 = "disk_error"
-	MetricFlashNodesDiskError       = "flashNodes_disk_error"
-	MetricDiskLost                  = "disk_lost"
-	MetricDpUnableDecommissionCount = "dp_unable_decommission_count"
-	MetricDpMissingTinyExtent       = "dp_missing_tinyExtent"
-	MetricDataNodesInactive         = "dataNodes_inactive"
-	MetricInactiveDataNodeInfo      = "inactive_dataNodes_info"
-	MetricMetaNodesInactive         = "metaNodes_inactive"
-	MetricDataNodesNotWritable      = "dataNodes_not_writable"
-	MetricDataNodesAllocable        = "dataNodes_allocable"
-	MetricMetaNodesNotWritable      = "metaNodes_not_writable"
-	MetricInactiveMetaNodeInfo      = "inactive_metaNodes_info"
-	MetricMetaInconsistent          = "mp_inconsistent"
-	MetricMasterNoLeader            = "master_no_leader"
-	MetricMasterNoCache             = "master_no_cache"
-	MetricMasterSnapshot            = "master_snapshot"
-	MetricMastersInactive           = "masters_inactive"
-	MetricInactiveMasterInfo        = "inactive_masters_info"
+	StatPeriod                             = time.Minute * time.Duration(1)
+	MetricDataNodesUsedGB                  = "dataNodes_used_GB"
+	MetricDataNodesTotalGB                 = "dataNodes_total_GB"
+	MetricDataNodesStat                    = "dataNodes_stats"
+	MetricDataNodesIncreasedGB             = "dataNodes_increased_GB"
+	MetricMetaNodesUsedGB                  = "metaNodes_used_GB"
+	MetricMetaNodesTotalGB                 = "metaNodes_total_GB"
+	MetricMetaNodesIncreasedGB             = "metaNodes_increased_GB"
+	MetricDataNodesCount                   = "dataNodes_count"
+	MetricMetaNodesCount                   = "metaNodes_count"
+	MetricNodeStat                         = "node_stat"
+	MetricVolCount                         = "vol_count"
+	MetricVolTotalGB                       = "vol_total_GB"
+	MetricVolUsedGB                        = "vol_used_GB"
+	MetricVolUsageGB                       = "vol_usage_ratio"
+	MetricVolStats                         = "vol_stats"
+	MetricVolMetaCount                     = "vol_meta_count"
+	MetricBadMpCount                       = "bad_mp_count"
+	MetricBadDpCount                       = "bad_dp_count"
+	MetricDiskError                        = "disk_error"
+	MetricFlashNodesDiskError              = "flashNodes_disk_error"
+	MetricDiskLost                         = "disk_lost"
+	MetricDpUnableDecommissionCount        = "dp_unable_decommission_count"
+	MetricDpNoSamePeer                     = "dp_no_same_peer"
+	MetricBadDiskDecommissionTimeOverLimit = "bad_disk_decommission_time_over_limit"
+	MetricDataNodesInactive                = "dataNodes_inactive"
+	MetricInactiveDataNodeInfo             = "inactive_dataNodes_info"
+	MetricMetaNodesInactive                = "metaNodes_inactive"
+	MetricDataNodesNotWritable             = "dataNodes_not_writable"
+	MetricDataNodesAllocable               = "dataNodes_allocable"
+	MetricMetaNodesNotWritable             = "metaNodes_not_writable"
+	MetricInactiveMetaNodeInfo             = "inactive_metaNodes_info"
+	MetricMetaInconsistent                 = "mp_inconsistent"
+	MetricMasterNoLeader                   = "master_no_leader"
+	MetricMasterNoCache                    = "master_no_cache"
+	MetricMasterSnapshot                   = "master_snapshot"
+	MetricMastersInactive                  = "masters_inactive"
+	MetricInactiveMasterInfo               = "inactive_masters_info"
 
 	MetricMissingDp                = "missing_dp"
 	MetricDpNoLeader               = "dp_no_leader"
@@ -106,66 +107,65 @@ const (
 var WarnMetrics *warningMetrics
 
 type monitorMetrics struct {
-	cluster                   *Cluster
-	dataNodesCount            *exporter.Gauge
-	metaNodesCount            *exporter.Gauge
-	volCount                  *exporter.Gauge
-	dataNodesTotal            *exporter.Gauge
-	dataNodesUsed             *exporter.Gauge
-	dataNodeStat              *exporter.GaugeVec
-	dataNodeIncreased         *exporter.Gauge
-	metaNodesTotal            *exporter.Gauge
-	metaNodesUsed             *exporter.Gauge
-	metaNodesIncreased        *exporter.Gauge
-	volTotalSpace             *exporter.GaugeVec
-	volUsedSpace              *exporter.GaugeVec
-	volUsage                  *exporter.GaugeVec
-	volMetaCount              *exporter.GaugeVec
-	volStats                  *exporter.GaugeVec
-	badMpCount                *exporter.Gauge
-	badDpCount                *exporter.Gauge
-	diskError                 *exporter.GaugeVec
-	flashNodesDiskError       *exporter.GaugeVec
-	diskLost                  *exporter.GaugeVec
-	dpUnableDecommissionCount *exporter.Gauge
-	dpMissingTinyExtent       *exporter.GaugeVec
-	dataNodesNotWritable      *exporter.Gauge
-	dataNodesAllocable        *exporter.Gauge
-	metaNodesNotWritable      *exporter.Gauge
-	dataNodesInactive         *exporter.Gauge
-	InactiveDataNodeInfo      *exporter.GaugeVec
-	metaNodesInactive         *exporter.Gauge
-	InactiveMetaNodeInfo      *exporter.GaugeVec
-	mastersInactive           *exporter.Gauge
-	InactiveMasterInfo        *exporter.GaugeVec
-	ReplicaMissingDPCount     *exporter.GaugeVec
-	DpMissingLeaderCount      *exporter.GaugeVec
-	MpMissingLeaderCount      *exporter.Gauge
-	MpMissingReplicaCount     *exporter.Gauge
-	dataNodesetInactiveCount  *exporter.GaugeVec
-	metaNodesetInactiveCount  *exporter.GaugeVec
-	metaEqualCheckFail        *exporter.GaugeVec
-	masterNoLeader            *exporter.Gauge
-	masterNoCache             *exporter.GaugeVec
-	masterSnapshot            *exporter.Gauge
-	nodesetMetaTotal          *exporter.GaugeVec
-	nodesetMetaUsed           *exporter.GaugeVec
-	nodesetMetaUsageRatio     *exporter.GaugeVec
-	nodesetDataTotal          *exporter.GaugeVec
-	nodesetDataUsed           *exporter.GaugeVec
-	nodesetDataUsageRatio     *exporter.GaugeVec
-	nodesetMpReplicaCount     *exporter.GaugeVec
-	nodesetDpReplicaCount     *exporter.GaugeVec
-	nodeStat                  *exporter.GaugeVec
+	cluster                          *Cluster
+	dataNodesCount                   *exporter.Gauge
+	metaNodesCount                   *exporter.Gauge
+	volCount                         *exporter.Gauge
+	dataNodesTotal                   *exporter.Gauge
+	dataNodesUsed                    *exporter.Gauge
+	dataNodeStat                     *exporter.GaugeVec
+	dataNodeIncreased                *exporter.Gauge
+	metaNodesTotal                   *exporter.Gauge
+	metaNodesUsed                    *exporter.Gauge
+	metaNodesIncreased               *exporter.Gauge
+	volTotalSpace                    *exporter.GaugeVec
+	volUsedSpace                     *exporter.GaugeVec
+	volUsage                         *exporter.GaugeVec
+	volMetaCount                     *exporter.GaugeVec
+	volStats                         *exporter.GaugeVec
+	badMpCount                       *exporter.Gauge
+	badDpCount                       *exporter.Gauge
+	diskError                        *exporter.GaugeVec
+	flashNodesDiskError              *exporter.GaugeVec
+	diskLost                         *exporter.GaugeVec
+	dpUnableDecommissionCount        *exporter.Gauge
+	dpNoSamePeer                     *exporter.GaugeVec
+	badDiskDecommissionTimeOverLimit *exporter.GaugeVec
+	dataNodesNotWritable             *exporter.Gauge    // TODO: remove in the future
+	dataNodesAllocable               *exporter.Gauge    // TODO: remove in the future
+	metaNodesNotWritable             *exporter.Gauge    // TODO: remove in the future
+	dataNodesInactive                *exporter.Gauge    // TODO: remove in the future
+	InactiveDataNodeInfo             *exporter.GaugeVec // TODO: remove in the future
+	metaNodesInactive                *exporter.Gauge    // TODO: remove in the future
+	InactiveMetaNodeInfo             *exporter.GaugeVec // TODO: remove in the future
+	mastersInactive                  *exporter.Gauge
+	InactiveMasterInfo               *exporter.GaugeVec
+	ReplicaMissingDPCount            *exporter.GaugeVec
+	DpMissingLeaderCount             *exporter.GaugeVec
+	MpMissingLeaderCount             *exporter.Gauge
+	MpMissingReplicaCount            *exporter.Gauge
+	metaEqualCheckFail               *exporter.GaugeVec
+	masterNoLeader                   *exporter.Gauge
+	masterNoCache                    *exporter.GaugeVec
+	masterSnapshot                   *exporter.Gauge
+	// TODO remove in next version
+	nodesetMetaTotal      *exporter.GaugeVec
+	nodesetMetaUsed       *exporter.GaugeVec
+	nodesetMetaUsageRatio *exporter.GaugeVec
+	nodesetDataTotal      *exporter.GaugeVec
+	nodesetDataUsed       *exporter.GaugeVec
+	nodesetDataUsageRatio *exporter.GaugeVec
+	nodesetMpReplicaCount *exporter.GaugeVec
+	nodesetDpReplicaCount *exporter.GaugeVec
 
-	volNames                      map[string]struct{}
-	badDisks                      map[string]string
-	flashNodesBadDisks            map[string]string
-	nodesetInactiveDataNodesCount map[uint64]int64
-	nodesetInactiveMetaNodesCount map[uint64]int64
-	inconsistentMps               map[string]string
-	replicaCntMap                 map[uint64]struct{}
-	nodesetIds                    map[uint64]string
+	nodeStat *exporter.GaugeVec
+
+	volNames           map[string]struct{}
+	badDisks           map[string]string
+	flashNodesBadDisks map[string]string
+	inconsistentMps    map[string]string
+	replicaCntMap      map[uint64]struct{}
+	nodesetIds         map[uint64]string
 
 	lcNodesCount      *exporter.Gauge
 	lcId              map[string]struct{}
@@ -180,15 +180,13 @@ type monitorMetrics struct {
 
 func newMonitorMetrics(c *Cluster) *monitorMetrics {
 	return &monitorMetrics{
-		cluster:                       c,
-		volNames:                      make(map[string]struct{}),
-		badDisks:                      make(map[string]string),
-		flashNodesBadDisks:            make(map[string]string),
-		nodesetInactiveDataNodesCount: make(map[uint64]int64),
-		nodesetInactiveMetaNodesCount: make(map[uint64]int64),
-		inconsistentMps:               make(map[string]string),
-		replicaCntMap:                 make(map[uint64]struct{}),
-		lcId:                          make(map[string]struct{}),
+		cluster:            c,
+		volNames:           make(map[string]struct{}),
+		badDisks:           make(map[string]string),
+		flashNodesBadDisks: make(map[string]string),
+		inconsistentMps:    make(map[string]string),
+		replicaCntMap:      make(map[uint64]struct{}),
+		lcId:               make(map[string]struct{}),
 	}
 }
 
@@ -318,6 +316,9 @@ func (m *warningMetrics) WarnMissingDp(clusterName, addr string, partitionID uin
 		m.deleteMissingDp(m.dpMissingReplicaInfo[id], clusterName, id, addr)
 		return
 	}
+	defer m.dpMissingReplicaMutex.Unlock()
+
+	m.dpMissingReplicaMutex.Lock()
 	defer m.dpMissingReplicaMutex.Unlock()
 
 	m.dpMissingReplicaMutex.Lock()
@@ -516,8 +517,9 @@ func (mm *monitorMetrics) start() {
 	mm.flashNodesDiskError = exporter.NewGaugeVec(MetricFlashNodesDiskError, "", []string{"addr", "path"})
 	mm.diskLost = exporter.NewGaugeVec(MetricDiskLost, "", []string{"addr", "path"})
 	mm.dpUnableDecommissionCount = exporter.NewGauge(MetricDpUnableDecommissionCount)
-	mm.dpMissingTinyExtent = exporter.NewGaugeVec(MetricDpMissingTinyExtent, "", []string{"dpId", "addr"})
-	mm.nodeStat = exporter.NewGaugeVec(MetricNodeStat, "", []string{"type", "addr", "stat"})
+	mm.dpNoSamePeer = exporter.NewGaugeVec(MetricDpNoSamePeer, "", []string{"dpId"})
+	mm.badDiskDecommissionTimeOverLimit = exporter.NewGaugeVec(MetricBadDiskDecommissionTimeOverLimit, "", []string{"addr", "path", "firstReportTime"})
+	mm.nodeStat = exporter.NewGaugeVec(MetricNodeStat, "", []string{"type", "addr", "stat", "zone", "set", "media", "writable", "alloc"})
 	mm.dataNodesInactive = exporter.NewGauge(MetricDataNodesInactive)
 	mm.InactiveDataNodeInfo = exporter.NewGaugeVec(MetricInactiveDataNodeInfo, "", []string{"clusterName", "addr"})
 	mm.metaNodesInactive = exporter.NewGauge(MetricMetaNodesInactive)
@@ -525,12 +527,10 @@ func (mm *monitorMetrics) start() {
 	mm.dataNodesAllocable = exporter.NewGauge(MetricDataNodesAllocable)
 	mm.metaNodesNotWritable = exporter.NewGauge(MetricMetaNodesNotWritable)
 	mm.InactiveMetaNodeInfo = exporter.NewGaugeVec(MetricInactiveMetaNodeInfo, "", []string{"clusterName", "addr"})
-	mm.ReplicaMissingDPCount = exporter.NewGaugeVec(MetricReplicaMissingDPCount, "", []string{"replicaNum"})
-	mm.DpMissingLeaderCount = exporter.NewGaugeVec(MetricDpMissingLeaderCount, "", []string{"replicaNum"})
+	mm.ReplicaMissingDPCount = exporter.NewGaugeVec(MetricReplicaMissingDPCount, "", []string{"replicaNum", "media"})
+	mm.DpMissingLeaderCount = exporter.NewGaugeVec(MetricDpMissingLeaderCount, "", []string{"replicaNum", "media"})
 	mm.MpMissingLeaderCount = exporter.NewGauge(MetricMpMissingLeaderCount)
 	mm.MpMissingReplicaCount = exporter.NewGauge(MetricMpMissingReplicaCount)
-	mm.dataNodesetInactiveCount = exporter.NewGaugeVec(MetricDataNodesetInactiveCount, "", []string{"nodeset"})
-	mm.metaNodesetInactiveCount = exporter.NewGaugeVec(MetricMetaNodesetInactiveCount, "", []string{"nodeset"})
 	mm.metaEqualCheckFail = exporter.NewGaugeVec(MetricMetaInconsistent, "", []string{"volume", "mpId"})
 
 	mm.masterSnapshot = exporter.NewGauge(MetricMasterSnapshot)
@@ -620,7 +620,8 @@ func (mm *monitorMetrics) doStat() {
 	mm.setDiskLostMetric()
 	mm.setFlashNodesDiskErrorMetric()
 	mm.setDpUnableDecommissionMetric()
-	mm.setDpMissingTinyExtentMetric()
+	mm.setDpNoSamePeerMetric()
+	mm.setBadDiskDecommissionTimeOverLimit()
 	mm.setNotWritableDataNodesCount()
 	mm.setNotWritableMetaNodesCount()
 	mm.setMpInconsistentErrorMetric()
@@ -639,12 +640,30 @@ func (mm *monitorMetrics) setMpAndDpMetrics() {
 		log.LogInfof("setMpAndDpMetrics: total cost %d ms", time.Since(start).Milliseconds())
 	}()
 
-	dpMissingLeaderMap := make(map[uint64]int)
-	dpMissingReplicaMap := make(map[uint64]int)
+	type dpInfo struct {
+		ReplicNum string
+		Cnt       int
+		Media     string
+	}
 
-	for num := range mm.replicaCntMap {
-		dpMissingLeaderMap[num] = 0
-		dpMissingReplicaMap[num] = 0
+	dpMissingLeaderMap := make(map[string]*dpInfo)
+	dpMissingReplicaMap := make(map[string]*dpInfo)
+
+	addMap := func(dpMap map[string]*dpInfo, repNum uint8, media uint32) {
+		key := fmt.Sprintf("%s_%v", proto.MediaTypeString(media), repNum)
+		info := dpMap[key]
+		if info != nil {
+			info.Cnt++
+			return
+		}
+
+		info = &dpInfo{
+			ReplicNum: strconv.Itoa(int(repNum)),
+			Cnt:       1,
+			Media:     proto.MediaTypeString(media),
+		}
+
+		dpMap[key] = info
 	}
 
 	mpMissingLeaderCount := 0
@@ -659,20 +678,20 @@ func (mm *monitorMetrics) setMpAndDpMetrics() {
 		replicaNum := vol.dpReplicaNum
 		mm.replicaCntMap[uint64(replicaNum)] = struct{}{}
 
-		dps := vol.dataPartitions
-		for _, dp := range dps.partitions {
+		dps := vol.dataPartitions.clonePartitions()
+		for _, dp := range dps {
 			if dp.IsDiscard {
 				continue
 			}
 
 			if replicaNum > uint8(len(dp.liveReplicas(mm.cluster.getDataPartitionTimeoutSec()))) {
-				dpMissingReplicaMap[uint64(replicaNum)]++
+				addMap(dpMissingReplicaMap, replicaNum, dp.MediaType)
 			}
 			if proto.IsNormalDp(dp.PartitionType) && dp.getLeaderAddr() == "" && time.Now().Unix()-dp.LeaderReportTime > mm.cluster.cfg.DpNoLeaderReportIntervalSec {
 				reportTime := time.Unix(dp.LeaderReportTime, 0)
 				msg := fmt.Sprintf("dp(%v) lost leader, leader last report time(%v), since report time(%v)", dp.PartitionID, reportTime, time.Since(reportTime))
 				auditlog.LogMasterOp("setMpAndDpMetrics", msg, nil)
-				dpMissingLeaderMap[uint64(replicaNum)]++
+				addMap(dpMissingLeaderMap, replicaNum, dp.MediaType)
 			}
 		}
 		vol.mpsLock.RLock()
@@ -687,12 +706,16 @@ func (mm *monitorMetrics) setMpAndDpMetrics() {
 		vol.mpsLock.RUnlock()
 	}
 
-	for num, cnt := range dpMissingLeaderMap {
-		mm.DpMissingLeaderCount.SetWithLabelValues(float64(cnt), strconv.Itoa(int(num)))
+	mm.DpMissingLeaderCount.Reset()
+	mm.ReplicaMissingDPCount.Reset()
+
+	for _, dp := range dpMissingLeaderMap {
+		mm.DpMissingLeaderCount.SetWithLabelValues(float64(dp.Cnt), dp.ReplicNum, dp.Media)
 	}
-	for num, cnt := range dpMissingReplicaMap {
-		mm.ReplicaMissingDPCount.SetWithLabelValues(float64(cnt), strconv.Itoa(int(num)))
+	for _, dp := range dpMissingReplicaMap {
+		mm.ReplicaMissingDPCount.SetWithLabelValues(float64(dp.Cnt), dp.ReplicNum, dp.Media)
 	}
+
 	mm.MpMissingLeaderCount.Set(float64(mpMissingLeaderCount))
 	mm.MpMissingReplicaCount.Set(float64(mpMissingReplicaCount))
 }
@@ -942,21 +965,34 @@ func (mm *monitorMetrics) setDpUnableDecommissionMetric() {
 	mm.dpUnableDecommissionCount.Set(float64(dpUnableDecommissionCount))
 }
 
-func (mm *monitorMetrics) setDpMissingTinyExtentMetric() {
-	mm.dpMissingTinyExtent.Reset()
+func (mm *monitorMetrics) setDpNoSamePeerMetric() {
+	mm.dpNoSamePeer.Reset()
 
-	vols := mm.cluster.allVols()
-	for _, vol := range vols {
-		partitions := vol.dataPartitions.clonePartitions()
-		for _, dp := range partitions {
-			for _, replica := range dp.Replicas {
-				if replica.IsMissingTinyExtent {
-					idStr := strconv.FormatUint(dp.PartitionID, 10)
-					mm.dpMissingTinyExtent.SetWithLabelValues(1, idStr, replica.Addr)
-				}
+	mm.cluster.NoSamePeerDps.Range(func(key, value interface{}) bool {
+		dpId := key.(uint64)
+		idStr := strconv.FormatUint(dpId, 10)
+		mm.dpNoSamePeer.SetWithLabelValues(1, idStr)
+		return true
+	})
+}
+
+func (mm *monitorMetrics) setBadDiskDecommissionTimeOverLimit() {
+	mm.badDiskDecommissionTimeOverLimit.Reset()
+
+	mm.cluster.dataNodes.Range(func(addr, node interface{}) bool {
+		dataNode, ok := node.(*DataNode)
+		if !ok {
+			return true
+		}
+		for _, badDiskStat := range dataNode.BadDiskStats {
+			_, isSuccess := dataNode.DecommissionSuccessDisks.Load(badDiskStat.DiskPath)
+			if !badDiskStat.FirstReportTime.IsZero() && time.Since(badDiskStat.FirstReportTime) > 24*time.Hour && !isSuccess {
+				mm.badDiskDecommissionTimeOverLimit.SetWithLabelValues(1, dataNode.Addr, badDiskStat.DiskPath,
+					badDiskStat.FirstReportTime.Format("2006-01-02 15:04:05"))
 			}
 		}
-	}
+		return true
+	})
 }
 
 func (mm *monitorMetrics) setDiskDecommissionedMetric() {
@@ -979,12 +1015,6 @@ func (mm *monitorMetrics) setDiskDecommissionedMetric() {
 func (mm *monitorMetrics) updateMetaNodesStat() {
 	var inactiveMetaNodesCount int64
 
-	deleteNodesetCount := make(map[uint64]int64)
-	for k, v := range mm.nodesetInactiveMetaNodesCount {
-		deleteNodesetCount[k] = v
-		delete(mm.nodesetInactiveMetaNodesCount, k)
-	}
-
 	mm.cluster.metaNodes.Range(func(addr, node interface{}) bool {
 		metaNode, ok := node.(*MetaNode)
 		if !ok {
@@ -993,46 +1023,43 @@ func (mm *monitorMetrics) updateMetaNodesStat() {
 		if !metaNode.IsActive {
 			inactiveMetaNodesCount++
 			mm.InactiveMetaNodeInfo.SetWithLabelValues(1, mm.cluster.Name, metaNode.Addr)
-			mm.nodesetInactiveMetaNodesCount[metaNode.NodeSetID] = mm.nodesetInactiveMetaNodesCount[metaNode.NodeSetID] + 1
-			delete(deleteNodesetCount, metaNode.NodeSetID)
 		} else {
 			mm.InactiveMetaNodeInfo.DeleteLabelValues(mm.cluster.Name, metaNode.Addr)
 		}
-		mm.nodeStat.SetWithLabelValues(metaNode.Ratio, MetricRoleMetaNode, metaNode.Addr, "usageRatio")
-		mm.nodeStat.SetWithLabelValues(float64(metaNode.Total), MetricRoleMetaNode, metaNode.Addr, "memTotal")
-		mm.nodeStat.SetWithLabelValues(float64(metaNode.Used), MetricRoleMetaNode, metaNode.Addr, "memUsed")
-		mm.nodeStat.SetWithLabelValues(float64(metaNode.MetaPartitionCount), MetricRoleMetaNode, metaNode.Addr, "mpCount")
-		mm.nodeStat.SetWithLabelValues(float64(metaNode.Threshold), MetricRoleMetaNode, metaNode.Addr, "threshold")
-		mm.nodeStat.SetBoolWithLabelValues(metaNode.IsWriteAble(), MetricRoleMetaNode, metaNode.Addr, "writable")
-		mm.nodeStat.SetBoolWithLabelValues(metaNode.IsActive, MetricRoleMetaNode, metaNode.Addr, "active")
+
+		zone := metaNode.ZoneName
+		setId := strconv.Itoa(int(metaNode.NodeSetID))
+		media := "default"
+		mAddr := metaNode.Addr
+
+		writable := "false"
+		if metaNode.IsWriteAble() {
+			writable = "true"
+		}
+		alloc := "false"
+		if metaNode.PartitionCntLimited() && metaNode.IsWriteAble() {
+			alloc = "true"
+		}
+
+		mm.nodeStat.Delete(map[string]string{"addr": mAddr})
+
+		mm.nodeStat.SetWithLabelValues(metaNode.Ratio, MetricRoleMetaNode, mAddr, "usageRatio", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(metaNode.Total), MetricRoleMetaNode, mAddr, "memTotal", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(metaNode.Used), MetricRoleMetaNode, mAddr, "memUsed", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(metaNode.MetaPartitionCount), MetricRoleMetaNode, mAddr, "mpCount", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(metaNode.Threshold), MetricRoleMetaNode, mAddr, "threshold", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetBoolWithLabelValues(metaNode.IsWriteAble(), MetricRoleMetaNode, mAddr, "writable", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetBoolWithLabelValues(metaNode.IsActive, MetricRoleMetaNode, mAddr, "active", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetBoolWithLabelValues(metaNode.PartitionCntLimited() && metaNode.IsWriteAble(), MetricRoleMetaNode, mAddr, "alloc", zone, setId, media, writable, alloc)
 
 		return true
 	})
 
 	mm.metaNodesInactive.Set(float64(inactiveMetaNodesCount))
-	for id, count := range mm.nodesetInactiveMetaNodesCount {
-		mm.metaNodesetInactiveCount.SetWithLabelValues(float64(count), strconv.FormatUint(id, 10))
-	}
-
-	for k := range deleteNodesetCount {
-		mm.metaNodesetInactiveCount.DeleteLabelValues(strconv.FormatUint(k, 10))
-	}
-}
-
-func (mm *monitorMetrics) clearInactiveMetaNodesCountMetric() {
-	for k := range mm.nodesetInactiveMetaNodesCount {
-		mm.metaNodesetInactiveCount.DeleteLabelValues(strconv.FormatUint(k, 10))
-	}
 }
 
 func (mm *monitorMetrics) updateDataNodesStat() {
 	var inactiveDataNodesCount uint64
-	deleteNodesetCount := make(map[uint64]int64)
-	for k, v := range mm.nodesetInactiveDataNodesCount {
-		log.LogErrorf("setInactiveDataNodesCountMetric, init deleteNodesetCount")
-		deleteNodesetCount[k] = v
-		delete(mm.nodesetInactiveDataNodesCount, k)
-	}
 
 	mm.cluster.dataNodes.Range(func(addr, node interface{}) bool {
 		dataNode, ok := node.(*DataNode)
@@ -1042,36 +1069,40 @@ func (mm *monitorMetrics) updateDataNodesStat() {
 		if !dataNode.isActive {
 			inactiveDataNodesCount++
 			mm.InactiveDataNodeInfo.SetWithLabelValues(1, mm.cluster.Name, dataNode.Addr)
-			mm.nodesetInactiveDataNodesCount[dataNode.NodeSetID] = mm.nodesetInactiveDataNodesCount[dataNode.NodeSetID] + 1
-			delete(deleteNodesetCount, dataNode.NodeSetID)
 		} else {
 			mm.InactiveDataNodeInfo.DeleteLabelValues(mm.cluster.Name, dataNode.Addr)
 		}
-		mm.nodeStat.SetWithLabelValues(float64(dataNode.DataPartitionCount), MetricRoleDataNode, dataNode.Addr, "dpCount")
-		mm.nodeStat.SetWithLabelValues(float64(dataNode.Total), MetricRoleDataNode, dataNode.Addr, "diskTotal")
-		mm.nodeStat.SetWithLabelValues(float64(dataNode.Used), MetricRoleDataNode, dataNode.Addr, "diskUsed")
-		mm.nodeStat.SetWithLabelValues(float64(dataNode.AvailableSpace), MetricRoleDataNode, dataNode.Addr, "diskAvail")
-		mm.nodeStat.SetWithLabelValues(dataNode.UsageRatio, MetricRoleDataNode, dataNode.Addr, "usageRatio")
-		mm.nodeStat.SetWithLabelValues(float64(len(dataNode.BadDisks)), MetricRoleDataNode, dataNode.Addr, "badDiskCount")
-		mm.nodeStat.SetWithLabelValues(float64(len(dataNode.LostDisks)), MetricRoleDataNode, dataNode.Addr, "lostDiskCount")
-		mm.nodeStat.SetBoolWithLabelValues(dataNode.isActive, MetricRoleDataNode, dataNode.Addr, "active")
-		mm.nodeStat.SetBoolWithLabelValues(dataNode.IsWriteAble(), MetricRoleDataNode, dataNode.Addr, "writable")
+
+		zone := dataNode.ZoneName
+		setId := strconv.Itoa(int(dataNode.NodeSetID))
+		media := proto.MediaTypeString(dataNode.MediaType)
+		dAddr := dataNode.Addr
+
+		writable := "false"
+		if dataNode.IsWriteAble() {
+			writable = "true"
+		}
+		alloc := "false"
+		if dataNode.canAllocDp() {
+			alloc = "true"
+		}
+
+		mm.nodeStat.Delete(map[string]string{"addr": dAddr})
+
+		mm.nodeStat.SetWithLabelValues(float64(dataNode.DataPartitionCount), MetricRoleDataNode, dAddr, "dpCount", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(dataNode.Total), MetricRoleDataNode, dAddr, "diskTotal", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(dataNode.Used), MetricRoleDataNode, dAddr, "diskUsed", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(dataNode.AvailableSpace), MetricRoleDataNode, dAddr, "diskAvail", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(dataNode.UsageRatio, MetricRoleDataNode, dAddr, "usageRatio", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(len(dataNode.BadDisks)), MetricRoleDataNode, dAddr, "badDiskCount", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetWithLabelValues(float64(len(dataNode.LostDisks)), MetricRoleDataNode, dAddr, "lostDiskCount", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetBoolWithLabelValues(dataNode.isActive, MetricRoleDataNode, dAddr, "active", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetBoolWithLabelValues(dataNode.IsWriteAble(), MetricRoleDataNode, dAddr, "writable", zone, setId, media, writable, alloc)
+		mm.nodeStat.SetBoolWithLabelValues(dataNode.canAllocDp(), MetricRoleDataNode, dAddr, "canAlloc", zone, setId, media, writable, alloc)
+
 		return true
 	})
 	mm.dataNodesInactive.Set(float64(inactiveDataNodesCount))
-	for id, count := range mm.nodesetInactiveDataNodesCount {
-		mm.dataNodesetInactiveCount.SetWithLabelValues(float64(count), strconv.FormatUint(id, 10))
-	}
-
-	for k := range deleteNodesetCount {
-		mm.dataNodesetInactiveCount.DeleteLabelValues(strconv.FormatUint(k, 10))
-	}
-}
-
-func (mm *monitorMetrics) clearInactiveDataNodesCountMetric() {
-	for k := range mm.nodesetInactiveDataNodesCount {
-		mm.dataNodesetInactiveCount.DeleteLabelValues(strconv.FormatUint(k, 10))
-	}
 }
 
 func (mm *monitorMetrics) updateMastersStat() {
@@ -1148,12 +1179,6 @@ func (mm *monitorMetrics) setNotWritableDataNodesCount() {
 		for t, c := range m {
 			mm.dataNodeStat.SetWithLabelValues(float64(c), media, t)
 		}
-	}
-}
-
-func (mm *monitorMetrics) clearInconsistentMps() {
-	for k := range mm.inconsistentMps {
-		mm.dataNodesetInactiveCount.DeleteLabelValues(k)
 	}
 }
 
@@ -1322,9 +1347,7 @@ func (mm *monitorMetrics) resetAllLeaderMetrics() {
 	mm.clearVolMetrics()
 	mm.clearDiskErrMetrics()
 	mm.clearFlashNodesDiskErrMetrics()
-	mm.clearInactiveMetaNodesCountMetric()
-	mm.clearInactiveDataNodesCountMetric()
-	mm.clearInconsistentMps()
+	mm.metaEqualCheckFail.Reset()
 	mm.clearNodesetMetrics()
 	mm.clearLcMetrics()
 
@@ -1342,7 +1365,8 @@ func (mm *monitorMetrics) resetAllLeaderMetrics() {
 	// mm.diskError.Set(0)
 	mm.diskLost.Reset()
 	mm.dpUnableDecommissionCount.Set(0)
-	mm.dpMissingTinyExtent.Reset()
+	mm.dpNoSamePeer.Reset()
+	mm.badDiskDecommissionTimeOverLimit.Reset()
 	mm.diskDecommissionSuccess.Reset()
 	mm.dataNodesInactive.Set(0)
 	mm.metaNodesInactive.Set(0)
@@ -1356,8 +1380,6 @@ func (mm *monitorMetrics) resetAllLeaderMetrics() {
 
 	mm.MpMissingLeaderCount.Set(0)
 	mm.MpMissingReplicaCount.Set(0)
-	for num := range mm.replicaCntMap {
-		mm.ReplicaMissingDPCount.DeleteLabelValues(strconv.FormatUint(num, 10))
-		mm.DpMissingLeaderCount.DeleteLabelValues(strconv.FormatUint(num, 10))
-	}
+	mm.ReplicaMissingDPCount.Reset()
+	mm.DpMissingLeaderCount.Reset()
 }

@@ -164,7 +164,9 @@ type ExtentConfig struct {
 	AheadReadBlockTimeOut int
 	AheadReadWindowCnt    int
 	// remoteCache
-	NeedRemoteCache bool
+	NeedRemoteCache  bool
+	ForceRemoteCache bool
+	HeartBeatPing    bool
 }
 
 type MultiVerMgr struct {
@@ -216,6 +218,8 @@ type ExtentClient struct {
 	stopOnce     sync.Once
 	stopCh       chan struct{}
 	wg           sync.WaitGroup
+
+	forceRemoteCache bool
 }
 
 func (client *ExtentClient) UidIsLimited(uid uint32) bool {
@@ -347,6 +351,7 @@ retry:
 	client.renewalForbiddenMigration = config.OnRenewalForbiddenMigration
 	client.forbiddenMigration = config.OnForbiddenMigration
 	client.getInodeInfo = config.OnGetInodeInfo
+	client.forceRemoteCache = config.ForceRemoteCache
 
 	if config.StreamRetryTimeout <= 0 || config.StreamRetryTimeout >= 600 {
 		client.streamRetryTimeout = StreamSendMaxTimeout
@@ -397,6 +402,7 @@ retry:
 	}
 	client.extentConfig = config
 	if config.NeedRemoteCache {
+		client.RemoteCache.HeartBeatPing = config.HeartBeatPing
 		client.RemoteCache.Init(client)
 	} else {
 		log.LogInfof("NewExtentClient for (%v) not init remoteCache, config.NeedRemoteCache %v", client.volumeName,
@@ -717,34 +723,11 @@ func (client *ExtentClient) Truncate(mw *meta.MetaWrapper, parentIno uint64, ino
 		log.LogErrorf("Prefix(%v): stream is not opened yet", prefix)
 		return syscall.EBADF
 	}
-	var info *proto.InodeInfo
 	var err error
-	var oldSize uint64
-	if mw.EnableSummary {
-		info, err = mw.InodeGet_ll(inode)
-		if err != nil || info == nil {
-			log.LogErrorf("Truncate: InodeGet failed, fullPath(%s) inode(%d) err(%v)\n", fullPath, inode, err)
-			return err
-		}
-		oldSize = info.Size
-	}
 	err = s.IssueTruncRequest(size, fullPath)
 	if err != nil {
 		err = errors.Trace(err, prefix)
 		log.LogError(errors.Stack(err))
-	}
-	if mw.EnableSummary {
-		var bytesHddInc, bytesSsdInc, bytesBlobStoreInc int64
-		if info.StorageClass == proto.StorageClass_Replica_HDD {
-			bytesHddInc = int64(size) - int64(oldSize)
-		}
-		if info.StorageClass == proto.StorageClass_Replica_SSD {
-			bytesSsdInc = int64(size) - int64(oldSize)
-		}
-		if info.StorageClass == proto.StorageClass_BlobStore {
-			bytesBlobStoreInc = int64(size) - int64(oldSize)
-		}
-		go mw.UpdateSummary_ll(parentIno, 0, 0, 0, bytesHddInc, bytesSsdInc, bytesBlobStoreInc, 0)
 	}
 
 	return err
@@ -990,7 +973,6 @@ func (c *ExtentClient) servePrepareRequest(prepareReq *PrepareRemoteCacheRequest
 		return
 	}
 	if prepareReq.warmUp {
-		s.extents.Append(prepareReq.ek, false)
 		s.prepareRemoteCache(prepareReq.ctx, prepareReq.ek, prepareReq.gen)
 	} else {
 		inodeInfo, err := s.client.getInodeInfo(prepareReq.inode)
@@ -1009,4 +991,14 @@ func (c *ExtentClient) shouldRemoteCache(fullPath string) bool {
 		}
 	}
 	return false
+}
+
+func (client *ExtentClient) RefCnt(inode uint64) int32 {
+	client.streamerLock.Lock()
+	defer client.streamerLock.Unlock()
+	s, ok := client.streamers[inode]
+	if !ok {
+		return 0
+	}
+	return atomic.LoadInt32(&s.refcnt)
 }

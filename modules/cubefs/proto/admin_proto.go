@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cubefs/cubefs/depends/tiglabs/raft"
+
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/log"
 )
@@ -44,6 +46,7 @@ const (
 	AdminGetDataPartition                             = "/dataPartition/get"
 	AdminLoadDataPartition                            = "/dataPartition/load"
 	AdminCreateDataPartition                          = "/dataPartition/create"
+	AdminCreatePreLoadDataPartition                   = "/dataPartition/createPreLoad"
 	AdminDecommissionDataPartition                    = "/dataPartition/decommission"
 	AdminDiagnoseDataPartition                        = "/dataPartition/diagnose"
 	AdminResetDataPartitionDecommissionStatus         = "/dataPartition/resetDecommissionStatus"
@@ -186,7 +189,6 @@ const (
 	DeleteDecommissionDiskRecord       = "/disk/deleteDecommissionDiskRecord"
 	PauseDecommissionDisk              = "/disk/pauseDecommission"
 	CancelDecommissionDisk             = "/disk/cancelDecommission"
-	ResetDecommissionDiskStatus        = "/disk/resetDecommissionStatus"
 	QueryDecommissionDiskDecoFailedDps = "/disk/queryDecommissionFailedDps"
 	QueryBadDisks                      = "/disk/queryBadDisks"
 	QueryDisks                         = "/disk/queryDisks"
@@ -687,16 +689,18 @@ type DataPartitionDecommissionRequest struct {
 
 // AddDataPartitionRaftMemberRequest defines the request of add raftMember a data partition.
 type AddDataPartitionRaftMemberRequest struct {
-	PartitionId uint64
-	AddPeer     Peer
+	PartitionId     uint64
+	AddPeer         Peer
+	RepairingStatus bool
 }
 
 // RemoveDataPartitionRaftMemberRequest defines the request of add raftMember a data partition.
 type RemoveDataPartitionRaftMemberRequest struct {
-	PartitionId uint64
-	RemovePeer  Peer
-	Force       bool
-	AutoRemove  bool
+	PartitionId     uint64
+	RemovePeer      Peer
+	RepairingStatus bool
+	Force           bool
+	AutoRemove      bool
 }
 
 // AddMetaPartitionRaftMemberRequest defines the request of add raftMember a meta partition.
@@ -893,6 +897,7 @@ type BadDiskStat struct {
 	DiskPath             string
 	TotalPartitionCnt    int
 	DiskErrPartitionList []uint64
+	FirstReportTime      time.Time
 }
 
 type DiskStat struct {
@@ -1091,6 +1096,13 @@ type MetaPartitionLoadRequest struct {
 	PartitionID uint64
 }
 
+type RaftInfo struct {
+	RaftStatus   raft.Status
+	PendingPeers []uint64
+	DownReplicas []raft.DownReplica
+	Hosts        []Peer
+}
+
 // MetaPartitionLoadResponse defines the response to the request of loading meta partition.
 type MetaPartitionLoadResponse struct {
 	PartitionID uint64
@@ -1101,6 +1113,7 @@ type MetaPartitionLoadResponse struct {
 	DentryCount uint64
 	InodeCount  uint64
 	Addr        string
+	RaftInfo    RaftInfo
 }
 
 // DataPartitionResponse defines the response from a data node to the master that is related to a data partition.
@@ -1137,21 +1150,22 @@ func NewDataPartitionsView() (dataPartitionsView *DataPartitionsView) {
 
 // MetaPartitionView defines the view of a meta partition
 type MetaPartitionView struct {
-	PartitionID uint64
-	Start       uint64
-	End         uint64
-	MaxInodeID  uint64
-	InodeCount  uint64
-	DentryCount uint64
-	FreeListLen uint64
-	TxCnt       uint64
-	TxRbInoCnt  uint64
-	TxRbDenCnt  uint64
-	IsRecover   bool
-	Members     []string
-	LeaderAddr  string
-	Status      int8
-	IsFreeze    bool
+	PartitionID        uint64
+	Start              uint64
+	End                uint64
+	MaxInodeID         uint64
+	InodeCount         uint64
+	DentryCount        uint64
+	FreeListLen        uint64
+	TxCnt              uint64
+	TxRbInoCnt         uint64
+	TxRbDenCnt         uint64
+	IsRecover          bool
+	Members            []string
+	LeaderAddr         string
+	Status             int8
+	Freeze             int8
+	LastDelReplicaTime int64
 }
 
 type DataNodeDisksRequest struct{}
@@ -1316,8 +1330,12 @@ type SimpleVolView struct {
 	Status                  uint8
 	Capacity                uint64 // GB
 	RwDpCnt                 int
+	RwDpOfSSDCnt            int
+	RwDpOfHDDCnt            int
 	MpCnt                   int
 	DpCnt                   int
+	DpOfSSDCnt              int
+	DpOfHDDCnt              int
 	FollowerRead            bool
 	MetaFollowerRead        bool
 	DirectRead              bool
@@ -1739,3 +1757,9 @@ func IsFlashNodeLimitError(err error) bool {
 	}
 	return false
 }
+
+const (
+	FreezeMetaPartitionInit = 0
+	FreezingMetaPartition   = 1
+	FreezedMetaPartition    = 2
+)

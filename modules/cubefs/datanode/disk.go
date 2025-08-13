@@ -104,6 +104,7 @@ type Disk struct {
 	// diskPartition info
 	diskPartition               *disk.PartitionStat
 	DiskErrPartitionSet         sync.Map
+	BadDiskFirstReportTime      time.Time
 	decommission                bool
 	extentRepairReadLimit       chan struct{}
 	enableExtentRepairReadLimit bool
@@ -298,12 +299,15 @@ func (d *Disk) updateQosLimiter() {
 	}
 	if d.dataNode.diskAsyncReadIops > 0 {
 		d.limitFactor[proto.IopsAsyncReadType].SetLimit(rate.Limit(d.dataNode.diskAsyncReadIops))
+		d.limitFactor[proto.IopsAsyncReadType].SetBurst(d.dataNode.diskAsyncReadIops / 2)
 	}
 	if d.dataNode.diskAsyncWriteIops > 0 {
 		d.limitFactor[proto.IopsAsyncWriteType].SetLimit(rate.Limit(d.dataNode.diskAsyncWriteIops))
+		d.limitFactor[proto.IopsAsyncWriteType].SetBurst(d.dataNode.diskAsyncWriteIops / 2)
 	}
 	if d.dataNode.diskDeleteIops > 0 {
 		d.limitFactor[proto.IopsDeleteType].SetLimit(rate.Limit(d.dataNode.diskDeleteIops))
+		d.limitFactor[proto.IopsDeleteType].SetBurst(d.dataNode.diskDeleteIops / 2)
 	}
 	for i := proto.IopsReadType; i < proto.FlowDeleteType; i++ {
 		log.LogInfof("action[updateQosLimiter] type %v limit %v", proto.QosTypeString(i), d.limitFactor[i].Limit())
@@ -338,6 +342,9 @@ func (d *Disk) allocCheckAsyncLimit(factorType uint32, used uint32) error {
 	if !d.dataNode.diskAsyncQosEnable {
 		return nil
 	}
+	if factorType == proto.FlowAsyncReadType || factorType == proto.FlowAsyncWriteType {
+		return nil
+	}
 
 	ctx := context.Background()
 	d.limitFactor[factorType].WaitN(ctx, int(used))
@@ -370,7 +377,7 @@ func (d *Disk) diskLimit(
 	ioType string,
 	operationSize uint32,
 	operationFunc func(),
-) {
+) (err error) {
 	flowType, iopsType, allocCheckFunc, limiter, allowHang := d.getLimitIoConfig(ioType)
 
 	if operationSize > 0 {
@@ -378,9 +385,10 @@ func (d *Disk) diskLimit(
 	}
 	allocCheckFunc(iopsType, 1)
 
-	limiter.Run(int(operationSize), allowHang, func() {
+	err = limiter.Run(int(operationSize), allowHang, func() {
 		operationFunc()
 	})
+	return err
 }
 
 func (d *Disk) tryDiskLimit(
@@ -615,6 +623,10 @@ func (d *Disk) triggerDiskError(rwFlag uint8, dpId uint64) {
 	// exporter.Warning(mesg)
 	log.LogWarnf(mesg)
 
+	if d.HasDiskErrPartition(dpId) {
+		return
+	}
+
 	if rwFlag == WriteFlag {
 		d.incWriteErrCnt()
 	} else if rwFlag == ReadFlag {
@@ -627,7 +639,7 @@ func (d *Disk) triggerDiskError(rwFlag uint8, dpId uint64) {
 	d.AddDiskErrPartition(dpId)
 	diskErrCnt := d.getTotalErrCnt()
 	diskErrPartitionCnt := d.GetDiskErrPartitionCount()
-	if diskErrPartitionCnt >= d.dataNode.diskUnavailablePartitionErrorCount {
+	if diskErrCnt >= d.dataNode.diskUnavailableErrorCount || diskErrPartitionCnt >= d.dataNode.diskUnavailablePartitionErrorCount {
 		msg := fmt.Sprintf("set disk unavailable for too many disk error, "+
 			"disk path(%v), ip(%v), diskErrCnt(%v), diskErrPartitionCnt(%v) threshold(%v)",
 			d.Path, LocalIP, diskErrCnt, diskErrPartitionCnt, d.dataNode.diskUnavailablePartitionErrorCount)
@@ -773,11 +785,13 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 		partitionID      uint64
 		partitionSize    int
 		replicaDiskInfos = make(map[uint64]string)
+		diskPartitionCnt = make(map[string]int)
 	)
 
 	for _, info := range dinfo.PersistenceDataPartitionsWithDiskPath {
 		if _, ok := replicaDiskInfos[info.PartitionId]; !ok {
 			replicaDiskInfos[info.PartitionId] = info.Disk
+			diskPartitionCnt[info.Disk]++
 		}
 	}
 	fileInfoList, err := os.ReadDir(d.Path)
@@ -793,9 +807,14 @@ func (d *Disk) RestorePartition(visitor PartitionVisitor) (err error) {
 	)
 	begin := time.Now()
 	defer func() {
-		msg := fmt.Sprintf("[RestorePartition] disk(%v) load all dp(%v) using time(%v)", d.Path, dpNum, time.Since(begin))
-		syslog.Print(msg)
-		log.LogInfo(msg)
+		if dpNum == 0 && diskPartitionCnt[d.Path] > 0 {
+			err = fmt.Errorf("disk(%v) is lost", d.Path)
+			syslog.Print(err)
+		} else {
+			msg := fmt.Sprintf("[RestorePartition] disk(%v) load all dp(%v) using time(%v)", d.Path, dpNum, time.Since(begin))
+			syslog.Print(msg)
+			log.LogInfo(msg)
+		}
 	}()
 	loadCh := make(chan dpLoadInfo, d.space.currentLoadDpCount)
 

@@ -87,7 +87,6 @@ type Super struct {
 	writeThreads int
 	bc           *bcache.BcacheClient
 	ebsc         *blobstore.BlobStoreClient
-	sc           *SummaryCache
 
 	taskPool []common.TaskPool
 	closeC   chan struct{}
@@ -115,7 +114,6 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		Authenticate:    opt.Authenticate,
 		TicketMess:      opt.TicketMess,
 		ValidateOwner:   opt.Authenticate || opt.AccessKey == "",
-		EnableSummary:   opt.EnableSummary && opt.EnableXattr,
 		MetaSendTimeout: opt.MetaSendTimeout,
 		// EnableTransaction: opt.EnableTransaction,
 		SubDir:                     opt.SubDir,
@@ -170,10 +168,6 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 	s.taskPool = []common.TaskPool{common.New(DefaultTaskPoolSize, DefaultTaskPoolSize), common.New(DefaultTaskPoolSize, DefaultTaskPoolSize)}
 	s.runningMonitor = NewRunningMonitor(opt.ClientOpTimeOut)
 	s.runningMonitor.Start()
-
-	if s.mw.EnableSummary {
-		s.sc = NewSummaryCache(DefaultSummaryExpiration, MaxSummaryCache)
-	}
 
 	if opt.MaxStreamerLimit > 0 {
 		DisableMetaCache = false
@@ -253,6 +247,7 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 		AheadReadBlockTimeOut: opt.AheadReadBlockTimeOut,
 		AheadReadWindowCnt:    opt.AheadReadWindowCnt,
 		NeedRemoteCache:       true,
+		ForceRemoteCache:      opt.ForceRemoteCache,
 	}
 
 	log.LogWarnf("ahead info enable %+v, totalMem %+v, timeout %+v, winCnt %+v", opt.AheadReadEnable, opt.AheadReadTotalMem, opt.AheadReadBlockTimeOut, opt.AheadReadWindowCnt)
@@ -308,9 +303,6 @@ func NewSuper(opt *proto.MountOptions) (s *Super, err error) {
 	if proto.IsCold(opt.VolType) || proto.IsVolSupportStorageClass(opt.VolAllowedStorageClass, proto.StorageClass_BlobStore) {
 		go s.scheduleFlush()
 	}
-	if s.mw.EnableSummary {
-		s.sc = NewSummaryCache(DefaultSummaryExpiration, MaxSummaryCache)
-	}
 
 	if opt.NeedRestoreFuse {
 		atomic.StoreUint32((*uint32)(&s.state), uint32(fs.FSStatRestore))
@@ -333,7 +325,6 @@ func (s *Super) scheduleFlush() {
 		{
 			ctx := context.Background()
 			s.fslock.Lock()
-			// var flushedInos []uint64
 			for ino, node := range s.nodeCache {
 				if _, ok := node.(*File); !ok {
 					continue
@@ -342,16 +333,12 @@ func (s *Super) scheduleFlush() {
 				if atomic.LoadInt32(&file.idle) >= BlobWriterIdleTimeoutPeriod {
 					if file.fWriter != nil {
 						atomic.StoreInt32(&file.idle, 0)
-						// flushedInos = append(flushedInos, ino)
 						go file.fWriter.Flush(ino, ctx)
 					}
 				} else {
 					atomic.AddInt32(&file.idle, 1)
 				}
 			}
-			// for _, ino := range flushedInos {
-			//	delete(s.nodeCache, ino)
-			// }
 			s.fslock.Unlock()
 		}
 	}
@@ -364,9 +351,6 @@ func (s *Super) Root() (fs.Node, error) {
 		return nil, err
 	}
 	root := NewDir(s, inode, inode.Inode, "")
-	root.(*Dir).setFullPath(s.subDir)
-	root.(*Dir).addParentInode([]uint64{inode.Inode})
-	log.LogInfof("Super:root path is(%v)", s.subDir)
 	return root, nil
 }
 
@@ -658,8 +642,10 @@ func (s *Super) syncMeta() <-chan struct{} {
 		out := make(chan uint64)
 		go func() {
 			for i := s.ic.lruList.Front(); i != nil; i = i.Next() {
-				oldInfo := i.Value.(*proto.InodeInfo)
-				out <- oldInfo.Inode
+				if i.Value != nil {
+					oldInfo := i.Value.(*proto.InodeInfo)
+					out <- oldInfo.Inode
+				}
 			}
 			close(out)
 		}()

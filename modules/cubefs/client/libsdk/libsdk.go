@@ -258,7 +258,6 @@ type client struct {
 	enableBcache           bool
 	readBlockThread        int
 	writeBlockThread       int
-	enableSummary          bool
 	secretKey              string
 	accessKey              string
 	subDir                 string
@@ -314,48 +313,6 @@ func cfs_get_xattr(id C.int64_t, path *C.char, key *C.char) *C.char {
 	value := xattrInfo.Get(xattrKey)
 	log.LogDebugf("cfs_get_xattr path(%v) ino(%v) key(%v) value(%s) success,", dstPath, ino, xattrKey, value)
 	return C.CString(string(value))
-}
-
-//export cfs_get_accessFiles
-func cfs_get_accessFiles(id C.int64_t, path *C.char, depth C.int, goroutine_num C.int, accessFileInfo []C.struct_cfs_access_file_info, count C.int) (n C.int) {
-	dstPath := C.GoString(path)
-	maxDepth := int32(depth)
-	goroutineNum := int32(goroutine_num)
-	log.LogDebugf("cfs_get_accessFiles path(%v) depth(%v)", dstPath, depth)
-
-	c, exist := getClient(int64(id))
-	if !exist {
-		log.LogErrorf("cfs_get_accessFiles path(%v) failed, client not exist", dstPath)
-		return -1
-	}
-
-	inodeInfo, err := c.lookupPath(c.absPath(dstPath))
-	if err != nil {
-		log.LogErrorf("cfs_get_accessFiles path(%v) failed, not found path", dstPath)
-		return -1
-	}
-
-	ino := inodeInfo.Inode
-
-	infos, _ := c.mw.GetAccessFileInfo(dstPath, ino, maxDepth, goroutineNum)
-
-	n = 0
-	for i, info := range infos {
-		if i >= int(count) {
-			log.LogInfof("cfs_get_accessFiles too many infos, len(%v) count(%v)", len(infos), int(count))
-			break
-		}
-		C.memcpy(unsafe.Pointer(&accessFileInfo[i].dir[0]), C.CBytes([]byte(info.Dir)), C.size_t(len(info.Dir)))
-		C.memcpy(unsafe.Pointer(&accessFileInfo[i].accessFileCountSsd[0]), C.CBytes([]byte(info.AccessFileCountSsd)), C.size_t(len(info.AccessFileCountSsd)))
-		C.memcpy(unsafe.Pointer(&accessFileInfo[i].accessFileSizeSsd[0]), C.CBytes([]byte(info.AccessFileSizeSsd)), C.size_t(len(info.AccessFileSizeSsd)))
-		C.memcpy(unsafe.Pointer(&accessFileInfo[i].accessFileCountHdd[0]), C.CBytes([]byte(info.AccessFileCountHdd)), C.size_t(len(info.AccessFileCountHdd)))
-		C.memcpy(unsafe.Pointer(&accessFileInfo[i].accessFileSizeHdd[0]), C.CBytes([]byte(info.AccessFileSizeHdd)), C.size_t(len(info.AccessFileSizeHdd)))
-		C.memcpy(unsafe.Pointer(&accessFileInfo[i].accessFileCountBlobStore[0]), C.CBytes([]byte(info.AccessFileCountBlobStore)), C.size_t(len(info.AccessFileCountBlobStore)))
-		C.memcpy(unsafe.Pointer(&accessFileInfo[i].accessFileSizeBlobStore[0]), C.CBytes([]byte(info.AccessFileSizeBlobStore)), C.size_t(len(info.AccessFileSizeBlobStore)))
-		n++
-	}
-
-	return n
 }
 
 //export cfs_list_vols
@@ -614,12 +571,6 @@ func cfs_set_client(id C.int64_t, key, val *C.char) C.int {
 		wt, err := strconv.Atoi(v)
 		if err == nil {
 			c.writeBlockThread = wt
-		}
-	case "enableSummary":
-		if v == "true" {
-			c.enableSummary = true
-		} else {
-			c.enableSummary = false
 		}
 	case "accessKey":
 		c.accessKey = v
@@ -1082,9 +1033,6 @@ func cfs_refreshsummary(id C.int64_t, path *C.char, goroutine_num C.int, unit *C
 	if !exist {
 		return statusEINVAL
 	}
-	if !c.enableSummary {
-		return statusEINVAL
-	}
 	info, err := c.lookupPath(c.absPath(C.GoString(path)))
 	var ino uint64
 	if err != nil {
@@ -1093,8 +1041,9 @@ func cfs_refreshsummary(id C.int64_t, path *C.char, goroutine_num C.int, unit *C
 		ino = info.Inode
 	}
 	goroutineNum := int32(goroutine_num)
-	err = c.mw.RefreshSummary_ll(ino, goroutineNum, C.GoString(unit), C.GoString(split))
+	err = c.mw.RefreshSummary_ll(ino, goroutineNum, C.GoString(unit), C.GoString(split), 0, 0, 0)
 	if err != nil {
+		log.LogErrorf("cfs_refreshsummary failed, path(%v) err(%v)", c.absPath(C.GoString(path)), err)
 		return errorToStatus(err)
 	}
 	return statusOK
@@ -1456,6 +1405,7 @@ func cfs_getsummary(id C.int64_t, path *C.char, summary *C.struct_cfs_summary_in
 
 	info, err := c.lookupPath(c.absPath(C.GoString(path)))
 	if err != nil {
+		log.LogErrorf("cfs_getsummary not found path(%v) err(%v)", c.absPath(C.GoString(path)), err)
 		return errorToStatus(err)
 	}
 
@@ -1479,12 +1429,14 @@ func cfs_getsummary(id C.int64_t, path *C.char, summary *C.struct_cfs_summary_in
 	goroutineNum := int32(goroutine_num)
 	summaryInfo, err := c.mw.GetSummary_ll(info.Inode, goroutineNum)
 	if err != nil {
+		log.LogErrorf("cfs_getsummary failed, path(%v) err(%v)", c.absPath(C.GoString(path)), err)
 		return errorToStatus(err)
 	}
 	if strings.ToLower(C.GoString(useCache)) != "false" {
 		c.sc.Put(info.Inode, &summaryInfo)
 	}
 
+	log.LogInfof("cfs_getsummary path(%v) ino(%v) summaryInfo(%v)", c.absPath(C.GoString(path)), info.Inode, summaryInfo)
 	summary.filesHdd = C.int64_t(summaryInfo.FilesHdd)
 	summary.filesSsd = C.int64_t(summaryInfo.FilesSsd)
 	summary.filesBlobStore = C.int64_t(summaryInfo.FilesBlobStore)
@@ -1559,9 +1511,6 @@ func (c *client) start() (err error) {
 		}
 	}
 
-	if c.enableSummary {
-		c.sc = fs.NewSummaryCache(fs.DefaultSummaryExpiration, fs.MaxSummaryCache)
-	}
 	if c.enableBcache {
 		c.bc = bcache.NewBcacheClient()
 	}
@@ -1593,7 +1542,6 @@ func (c *client) start() (err error) {
 		Volume:        c.volName,
 		Masters:       masters,
 		ValidateOwner: false,
-		EnableSummary: c.enableSummary,
 		InnerReq:      c.enableInnerReq,
 	}); err != nil {
 		log.LogErrorf("newClient NewMetaWrapper failed(%v)", err)

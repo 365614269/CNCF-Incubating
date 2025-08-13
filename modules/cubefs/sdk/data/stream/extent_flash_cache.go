@@ -92,6 +92,7 @@ type RemoteCache struct {
 	TTL            int64
 	ReadTimeout    int64 // ms
 	PrepareCh      chan *PrepareRemoteCacheRequest
+	HeartBeatPing  bool
 
 	clusterEnable func(bool)
 	lock          sync.Mutex
@@ -264,13 +265,13 @@ func (rc *RemoteCache) Init(client *ExtentClient) (err error) {
 	rc.sameRegionTimeout = proto.DefaultRemoteCacheSameRegionTimeout
 	rc.clusterEnable = client.enableRemoteCacheCluster
 	rc.mc = master.NewMasterClient(client.extentConfig.Masters, false)
+	rc.conns = util.NewConnectPoolWithTimeoutAndCap(5, 500, _connIdelTimeout, 1)
 
 	err = rc.updateFlashGroups()
 	if err != nil {
 		log.LogDebugf("RemoteCache: Init err %v", err)
 		return
 	}
-	rc.conns = util.NewConnectPoolWithTimeoutAndCap(5, 500, _connIdelTimeout, 1)
 	rc.cacheBloom = bloom.New(BloomBits, BloomHashNum)
 	rc.wg.Add(1)
 	go rc.refresh()
@@ -390,6 +391,10 @@ func (rc *RemoteCache) Prepare(ctx context.Context, fg *FlashGroup, inode uint64
 		conn  *net.TCPConn
 		moved bool
 	)
+	bg := stat.BeginStat()
+	defer func() {
+		defer stat.EndStat("prepareCacheBlock", err, bg, 1)
+	}()
 	addr := fg.getFlashHost()
 	if addr == "" {
 		err = fmt.Errorf("getFlashHost failed: can not find host")
@@ -420,7 +425,7 @@ func (rc *RemoteCache) Prepare(ctx context.Context, fg *FlashGroup, inode uint64
 	}
 
 	replyPacket := NewFlashCacheReply()
-	if err = replyPacket.ReadFromConnExt(conn, int(rc.ReadTimeout)); err != nil {
+	if err = replyPacket.readFromConn(conn, proto.WriteDeadlineTime); err != nil {
 		log.LogWarnf("FlashGroup Prepare: failed to ReadFromConn, replyPacket(%v), fg host(%v) moved(%v), err(%v)", replyPacket, addr, moved, err)
 		return
 	}
@@ -669,8 +674,16 @@ func (rc *RemoteCache) refreshHostLatency() {
 }
 
 func (rc *RemoteCache) updateHostLatency(hosts []string) {
+	var (
+		avgRtt time.Duration
+		err    error
+	)
 	for _, host := range hosts {
-		avgRtt, err := iputil.PingWithTimeout(strings.Split(host, ":")[0], pingCount, time.Millisecond*time.Duration(rc.ReadTimeout))
+		if rc.HeartBeatPing {
+			avgRtt, err = rc.HeartBeat(host)
+		} else {
+			avgRtt, err = iputil.PingWithTimeout(strings.Split(host, ":")[0], pingCount, time.Millisecond*time.Duration(rc.ReadTimeout))
+		}
 		if err == nil {
 			v, _ := rc.AddressPingMap.LoadOrStore(host, &AddressPingStats{})
 			aps := v.(*AddressPingStats)
@@ -715,6 +728,34 @@ func (rc *RemoteCache) GetFlashGroupBySlot(slot uint32) (*FlashGroup, uint32) {
 		return rc.getMinFlashGroup()
 	}
 	return item.FlashGroup, item.slot
+}
+
+func (rc *RemoteCache) HeartBeat(addr string) (duration time.Duration, err error) {
+	var conn *net.TCPConn
+	packet := proto.NewPacket()
+	packet.Opcode = proto.OpFlashSDKHeartbeat
+
+	defer func() {
+		rc.conns.PutConnect(conn, err != nil)
+	}()
+
+	if conn, err = rc.conns.GetConnect(addr); err != nil {
+		log.LogWarnf("HeartBeat get connection to addr failed, addr(%v) err(%v)", addr, err)
+		return
+	}
+	start := time.Now()
+	if err = packet.WriteToConn(conn); err != nil {
+		log.LogWarnf("HeartBeat failed write to addr(%v) err(%v)", addr, err)
+		return
+	}
+	if err = packet.ReadFromConnExt(conn, int(rc.sameZoneTimeout)); err != nil {
+		log.LogWarnf("HeartBeat failed to ReadFromConn addr(%v) err(%v)", addr, err)
+		return
+	}
+
+	duration = time.Since(start)
+	log.LogDebugf("HeartBeat from addr(%v) cost(%v)", addr, duration)
+	return
 }
 
 func (rc *RemoteCache) getFlashHostsMap() map[string]bool {

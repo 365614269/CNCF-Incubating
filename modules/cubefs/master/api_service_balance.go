@@ -64,7 +64,7 @@ func (m *Server) getMetaPartitionEmptyStatus(w http.ResponseWriter, r *http.Requ
 		volStatus.Total = len(vol.MetaPartitions)
 		mps := vol.getSortMetaPartitions()
 		for _, mp := range mps {
-			if mp.IsFreeze || mp.IsEmptyToBeClean() {
+			if mp.IsMetaPartitionFreezed() || mp.IsEmptyToBeClean() {
 				volStatus.EmptyCount++
 				volStatus.MetaPartitions = append(volStatus.MetaPartitions, getMetaPartitionView(mp))
 			}
@@ -159,7 +159,7 @@ func (m *Server) SetMetaPartitionFrozen(mps []*MetaPartition, cleans int) []*Met
 			continue
 		}
 
-		mp.IsFreeze = true
+		mp.Freeze = proto.FreezingMetaPartition
 		if mp.Status == proto.ReadWrite {
 			mp.Status = proto.ReadOnly
 		}
@@ -269,16 +269,33 @@ func (m *Server) getCleanMetaPartitionTask(w http.ResponseWriter, r *http.Reques
 	m.cluster.mu.Lock()
 	defer m.cluster.mu.Unlock()
 
+	taskList := make([]*CleanTask, 0, len(m.cluster.cleanTask))
 	if name == "" {
-		sendOkReply(w, r, newSuccessHTTPReply(m.cluster.cleanTask))
+		for key, val := range m.cluster.cleanTask {
+			task, err := m.cluster.CalculateMetaPartitionFreezeCount(key)
+			if err != nil {
+				log.LogWarnf("CalculateMetaPartitionFreezeCount volume(%s) err: %s", key, err.Error())
+				continue
+			}
+			task.Status = val.Status
+			taskList = append(taskList, task)
+		}
 	} else {
-		task, ok := m.cluster.cleanTask[name]
+		val, ok := m.cluster.cleanTask[name]
 		if !ok {
 			sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeParamError, Msg: fmt.Sprintf("Can't find task for volume(%s)", name)})
 			return
 		}
-		sendOkReply(w, r, newSuccessHTTPReply(task))
+		task, err := m.cluster.CalculateMetaPartitionFreezeCount(name)
+		if err != nil {
+			sendErrReply(w, r, &proto.HTTPReply{Code: proto.ErrCodeInternalError, Msg: err.Error()})
+			return
+		}
+		task.Status = val.Status
+		taskList = append(taskList, task)
 	}
+
+	sendOkReply(w, r, newSuccessHTTPReply(taskList))
 }
 
 func parseMigratePartitionParam(r *http.Request) (srcAddr, targetAddr string, id uint64, err error) {
@@ -511,8 +528,19 @@ func (m *Server) offlineMetaNode(w http.ResponseWriter, r *http.Request) {
 		sendErrReply(w, r, newErrHTTPReply(proto.ErrMetaNodeNotExists))
 		return
 	}
+	oldRdOnly := metaNode.RdOnly
+	if !oldRdOnly {
+		metaNode.RdOnly = true
+		if err = m.cluster.syncUpdateMetaNode(metaNode); err != nil {
+			metaNode.RdOnly = oldRdOnly
+			log.LogErrorf("syncUpdateMetaNode(%s) err: %s", offLineAddr, err.Error())
+			sendErrReply(w, r, newErrHTTPReply(proto.ErrInternalError))
+			return
+		}
+	}
 
-	if metaNode.MetaPartitionCount == 0 {
+	count := m.cluster.GetMpCountByMetaNode(metaNode.Addr)
+	if count == 0 {
 		err = m.cluster.DoMetaNodeOffline(offLineAddr)
 		if err != nil {
 			log.LogErrorf("DoMetaNodeOffline(%s) err: %s", offLineAddr, err.Error())
@@ -549,7 +577,7 @@ func (m *Server) offlineMetaNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if plan, err = m.cluster.CreateOfflineMetaNodePlan(offLineAddr); err != nil {
-		log.LogErrorf("Failed to create kick out plan for metanode(%s) err: %s", offLineAddr, err.Error())
+		log.LogErrorf(err.Error())
 		sendErrReply(w, r, newErrHTTPReply(err))
 		return
 	}

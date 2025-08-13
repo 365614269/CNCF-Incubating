@@ -243,6 +243,8 @@ func formatSimpleVolView(svv *proto.SimpleVolView) string {
 	sb.WriteString(fmt.Sprintf("  Dentry count                    : %v\n", svv.DentryCount))
 	sb.WriteString(fmt.Sprintf("  Description                     : %v\n", string([]rune(svv.Description)[:])))
 	sb.WriteString(fmt.Sprintf("  DpCnt                           : %v\n", svv.DpCnt))
+	sb.WriteString(fmt.Sprintf("  DpOfSSDCnt                      : %v\n", svv.DpOfSSDCnt))
+	sb.WriteString(fmt.Sprintf("  DpOfHDDCnt                      : %v\n", svv.DpOfHDDCnt))
 	sb.WriteString(fmt.Sprintf("  DpReplicaNum                    : %v\n", svv.DpReplicaNum))
 	sb.WriteString(fmt.Sprintf("  Follower read                   : %v\n", formatEnabledDisabled(svv.FollowerRead)))
 	sb.WriteString(fmt.Sprintf("  Meta Follower read              : %v\n", formatEnabledDisabled(svv.MetaFollowerRead)))
@@ -256,6 +258,8 @@ func formatSimpleVolView(svv *proto.SimpleVolView) string {
 	sb.WriteString(fmt.Sprintf("  MpReplicaNum                    : %v\n", svv.MpReplicaNum))
 	sb.WriteString(fmt.Sprintf("  NeedToLowerReplica              : %v\n", formatEnabledDisabled(svv.NeedToLowerReplica)))
 	sb.WriteString(fmt.Sprintf("  RwDpCnt                         : %v\n", svv.RwDpCnt))
+	sb.WriteString(fmt.Sprintf("  RwDpOfSSDCnt                    : %v\n", svv.RwDpOfSSDCnt))
+	sb.WriteString(fmt.Sprintf("  RwDpOfHDDCnt                    : %v\n", svv.RwDpOfHDDCnt))
 	sb.WriteString(fmt.Sprintf("  Status                          : %v\n", formatVolumeStatus(svv.Status)))
 	sb.WriteString(fmt.Sprintf("  ZoneName                        : %v\n", svv.ZoneName))
 	sb.WriteString(fmt.Sprintf("  VolType                         : %v\n", svv.VolType))
@@ -412,6 +416,14 @@ var (
 	partitionInfoTableHeader  = fmt.Sprintf(partitionInfoTablePattern,
 		"ID", "VOLUME", "REPLICAS", "STATUS", "MediaType", "MEMBERS")
 
+	PeerAbnormalRaftPartitionInfoTablePattern = "%-8v    %-32v    %-8v    %-12v    %-12v    %-12v   %v%v%v"
+	PeerAbnormalRaftPartitionInfoHeader       = fmt.Sprintf(PeerAbnormalRaftPartitionInfoTablePattern,
+		"ID", "VOLUME", "REPLICAS", "STATUS", "MediaType", "MEMBERS", "DIFF-RAFT-MEMBERS", "|DOWN-MEMBERS", "|PEND-MEMBERS")
+
+	badMpReplicaPartitionInfoTablePattern = "%-8v    %-32v    %-8v    %-12v    %-64v    %-24v"
+	badMpReplicaPartitionInfoTableHeader  = fmt.Sprintf(badMpReplicaPartitionInfoTablePattern,
+		"ID", "VOLUME", "REPLICAS", "STATUS", "MEMBERS", "UNAVAILABLE_REPLICAS")
+
 	badReplicaPartitionInfoTablePattern = "%-8v    %-32v    %-8v    %-12v    %-64v    %-24v"
 	badReplicaPartitionInfoTableHeader  = fmt.Sprintf(badReplicaPartitionInfoTablePattern,
 		"ID", "VOLUME", "REPLICAS", "STATUS", "MEMBERS", "UNAVAILABLE_REPLICAS")
@@ -553,6 +565,65 @@ func formatMetaPartitionInfoRow(partition *proto.MetaPartitionInfo) string {
 		formatDataPartitionStatus(partition.Status), "N/A", strings.Join(partition.Hosts, ", "))
 }
 
+func formatMetaPartitionInfoRowWithRaft(partition *proto.MetaPartitionInfo) string {
+	var (
+		info         *proto.MetaPartitionLoadResponse
+		addrArr      = make(map[uint64]string)
+		diffHosts    []string
+		downHosts    []string
+		pendingHosts []string
+	)
+	for _, peer := range partition.Peers {
+		addrArr[peer.ID] = peer.Addr
+	}
+
+	for _, info = range partition.LoadResponse {
+		if info.RaftInfo.RaftStatus.Leader == info.RaftInfo.RaftStatus.NodeID {
+			break
+		}
+	}
+	if info == nil {
+		return ""
+	}
+	for _, peer := range info.RaftInfo.Hosts {
+		if _, ok := addrArr[peer.ID]; ok {
+			continue
+		}
+		diffHosts = append(diffHosts, peer.Addr)
+		addrArr[peer.ID] = peer.Addr
+	}
+
+	for _, dr := range info.RaftInfo.DownReplicas {
+		if host, ok := addrArr[dr.NodeID]; ok {
+			downHosts = append(downHosts, host)
+		}
+	}
+	for _, pr := range info.RaftInfo.PendingPeers {
+		if host, ok := addrArr[pr]; ok {
+			pendingHosts = append(pendingHosts, host)
+		}
+	}
+	var (
+		diffInfo    = "N/A"
+		downInfo    = "N/A"
+		pendingInfo = "N/A"
+	)
+	if len(diffHosts) != 0 {
+		diffInfo = strings.Join(diffHosts, ", ")
+	}
+	if len(downHosts) != 0 {
+		downInfo = strings.Join(downHosts, ", ")
+	}
+	if len(pendingHosts) != 0 {
+		pendingInfo = strings.Join(pendingHosts, ", ")
+	}
+
+	return fmt.Sprintf(PeerAbnormalRaftPartitionInfoTablePattern,
+		partition.PartitionID, partition.VolName, partition.ReplicaNum,
+		formatDataPartitionStatus(partition.Status), "N/A", strings.Join(partition.Hosts, ", "),
+		diffInfo+"|", downInfo+"|", pendingInfo)
+}
+
 func formatBadReplicaMpInfoRow(partition *proto.MetaPartitionInfo) string {
 	sb := strings.Builder{}
 	sb.WriteString("[")
@@ -658,7 +729,7 @@ func formatMetaPartitionInfo(partition *proto.MetaPartitionInfo) string {
 	sb.WriteString(fmt.Sprintf("End           : %v\n", partition.End))
 	sb.WriteString(fmt.Sprintf("MaxInodeID    : %v\n", partition.MaxInodeID))
 	sb.WriteString(fmt.Sprintf("Forbidden     : %v\n", partition.Forbidden))
-	sb.WriteString(fmt.Sprintf("IsFreeze      : %v\n", partition.IsFreeze))
+	sb.WriteString(fmt.Sprintf("Freeze        : %v\n", formatMetaPartitionFreeze(partition.Freeze)))
 	sb.WriteString(fmt.Sprintf("ForbidWriteOpOfProtoVer0 : %v\n", partition.ForbidWriteOpOfProtoVer0))
 	sb.WriteString("\n")
 	sb.WriteString("Replicas : \n")
@@ -1289,10 +1360,16 @@ func formatDecommissionProgress(progress *proto.DecommissionProgress) string {
 		}
 	}
 	if len(progress.FailedDps) != 0 {
-		sb.WriteString("Failed Dps:       \n")
+		sb.WriteString("Failed Dps:        \n")
 		for i, info := range progress.FailedDps {
 			sb.WriteString(fmt.Sprintf("           [%v/%v] Partition Id  : %v\n", i+1, len(progress.FailedDps), info.PartitionID))
 			sb.WriteString(fmt.Sprintf("                   Error Message : %v\n", info.ErrMsg))
+		}
+	}
+	if len(progress.RetryOverLimitDps) != 0 {
+		sb.WriteString("retryOverLimit Dps:\n")
+		for i, info := range progress.RetryOverLimitDps {
+			sb.WriteString(fmt.Sprintf("           [%v/%v] Partition Id : %v\n", i+1, len(progress.RetryOverLimitDps), info))
 		}
 	}
 	return sb.String()
@@ -1302,12 +1379,14 @@ func formatDataPartitionDecommissionProgress(info *proto.DecommissionDataPartiti
 	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("Status:            %v\n", info.Status))
 	sb.WriteString(fmt.Sprintf("SpecialStep:       %v\n", info.SpecialStep))
+	sb.WriteString(fmt.Sprintf("DiskRetryMap:      %v\n", info.DiskRetryMap))
 	sb.WriteString(fmt.Sprintf("Retry:             %v\n", info.Retry))
 	sb.WriteString(fmt.Sprintf("RaftForce:         %v\n", info.RaftForce))
 	sb.WriteString(fmt.Sprintf("Recover:           %v\n", info.Recover))
 	sb.WriteString(fmt.Sprintf("SrcAddress:        %v\n", info.SrcAddress))
 	sb.WriteString(fmt.Sprintf("SrcDiskPath:       %v\n", info.SrcDiskPath))
 	sb.WriteString(fmt.Sprintf("DstAddress:        %v\n", info.DstAddress))
+	sb.WriteString(fmt.Sprintf("DstNodeSet:        %v\n", info.DstNodeSet))
 	sb.WriteString(fmt.Sprintf("Term:              %v\n", info.Term))
 	sb.WriteString(fmt.Sprintf("Weight:            %v\n", info.Weight))
 	sb.WriteString(fmt.Sprintf("Replicas:          %v\n", info.Replicas))
@@ -1452,4 +1531,17 @@ func formatFlashNodeSlotStat(stat *proto.FlashNodeSlotStat) string {
 	}
 
 	return sb.String()
+}
+
+func formatMetaPartitionFreeze(freeze int8) string {
+	switch freeze {
+	case proto.FreezeMetaPartitionInit:
+		return "unfreeze"
+	case proto.FreezingMetaPartition:
+		return "freezing"
+	case proto.FreezedMetaPartition:
+		return "freezed"
+	default:
+		return "Unknown"
+	}
 }

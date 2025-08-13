@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"math"
 	"net"
 	"strings"
@@ -34,6 +35,10 @@ import (
 	"github.com/cubefs/cubefs/util"
 	"github.com/cubefs/cubefs/util/errors"
 	"github.com/cubefs/cubefs/util/log"
+)
+
+const (
+	tinyOffsetInvalid = "tiny offset is invalid from empty recover"
 )
 
 type RepairExtentInfo struct {
@@ -144,8 +149,10 @@ func (dp *DataPartition) repair(extentType uint8) {
 	// every time we need to figure out which extents need to be repaired and which ones do not.
 	dp.sendAllTinyExtentsToC(extentType, availableTinyExtents, brokenTinyExtents)
 
+	dp.isMissingTinyExtent = false
 	// error check
 	if dp.extentStore.AvailableTinyExtentCnt()+dp.extentStore.BrokenTinyExtentCnt() != storage.TinyExtentCount {
+		dp.isMissingTinyExtent = true
 		log.LogWarnf("action[repair] partition(%v) GoodTinyExtents(%v) "+
 			"BadTinyExtents(%v) finish cost[%v] extentType %v.", dp.partitionID, dp.extentStore.AvailableTinyExtentCnt(),
 			dp.extentStore.BrokenTinyExtentCnt(), time.Since(start).String(), extentType)
@@ -308,8 +315,8 @@ func (dp *DataPartition) DoRepair(repairTasks []*DataPartitionRepairTask) {
 	RETRY:
 		err := dp.streamRepairExtent(extentInfo, repl.NewTinyExtentRepairReadPacket, repl.NewExtentRepairReadPacket, repl.NewNormalExtentWithHoleRepairReadPacket, repl.NewPacketEx)
 		if err != nil {
-			if strings.Contains(err.Error(), storage.NoDiskReadRepairExtentTokenError.Error()) {
-				log.LogDebugf("action[DoRepair] retry dp(%v) extent(%v).", dp.partitionID, extentInfo.FileID)
+			if strings.Contains(err.Error(), storage.NoDiskReadRepairExtentTokenError.Error()) || strings.Contains(err.Error(), tinyOffsetInvalid) {
+				log.LogWarnf("action[DoRepair] retry dp(%v) extent(%v), err(%s).", dp.partitionID, extentInfo.FileID, err.Error())
 				goto RETRY
 			}
 			err = errors.Trace(err, "doStreamExtentFixRepair %v", dp.applyRepairKey(int(extentInfo.FileID)))
@@ -656,13 +663,15 @@ func (dp *DataPartition) NormalExtentRepairRead(p repl.PacketInterface, connect 
 		} else {
 			opType = OpRead
 		}
-		dp.disk.diskLimit(opType, currReadSize, func() {
+		if rs := dp.disk.diskLimit(opType, currReadSize, func() {
 			crc, err = store.Read(reply.GetExtentID(), offset, int64(currReadSize), reply.GetData(), isRepairRead, p.GetOpcode() == proto.OpBackupRead)
 			reply.SetCRC(crc)
-		})
+		}); err == nil && rs != nil {
+			err = rs
+		}
 
 		if log.EnableDebug() {
-			log.LogDebugf("[NormalExtentRepairRead] reply op %v data.len %v size %v crc %v err %v", reply.GetOpMsg(), len(reply.GetData()), reply.GetSize(), crc, err)
+			log.LogDebugf("[NormalExtentRepairRead] reply %v crc %v err %v", reply.GetNoPrefixMsg(), crc, err)
 		}
 
 		if !shallDegrade && metrics != nil {
@@ -673,6 +682,16 @@ func (dp *DataPartition) NormalExtentRepairRead(p repl.PacketInterface, connect 
 		dp.checkIsDiskError(err, ReadFlag)
 		p.SetCRC(reply.GetCRC())
 		if err != nil {
+			if strings.Contains(err.Error(), storage.ExtentHasBeenDeletedError.Error()) ||
+				strings.Contains(err.Error(), storage.LimitedIoError.Error()) {
+				log.LogWarnf("action[operatePacket] err %v", err)
+				return
+			}
+			if err == io.EOF && dp.Status() == proto.Recovering {
+				err = storage.DpRepairError
+				log.LogWarnf("action[operatePacket] err %v", err)
+				return
+			}
 			log.LogErrorf("action[operatePacket] err %v", err)
 			return
 		}
@@ -729,8 +748,8 @@ func (dp *DataPartition) doStreamExtentFixRepair(wg *sync.WaitGroup, remoteExten
 RETRY:
 	err := dp.streamRepairExtent(remoteExtentInfo, repl.NewTinyExtentRepairReadPacket, repl.NewExtentRepairReadPacket, repl.NewNormalExtentWithHoleRepairReadPacket, repl.NewPacketEx)
 	if err != nil {
-		if strings.Contains(err.Error(), storage.NoDiskReadRepairExtentTokenError.Error()) {
-			log.LogWarnf("action[DoRepair] retry dp(%v) extent(%v).", dp.partitionID, remoteExtentInfo.FileID)
+		if strings.Contains(err.Error(), storage.NoDiskReadRepairExtentTokenError.Error()) || strings.Contains(err.Error(), tinyOffsetInvalid) || strings.Contains(err.Error(), "timeout") {
+			log.LogWarnf("action[DoRepair] retry dp(%v) extent(%v). err %s ", dp.partitionID, remoteExtentInfo.FileID, err.Error())
 			goto RETRY
 		}
 		// If there are too many extents on the data protection (DP) side,
@@ -936,6 +955,12 @@ func (dp *DataPartition) streamRepairExtent(remoteExtentInfo *RepairExtentInfo,
 			// log.LogDebugf("streamRepairExtent reply size %v, currFixoffset %v, reply %v err %v", reply.Size, currFixOffset, reply, err)
 			// write to the local extent file
 			if err != nil {
+
+				if isEmptyResponse && storage.IsTinyExtent(localExtentInfo.FileID) && strings.Contains(err.Error(), "offset invalid") {
+					err = errors.Trace(err, "streamRepairExtent repair data error, "+tinyOffsetInvalid)
+					return
+				}
+
 				err = errors.Trace(err, "streamRepairExtent repair data error ")
 				return
 			}

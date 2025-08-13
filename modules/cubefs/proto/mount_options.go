@@ -47,7 +47,6 @@ const (
 	EnableXattr
 	NearRead
 	EnablePosixACL
-	EnableSummary
 	EnableUnixPermission
 	RequestTimeout
 	ClientOpTimeOut
@@ -85,6 +84,10 @@ const (
 	AheadReadBlockTimeOut
 	AheadReadWindowCnt
 	ReqChanCnt
+
+	// remotecache
+	ForceRemoteCache
+
 	MaxMountOption
 )
 
@@ -146,13 +149,12 @@ func InitMountOptions(opts []MountOption) {
 	opts[SecretKey] = MountOption{"secretKey", "Secret Key", "", ""}
 
 	opts[DisableDcache] = MountOption{"disableDcache", "Disable Dentry Cache", "", false}
-	opts[SubDir] = MountOption{"subdir", "Mount sub directory", "", "/"}
+	opts[SubDir] = MountOption{"subdir", "Mount sub directory", "", ""}
 	opts[FsyncOnClose] = MountOption{"fsyncOnClose", "Perform fsync upon file close", "", true}
 	opts[MaxCPUs] = MountOption{"maxcpus", "The maximum number of CPUs that can be executing", "", int64(-1)}
 	opts[ReqChanCnt] = MountOption{"reqChanCnt", "the request chan cnt for stream", "", int64(-1)}
 	opts[EnableXattr] = MountOption{"enableXattr", "Enable xattr support", "", false}
 	opts[EnablePosixACL] = MountOption{"enablePosixACL", "Enable posix ACL support", "", false}
-	opts[EnableSummary] = MountOption{"enableSummary", "Enable content summary", "", false}
 	opts[EnableUnixPermission] = MountOption{"enableUnixPermission", "Enable unix permission check(e.g: 777/755)", "", false}
 
 	opts[VolType] = MountOption{"volType", "volume type", "", int64(0)}
@@ -185,6 +187,7 @@ func InitMountOptions(opts []MountOption) {
 	opts[AheadReadBlockTimeOut] = MountOption{"aheadReadBlockTimeOut", "ahead read block expiration time", "", int64(3)}
 	opts[AheadReadWindowCnt] = MountOption{"aheadReadWindowCnt", "ahead read window block count", "", int64(8)}
 
+	opts[ForceRemoteCache] = MountOption{"forceRemoteCache", "All read requests are handled by the remote cache.", "", false}
 	for i := 0; i < MaxMountOption; i++ {
 		flag.StringVar(&opts[i].cmdlineValue, opts[i].keyword, "", opts[i].description)
 	}
@@ -362,4 +365,7 @@ type MountOptions struct {
 	AheadReadTotalMem     int64
 	AheadReadBlockTimeOut int
 	AheadReadWindowCnt    int
+
+	// remote cache
+	ForceRemoteCache bool
 }

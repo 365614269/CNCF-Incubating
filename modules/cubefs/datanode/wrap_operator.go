@@ -107,9 +107,9 @@ func (s *DataNode) OperatePacket(p *repl.Packet, c net.Conn) (err error) {
 			err = fmt.Errorf("op(%v) error(%v)", p.GetOpMsg(), string(p.Data[:resultSize]))
 			logContent := fmt.Sprintf("action[OperatePacket] %v.",
 				p.LogMessage(p.GetOpMsg(), c.RemoteAddr().String(), start, err))
-			if p.IsWriteOpOfPacketProtoVerForbidden() || strings.Contains(logContent, raft.ErrNotLeader.Error()) || p.Opcode == proto.OpReadTinyDeleteRecord {
+			if p.IsWriteOpOfPacketProtoVerForbidden() || strings.Contains(logContent, raft.ErrNotLeader.Error()) || p.Opcode == proto.OpReadTinyDeleteRecord || p.Opcode == proto.OpNotExistErr {
 				log.LogWarnf(logContent)
-			} else if isColdVolExtentDelErr(p) || p.ResultCode == proto.OpTinyRecoverErr || p.ResultCode == proto.OpLimitedIoErr || p.ResultCode == proto.OpDpDecommissionRepairErr {
+			} else if isColdVolExtentDelErr(p) || p.ResultCode == proto.OpTinyRecoverErr || p.ResultCode == proto.OpLimitedIoErr || p.ResultCode == proto.OpDpDecommissionRepairErr || p.ResultCode == proto.OpDpRepairErr {
 				log.LogInfof(logContent)
 			} else {
 				log.LogErrorf(logContent)
@@ -1594,9 +1594,9 @@ func (s *DataNode) handlePacketToRemoveDataPartitionRaftMember(p *repl.Packet) {
 	}
 	defer dp.setRestoreReplicaFinish()
 	log.LogInfof("action[handlePacketToRemoveDataPartitionRaftMember], req %v (%s) RemoveRaftPeer(%s) dp %v "+
-		"replicaNum %v config.Peer %v replica %v force %v auto %v",
+		"replicaNum %v config.Peer %v replica %v force %v auto %v repairingStatus %v",
 		p.GetReqID(), string(reqData), req.RemovePeer.Addr, dp.partitionID, dp.replicaNum, dp.config.Peers, dp.replicas,
-		req.Force, req.AutoRemove)
+		req.Force, req.AutoRemove, req.RepairingStatus)
 
 	p.PartitionID = req.PartitionId
 	// do not return error to keep master decommission progress go forward
@@ -1637,9 +1637,10 @@ func (s *DataNode) handlePacketToRemoveDataPartitionRaftMember(p *repl.Packet) {
 					dp.partitionID, peer.Addr, peer.ID, req.RemovePeer.ID)
 				// update reqData for
 				newReq := &proto.RemoveDataPartitionRaftMemberRequest{
-					PartitionId: req.PartitionId,
-					Force:       req.Force,
-					RemovePeer:  removePeer,
+					PartitionId:     req.PartitionId,
+					Force:           req.Force,
+					RemovePeer:      removePeer,
+					RepairingStatus: req.RepairingStatus,
 				}
 				reqData, err = json.Marshal(newReq)
 				if err != nil {
@@ -2123,6 +2124,7 @@ func (s *DataNode) handlePacketToRecoverBadDisk(p *repl.Packet) {
 			partition := s.space.Partition(dpId)
 			if partition == nil {
 				log.LogWarnf("action[handlePacketToRecoverBadDisk]req(%v) bad dp(%v) not found on disk (%v).", task.RequestID, dpId, request.DiskPath)
+				disk.DiskErrPartitionSet.Delete(dpId)
 				continue
 			}
 			partition.resetDiskErrCnt()

@@ -280,7 +280,7 @@ func transferLongFileName(filePath string) (newName, oldName string) {
 
 func (trash *Trash) getDeleteInterval() int64 {
 	checkPointInterval := atomic.LoadInt64(&trash.deleteInterval) / 4
-	if checkPointInterval == 0 {
+	if checkPointInterval <= 0 {
 		checkPointInterval = 1
 	}
 	rand.Seed(time.Now().UnixNano())
@@ -763,6 +763,8 @@ func (trash *Trash) createParentPathInTrash(parentPath, rootDir string) (err err
 					parentIno = info.Inode
 				}
 				continue
+			} else if strings.Contains(err.Error(), "quota exceeded") || strings.Contains(err.Error(), "no space") {
+				trash.deleteTask(parentIno, sub, true, path.Join(parentPath, sub))
 			} else {
 				log.LogWarnf("action[createParentPathInTrash] CreateDirectory  %v in trash failed: %v", cur, err.Error())
 				return

@@ -98,6 +98,7 @@ func newListCorruptDataPartitionCmd(client *master.MasterClient) *cobra.Command 
 	var showBadDp bool
 	var showUnavailable bool
 	var showExcess bool
+	var showMissingTinyExtent bool
 	var showDiskError bool
 	var showDiscard bool
 	var showDiff bool
@@ -122,8 +123,8 @@ The "reset" command will be released in next version`,
 				errout(err)
 			}()
 
-			showAll := !showNoLeader && !showLack && !showDiscard && !showBadDp &&
-				!showDiff && !showUnavailable && !showExcess && !showDiskError && !showSimplified
+			showAll := !showInactiveNodes && !showNoLeader && !showLack && !showDiscard && !showBadDp &&
+				!showDiff && !showUnavailable && !showExcess && !showMissingTinyExtent && !showDiskError && !showSimplified
 			if diagnosis, err = client.AdminAPI().DiagnoseDataPartition(true); err != nil {
 				return
 			}
@@ -189,16 +190,73 @@ The "reset" command will be released in next version`,
 
 			stdoutln()
 			if !showSimplified && (showAll || showBadDp) {
+				typeGroups := make(map[uint32][]struct {
+					Path      string
+					Partition proto.DpRepairInfo
+				})
+				for _, bdpv := range diagnosis.BadDataPartitionInfos {
+					for _, pinfo := range bdpv.PartitionInfos {
+						decommissionType := pinfo.DecommissionType
+						typeGroups[decommissionType] = append(typeGroups[decommissionType], struct {
+							Path      string
+							Partition proto.DpRepairInfo
+						}{bdpv.Path, pinfo})
+					}
+				}
+				typeOrder := []uint32{1, 2, 4, 5}
+				typeNames := map[uint32]string{
+					1: "ManualDecommission",
+					2: "AutoDecommission",
+					4: "AutoAddReplica",
+					5: "ManualAddReplica",
+				}
 				stdoutln("[Bad data partitions(decommission not completed)]:")
 				badPartitionTablePattern := "%-50v    %-10v    %-20v    %-20v"
-				stdoutlnf(badPartitionTablePattern, "PATH", "DP_ID", "REPAIR PROGRESS", "REPAIR STARTTIME")
-				for _, bdpv := range diagnosis.BadDataPartitionInfos {
-					sort.SliceStable(bdpv.PartitionInfos, func(i, j int) bool {
-						return bdpv.PartitionInfos[i].PartitionID < bdpv.PartitionInfos[j].PartitionID
+				// stdoutlnf(badPartitionTablePattern, "PATH", "DP_ID", "REPAIR PROGRESS", "REPAIR STARTTIME")
+				for _, dtype := range typeOrder {
+					if group, ok := typeGroups[dtype]; ok {
+						stdoutln("[" + typeNames[dtype] + "]:")
+						stdoutlnf(badPartitionTablePattern, "PATH", "DP_ID", "REPAIR PROGRESS", "REPAIR STARTTIME")
+
+						sort.SliceStable(group, func(i, j int) bool {
+							return group[i].Partition.PartitionID < group[j].Partition.PartitionID
+						})
+
+						for _, item := range group {
+							percent := strconv.FormatFloat(item.Partition.DecommissionRepairProgress*100, 'f', 2, 64) + "%"
+							stdoutlnf(badPartitionTablePattern,
+								item.Path,
+								item.Partition.PartitionID,
+								percent,
+								item.Partition.RecoverStartTime)
+						}
+						delete(typeGroups, dtype)
+					}
+				}
+
+				if len(typeGroups) > 0 {
+					stdoutln("\n[Other]:")
+					stdoutlnf(badPartitionTablePattern, "PATH", "DP_ID", "REPAIR PROGRESS", "REPAIR STARTTIME")
+
+					var otherGroup []struct {
+						Path      string
+						Partition proto.DpRepairInfo
+					}
+					for _, group := range typeGroups {
+						otherGroup = append(otherGroup, group...)
+					}
+
+					sort.SliceStable(otherGroup, func(i, j int) bool {
+						return otherGroup[i].Partition.PartitionID < otherGroup[j].Partition.PartitionID
 					})
-					for _, pinfo := range bdpv.PartitionInfos {
-						percent := strconv.FormatFloat(pinfo.DecommissionRepairProgress*100, 'f', 2, 64) + "%"
-						stdoutlnf(badPartitionTablePattern, bdpv.Path, pinfo.PartitionID, percent, pinfo.RecoverStartTime)
+
+					for _, item := range otherGroup {
+						percent := strconv.FormatFloat(item.Partition.DecommissionRepairProgress*100, 'f', 2, 64) + "%"
+						stdoutlnf(badPartitionTablePattern,
+							item.Path,
+							item.Partition.PartitionID,
+							percent,
+							item.Partition.RecoverStartTime)
 					}
 				}
 			} else {
@@ -297,6 +355,27 @@ The "reset" command will be released in next version`,
 			}
 
 			stdoutln()
+			if !showSimplified && showMissingTinyExtent {
+				stdoutln("[Partition with missing tiny extent]:")
+				stdoutln(partitionInfoTableHeader)
+				sort.SliceStable(diagnosis.MissingTinyExtentDpIDs, func(i, j int) bool {
+					return diagnosis.MissingTinyExtentDpIDs[i] < diagnosis.MissingTinyExtentDpIDs[j]
+				})
+				for _, pid := range diagnosis.MissingTinyExtentDpIDs {
+					var partition *proto.DataPartitionInfo
+					if partition, err = client.AdminAPI().GetDataPartition("", pid); err != nil {
+						err = fmt.Errorf("Partition not found[%v], err:[%v] ", pid, err)
+						return
+					}
+					if partition != nil {
+						stdoutln(formatDataPartitionInfoRow(partition))
+					}
+				}
+			} else {
+				stdoutlnf("[Partition with missing tiny extent count]: %v", len(diagnosis.MissingTinyExtentDpIDs))
+			}
+
+			stdoutln()
 			if !showSimplified && (showAll || showDiskError) {
 				stdoutln("[Partition with disk error replicas]:")
 				stdoutln(diskErrorReplicaPartitionInfoTableHeader)
@@ -347,6 +426,7 @@ The "reset" command will be released in next version`,
 	cmd.Flags().BoolVarP(&showUnavailable, "showUnavailable", "u", false, "true for display dp with unavailable replicas")
 	cmd.Flags().BoolVarP(&showBadDp, "showBadDp", "b", false, "true for display bad dp")
 	cmd.Flags().BoolVarP(&showExcess, "showExcess", "e", false, "true for display dp with excess replicas")
+	cmd.Flags().BoolVarP(&showMissingTinyExtent, "showMissingTinyExtent", "m", false, "true for display dp with missing tiny extent")
 	cmd.Flags().BoolVarP(&showDiskError, "showDiskError", "E", false, "true for display dp with disk error replicas")
 	cmd.Flags().BoolVarP(&showDiscard, "showDiscard", "D", false, "true for display discard dp")
 	cmd.Flags().BoolVarP(&showDiff, "showDiff", "d", false, "true for display dp those replica file count count or size differ significantly")
@@ -356,6 +436,7 @@ The "reset" command will be released in next version`,
 func newDataPartitionDecommissionCmd(client *master.MasterClient) *cobra.Command {
 	var raftForceDel bool
 	var weight int
+	var dstNodeSet uint64
 	var decommissionType string
 	var clientIDKey string
 	cmd := &cobra.Command{
@@ -375,7 +456,7 @@ func newDataPartitionDecommissionCmd(client *master.MasterClient) *cobra.Command
 			if err != nil {
 				return
 			}
-			if err := client.AdminAPI().DecommissionDataPartition(partitionID, address, raftForceDel, weight, clientIDKey, decommissionType); err != nil {
+			if err := client.AdminAPI().DecommissionDataPartition(partitionID, address, dstNodeSet, raftForceDel, weight, clientIDKey, decommissionType); err != nil {
 				stdout(fmt.Sprintf("failed:err(%v)\n", err.Error()))
 				return
 			}
@@ -390,6 +471,7 @@ func newDataPartitionDecommissionCmd(client *master.MasterClient) *cobra.Command
 	}
 	cmd.Flags().BoolVarP(&raftForceDel, CliFlagDecommissionRaftForce, "r", false, "true for raftForceDel")
 	cmd.Flags().IntVar(&weight, CliFLagDecommissionWeight, lowPriorityDecommissionWeight, "decommission weight")
+	cmd.Flags().Uint64Var(&dstNodeSet, CliFlagDecommissionDstNodeSet, 0, "decommission dst nodeSet")
 	cmd.Flags().StringVar(&decommissionType, "decommissionType", "1", "decommission type")
 	cmd.Flags().StringVar(&clientIDKey, CliFlagClientIDKey, client.ClientIDKey(), CliUsageClientIDKey)
 	return cmd

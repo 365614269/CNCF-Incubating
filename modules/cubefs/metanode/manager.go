@@ -38,6 +38,7 @@ import (
 	"github.com/cubefs/cubefs/util/loadutil"
 	"github.com/cubefs/cubefs/util/log"
 	"github.com/cubefs/cubefs/util/strutil"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -52,7 +53,10 @@ const UpdateVolTicket = 2 * time.Minute
 const (
 	gcTimerDuration         = 10 * time.Second
 	defaultGcRecyclePercent = 0.90
+	defaultReadDirIops      = 100
 )
+
+var TryAgainError = errors.New("try again")
 
 // MetadataManager manages all the meta partitions.
 type MetadataManager interface {
@@ -64,6 +68,8 @@ type MetadataManager interface {
 	GetLeaderPartitions() map[uint64]MetaPartition
 	GetAllVolumes() (volumes *util.Set)
 	checkVolVerList() (err error)
+	ReloadPartition(id int) (err error)
+	UpdateQosLimit()
 }
 
 // MetadataManagerConfig defines the configures in the metadata manager.
@@ -107,6 +113,7 @@ type metadataManager struct {
 	gogcValue            int
 	gcRecyclePercent     float64
 	gcTimer              *util.RecycleTimer
+	limitFactor          map[uint32]*rate.Limiter
 }
 
 func (m *metadataManager) GetAllVolumes() (volumes *util.Set) {
@@ -220,7 +227,9 @@ func (m *metadataManager) checkForbidWriteOpOfProtoVer0(pktProtoVersion uint32, 
 // HandleMetadataOperation handles the metadata operations.
 func (m *metadataManager) HandleMetadataOperation(conn net.Conn, p *Packet, remoteAddr string) (err error) {
 	start := time.Now()
-	if log.EnableInfo() {
+	if p.AdminOp() {
+		log.LogWarnf("HandleMetadataOperation input info op (%s), data %s, remote %s", p.String(), string(p.Data), remoteAddr)
+	} else if log.EnableInfo() {
 		log.LogInfof("HandleMetadataOperation input info op (%s), data %s, remote %s", p.String(), string(p.Data), remoteAddr)
 	}
 
@@ -233,7 +242,10 @@ func (m *metadataManager) HandleMetadataOperation(conn net.Conn, p *Packet, remo
 			return
 		}
 
-		if log.EnableInfo() {
+		if p.AdminOp() {
+			log.LogInfof("HandleMetadataOperation out (%s), result (%s), remote %s, cost %s", p.String(),
+				p.GetResultMsg(), remoteAddr, time.Since(start).String())
+		} else if log.EnableInfo() {
 			log.LogInfof("HandleMetadataOperation out (%s), result (%s), remote %s, cost %s", p.String(),
 				p.GetResultMsg(), remoteAddr, time.Since(start).String())
 		}
@@ -568,6 +580,82 @@ func (m *metadataManager) getPartition(id uint64) (mp MetaPartition, err error) 
 	return
 }
 
+func (m *metadataManager) ReloadPartition(id int) error {
+	log.LogWarnf("action[ReloadPartition] reloadPartition %v", id)
+	m.mu.RLock()
+	mp, ok := m.partitions[uint64(id)]
+	if !ok {
+		log.LogWarnf("action[ReloadPartition] reloadPartition %v not found", id)
+		m.mu.RUnlock()
+		return fmt.Errorf("not found")
+	}
+	m.mu.RUnlock()
+	mp.Stop()
+
+	return m.loadPartition(partitionPrefix + strconv.Itoa(id))
+}
+
+func (m *metadataManager) loadPartition(fileName string) (err error) {
+	log.LogInfof("action[loadPartitions] load partition filename %s", fileName)
+	defer func() {
+		if r := recover(); r != nil {
+			log.LogWarnf("action[loadPartitions] recovered when load partition, skip it,"+
+				" partition: %s, error: %s, failed: %v", fileName, err, r)
+			syslog.Printf("load meta partition %v fail: %v", fileName, r)
+		} else if err != nil {
+			log.LogWarnf("action[loadPartitions] failed to load partition, skip it, partition: %s, error: %s",
+				fileName, err)
+		}
+		log.LogInfof("action[loadPartitions] load partition filename %s error: %s",
+			fileName, err)
+	}()
+
+	if len(fileName) < 10 {
+		log.LogWarnf("ignore unknown partition dir: %s", fileName)
+		return
+	}
+	var id uint64
+	partitionId := fileName[len(partitionPrefix):]
+	id, err = strconv.ParseUint(partitionId, 10, 64)
+	if err != nil {
+		log.LogWarnf("action[loadPartitions] ignore path: %s, not partition", partitionId)
+		return
+	}
+
+	partitionConfig := &MetaPartitionConfig{
+		PartitionId: id,
+		NodeId:      m.nodeId,
+		RaftStore:   m.raftStore,
+		RootDir:     path.Join(m.rootDir, fileName),
+		ConnPool:    m.connPool,
+	}
+	partitionConfig.AfterStop = func() {
+		m.detachPartition(id)
+	}
+	// check snapshot dir or backup
+	snapshotDir := path.Join(partitionConfig.RootDir, snapshotDir)
+	if _, err = os.Stat(snapshotDir); err != nil {
+		backupDir := path.Join(partitionConfig.RootDir, snapshotBackup)
+		if _, err = os.Stat(backupDir); err == nil {
+			if err = os.Rename(backupDir, snapshotDir); err != nil {
+				err = errors.Trace(err,
+					fmt.Sprintf(": fail recover backup snapshot %s",
+						snapshotDir))
+				return
+			}
+		}
+		err = nil
+	}
+	partition := NewMetaPartition(partitionConfig, m)
+	err = m.attachPartition(id, partition)
+
+	if err != nil {
+		log.LogErrorf("action[loadPartitions] load partition id=%d failed: %s.",
+			id, err.Error())
+	}
+	return
+}
+
 func (m *metadataManager) loadPartitions() (err error) {
 	var metaNodeInfo *proto.MetaNodeInfo
 	for i := 0; i < 3; i++ {
@@ -587,13 +675,13 @@ func (m *metadataManager) loadPartitions() (err error) {
 	}
 
 	// Check metadataDir directory
-	fileInfo, err := os.Stat(m.rootDir)
+	rfileInfo, err := os.Stat(m.rootDir)
 	if err != nil {
 		os.MkdirAll(m.rootDir, 0o755)
 		err = nil
 		return
 	}
-	if !fileInfo.IsDir() {
+	if !rfileInfo.IsDir() {
 		err = errors.New("metadataDir must be directory")
 		return
 	}
@@ -604,77 +692,22 @@ func (m *metadataManager) loadPartitions() (err error) {
 	}
 	syslog.Println("Start loadPartitions!!!")
 	var wg sync.WaitGroup
+	curTime := "_" + time.Now().Format(StaleMetadataTimeFormat)
 	for _, fileInfo := range fileInfoList {
 		if fileInfo.IsDir() && strings.HasPrefix(fileInfo.Name(), partitionPrefix) {
-
 			if isExpiredPartition(fileInfo.Name(), metaNodeInfo.PersistenceMetaPartitions) {
 				log.LogErrorf("loadPartitions: find expired partition[%s], rename it and you can delete it manually",
 					fileInfo.Name())
 				oldName := path.Join(m.rootDir, fileInfo.Name())
-				newName := path.Join(m.rootDir, ExpiredPartitionPrefix+fileInfo.Name())
+				newName := path.Join(m.rootDir, ExpiredPartitionPrefix+fileInfo.Name()+curTime)
 				os.Rename(oldName, newName)
 				continue
 			}
 
 			wg.Add(1)
 			go func(fileName string) {
-				var errload error
-
-				defer func() {
-					if r := recover(); r != nil {
-						log.LogWarnf("action[loadPartitions] recovered when load partition, skip it,"+
-							" partition: %s, error: %s, failed: %v", fileName, errload, r)
-						syslog.Printf("load meta partition %v fail: %v", fileName, r)
-					} else if errload != nil {
-						log.LogWarnf("action[loadPartitions] failed to load partition, skip it, partition: %s, error: %s",
-							fileName, errload)
-					}
-				}()
-
 				defer wg.Done()
-				if len(fileName) < 10 {
-					log.LogWarnf("ignore unknown partition dir: %s", fileName)
-					return
-				}
-				var id uint64
-				partitionId := fileName[len(partitionPrefix):]
-				id, errload = strconv.ParseUint(partitionId, 10, 64)
-				if errload != nil {
-					log.LogWarnf("action[loadPartitions] ignore path: %s, not partition", partitionId)
-					return
-				}
-
-				partitionConfig := &MetaPartitionConfig{
-					PartitionId: id,
-					NodeId:      m.nodeId,
-					RaftStore:   m.raftStore,
-					RootDir:     path.Join(m.rootDir, fileName),
-					ConnPool:    m.connPool,
-				}
-				partitionConfig.AfterStop = func() {
-					m.detachPartition(id)
-				}
-				// check snapshot dir or backup
-				snapshotDir := path.Join(partitionConfig.RootDir, snapshotDir)
-				if _, errload = os.Stat(snapshotDir); errload != nil {
-					backupDir := path.Join(partitionConfig.RootDir, snapshotBackup)
-					if _, errload = os.Stat(backupDir); errload == nil {
-						if errload = os.Rename(backupDir, snapshotDir); errload != nil {
-							errload = errors.Trace(errload,
-								fmt.Sprintf(": fail recover backup snapshot %s",
-									snapshotDir))
-							return
-						}
-					}
-					errload = nil
-				}
-				partition := NewMetaPartition(partitionConfig, m)
-				errload = m.attachPartition(id, partition)
-
-				if errload != nil {
-					log.LogErrorf("action[loadPartitions] load partition id=%d failed: %s.",
-						id, errload.Error())
-				}
+				m.loadPartition(fileName)
 			}(fileInfo.Name())
 		}
 	}
@@ -735,7 +768,7 @@ func (m *metadataManager) detachPartition(id uint64) (err error) {
 
 func (m *metadataManager) createPartition(request *proto.CreateMetaPartitionRequest) (err error) {
 	partitionId := fmt.Sprintf("%d", request.PartitionID)
-	log.LogInfof("start create meta Partition, partition %s", partitionId)
+	log.LogWarnf("start create meta Partition, partition %s", partitionId)
 
 	mpc := &MetaPartitionConfig{
 		PartitionId: request.PartitionID,
@@ -773,6 +806,8 @@ func (m *metadataManager) createPartition(request *proto.CreateMetaPartitionRequ
 		return
 	}
 
+	log.LogWarnf("meta partition start %v success", request.PartitionID)
+
 	func() {
 		m.mu.Lock()
 		defer m.mu.Unlock()
@@ -786,7 +821,7 @@ func (m *metadataManager) createPartition(request *proto.CreateMetaPartitionRequ
 		m.partitions[request.PartitionID] = partition
 	}()
 
-	log.LogInfof("load meta partition %v success", request.PartitionID)
+	log.LogWarnf("load meta partition %v success", request.PartitionID)
 
 	return
 }
@@ -852,9 +887,30 @@ func (m *metadataManager) GetLeaderPartitions() map[uint64]MetaPartition {
 	return mps
 }
 
+func (m *metadataManager) allocCheckLimit(factorType uint32) error {
+	if !m.metaNode.qosEnable {
+		return nil
+	}
+
+	if !m.limitFactor[factorType].Allow() {
+		return TryAgainError
+	}
+	// ctx := context.Background()
+	// m.limitFactor[factorType].WaitN(ctx, int(used))
+	return nil
+}
+
+func (m *metadataManager) UpdateQosLimit() {
+	if m.metaNode.readDirIops > 0 {
+		m.limitFactor[readDirIops].SetLimit(rate.Limit(m.metaNode.readDirIops))
+		m.limitFactor[readDirIops].SetBurst(m.metaNode.readDirIops / 2)
+	}
+	log.LogWarnf("[UpdataQosLimit] update readDirIops [%v]", m.metaNode.readDirIops)
+}
+
 // NewMetadataManager returns a new metadata manager.
 func NewMetadataManager(conf MetadataManagerConfig, metaNode *MetaNode) MetadataManager {
-	return &metadataManager{
+	m := &metadataManager{
 		nodeId:               conf.NodeID,
 		zoneName:             conf.ZoneName,
 		rootDir:              conf.RootDir,
@@ -866,7 +922,11 @@ func NewMetadataManager(conf MetadataManagerConfig, metaNode *MetaNode) Metadata
 		gogcValue:            DefaultGOGCValue,
 		enableGcTimer:        conf.EnableGcTimer,
 		gcRecyclePercent:     conf.GcRecyclePercent,
+		limitFactor:          make(map[uint32]*rate.Limiter),
 	}
+	m.limitFactor[readDirIops] = rate.NewLimiter(rate.Limit(metaNode.readDirIops), metaNode.readDirIops/2)
+
+	return m
 }
 
 // isExpiredPartition return whether one partition is expired

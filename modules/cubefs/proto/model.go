@@ -111,7 +111,7 @@ type MetaPartitionInfo struct {
 	MissNodes                 map[string]int64
 	LoadResponse              []*MetaPartitionLoadResponse
 	Forbidden                 bool
-	IsFreeze                  bool
+	Freeze                    int8
 	StatByStorageClass        []*StatOfStorageClass
 	StatByMigrateStorageClass []*StatOfStorageClass
 	ForbidWriteOpOfProtoVer0  bool
@@ -120,6 +120,7 @@ type MetaPartitionInfo struct {
 // MetaReplica defines the replica of a meta partition
 type MetaReplicaInfo struct {
 	Addr            string
+	NodeID          uint64
 	DomainAddr      string
 	MaxInodeID      uint64
 	ReportTime      int64
@@ -212,6 +213,7 @@ type DpRepairInfo struct {
 	DecommissionRepairProgress float64
 	RecoverStartTime           time.Time
 	RecoverUpdateTime          time.Time
+	DecommissionType           uint32
 }
 
 type BadPartitionRepairView struct {
@@ -392,6 +394,7 @@ type DataPartitionDiagnosis struct {
 	RepFileCountDifferDpIDs     []uint64
 	RepUsedSizeDifferDpIDs      []uint64
 	ExcessReplicaDpIDs          []uint64
+	MissingTinyExtentDpIDs      []uint64
 	// BadDataPartitionIDs         []BadPartitionView
 	BadDataPartitionInfos       []BadPartitionRepairView
 	BadReplicaDataPartitionIDs  []uint64
@@ -399,6 +402,7 @@ type DataPartitionDiagnosis struct {
 }
 
 // meta partition diagnosis represents the inactive meta nodes, corrupt meta partitions, and meta partitions lack of replicas
+
 type MetaPartitionDiagnosis struct {
 	InactiveMetaNodes                          []string
 	CorruptMetaPartitionIDs                    []uint64
@@ -409,6 +413,19 @@ type MetaPartitionDiagnosis struct {
 	InodeCountNotEqualReplicaMetaPartitionIDs  []uint64
 	MaxInodeNotEqualReplicaMetaPartitionIDs    []uint64
 	DentryCountNotEqualReplicaMetaPartitionIDs []uint64
+}
+
+type MetaPartitionDiagnosisV1 struct {
+	InactiveMetaNodes                    []string
+	NoLeaderMetaPartitionIDs             []uint64
+	LackReplicaMetaPartitionIDs          []uint64
+	BadMetaPartitionIDs                  []BadPartitionView
+	UnavailableMetaPartitionIDs          []uint64
+	InConsistRreplicaCntMetaPartitionIDs []uint64
+	InodeCountNotEqualIDs                []uint64
+	MaxInodeNotEqualIDs                  []uint64
+	DentryCountNotEqualIDs               []uint64
+	AbnormalRaftIDs                      []uint64
 }
 
 type FailedDpInfo struct {
@@ -429,6 +446,7 @@ type DecommissionProgress struct {
 	FailedDps                []FailedDpInfo
 	IgnoreDps                []IgnoreDecommissionDP
 	ResidualDps              []IgnoreDecommissionDP
+	RetryOverLimitDps        []uint64
 	StartTime                string
 	IsManualDecommissionDisk bool
 }
@@ -576,12 +594,14 @@ type DecommissionDataPartitionInfo struct {
 	ReplicaNum            uint8
 	Status                string
 	SpecialStep           string
+	DiskRetryMap          map[string]int
 	Retry                 int
 	RaftForce             bool
 	Recover               bool
 	SrcAddress            string
 	SrcDiskPath           string
 	DstAddress            string
+	DstNodeSet            uint64
 	Term                  uint64
 	Weight                int
 	Replicas              []string

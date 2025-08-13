@@ -23,6 +23,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -743,7 +744,11 @@ func (e *Extent) autoComputeExtentCrc(extSize int64, crcFunc UpdateCrcFunc) (crc
 		blockCrc = crc32.ChecksumIEEE(bdata[:readN])
 		err = crcFunc(e, blockNo, blockCrc)
 		if err != nil {
-			log.LogErrorf("autoComputeExtentCrc. path %v extent %v blockNo %v, err %v", e.filePath, e.extentID, blockNo, err)
+			if strings.Contains(err.Error(), "file already close") {
+				log.LogWarnf("autoComputeExtentCrc. path %v extent %v blockNo %v, err %v", e.filePath, e.extentID, blockNo, err)
+			} else {
+				log.LogErrorf("autoComputeExtentCrc. path %v extent %v blockNo %v, err %v", e.filePath, e.extentID, blockNo, err)
+			}
 			return 0, nil
 		}
 		log.LogDebugf("autoComputeExtentCrc. path %v extent %v blockCrc %v,blockNo %v", e.filePath, e.extentID, blockCrc, blockNo)
@@ -856,9 +861,10 @@ func (e *Extent) TinyExtentRecover(data []byte, offset, size int64, crc uint32, 
 		watermark = watermark + (util.PageSize - watermark%util.PageSize)
 	}
 	e.dataSize = watermark
-	log.LogDebugf("after file (%v) getRealBlockNo (%v) isEmptyPacket(%v)"+
-		"offset(%v) size(%v) e.datasize(%v)", e.filePath, e.getRealBlockCnt(), isEmptyPacket, offset, size, e.dataSize)
-
+	if log.EnableDebug() {
+		log.LogDebugf("after file (%v) getRealBlockNo (%v) isEmptyPacket(%v)"+
+			"offset(%v) size(%v) e.datasize(%v)", e.filePath, e.getRealBlockCnt(), isEmptyPacket, offset, size, e.dataSize)
+	}
 	return
 }
 
@@ -873,8 +879,8 @@ func (e *Extent) getExtentWithHoleAvailableOffset(offset int64) (newOffset, newE
 	if err != nil {
 		return
 	}
-	if newOffset-offset > util.BlockSize {
-		newOffset = offset + util.BlockSize
+	if newOffset-offset > util.ExtentSize {
+		newOffset = offset + util.ExtentSize
 	}
 	if newEnd-newOffset > util.BlockSize {
 		newEnd = newOffset + util.BlockSize

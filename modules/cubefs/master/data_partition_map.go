@@ -432,7 +432,7 @@ func (dpMap *DataPartitionMap) checkBadDiskDataPartitions(diskPath, nodeAddr str
 
 	partitions = make([]*DataPartition, 0)
 	for _, dp := range dpMapCache {
-		if !ignoreDiscard && dp.IsDiscard {
+		if ignoreDiscard && dp.IsDiscard {
 			continue
 		}
 		if dp.containsBadDisk(diskPath, nodeAddr) {
@@ -498,13 +498,11 @@ func (dpMap *DataPartitionMap) CheckReadWritableCntUnderLimit(limit int, mediaTy
 
 	cntOfMediaType, ok := dpMap.rwCntByMediaType[mediaType]
 	if !ok {
-		err := fmt.Errorf("mediatype(%d) is not in dpMap.rwCntByMediaType", mediaType)
-		log.LogErrorf("CheckReadWritableCntUnderLimit: %s", err.Error())
+		err := fmt.Errorf("CheckReadWritableCntUnderLimit: mediatype(%d) is not in dpMap.rwCntByMediaType", mediaType)
 		return err
 	}
 	if cntOfMediaType >= limit {
-		err := fmt.Errorf("mediatype(%d) count(%d) limit(%d)", mediaType, cntOfMediaType, limit)
-		log.LogErrorf("CheckReadWritableCntUnderLimit: %s", err.Error())
+		err := fmt.Errorf("CheckReadWritableCntUnderLimit: mediatype(%d) RWDpCnt(%d) reach limit(%d)", mediaType, cntOfMediaType, limit)
 		return err
 	}
 	return nil

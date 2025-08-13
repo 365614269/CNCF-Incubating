@@ -161,9 +161,11 @@ func (api *AdminAPI) DiagnoseDataPartition(ignoreDiscardDp bool) (diagnosis *pro
 	return
 }
 
-func (api *AdminAPI) DiagnoseMetaPartition() (diagnosis *proto.MetaPartitionDiagnosis, err error) {
-	diagnosis = &proto.MetaPartitionDiagnosis{}
-	err = api.mc.requestWith(diagnosis, newRequest(get, proto.AdminDiagnoseMetaPartition).Header(api.h))
+func (api *AdminAPI) DiagnoseMetaPartition() (diagnosis *proto.MetaPartitionDiagnosisV1, err error) {
+	diagnosis = &proto.MetaPartitionDiagnosisV1{}
+	err = api.mc.requestWith(diagnosis, newRequest(get, proto.AdminDiagnoseMetaPartition).Header(api.h).Param(
+		anyParam{"v1", "true"},
+	))
 	return
 }
 
@@ -184,10 +186,13 @@ func (api *AdminAPI) CreateDataPartition(volName string, count int, clientIDKey 
 	))
 }
 
-func (api *AdminAPI) DecommissionDataPartition(dataPartitionID uint64, nodeAddr string, raftForce bool, weight int, clientIDKey, decommissionType string) (err error) {
+func (api *AdminAPI) DecommissionDataPartition(dataPartitionID uint64, nodeAddr string, dstNodeSet uint64, raftForce bool, weight int, clientIDKey, decommissionType string) (err error) {
 	request := newRequest(get, proto.AdminDecommissionDataPartition).Header(api.h)
 	request.addParam("id", strconv.FormatUint(dataPartitionID, 10))
 	request.addParam("addr", nodeAddr)
+	if dstNodeSet != 0 {
+		request.addParam("dstNodeSet", strconv.FormatUint(dstNodeSet, 10))
+	}
 	request.addParam("raftForceDel", strconv.FormatBool(raftForce))
 	request.addParam("weight", strconv.Itoa(weight))
 	request.addParam("clientIDKey", clientIDKey)
@@ -752,14 +757,14 @@ func (api *AdminAPI) DiskDetail(addr string, diskPath string) (disk *proto.DiskI
 	return
 }
 
-func (api *AdminAPI) DecommissionDisk(addr string, disk string, weight int) (err error) {
+func (api *AdminAPI) DecommissionDisk(addr string, disk string, weight int, raftForceDel bool) (err error) {
 	return api.mc.request(newRequest(post, proto.DecommissionDisk).Header(api.h).
-		addParam("addr", addr).addParam("disk", disk).addParam("decommissionType", "1").addParam("weight", strconv.Itoa(weight)))
+		addParam("addr", addr).addParam("disk", disk).addParam("decommissionType", "1").addParam("weight", strconv.Itoa(weight)).addParam("raftForceDel", strconv.FormatBool(raftForceDel)))
 }
 
-func (api *AdminAPI) RecommissionDisk(addr string, disk string, recommissionType string) (err error) {
+func (api *AdminAPI) RecommissionDisk(addr string, disk string) (err error) {
 	return api.mc.request(newRequest(post, proto.RecommissionDisk).Header(api.h).
-		addParam("addr", addr).addParam("disk", disk).addParam("recommissionType", recommissionType))
+		addParam("addr", addr).addParam("disk", disk))
 }
 
 func (api *AdminAPI) QueryDecommissionDiskProgress(addr string, disk string) (progress *proto.DecommissionProgress, err error) {

@@ -89,6 +89,7 @@ func NewStreamer(client *ExtentClient, inode uint64, openForWrite, isCache bool,
 	s.openForWrite = openForWrite
 	s.isCache = isCache
 	s.fullPath = fullPath
+
 	if log.EnableDebug() {
 		log.LogDebugf("NewStreamer: streamer(%v), reqChSize %d", s, reqChanSize)
 	}
@@ -284,9 +285,9 @@ func (s *Streamer) read(data []byte, offset int, size int, storageClass uint32) 
 					return 0, err
 				}
 
-				if !s.client.RemoteCache.remoteCacheOnlyForNotSSD || (s.client.RemoteCache.remoteCacheOnlyForNotSSD && inodeInfo.StorageClass != proto.StorageClass_Replica_SSD) {
-					log.LogDebugf("Streamer read from remoteCache, ino(%v) enableRemoteCache(true) storageClass(%v) remoteCacheOnlyForNotSSD(%v)",
-						s.inode, proto.StorageClassString(inodeInfo.StorageClass), s.client.RemoteCache.remoteCacheOnlyForNotSSD)
+				if s.client.forceRemoteCache || !s.client.RemoteCache.remoteCacheOnlyForNotSSD || (s.client.RemoteCache.remoteCacheOnlyForNotSSD && inodeInfo.StorageClass != proto.StorageClass_Replica_SSD) {
+					log.LogDebugf("Streamer read from remoteCache, ino(%v) enableRemoteCache(true) storageClass(%v) remoteCacheOnlyForNotSSD(%v) forceRemoteCache(%v)",
+						s.inode, proto.StorageClassString(inodeInfo.StorageClass), s.client.RemoteCache.remoteCacheOnlyForNotSSD, s.client.forceRemoteCache)
 					var cacheReadRequests []*CacheReadRequest
 					cacheReadRequests, err = s.prepareCacheRequests(uint64(offset), uint64(size), data, inodeInfo.Generation)
 					if err == nil {
@@ -381,7 +382,11 @@ func (s *Streamer) asyncBlockCache() {
 			} else {
 				data = make([]byte, ek.Size)
 			}
-			reader, _ := s.GetExtentReader(ek, pending.storageClass)
+			reader, err := s.GetExtentReader(ek, pending.storageClass)
+			if err != nil {
+				log.LogErrorf("asyncBlockCache: GetExtentReader err %v", err)
+				return
+			}
 			fullReq := NewExtentRequest(int(ek.FileOffset), int(ek.Size), data, ek)
 			metric := exporter.NewTPCnt("bcache-read-cachedata")
 			readBytes, err := reader.Read(fullReq)

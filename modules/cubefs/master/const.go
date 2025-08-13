@@ -88,6 +88,7 @@ const (
 	forceKey                               = "force"
 	raftForceDelKey                        = "raftForceDel"
 	weightKey                              = "weight"
+	dstNodeSetKey                          = "dstNodeSet"
 	enablePosixAclKey                      = "enablePosixAcl"
 	enableTxMaskKey                        = "enableTxMask"
 	txTimeoutKey                           = "txTimeout"
@@ -130,7 +131,6 @@ const (
 	Periodic                               = "periodic"
 	DecommissionType                       = "decommissionType"
 	decommissionDiskLimit                  = "decommissionDiskLimit"
-	RecommissionType                       = "recommissionType"
 	dpRepairBlockSizeKey                   = "dpRepairBlockSize"
 	markDiskBrokenThresholdKey             = "markDiskBrokenThreshold"
 	decommissionTypeKey                    = "decommissionType"
@@ -254,6 +254,9 @@ const (
 	highestPriorityDecommissionWeight             = 8
 	diskDecommissionInfoStatType                  = 1
 	dataNodeDecommissionInfoStatType              = 2
+
+	maxTrashInterval     = 365 * 24 * 60
+	mpReplicaDelInterval = 300 // 5 minutes
 )
 
 const (
