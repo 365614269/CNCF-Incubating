@@ -3,6 +3,7 @@ Adler32
 apiGroups
 clampMax
 clampMin
+ClusterProviderConfig
 ClusterUsages
 CombineFromComposite
 CombineFromEnvironment
@@ -28,6 +29,7 @@ Crossplane
 crossplane-admin
 crossplane-browse
 crossplane-edit
+crossplane-runtime
 Crossplane's
 crossplane-view
 crossplane.yaml
@@ -60,8 +62,17 @@ InactivePackageRevision
 initProvider
 KCL
 LateInitialize
+ManagedResourceActivationPolicies
+ManagedResourceActivationPolicy
+ManagedResourceDefinition
+ManagedResourceDefinitions
 managementPolicies
 MR
+MRAP
+MRAPs
+MRD
+MRD's
+MRDs
 MRs
 Operation-specific
 PatchSet

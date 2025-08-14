@@ -1,5 +1,5 @@
 ---
-title: WatchOperation
+title: Watch Operations
 weight: 130
 state: alpha
 alphaVersion: 2.0
@@ -210,7 +210,7 @@ metadata:
   name: backup-on-deletion
 spec:
   watch:
-    apiVersion: rds.aws.crossplane.io/v1alpha1
+    apiVersion: rds.aws.m.upbound.io/v1beta1
     kind: Instance
     # Note: Watching for deletion requires function logic
     # to check deletion timestamp
