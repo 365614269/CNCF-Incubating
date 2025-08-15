@@ -5,7 +5,7 @@ aliases:
   - composition
   - composition-functions
   - /knowledge-base/guides/composition-functions
-description: "Compositions are a template for creating composite resources"
+description: "Define which resources to create and how"
 ---
 
 Compositions are a template for creating multiple Kubernetes resources as a
@@ -140,7 +140,12 @@ reports `True`.
 
 Crossplane calls a Function to determine what resources it should create when
 you create a composite resource. The Function also tells Crossplane what to do
-with these resources when you update or delete a composite resource.
+with these resources when you update a composite resource.
+
+{{<hint "note" >}}
+Composition functions don't run when you delete a composite resource.
+Crossplane handles deletion of composed resources automatically.
+{{< /hint >}}
 
 When Crossplane calls a Function it sends it the current state of the composite
 resource. It also sends it the current state of any resources the composite
@@ -576,7 +581,7 @@ sequenceDiagram
     Crossplane Pod->>+API Server: Apply desired composed resources
 ```
 
-When you create, update, or delete a composite resource that uses composition
+When you create or update a composite resource that uses composition
 functions Crossplane calls each function in the order they appear in the
 Composition's pipeline. Crossplane calls each function by sending it a gRPC
 RunFunctionRequest. The function must respond with a gRPC RunFunctionResponse.
@@ -601,15 +606,15 @@ Most composition functions read the observed state of the composite resource,
 and use it to add composed resources to the desired state. This tells Crossplane
 which composed resources it should create or update.
 
-If the function needs __extra resources__ to determine the desired state it can
-request any cluster-scoped resource Crossplane already has access to, either by
+If the function needs __required resources__ to determine the desired state it can
+request any cluster-scoped or namespaced resource Crossplane already has access to, either by
 name or labels through the returned RunFunctionResponse. Crossplane then calls
-the function again including the requested __extra resources__ and the
+the function again including the requested __required resources__ and the
 __context__ returned by the Function itself alongside the same __input__,
 __observed__ and __desired state__ of the previous RunFunctionRequest. Functions
-can iteratively request __extra resources__ if needed, but to avoid endlessly
+can iteratively request __required resources__ if needed, but to avoid endlessly
 looping Crossplane limits the number of iterations to 5. Crossplane considers
-the function satisfied as soon as the __extra resources__ requests become
+the function satisfied as soon as the __required resources__ requests become
 stable, so the Function returns the same exact request two times in a row.
 Crossplane errors if stability isn't reached after 5 iterations.
 
@@ -762,6 +767,183 @@ Crossplane doesn't validate function input. It's a good idea for a function to
 validate its own input.
 {{</hint>}}
 
+### Required resources
+
+{{<hint "note">}}
+Crossplane v1 called this feature "extra resources." The v2 API
+uses the name "required resources" and adds support for bootstrap requirements.
+{{</hint>}}
+
+Functions can request access to existing Kubernetes resources to help determine
+the desired state. Functions use this capability to read configuration from
+ConfigMaps, select the status of other resources, or make decisions based on
+existing cluster state.
+
+Functions can receive required resources in two ways:
+
+#### Bootstrap requirements
+
+You can provide required resources in the Composition pipeline step. This
+approach performs better than requesting resources during function runtime:
+
+```yaml
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: app-with-config
+spec:
+  compositeTypeRef:
+    apiVersion: example.crossplane.io/v1
+    kind: App
+  mode: Pipeline
+  pipeline:
+  - step: create-deployment-from-config
+    functionRef:
+      name: crossplane-contrib-function-python
+    requirements:
+      requiredResources:
+      - requirementName: app-config
+        apiVersion: v1
+        kind: ConfigMap
+        name: app-configuration
+        namespace: default
+    input:
+      apiVersion: python.fn.crossplane.io/v1beta1
+      kind: Script
+      script: |
+        from crossplane.function import request
+        
+        def compose(req, rsp):
+            observed_xr = req.observed.composite.resource
+            
+            # Access the required ConfigMap using the helper function
+            config_map = request.get_required_resource(req, "app-config")
+            
+            if not config_map:
+                # Fallback image if ConfigMap not found
+                image = "nginx:latest"
+            else:
+                # Read image from ConfigMap data
+                image = config_map.get("data", {}).get("image", "nginx:latest")
+            
+            # Create deployment with the configured image
+            rsp.desired.resources["deployment"].resource.update({
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "metadata": {
+                    "labels": {"example.crossplane.io/app": observed_xr["metadata"]["name"]},
+                },
+                "spec": {
+                    "replicas": 2,
+                    "selector": {"matchLabels": {"example.crossplane.io/app": observed_xr["metadata"]["name"]}},
+                    "template": {
+                        "metadata": {
+                            "labels": {"example.crossplane.io/app": observed_xr["metadata"]["name"]},
+                        },
+                        "spec": {
+                            "containers": [{
+                                "name": "app",
+                                "image": image,
+                                "ports": [{"containerPort": 80}]
+                            }],
+                        },
+                    },
+                },
+            })
+```
+
+#### Dynamic resource requests
+
+Functions can also request resources during runtime through the
+RunFunctionResponse. Crossplane calls the function again with the requested
+resources:
+
+```yaml
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: app-dynamic-config
+spec:
+  compositeTypeRef:
+    apiVersion: example.crossplane.io/v1
+    kind: App
+  mode: Pipeline
+  pipeline:
+  - step: create-deployment-from-dynamic-config
+    functionRef:
+      name: crossplane-contrib-function-python
+    input:
+      apiVersion: python.fn.crossplane.io/v1beta1
+      kind: Script
+      script: |
+        from crossplane.function import request, response
+        
+        def compose(req, rsp):
+            observed_xr = req.observed.composite.resource
+            
+            # Always request the ConfigMap to ensure stable requirements
+            config_name = observed_xr["spec"].get("configName", "default-config")
+            namespace = observed_xr["metadata"].get("namespace", "default")
+            
+            response.require_resources(
+                rsp, 
+                name="dynamic-config",
+                api_version="v1",
+                kind="ConfigMap",
+                match_name=config_name,
+                namespace=namespace
+            )
+            
+            # Check if we have the required ConfigMap
+            config_map = request.get_required_resource(req, "dynamic-config")
+            
+            if not config_map:
+                # ConfigMap not found yet - Crossplane will call us again
+                return
+            
+            # ConfigMap found - use the image data to create deployment
+            image = config_map.get("data", {}).get("image", "nginx:latest")
+            
+            rsp.desired.resources["deployment"].resource.update({
+                "apiVersion": "apps/v1",
+                "kind": "Deployment",
+                "metadata": {
+                    "labels": {"example.crossplane.io/app": observed_xr["metadata"]["name"]},
+                },
+                "spec": {
+                    "replicas": 2,
+                    "selector": {"matchLabels": {"example.crossplane.io/app": observed_xr["metadata"]["name"]}},
+                    "template": {
+                        "metadata": {
+                            "labels": {"example.crossplane.io/app": observed_xr["metadata"]["name"]},
+                        },
+                        "spec": {
+                            "containers": [{
+                                "name": "app",
+                                "image": image,
+                                "ports": [{"containerPort": 80}]
+                            }],
+                        },
+                    },
+                },
+            })
+```
+
+{{<hint "tip">}}
+Use bootstrap requirements when possible for better performance. Dynamic requests
+require more function calls and work best when the
+required resources depend on the observed state or earlier function results.
+{{</hint>}}
+
+Functions can request resources by:
+- **Name**: `name: "my-configmap"` for a specific resource
+- **Labels**: `matchLabels: {"env": "prod"}` for multiple resources
+- **Namespace**: Include `namespace: "production"` for namespaced resources
+
+Crossplane limits dynamic resource requests to 5 iterations to prevent infinite
+loops. The function signals completion by returning the same resource requirements
+two iterations in a row.
+
 ### Function pipeline context
 
 Sometimes two functions in a pipeline want to share information with each other
@@ -769,3 +951,35 @@ that isn't desired state. Functions can use context for this. Any function can
 write to the pipeline context. Crossplane passes the context to all following
 functions. When Crossplane has called all functions it discards the pipeline
 context.
+
+### Function response cache
+
+{{<hint "note" >}}
+Function response caching is an alpha feature. Enable it by setting the 
+`--enable-function-response-cache` feature flag.
+{{< /hint >}}
+
+Crossplane can cache function responses to improve performance by reducing 
+repeated function calls. When enabled, Crossplane caches responses from 
+composition functions that include a time to live (TTL) value.
+
+The cache works by:
+- Storing function responses on disk based on a hash of the request
+- Only caching responses with a nonzero TTL
+- Automatically removing expired cache entries
+- Reusing cached responses for identical requests until they expire
+
+This feature helps functions that:
+- Perform expensive computations or external API calls
+- Return stable results for the same inputs
+- Include appropriate TTL values in their responses
+
+#### Cache configuration
+
+Control the cache behavior with these Crossplane pod arguments:
+
+- `--xfn-cache-max-ttl` - Maximum cache duration (default: 24 hours)
+
+The cache stores files in the `/cache/xfn/` directory in the Crossplane pod.
+For better performance, consider using an in-memory cache by mounting an 
+emptyDir volume with `medium: Memory`.
