@@ -2464,9 +2464,9 @@ envoy:
     # @schema
     override: ~
     repository: "quay.io/cilium/cilium-envoy"
-    tag: "v1.35.0-1754542821-43b62ac18029bf5e22cbcc9e7141ee55eb09555d"
+    tag: "v1.35.0-1754998290-11299b59706d4ccb2cbbc2a6cd548709655098ea"
     pullPolicy: "Always"
-    digest: "sha256:2173f013b41e71cf8d65503cc9710c106746efbd93ae0ef3f46ee65de13b19f6"
+    digest: "sha256:ba771a73604d1947a8f87f623e93a7c3baf00146528a54838121e99ea271df7d"
     useDigest: true
   # -- Additional containers added to the cilium Envoy DaemonSet.
   extraContainers: []
@@ -3162,9 +3162,9 @@ preflight:
       # @schema
       override: ~
       repository: "quay.io/cilium/cilium-envoy"
-      tag: "v1.35.0-1754542821-43b62ac18029bf5e22cbcc9e7141ee55eb09555d"
+      tag: "v1.35.0-1754998290-11299b59706d4ccb2cbbc2a6cd548709655098ea"
       pullPolicy: "Always"
-      digest: "sha256:2173f013b41e71cf8d65503cc9710c106746efbd93ae0ef3f46ee65de13b19f6"
+      digest: "sha256:ba771a73604d1947a8f87f623e93a7c3baf00146528a54838121e99ea271df7d"
       useDigest: true
   # -- The priority class to use for the preflight pod.
   priorityClassName: ""
@@ -3923,7 +3923,7 @@ authentication:
           override: ~
           repository: "docker.io/library/busybox"
           tag: "1.37.0"
-          digest: "sha256:f9a104fddb33220ec80fc45a4e606c74aadf1ef7a3832eb0b05be9e90cd61f5f"
+          digest: "sha256:ab33eacc8251e3807b85bb6dba570e4698c3998eca6f0fc2ccb60575a563ea74"
           useDigest: true
           pullPolicy: "Always"
         # SPIRE agent configuration
