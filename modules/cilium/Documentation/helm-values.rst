@@ -357,7 +357,7 @@
      - object
      - ``{"default":{"burstLimit":null,"rateLimit":null},"drop":{"enabled":true},"policyVerdict":{"enabled":true},"trace":{"enabled":true}}``
    * - :spelling:ignore:`bpf.events.default`
-     - Default settings for all types of events except dbg and pcap.
+     - Default settings for all types of events except dbg.
      - object
      - ``{"burstLimit":null,"rateLimit":null}``
    * - :spelling:ignore:`bpf.events.default.burstLimit`
@@ -3176,6 +3176,10 @@
      - Restart any pod that are not managed by Cilium.
      - bool
      - ``true``
+   * - :spelling:ignore:`operator.unmanagedPodWatcher.selector`
+     - Selector for pods that should be restarted when not managed by Cilium. If not set, defaults to built-in selector "k8s-app=kube-dns". Set to empty string to select all pods. @schema type: [null, string] @schema
+     - string
+     - ``nil``
    * - :spelling:ignore:`operator.updateStrategy`
      - cilium-operator update strategy
      - object

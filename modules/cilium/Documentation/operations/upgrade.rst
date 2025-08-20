@@ -305,9 +305,21 @@ communicating via the proxy must reconnect to re-establish connections.
   to update your network policies.
 * Kafka Network Policy support is deprecated and will be removed in Cilium v1.20.
 
+* ``enable-remote-node-masquerade`` config option is introduced.
+  To masquerade traffic to remote nodes in BPF masquerading mode,
+  use the option ``enable-remote-node-masquerade: "true"``.
+  This option requires ``enable-bpf-masquerade: "true"`` and also either
+  ``enable-ipv4-masquerade: "true"`` or ``enable-ipv6-masquerade: "true"``
+  to SNAT traffic for IPv4 and IPv6, respectively.
+  This flag currently masquerades traffic to node ``InternalIP`` addresses.
+  This may change in future. See :gh-issue:`35823`
+  and :gh-issue:`17177` for further discussion on this topic.
+
 Removed Options
 ~~~~~~~~~~~~~~~
 * The previously deprecated ``--bpf-lb-proto-diff`` flag has been removed.
+* The previously deprecated PCAP recorder feature and its accompanying flags (``--enable-recorder``,
+  ``--hubble-recorder-*``) have been removed.
 
 Deprecated Options
 ~~~~~~~~~~~~~~~~~~
@@ -345,6 +357,7 @@ Removed Metrics
 Changed Metrics
 ~~~~~~~~~~~~~~~
 
+* ``k8s_client_rate_limiter_duration_seconds`` no longer has labels ``path`` and ``method``.
 
 Deprecated Metrics
 ~~~~~~~~~~~~~~~~~~
@@ -571,7 +584,7 @@ Below is an example where there is one network policy that needs to be updated:
 
 .. code-block:: shell-session
 
-    $ cilium clustermesh prepare-policy-default-local-cluster --all-namespaces
+    $ cilium clustermesh inspect-policy-default-local-cluster --all-namespaces
 
     ⚠️ CiliumNetworkPolicy 0/1
             ⚠️ default/allow-from-bar

@@ -269,9 +269,6 @@ const (
 	// considered local ones with HOST_ID in the ipcache
 	AddressScopeMax = "local-max-addr-scope"
 
-	// EnableRecorder enables the datapath pcap recorder
-	EnableRecorder = "enable-recorder"
-
 	// EnableLocalRedirectPolicy enables support for local redirect policy
 	EnableLocalRedirectPolicy = "enable-local-redirect-policy"
 
@@ -289,6 +286,9 @@ const (
 
 	// LogOpt sets log driver options for cilium
 	LogOpt = "log-opt"
+
+	// EnableRemoteNodeMasquerade Masquerade packets from endpoints leaving the host destined to a remote node in BPF masquerading mode. This option requires to set enable-bpf-masquerade to true.
+	EnableRemoteNodeMasquerade = "enable-remote-node-masquerade"
 
 	// EnableIPv4Masquerade masquerades IPv4 packets from endpoints leaving the host.
 	EnableIPv4Masquerade = "enable-ipv4-masquerade"
@@ -628,7 +628,7 @@ const (
 	IPv6MCastDevice = "ipv6-mcast-device"
 
 	// BPFEventsDefaultRateLimit specifies limit of messages per second that can be written to
-	// BPF events map. This limit is defined for all types of events except dbg and pcap.
+	// BPF events map. This limit is defined for all types of events except dbg.
 	// The number of messages is averaged, meaning that if no messages were written
 	// to the map over 5 seconds, it's possible to write more events than the value of rate limit
 	// in the 6th second.
@@ -639,7 +639,7 @@ const (
 	BPFEventsDefaultRateLimit = "bpf-events-default-rate-limit"
 
 	// BPFEventsDefaultBurstLimit specifies the maximum number of messages that can be written
-	// to BPF events map in 1 second. This limit is defined for all types of events except dbg and pcap.
+	// to BPF events map in 1 second. This limit is defined for all types of events except dbg.
 	//
 	// If BPFEventsDefaultBurstLimit > 0, non-zero value for BPFEventsDefaultRateLimit must also be provided
 	// lest the configuration is considered invalid.
@@ -1307,7 +1307,7 @@ type DaemonConfig struct {
 	MonitorAggregationFlags uint16
 
 	// BPFEventsDefaultRateLimit specifies limit of messages per second that can be written to
-	// BPF events map. This limit is defined for all types of events except dbg and pcap.
+	// BPF events map. This limit is defined for all types of events except dbg.
 	// The number of messages is averaged, meaning that if no messages were written
 	// to the map over 5 seconds, it's possible to write more events than the value of rate limit
 	// in the 6th second.
@@ -1317,7 +1317,7 @@ type DaemonConfig struct {
 	BPFEventsDefaultRateLimit uint32
 
 	// BPFEventsDefaultBurstLimit specifies the maximum number of messages that can be written
-	// to BPF events map in 1 second. This limit is defined for all types of events except dbg and pcap.
+	// to BPF events map in 1 second. This limit is defined for all types of events except dbg.
 	//
 	// If BPFEventsDefaultBurstLimit > 0, non-zero value for BPFEventsDefaultRateLimit must also be provided
 	// lest the configuration is considered invalid.
@@ -1472,6 +1472,7 @@ type DaemonConfig struct {
 
 	// Masquerade specifies whether or not to masquerade packets from endpoints
 	// leaving the host.
+	EnableRemoteNodeMasquerade  bool
 	EnableIPv4Masquerade        bool
 	EnableIPv6Masquerade        bool
 	EnableBPFMasquerade         bool
@@ -1677,9 +1678,6 @@ type DaemonConfig struct {
 	// AddressScopeMax controls the maximum address scope for addresses to be
 	// considered local ones with HOST_ID in the ipcache
 	AddressScopeMax int
-
-	// EnableRecorder enables the datapath pcap recorder
-	EnableRecorder bool
 
 	// EnableMKE enables MKE specific 'chaining' for kube-proxy replacement
 	EnableMKE bool
@@ -2568,7 +2566,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.NodePortBindProtection = vp.GetBool(NodePortBindProtection)
 	c.NodePortNat46X64 = vp.GetBool(LoadBalancerNat46X64)
 	c.EnableAutoProtectNodePortRange = vp.GetBool(EnableAutoProtectNodePortRange)
-	c.EnableRecorder = vp.GetBool(EnableRecorder)
 	c.EnableMKE = vp.GetBool(EnableMKE)
 	c.CgroupPathMKE = vp.GetString(CgroupPathMKE)
 	c.EnableHostFirewall = vp.GetBool(EnableHostFirewall)
@@ -2643,6 +2640,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableCustomCalls = vp.GetBool(EnableCustomCallsName)
 	c.BGPSecretsNamespace = vp.GetString(BGPSecretsNamespace)
 	c.EnableNat46X64Gateway = vp.GetBool(EnableNat46X64Gateway)
+	c.EnableRemoteNodeMasquerade = vp.GetBool(EnableRemoteNodeMasquerade)
 	c.EnableIPv4Masquerade = vp.GetBool(EnableIPv4Masquerade) && c.EnableIPv4
 	c.EnableIPv6Masquerade = vp.GetBool(EnableIPv6Masquerade) && c.EnableIPv6
 	c.EnableBPFMasquerade = vp.GetBool(EnableBPFMasquerade)

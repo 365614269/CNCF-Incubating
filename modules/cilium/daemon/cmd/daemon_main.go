@@ -463,10 +463,6 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.AddressScopeMax)
 	option.BindEnv(vp, option.AddressScopeMax)
 
-	flags.Bool(option.EnableRecorder, false, "Enable BPF datapath pcap recorder")
-	flags.MarkDeprecated(option.EnableRecorder, "The feature will be removed in v1.19")
-	option.BindEnv(vp, option.EnableRecorder)
-
 	flags.Bool(option.EnableLocalRedirectPolicy, false, "Enable Local Redirect Policy")
 	option.BindEnv(vp, option.EnableLocalRedirectPolicy)
 
@@ -549,6 +545,9 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.EnableIPv4Masquerade, true, "Masquerade IPv4 traffic from endpoints leaving the host")
 	option.BindEnv(vp, option.EnableIPv4Masquerade)
+
+	flags.Bool(option.EnableRemoteNodeMasquerade, false, "Masquerade packets from endpoints leaving the host destined to a remote node in BPF masquerading mode. This option requires to set enable-bpf-masquerade to true.")
+	option.BindEnv(vp, option.EnableRemoteNodeMasquerade)
 
 	flags.Bool(option.EnableIPv6Masquerade, true, "Masquerade IPv6 traffic from endpoints leaving the host")
 	option.BindEnv(vp, option.EnableIPv6Masquerade)
@@ -1173,6 +1172,10 @@ func initEnv(logger *slog.Logger, vp *viper.Viper) {
 
 	if option.Config.EnableIPSecEncryptedOverlay && !option.Config.EnableIPSec {
 		logger.Warn("IPSec encrypted overlay is enabled but IPSec is not. Ignoring option.")
+	}
+
+	if option.Config.EnableRemoteNodeMasquerade && !option.Config.EnableBPFMasquerade {
+		logging.Fatal(logger, "Option "+option.EnableRemoteNodeMasquerade+" requires BPF masquerade to be enabled ("+option.EnableBPFMasquerade+")")
 	}
 
 	if option.Config.TunnelingEnabled() && option.Config.EnableAutoDirectRouting {

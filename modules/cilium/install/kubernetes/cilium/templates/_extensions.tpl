@@ -22,6 +22,15 @@ dnsPolicy: {{ .Values.dnsPolicy }}
 {{- end }}
 
 {{/*
+Allow packagers to add extra volumes to cilium-operator.
+*/}}
+{{- define "cilium-operator.volumes.extra" }}
+{{- end }}
+
+{{- define "cilium-operator.volumeMounts.extra" }}
+{{- end }}
+
+{{/*
 Intentionally empty to allow downstream chart packagers to add extra
 containers to hubble-relay without having to modify the deployment manifest
 directly.
@@ -71,4 +80,16 @@ grpc
 Allow packagers to add extra configuration to certgen.
 */}}
 {{- define "certgen.config.extra" -}}
+{{- end }}
+
+{{/*
+Allow packagers to add extra arguments to the clustermesh-apiserver apiserver container.
+*/}}
+{{- define "clustermesh.apiserver.args.extra" -}}
+{{- end }}
+
+{{/*
+Allow packagers to add extra arguments to the clustermesh-apiserver kvstoremesh container.
+*/}}
+{{- define "clustermesh.kvstoremesh.args.extra" -}}
 {{- end }}
