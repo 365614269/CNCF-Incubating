@@ -19,23 +19,19 @@ var Cell = cell.Module(
 )
 
 type KPRFlags struct {
-	KubeProxyReplacement      string
-	EnableSocketLB            bool `mapstructure:"bpf-lb-sock"`
-	EnableNodePort            bool
-	EnableExternalIPs         bool
-	EnableHostPort            bool
-	EnableSVCSourceRangeCheck bool
-	EnableSessionAffinity     bool
+	KubeProxyReplacement string
+	EnableSocketLB       bool `mapstructure:"bpf-lb-sock"`
+	EnableNodePort       bool
+	EnableExternalIPs    bool
+	EnableHostPort       bool
 }
 
 var defaultFlags = KPRFlags{
-	KubeProxyReplacement:      "false",
-	EnableSocketLB:            false,
-	EnableNodePort:            false,
-	EnableExternalIPs:         false,
-	EnableHostPort:            false,
-	EnableSVCSourceRangeCheck: true,
-	EnableSessionAffinity:     true,
+	KubeProxyReplacement: "false",
+	EnableSocketLB:       false,
+	EnableNodePort:       false,
+	EnableExternalIPs:    false,
+	EnableHostPort:       false,
 }
 
 func (def KPRFlags) Flags(flags *pflag.FlagSet) {
@@ -51,23 +47,14 @@ func (def KPRFlags) Flags(flags *pflag.FlagSet) {
 
 	flags.Bool("enable-host-port", def.EnableHostPort, "Enable k8s hostPort mapping feature (requires enabling enable-node-port)")
 	flags.MarkDeprecated("enable-host-port", "The flag will be removed in v1.19. The feature will be unconditionally enabled by enabling kube-proxy-replacement")
-
-	flags.Bool("enable-svc-source-range-check", def.EnableSVCSourceRangeCheck, "Enable check of service source ranges (currently, only for LoadBalancer)")
-	flags.MarkDeprecated("enable-svc-source-range-check", "The flag will be removed in v1.19. The feature will be unconditionally enabled by enabling kube-proxy-replacement")
-
-	flags.Bool("enable-session-affinity", def.EnableSessionAffinity, "Enable support for service session affinity")
-	flags.MarkDeprecated("enable-session-affinity", "The flag to control Session Affinity has been deprecated, and it will be removed in v1.19. The feature will be unconditionally enabled.")
-
 }
 
 type KPRConfig struct {
-	KubeProxyReplacement      string
-	EnableNodePort            bool
-	EnableExternalIPs         bool
-	EnableHostPort            bool
-	EnableSVCSourceRangeCheck bool
-	EnableSessionAffinity     bool
-	EnableSocketLB            bool
+	KubeProxyReplacement string
+	EnableNodePort       bool
+	EnableExternalIPs    bool
+	EnableHostPort       bool
+	EnableSocketLB       bool
 }
 
 func NewKPRConfig(flags KPRFlags) (KPRConfig, error) {
@@ -76,20 +63,17 @@ func NewKPRConfig(flags KPRFlags) (KPRConfig, error) {
 	}
 
 	cfg := KPRConfig{
-		KubeProxyReplacement:      flags.KubeProxyReplacement,
-		EnableNodePort:            flags.EnableNodePort,
-		EnableExternalIPs:         flags.EnableExternalIPs,
-		EnableHostPort:            flags.EnableHostPort,
-		EnableSVCSourceRangeCheck: flags.EnableSVCSourceRangeCheck,
-		EnableSessionAffinity:     flags.EnableSessionAffinity,
-		EnableSocketLB:            flags.EnableSocketLB,
+		KubeProxyReplacement: flags.KubeProxyReplacement,
+		EnableNodePort:       flags.EnableNodePort,
+		EnableExternalIPs:    flags.EnableExternalIPs,
+		EnableHostPort:       flags.EnableHostPort,
+		EnableSocketLB:       flags.EnableSocketLB,
 	}
 
 	if flags.KubeProxyReplacement == "true" {
 		cfg.EnableNodePort = true
 		cfg.EnableExternalIPs = true
 		cfg.EnableHostPort = true
-		cfg.EnableSessionAffinity = true
 		cfg.EnableSocketLB = true
 	}
 
@@ -97,7 +81,6 @@ func NewKPRConfig(flags KPRFlags) (KPRConfig, error) {
 		// Disable features depending on NodePort
 		cfg.EnableHostPort = false
 		cfg.EnableExternalIPs = false
-		cfg.EnableSVCSourceRangeCheck = false
 	}
 
 	return cfg, nil

@@ -347,9 +347,7 @@ func (d *statusCollector) getKubeProxyReplacementStatus(ctx context.Context) *mo
 		features.SocketLB.Enabled = true
 		features.SocketLBTracing.Enabled = true
 	}
-	if d.statusParams.KPRConfig.EnableSessionAffinity {
-		features.SessionAffinity.Enabled = true
-	}
+	features.SessionAffinity.Enabled = true
 	if d.statusParams.DaemonConfig.NodePortNat46X64 || d.statusParams.DaemonConfig.EnableNat46X64Gateway {
 		features.Nat46X64.Enabled = true
 		gw := &models.KubeProxyReplacementFeaturesNat46X64Gateway{
@@ -377,9 +375,7 @@ func (d *statusCollector) getKubeProxyReplacementStatus(ctx context.Context) *mo
 		features.Annotations = append(features.Annotations, annotation.ServiceNodeSelectorExposure)
 		features.Annotations = append(features.Annotations, annotation.ServiceTypeExposure)
 		features.Annotations = append(features.Annotations, annotation.ServiceProxyDelegation)
-		if d.statusParams.KPRConfig.EnableSVCSourceRangeCheck {
-			features.Annotations = append(features.Annotations, annotation.ServiceSourceRangesPolicy)
-		}
+		features.Annotations = append(features.Annotations, annotation.ServiceSourceRangesPolicy)
 		sort.Strings(features.Annotations)
 	}
 

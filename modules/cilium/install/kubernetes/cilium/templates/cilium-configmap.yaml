@@ -843,12 +843,6 @@ data:
 {{- if hasKey .Values.maglev "hashSeed" }}
   bpf-lb-maglev-hash-seed: {{ .Values.maglev.hashSeed | quote}}
 {{- end }}
-{{- if .Values.sessionAffinity }}
-  enable-session-affinity: {{ .Values.sessionAffinity | quote }}
-{{- end }}
-{{- if .Values.svcSourceRangeCheck }}
-  enable-svc-source-range-check: {{ .Values.svcSourceRangeCheck | quote }}
-{{- end }}
 
 {{- if hasKey .Values "l2NeighDiscovery" }}
 {{- if hasKey .Values.l2NeighDiscovery "enabled" }}
@@ -1398,7 +1392,6 @@ data:
 
   nat-map-stats-entries: {{ .Values.nat.mapStatsEntries | quote }}
   nat-map-stats-interval: {{ .Values.nat.mapStatsInterval | quote }}
-  enable-internal-traffic-policy: {{ .Values.enableInternalTrafficPolicy | quote }}
   enable-lb-ipam: {{ .Values.enableLBIPAM | quote }}
   enable-non-default-deny-policies: {{ .Values.enableNonDefaultDenyPolicies | quote }}
 

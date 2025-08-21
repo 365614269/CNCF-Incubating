@@ -84,7 +84,7 @@ func initKubeProxyReplacementOptions(logger *slog.Logger, sysctl sysctl.Sysctl, 
 
 		dsrIPIP := lbConfig.LoadBalancerUsesDSR() && lbConfig.DSRDispatch == loadbalancer.DSRDispatchIPIP
 		if dsrIPIP && option.Config.NodePortAcceleration == option.NodePortAccelerationDisabled {
-			return fmt.Errorf("DSR dispatch mode %q currently only available under XDP acceleration", lbConfig.DSRDispatch)
+			option.Config.EnableIPIPDevices = true
 		}
 
 		if (option.Config.LoadBalancerRSSv4CIDR != "" || option.Config.LoadBalancerRSSv6CIDR != "") && !dsrIPIP {
@@ -136,6 +136,7 @@ func initKubeProxyReplacementOptions(logger *slog.Logger, sysctl sysctl.Sysctl, 
 					lbConfig.LBMode, loadbalancer.DSRDispatchIPIP)
 			}
 			option.Config.EnableHealthDatapath = true
+			option.Config.EnableIPIPDevices = true
 		}
 	}
 
@@ -182,6 +183,10 @@ func probeKubeProxyReplacementOptions(logger *slog.Logger, lbConfig loadbalancer
 		if option.Config.EnableHealthDatapath {
 			if probes.HaveProgramHelper(logger, ebpf.CGroupSockAddr, asm.FnGetsockopt) != nil {
 				option.Config.EnableHealthDatapath = false
+				if !option.Config.EnableIPIPTermination &&
+					option.Config.NodePortAcceleration != option.NodePortAccelerationDisabled {
+					option.Config.EnableIPIPDevices = false
+				}
 				logger.Info("BPF load-balancer health check datapath needs kernel 5.12.0 or newer. Disabling BPF load-balancer health check datapath.")
 			}
 		}
