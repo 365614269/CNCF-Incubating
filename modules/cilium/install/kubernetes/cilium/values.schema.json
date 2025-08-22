@@ -660,6 +660,12 @@
             "integer"
           ]
         },
+        "policyMapPressureMetricsThreshold": {
+          "type": [
+            "null",
+            "number"
+          ]
+        },
         "policyStatsMapMax": {
           "type": [
             "null",
@@ -3171,8 +3177,14 @@
                 "address": {
                   "type": "string"
                 },
+                "blockProfileRate": {
+                  "type": "integer"
+                },
                 "enabled": {
                   "type": "boolean"
+                },
+                "mutexProfileFraction": {
+                  "type": "integer"
                 },
                 "port": {
                   "type": "integer"
@@ -4759,8 +4771,14 @@
             "address": {
               "type": "string"
             },
+            "blockProfileRate": {
+              "type": "integer"
+            },
             "enabled": {
               "type": "boolean"
+            },
+            "mutexProfileFraction": {
+              "type": "integer"
             },
             "port": {
               "type": "integer"
@@ -5019,8 +5037,14 @@
         "address": {
           "type": "string"
         },
+        "blockProfileRate": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
+        },
+        "mutexProfileFraction": {
+          "type": "integer"
         },
         "port": {
           "type": "integer"

@@ -440,6 +440,10 @@
      - Configure the maximum number of entries in endpoint policy map (per endpoint). @schema type: [null, integer] @schema
      - int
      - ``16384``
+   * - :spelling:ignore:`bpf.policyMapPressureMetricsThreshold`
+     - Configure threshold for emitting pressure metrics of policy maps. @schema type: [null, number] @schema
+     - float64
+     - ``0.1``
    * - :spelling:ignore:`bpf.policyStatsMapMax`
      - Configure the maximum number of entries in global policy stats map. @schema type: [null, integer] @schema
      - int
@@ -2056,10 +2060,18 @@
      - Configure pprof listen address for hubble-relay
      - string
      - ``"localhost"``
+   * - :spelling:ignore:`hubble.relay.pprof.blockProfileRate`
+     - Enable goroutine blocking profiling for hubble-relay and set the rate of sampled events in nanoseconds (set to 1 to sample all events [warning: performance overhead])
+     - int
+     - ``0``
    * - :spelling:ignore:`hubble.relay.pprof.enabled`
      - Enable pprof for hubble-relay
      - bool
      - ``false``
+   * - :spelling:ignore:`hubble.relay.pprof.mutexProfileFraction`
+     - Enable mutex contention profiling for hubble-relay and set the fraction of sampled events (set to 1 to sample all events)
+     - int
+     - ``0``
    * - :spelling:ignore:`hubble.relay.pprof.port`
      - Configure pprof listen port for hubble-relay
      - int
@@ -2931,7 +2943,7 @@
    * - :spelling:ignore:`nodeinit.image`
      - node-init image.
      - object
-     - ``{"digest":"sha256:8d7b41c4ca45860254b3c19e20210462ef89479bb6331d6760c4e609d651b29c","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"c54c7edeab7fde4da68e59acd319ab24af242c3f","useDigest":true}``
+     - ``{"digest":"sha256:5e111ecc2cfa7fa017ecd38a25e17e9639776b4e097c2af99ba3cc71b9ba92e4","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/startup-script","tag":"1755531540-60ee83e","useDigest":true}``
    * - :spelling:ignore:`nodeinit.nodeSelector`
      - Node labels for nodeinit pod assignment ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector
      - object
@@ -3080,10 +3092,18 @@
      - Configure pprof listen address for cilium-operator
      - string
      - ``"localhost"``
+   * - :spelling:ignore:`operator.pprof.blockProfileRate`
+     - Enable goroutine blocking profiling for cilium-operator and set the rate of sampled events in nanoseconds (set to 1 to sample all events [warning: performance overhead])
+     - int
+     - ``0``
    * - :spelling:ignore:`operator.pprof.enabled`
      - Enable pprof for cilium-operator
      - bool
      - ``false``
+   * - :spelling:ignore:`operator.pprof.mutexProfileFraction`
+     - Enable mutex contention profiling for cilium-operator and set the fraction of sampled events (set to 1 to sample all events)
+     - int
+     - ``0``
    * - :spelling:ignore:`operator.pprof.port`
      - Configure pprof listen port for cilium-operator
      - int
@@ -3216,10 +3236,18 @@
      - Configure pprof listen address for cilium-agent
      - string
      - ``"localhost"``
+   * - :spelling:ignore:`pprof.blockProfileRate`
+     - Enable goroutine blocking profiling for cilium-agent and set the rate of sampled events in nanoseconds (set to 1 to sample all events [warning: performance overhead])
+     - int
+     - ``0``
    * - :spelling:ignore:`pprof.enabled`
      - Enable pprof for cilium-agent
      - bool
      - ``false``
+   * - :spelling:ignore:`pprof.mutexProfileFraction`
+     - Enable mutex contention profiling for cilium-agent and set the fraction of sampled events (set to 1 to sample all events)
+     - int
+     - ``0``
    * - :spelling:ignore:`pprof.port`
      - Configure pprof listen port for cilium-agent
      - int

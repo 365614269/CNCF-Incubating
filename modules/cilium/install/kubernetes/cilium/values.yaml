@@ -612,6 +612,12 @@ bpf:
   # type: [null, integer]
   # @schema
   policyMapMax: 16384
+  # -- (float64) Configure threshold for emitting pressure metrics of policy maps.
+  # @schema
+  # type: [null, number]
+  # @schema
+  # @default -- `0.1`
+  policyMapPressureMetricsThreshold: ~
   # -- Configure the maximum number of entries in global policy stats map.
   # @schema
   # type: [null, integer]
@@ -1717,6 +1723,10 @@ hubble:
       address: localhost
       # -- Configure pprof listen port for hubble-relay
       port: 6062
+      # -- Enable mutex contention profiling for hubble-relay and set the fraction of sampled events (set to 1 to sample all events)
+      mutexProfileFraction: 0
+      # -- Enable goroutine blocking profiling for hubble-relay and set the rate of sampled events in nanoseconds (set to 1 to sample all events [warning: performance overhead])
+      blockProfileRate: 0
   ui:
     # -- Whether to enable the Hubble UI.
     enabled: false
@@ -2154,7 +2164,7 @@ maglev: {}
 # type: [null, boolean]
 # @schema
 # -- (bool) Enables masquerading of IPv4 traffic leaving the node from endpoints.
-# @default -- `true` unless ipam eni mode is active 
+# @default -- `true` unless ipam eni mode is active
 enableIPv4Masquerade: ~
 # -- Enables masquerading of IPv6 traffic leaving the node from endpoints.
 enableIPv6Masquerade: true
@@ -2310,6 +2320,10 @@ pprof:
   address: localhost
   # -- Configure pprof listen port for cilium-agent
   port: 6060
+  # -- Enable mutex contention profiling for cilium-agent and set the fraction of sampled events (set to 1 to sample all events)
+  mutexProfileFraction: 0
+  # -- Enable goroutine blocking profiling for cilium-agent and set the rate of sampled events in nanoseconds (set to 1 to sample all events [warning: performance overhead])
+  blockProfileRate: 0
 # -- Configure prometheus metrics on the configured port at /metrics
 prometheus:
   metricsService: false
@@ -2984,6 +2998,10 @@ operator:
     address: localhost
     # -- Configure pprof listen port for cilium-operator
     port: 6061
+    # -- Enable mutex contention profiling for cilium-operator and set the fraction of sampled events (set to 1 to sample all events)
+    mutexProfileFraction: 0
+    # -- Enable goroutine blocking profiling for cilium-operator and set the rate of sampled events in nanoseconds (set to 1 to sample all events [warning: performance overhead])
+    blockProfileRate: 0
   # -- Enable prometheus metrics for cilium-operator on the configured port at
   # /metrics
   prometheus:
@@ -3066,8 +3084,8 @@ nodeinit:
     # @schema
     override: ~
     repository: "quay.io/cilium/startup-script"
-    tag: "c54c7edeab7fde4da68e59acd319ab24af242c3f"
-    digest: "sha256:8d7b41c4ca45860254b3c19e20210462ef89479bb6331d6760c4e609d651b29c"
+    tag: "1755531540-60ee83e"
+    digest: "sha256:5e111ecc2cfa7fa017ecd38a25e17e9639776b4e097c2af99ba3cc71b9ba92e4"
     useDigest: true
     pullPolicy: "Always"
   # -- The priority class to use for the nodeinit pod.
