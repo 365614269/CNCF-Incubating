@@ -354,6 +354,12 @@ Note that `context` information are auto-injected before resources are applied t
 
 The list of [all available context variables](#full-available-context-in-component) are listed at last of this doc.
 
+## Reading Configuration
+Components can read Kubevela configuration via the `$config` parameter. 
+This allows for configuration to be shared across components, traits & applications without requiring parameters be explicitly provided. 
+
+See [Config Template](../../reference/config-template.md) for details.
+
 ## Compose resources in one component
 
 It's common that a component definition is composed by multiple API resources, for example, a `webserver` component that is composed by a Deployment and a Service. CUE is a great solution to achieve this in simplified primitives.
@@ -664,12 +670,97 @@ status:
 
 > Please refer to [this doc](https://github.com/kubevela/kubevela/blob/master/vela-templates/definitions/internal/component/webservice.cue#L29-L50) for more examples.
 
+### Detailed Status
+In addition to `healthPolicy` and `customStatus`, KubeVela supports a third status mechanism: `details`, which allows components to expose structured and detailed diagnostic information to the Application resource.
+
+This is especially helpful in multi-output components, enabling users to understand granular health or operational states of different resources.
+
+You define this under `attributes.status.details`, using either native CUE syntax or a CUE string expression.
+
+#### Native CUE Format
+Use native CUE to define detailed status as a structured map. Public fields (no prefix) will be exported as strings to the Application’s `.status.services[].status`
+
+**Note:** Native CUE syntax is currently available only on the `attributes.status.details` field and is unsupported for `healthPolicy` and `customStatus`
+
+```cue
+attributes: {
+  status: {
+    details: {
+      readyCount:      *context.output.status.readyReplicas | 0
+      readyPct:        *"\($internal.pctRunning)%" | "0%"
+      unavailablePct:  *"\($internal.pctUnavailable)%" | "0%"
+      degraded:        *$internal.pctRunning < 80 | false    // must be at least 80% of replicas ready
+
+      // Private fields are supported with `$` prefix
+      $internal: {
+        pctRunning: *((context.output.status.readyReplicas / context.output.spec.replicas) * 100) | 0
+        pctUnavailable: *((context.output.status.unavailableReplicas / context.output.spec.replicas) * 100) | 0
+      }
+    }
+  }
+}
+```
+**Important Notes:**
+- Public fields (readyCount, degraded, etc.) must return a `bool`, `int`, or `string`. Their stringified value will appear in the Application status.
+- Private fields (prefixed with `$`) can be any type (including nested structs and lists) and are not exported to the Application status.
+- Private fields can be referenced by public fields and other private fields.
+- When using native CUE struct syntax, all public values are stringified before being stored in the Application status.
+These string values are then recompiled back to CUE expressions during evaluation by the runtime.
+- For consistency, the `vela def get <component>` command will always return the definition using native CUE formatting, even if the original status block was provided as a string.
+- It is recommended to make use of defaults to account for missing values to ensure the status block is always complete,
+  e.g. `*context.output.status.readyReplicas | 0`
+
+#### String Expression Format
+Alternatively, you can use a CUE string literal to define the details block.
+
+```cue
+attributes: {
+  status: {
+    details: #"""
+      readyCount:      *context.output.status.readyReplicas | 0
+      readyPct:        *"\($internal.pctRunning)%" | "0%"
+      unavailablePct:  *"\($internal.pctRunning)%" | "0%"
+      degraded:        *$internal.pctRunning < 80 | false    // must be at least 80% of replicas ready
+
+      // Private fields are supported with `$` prefix
+      $internal: {
+        pctRunning: *((context.output.status.readyReplicas / context.output.spec.replicas) * 100) | 0
+        pctUnavailable: *((context.output.status.unavailableReplicas / context.output.spec.replicas) * 100) | 0
+      }
+    """#
+  }
+}
+```
+
+String expressions behave identically to native CUE structs and support the same rules regarding public/private fields and type restrictions.
+
+#### Result in Application Status
+Only public fields appear in .status.services[].status:
+```yaml
+...
+status:
+  services:
+    - name: mycomponent
+      healthy: true
+      message: "Ready:2/2"
+      status:
+        readyCount:      "2"
+        readyPct:        "100%"
+        unavailablePct:  "0%"
+        degraded:        "false"
+...
+```
+
+To inspect this via CLI:
+```bash
+vela status <app-name> -n <app-namespace>
+```
 
 ## Full available `context` in Component
 
 
 |         Context Variable         |                                                                                  Description                                                                                  |    Type    |
-| :------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :--------: |
+|:--------------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:----------:|
 |        `context.appName`         |                                                    The app name corresponding to the current instance of the application.                                                     |   string   |
 |       `context.namespace`        |          The target namespace of the current resource is going to be deployed, it can be different with the namespace of application if overridden by some policies.          |   string   |
 |        `context.cluster`         |           The target cluster of the current resource is going to be deployed, it can be different with the namespace of application if overridden by some policies.           |   string   |
@@ -689,7 +780,7 @@ status:
 ### Cluster Version
 
 |          Context Variable           |                         Description                         |  Type  |
-| :---------------------------------: | :---------------------------------------------------------: | :----: |
+|:-----------------------------------:|:-----------------------------------------------------------:|:------:|
 |   `context.clusterVersion.major`    |    The major version of the runtime Kubernetes cluster.     | string |
 | `context.clusterVersion.gitVersion` |      The gitVersion of the runtime Kubernetes cluster.      | string |
 |  `context.clusterVersion.platform`  | The platform information of the runtime Kubernetes cluster. | string |
