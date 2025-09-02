@@ -394,8 +394,12 @@ func (cd *datafile) Write(ctx context.Context, shard *core.Shard) (err error) {
 		}
 
 		// write header+data+footer; header+data, data..., data+footer
-		if _, err = tw.Write(buf); err != nil {
+		n, err = tw.Write(buf)
+		if err != nil {
 			return err
+		}
+		if n != len(buf) {
+			return bloberr.ErrInternal
 		}
 	}
 
@@ -414,11 +418,6 @@ func (cd *datafile) Read(ctx context.Context, shard *core.Shard, from, to uint32
 	if to > shard.Size || to-from > shard.Size {
 		return nil, bloberr.ErrInvalidParam
 	}
-
-	if !cd.qosAllow(ctx, qos.IOTypeRead) { // If there is too much io, it will discard some low-priority io
-		return nil, bloberr.ErrOverload
-	}
-	defer cd.qosRelease(qos.IOTypeRead)
 
 	// skip header
 	pos := shard.Offset + core.GetShardHeaderSize()
