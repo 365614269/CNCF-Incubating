@@ -21,14 +21,10 @@ import org.keycloak.Config.Scope;
 import org.keycloak.common.Profile;
 import org.keycloak.events.EventListenerProvider;
 import org.keycloak.events.EventListenerProviderFactory;
-import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
-import org.keycloak.models.RealmModel;
-import org.keycloak.models.UserModel;
 import org.keycloak.provider.EnvironmentDependentProviderFactory;
-
-import java.util.Map;
+import org.keycloak.provider.ProviderEvent;
 
 public class ResourcePolicyEventListenerFactory implements EventListenerProviderFactory, EnvironmentDependentProviderFactory {
 
@@ -48,20 +44,18 @@ public class ResourcePolicyEventListenerFactory implements EventListenerProvider
 
     @Override
     public void postInit(KeycloakSessionFactory factory) {
-        factory.register(fired -> {
-            ResourcePolicyEvent rpe = null;
-            if (fired instanceof FederatedIdentityModel.FederatedIdentityCreatedEvent event) {
-                 rpe = new ResourcePolicyEvent(ResourceType.USERS, ResourceOperationType.ADD_FEDERATED_IDENTITY,
-                        event.getUser().getId(), Map.of("provider", event.getFederatedIdentity().getIdentityProvider()));
-                ResourcePolicyManager manager = new ResourcePolicyManager(event.getKeycloakSession());
-                manager.processEvent(rpe);
-            } else if (fired instanceof FederatedIdentityModel.FederatedIdentityRemovedEvent event) {
-                rpe =  new ResourcePolicyEvent(ResourceType.USERS, ResourceOperationType.REMOVE_FEDERATED_IDENTITY,
-                        event.getUser().getId(), Map.of("provider", event.getFederatedIdentity().getIdentityProvider()));
-                ResourcePolicyManager manager = new ResourcePolicyManager(event.getKeycloakSession());
-                manager.processEvent(rpe);
+        factory.register(event -> {
+            KeycloakSession session = event.getKeycloakSession();
+
+            if (session != null) {
+                onEvent(event, session);
             }
         });
+    }
+
+    private void onEvent(ProviderEvent event, KeycloakSession session) {
+        ResourcePolicyEventListener provider = (ResourcePolicyEventListener) session.getProvider(EventListenerProvider.class, getId());
+        provider.onEvent(event);
     }
 
     @Override

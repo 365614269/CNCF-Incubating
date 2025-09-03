@@ -40,12 +40,15 @@ import org.keycloak.models.UserModel;
 import org.keycloak.models.policy.DisableUserActionProviderFactory;
 import org.keycloak.models.policy.NotifyUserActionProviderFactory;
 import org.keycloak.models.policy.ResourceAction;
+import org.keycloak.models.policy.ResourceOperationType;
 import org.keycloak.models.policy.ResourcePolicy;
 import org.keycloak.models.policy.ResourcePolicyManager;
 import org.keycloak.models.policy.ResourcePolicyStateProvider;
 import org.keycloak.models.policy.UserCreationTimeResourcePolicyProviderFactory;
 import org.keycloak.models.policy.UserSessionRefreshTimeResourcePolicyProviderFactory;
+import org.keycloak.models.policy.conditions.IdentityProviderPolicyConditionFactory;
 import org.keycloak.representations.resources.policies.ResourcePolicyActionRepresentation;
+import org.keycloak.representations.resources.policies.ResourcePolicyConditionRepresentation;
 import org.keycloak.representations.resources.policies.ResourcePolicyRepresentation;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.InjectUser;
@@ -193,6 +196,7 @@ public class ResourcePolicyManagementTest {
     public void testPolicyDoesNotFallThroughActionsInSingleRun() {
         managedRealm.admin().resources().policies().create(ResourcePolicyRepresentation.create()
                 .of(UserCreationTimeResourcePolicyProviderFactory.ID)
+                .onEvent(ResourceOperationType.CREATE.toString())
                 .withActions(
                         ResourcePolicyActionRepresentation.create().of(NotifyUserActionProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -258,7 +262,11 @@ public class ResourcePolicyManagementTest {
 
         managedRealm.admin().resources().policies().create(ResourcePolicyRepresentation.create()
                 .of(UserCreationTimeResourcePolicyProviderFactory.ID)
-                .withConfig("broker-aliases", "someidp")
+                .onEvent(ResourceOperationType.ADD_FEDERATED_IDENTITY.name())
+                .onCoditions(ResourcePolicyConditionRepresentation.create()
+                        .of(IdentityProviderPolicyConditionFactory.ID)
+                        .withConfig(IdentityProviderPolicyConditionFactory.EXPECTED_ALIASES, "someidp")
+                        .build())
                 .withActions(
                         ResourcePolicyActionRepresentation.create().of(NotifyUserActionProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -353,6 +361,7 @@ public class ResourcePolicyManagementTest {
         // create a test policy
         managedRealm.admin().resources().policies().create(ResourcePolicyRepresentation.create()
                 .of(UserCreationTimeResourcePolicyProviderFactory.ID)
+                .onEvent(ResourceOperationType.CREATE.toString())
                 .name("test-policy")
                 .withConfig("enabled", "true")
                 .withActions(
@@ -460,6 +469,7 @@ public class ResourcePolicyManagementTest {
     public void testRecurringPolicy() {
         managedRealm.admin().resources().policies().create(ResourcePolicyRepresentation.create()
                 .of(UserCreationTimeResourcePolicyProviderFactory.ID)
+                .onEvent(ResourceOperationType.CREATE.toString())
                 .withConfig("recurring", "true")
                 .withActions(
                         ResourcePolicyActionRepresentation.create().of(NotifyUserActionProviderFactory.ID)

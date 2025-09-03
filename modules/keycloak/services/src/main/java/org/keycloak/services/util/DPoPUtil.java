@@ -19,14 +19,11 @@ package org.keycloak.services.util;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.BooleanSupplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -73,7 +70,9 @@ import org.keycloak.protocol.oidc.mappers.OIDCAttributeMapperHelper;
 import org.keycloak.protocol.oidc.mappers.OIDCIDTokenMapper;
 import org.keycloak.protocol.oidc.mappers.TokenIntrospectionTokenMapper;
 import org.keycloak.protocol.oidc.mappers.UserInfoTokenMapper;
+import org.keycloak.provider.Provider;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.provider.ProviderFactory;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.dpop.DPoP;
 import org.keycloak.services.CorsErrorResponseException;
@@ -81,6 +80,8 @@ import org.keycloak.services.cors.Cors;
 import org.keycloak.util.JWKSUtils;
 import org.keycloak.util.TokenUtil;
 
+import static org.keycloak.OAuth2Constants.DPOP_JWT_HEADER_TYPE;
+import static org.keycloak.OAuth2Constants.DPOP_HTTP_HEADER;
 import static org.keycloak.utils.StringUtil.isNotBlank;
 
 /**
@@ -99,22 +100,6 @@ public class DPoPUtil {
         OPTIONAL,
         DISABLED
     }
-
-    public static final String DPOP_HTTP_HEADER = "DPoP";
-    private static final String DPOP_JWT_HEADER_TYPE = "dpop+jwt";
-    public static final String DPOP_ATH_ALG = "RS256";
-
-    public static final Set<String> DPOP_SUPPORTED_ALGS = Stream.of(
-        Algorithm.ES256,
-        Algorithm.ES384,
-        Algorithm.ES512,
-        Algorithm.PS256,
-        Algorithm.PS384,
-        Algorithm.PS512,
-        Algorithm.RS256,
-        Algorithm.RS384,
-        Algorithm.RS512
-    ).collect(Collectors.toSet());
 
     private static URI normalize(URI uri) {
         return UriBuilder.fromUri(uri).replaceQuery("").build();
@@ -160,7 +145,7 @@ public class DPoPUtil {
 
         HttpRequest request = keycloakSession.getContext().getHttpRequest();
         final boolean isClientRequiresDpop = clientConfig != null && clientConfig.isUseDPoP();
-        final boolean isDpopHeaderPresent = request.getHttpHeaders().getHeaderString(DPoPUtil.DPOP_HTTP_HEADER) != null;
+        final boolean isDpopHeaderPresent = request.getHttpHeaders().getHeaderString(DPOP_HTTP_HEADER) != null;
 
         if (!isClientRequiresDpop && !isDpopHeaderPresent) {
             return;
@@ -197,7 +182,7 @@ public class DPoPUtil {
 
         String algorithm = header.getAlgorithm().name();
 
-        if (!DPOP_SUPPORTED_ALGS.contains(algorithm)) {
+        if (!getDPoPSupportedAlgorithms(session).contains(algorithm)) {
             throw new VerificationException("Unsupported DPoP algorithm: " + header.getAlgorithm());
         }
 
@@ -338,6 +323,26 @@ public class DPoPUtil {
 
     }
 
+    private static List<String> getSupportedAlgorithms(KeycloakSession session, Class<? extends Provider> clazz, boolean includeNone) {
+        Stream<String> supportedAlgorithms = session.getKeycloakSessionFactory().getProviderFactoriesStream(clazz)
+                .map(ProviderFactory::getId);
+
+        if (includeNone) {
+            supportedAlgorithms = Stream.concat(supportedAlgorithms, Stream.of("none"));
+        }
+        return supportedAlgorithms.collect(Collectors.toList());
+    }
+
+    public static List<String> getDPoPSupportedAlgorithms(KeycloakSession session) {
+        return getSupportedAlgorithms(session, SignatureProvider.class, false).stream()
+                .map(algorithm -> new AbstractMap.SimpleEntry<>(algorithm, session.getProvider(SignatureProvider.class, algorithm)))
+                .filter(entry -> entry.getValue() != null)
+                .filter(entry -> entry.getValue().isAsymmetricAlgorithm())
+                .filter(entry -> !entry.getKey().equals(Algorithm.EdDSA))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+    }
+
     private static class DPoPHTTPCheck implements TokenVerifier.Predicate<DPoP> {
 
         private final URI uri;
@@ -434,7 +439,7 @@ public class DPoPUtil {
         private final String hash;
 
         public DPoPAccessTokenHashCheck(String tokenString) {
-            hash = HashUtils.accessTokenHash(DPOP_ATH_ALG, tokenString, true);
+            hash = HashUtils.accessTokenHash(OAuth2Constants.DPOP_DEFAULT_ALGORITHM.toString(), tokenString, true);
         }
 
         @Override

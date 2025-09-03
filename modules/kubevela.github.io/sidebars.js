@@ -257,6 +257,7 @@ module.exports = {
             'platform-engineers/auth/basic',
             'platform-engineers/auth/advance',
             'platform-engineers/auth/integration',
+            'platform-engineers/auth/definition-rbac',
           ],
         },
         {
@@ -273,6 +274,7 @@ module.exports = {
             'reference/ui-schema',
           ],
         },
+        'platform-engineers/status/application_health_status_metrics'
       ],
     },
     {
@@ -323,7 +325,8 @@ module.exports = {
             },
             'platform-engineers/system-operation/velaql',
             'platform-engineers/x-def-version',
-            'platform-engineers/cue/external-packages'
+            'platform-engineers/cue/external-packages',
+            'platform-engineers/status/definition_health_status'
           ],
         },
         {

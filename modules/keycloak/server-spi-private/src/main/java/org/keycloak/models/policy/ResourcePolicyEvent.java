@@ -1,26 +1,17 @@
 package org.keycloak.models.policy;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class ResourcePolicyEvent {
 
     private final ResourceType type;
     private final ResourceOperationType operation;
     private final String resourceId;
-    private final Map<String, String> details = new HashMap<>();
+    private final Object event;
 
-    public ResourcePolicyEvent(ResourceType type, ResourceOperationType operation, String resourceId) {
-        this(type, operation, resourceId, null);
-    }
-
-    public ResourcePolicyEvent(ResourceType type, ResourceOperationType operation, String resourceId, Map<String, String> details) {
+    public ResourcePolicyEvent(ResourceType type, ResourceOperationType operation, String resourceId, Object event) {
         this.type = type;
         this.operation = operation;
         this.resourceId = resourceId;
-        if (details != null) {
-            this.details.putAll(details);
-        }
+        this.event = event;
     }
 
     public ResourceType getResourceType() {
@@ -35,7 +26,7 @@ public class ResourcePolicyEvent {
         return resourceId;
     }
 
-    public Map<String, String> getDetails() {
-        return details;
+    public Object getEvent() {
+        return event;
     }
 }
