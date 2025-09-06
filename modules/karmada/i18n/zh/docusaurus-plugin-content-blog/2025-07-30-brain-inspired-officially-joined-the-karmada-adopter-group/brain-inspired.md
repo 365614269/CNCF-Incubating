@@ -23,14 +23,14 @@ Karmada 非常高兴地宣布 **[中科类脑](http://www.leinao.ai/)** 正式�
 - **职位发布**：有机会在 Karmada 社区支持的职位公告板上发布与 Karmada 相关的职位空缺（目前暂不可用）。
 - **扩展商业机会**：与 Karmada 生态系统的其他成员建立潜在的商业联系和合作。
 
-在 [GitHub 社区仓库](https://github.com/karmada-io/community/tree/main/adopter-group) 中了解更多关于 Karmada 用户组的信息，并在 [karmada.io/adopters](https://karmada.io/adopters) 查看完整的`公开`的采用者列表。
+在 [GitHub 社区仓库](https://github.com/karmada-io/community/tree/main/adopter-group) 中了解更多关于 Karmada 用户组的信息，并在 [karmada.io/adopters](https://karmada.io/zh/adopters) 查看完整的`公开`的采用者列表。
 
 ## 加入 Karmada 用户组
 
-任何在**生产环境**中使用 Karmada 的公司，其开发者均可申请加入 **Karmada 用户组**。无论您是**最终用户**还是**云厂商**，我们都欢迎您的加入。
+**Karmada 用户组**对当前正在**生产环境**中使用 Karmada 的**最终用户**和**供应商**开放。这包括：
 
-- **最终用户**：指在其内部 IT 基础设施中直接部署和使用 Karmada 进行多云或多集群管理的企业或组织。这些公司利用 Karmada 作为关键技术底座来管理和优化算力资源。
-- **供应商**：指那些将 Karmada 集成到他们的产品或服务中，以提供给其他企业或组织使用的公司。
+- **最终用户**：在其生产环境中运行 Karmada 的组织。
+- **供应商**：提供基于 Karmada 的产品或服务，并有客户在生产环境中使用这些产品或服务的公司。
 
 您是否在生产环境中使用 Karmada 并有兴趣加入 Karmada 用户组？  
 加入很简单——只需填写 [Karmada 用户组申请表单](https://github.com/karmada-io/karmada/issues/4540) 并提供您组织的信息。

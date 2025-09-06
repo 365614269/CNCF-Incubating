@@ -19,7 +19,6 @@ package org.keycloak.tests.admin.model.policy;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -38,6 +37,7 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import java.io.IOException;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.keycloak.admin.client.resource.RealmResourcePolicies;
 import org.keycloak.common.util.Time;
@@ -52,6 +52,7 @@ import org.keycloak.models.policy.ResourceOperationType;
 import org.keycloak.models.policy.ResourcePolicy;
 import org.keycloak.models.policy.ResourcePolicyManager;
 import org.keycloak.models.policy.ResourcePolicyStateProvider;
+import org.keycloak.models.policy.SetUserAttributeActionProviderFactory;
 import org.keycloak.models.policy.UserCreationTimeResourcePolicyProviderFactory;
 import org.keycloak.models.policy.UserSessionRefreshTimeResourcePolicyProviderFactory;
 import org.keycloak.models.policy.conditions.IdentityProviderPolicyConditionFactory;
@@ -232,8 +233,8 @@ public class ResourcePolicyManagementTest {
             assertEquals(1, registeredPolicies.size());
 
             ResourcePolicy policy = registeredPolicies.get(0);
-            assertEquals(2, manager.getActions(policy).size());
-            ResourceAction notifyAction = manager.getActions(policy).get(0);
+            assertEquals(2, manager.getActions(policy.getId()).size());
+            ResourceAction notifyAction = manager.getActions(policy.getId()).get(0);
 
             ResourcePolicyStateProvider stateProvider = session.getProvider(ResourcePolicyStateProvider.class);
             ResourcePolicyStateProvider.ScheduledAction scheduledAction = stateProvider.getScheduledAction(policy.getId(), user.getId());
@@ -248,7 +249,7 @@ public class ResourcePolicyManagementTest {
                 user = session.users().getUserById(realm, user.getId());
 
                 // Verify that the next action was scheduled for the user
-                ResourceAction disableAction = manager.getActions(policy).get(1);
+                ResourceAction disableAction = manager.getActions(policy.getId()).get(1);
                 scheduledAction = stateProvider.getScheduledAction(policy.getId(), user.getId());
                 assertNotNull(scheduledAction, "An action should have been scheduled for the user " + user.getUsername());
                 assertEquals(disableAction.getId(), scheduledAction.actionId(), "The second action should have been scheduled");
@@ -312,8 +313,8 @@ public class ResourcePolicyManagementTest {
             assertEquals(1, registeredPolicies.size());
             ResourcePolicy policy = registeredPolicies.get(0);
 
-            assertEquals(2, policyManager.getActions(policy).size());
-            ResourceAction notifyAction = policyManager.getActions(policy).get(0);
+            assertEquals(2, policyManager.getActions(policy.getId()).size());
+            ResourceAction notifyAction = policyManager.getActions(policy.getId()).get(0);
 
             // check no policies are yet attached to the previous users, only to the ones created after the policy was in place
             ResourcePolicyStateProvider stateProvider = session.getKeycloakSessionFactory().getProviderFactory(ResourcePolicyStateProvider.class).create(session);
@@ -332,7 +333,7 @@ public class ResourcePolicyManagementTest {
                 policyManager.runScheduledActions();
 
                 // check the same users are now scheduled to run the second action.
-                ResourceAction disableAction = policyManager.getActions(policy).get(1);
+                ResourceAction disableAction = policyManager.getActions(policy.getId()).get(1);
                 scheduledActions = stateProvider.getScheduledActionsByPolicy(policy);
                 assertEquals(3, scheduledActions.size());
                 scheduledActions.forEach(scheduledAction -> {
@@ -380,7 +381,6 @@ public class ResourcePolicyManagementTest {
                 .of(UserCreationTimeResourcePolicyProviderFactory.ID)
                 .onEvent(ResourceOperationType.CREATE.toString())
                 .name("test-policy")
-                .withConfig("enabled", "true")
                 .withActions(
                         ResourcePolicyActionRepresentation.create().of(NotifyUserActionProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -496,7 +496,7 @@ public class ResourcePolicyManagementTest {
         managedRealm.admin().resources().policies().create(ResourcePolicyRepresentation.create()
                 .of(UserCreationTimeResourcePolicyProviderFactory.ID)
                 .onEvent(ResourceOperationType.CREATE.toString())
-                .withConfig("recurring", "true")
+                .recurring()
                 .withActions(
                         ResourcePolicyActionRepresentation.create().of(NotifyUserActionProviderFactory.ID)
                                 .after(Duration.ofDays(5))
@@ -516,7 +516,7 @@ public class ResourcePolicyManagementTest {
 
                 UserModel user = session.users().getUserByUsername(realm, "testuser");
                 ResourcePolicy policy = manager.getPolicies().get(0);
-                ResourceAction action = manager.getActions(policy).get(0);
+                ResourceAction action = manager.getActions(policy.getId()).get(0);
 
                 // Verify that the action was scheduled again for the user
                 ResourcePolicyStateProvider stateProvider = session.getProvider(ResourcePolicyStateProvider.class);
@@ -534,6 +534,34 @@ public class ResourcePolicyManagementTest {
         // Verify that there should be two emails sent
         assertEquals(2, findEmailsByRecipient(mailServer, "testuser@example.com").size());
         mailServer.runCleanup();
+    }
+
+    @Test
+    public void testRunImmediatePolicy() {
+        // create a test policy with no time conditions - should run immediately when scheduled
+        managedRealm.admin().resources().policies().create(ResourcePolicyRepresentation.create()
+                .of(UserCreationTimeResourcePolicyProviderFactory.ID)
+                .immediate()
+                .withActions(
+                        ResourcePolicyActionRepresentation.create().of(SetUserAttributeActionProviderFactory.ID)
+                                .after(Duration.ofDays(1))
+                                .withConfig("message", "message")
+                                .build(),
+                        ResourcePolicyActionRepresentation.create().of(DisableUserActionProviderFactory.ID)
+                                .after(Duration.ofDays(2))
+                                .build()
+                ).build()).close();
+
+        // create a new user - should be bound to the new policy and all actions should run right away
+        managedRealm.admin().users().create(UserConfigBuilder.create().username("testuser").build());
+
+        // check the user has the attribute set and is disabled
+        runOnServer.run(session -> {
+            configureSessionContext(session);
+            UserModel user = session.users().getUserByUsername(session.getContext().getRealm(), "testuser");
+            assertEquals("message", user.getAttributes().get("message").get(0));
+            assertFalse(user.isEnabled());
+        });
     }
 
     @Test
@@ -806,7 +834,7 @@ public class ResourcePolicyManagementTest {
                                 "\nHTML: " + htmlContent);
             }
         } catch (MessagingException | IOException e) {
-            fail("Failed to read email message: " + e.getMessage());
+            Assertions.fail("Failed to read email message: " + e.getMessage());
         }
     }
 
