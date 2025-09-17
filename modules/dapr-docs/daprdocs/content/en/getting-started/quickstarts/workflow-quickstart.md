@@ -10,7 +10,7 @@ description: Get started with the Dapr Workflow building block
 Redis is currently used as the state store component for Workflows in the Quickstarts. However, Redis does not support transaction rollbacks and should not be used in production as an actor state store.
 {{% /alert %}}
 
-Let's take a look at the Dapr [Workflow building block]({{< ref workflow-overview.md >}}). In this Quickstart, you'll create a simple console application to demonstrate Dapr's workflow programming model and the workflow management APIs.
+Let's take a look at the Dapr [Workflow building block]({{% ref workflow-overview.md %}}). In this Quickstart, you'll create a simple console application to demonstrate Dapr's workflow programming model and the workflow management APIs.
 
 In this guide, you'll:
 
@@ -36,10 +36,10 @@ The workflow also contains business logic:
 <img src="/images/workflow-quickstart-controlflow.png" width=800 style="padding-bottom:15px;">
 
 Select your preferred language-specific Dapr SDK before proceeding with the Quickstart.
-{{< tabs "Python" "JavaScript" ".NET" "Java" Go >}}
+{{< tabpane text=true >}}
 
  <!-- Python -->
-{{% codetab %}}
+{{% tab "Python" %}}
 
 The `order-processor` console app starts and manages the `order_processing_workflow`, which simulates purchasing items from a store. The workflow consists of five unique workflow activities, or tasks:
 
@@ -90,7 +90,7 @@ cd ..
 
 ### Step 3: Run the order processor app
 
-In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{< ref multi-app-dapr-run >}}). From the `python/sdk` directory, run the following command:
+In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{% ref multi-app-dapr-run %}}). From the `python/sdk` directory, run the following command:
 
 ```bash
 dapr run -f .
@@ -406,10 +406,10 @@ def request_approval_activity(ctx: WorkflowActivityContext,
     logger.info('Requesting approval for payment of '+f'{input["total_cost"]}'+' USD for '
                 +f'{input["quantity"]}' +' ' +f'{input["item_name"]}')
 ```
-{{% /codetab %}}
+{{% /tab %}}
 
  <!-- JavaScript -->
-{{% codetab %}}
+{{% tab "JavaScript" %}}
 
 The `order-processor` console app starts and manages the lifecycle of an order processing workflow that stores and retrieves data in a state store. The workflow consists of four workflow activities, or tasks:
 
@@ -453,7 +453,7 @@ npm run build
 
 ### Step 3: Run the order processor app
 
-In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{< ref multi-app-dapr-run >}}). From the `javascript/sdk` directory, run the following command:
+In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{% ref multi-app-dapr-run %}}). From the `javascript/sdk` directory, run the following command:
 
 ```bash
 dapr run -f .
@@ -783,10 +783,10 @@ export const orderProcessingWorkflow: TWorkflow = async function* (ctx: Workflow
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
  <!-- .NET -->
-{{% codetab %}}
+{{% tab ".NET" %}}
 
 The `order-processor` console app starts and manages the lifecycle of an order processing workflow that stores and retrieves data in a state store. The workflow consists of four workflow activities, or tasks:
 
@@ -838,7 +838,7 @@ cd ..
 
 ### Step 3: Run the order processor app
 
-In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{< ref multi-app-dapr-run >}}). From the `csharp/sdk` directory, run the following command:
+In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{% ref multi-app-dapr-run %}}). From the `csharp/sdk` directory, run the following command:
 
 ```bash
 dapr run -f .
@@ -1241,12 +1241,12 @@ The `Activities` directory holds the four workflow activities used by the workfl
 
 Watch [this video to walk through the Dapr Workflow .NET demo](https://youtu.be/BxiKpEmchgQ?t=2564):
 
-<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/BxiKpEmchgQ?start=2564" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+{{< youtube id=BxiKpEmchgQ start=2564 >}}
 
-{{% /codetab %}}
+{{% /tab %}}
 
  <!-- Java -->
-{{% codetab %}}
+{{% tab "Java" %}}
 
 The `order-processor` console app starts and manages the lifecycle of an order processing workflow that stores and retrieves data in a state store. The workflow consists of four workflow activities, or tasks:
 
@@ -1298,7 +1298,7 @@ cd ..
 
 ### Step 3: Run the order processor app
 
-In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{< ref multi-app-dapr-run >}}). From the `java/sdk` directory, run the following command:
+In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{% ref multi-app-dapr-run %}}). From the `java/sdk` directory, run the following command:
 
 ```bash
 cd workflows/java/sdk
@@ -1632,10 +1632,10 @@ The `Activities` directory holds the four workflow activities used by the workfl
 - [`ProcessPaymentActivity`](https://github.com/dapr/quickstarts/tree/master/workflows/java/sdk/order-processor/src/main/java/io/dapr/quickstarts/workflows/activities/ProcessPaymentActivity.java)
 - [`UpdateInventoryActivity`](https://github.com/dapr/quickstarts/tree/master/workflows/java/sdk/order-processor/src/main/java/io/dapr/quickstarts/workflows/activities/UpdateInventoryActivity.java)
 
-{{% /codetab %}}
+{{% /tab %}}
 
  <!-- Go -->
-{{% codetab %}}
+{{% tab "Go" %}}
 
 The `order-processor` console app starts and manages the `OrderProcessingWorkflow` workflow, which simulates purchasing items from a store. The workflow consists of five unique workflow activities, or tasks:
 
@@ -1673,7 +1673,7 @@ cd workflows/go/sdk
 
 ### Step 3: Run the order processor app
 
-In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{< ref multi-app-dapr-run >}}). From the `go/sdk` directory, run the following command:
+In the terminal, start the order processor app alongside a Dapr sidecar using [Multi-App Run]({{% ref multi-app-dapr-run %}}). From the `go/sdk` directory, run the following command:
 
 ```bash
 dapr run -f .
@@ -1756,8 +1756,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/dapr/durabletask-go/workflow"
 	"github.com/dapr/go-sdk/client"
-	"github.com/dapr/go-sdk/workflow"
 )
 
 var (
@@ -1771,49 +1771,46 @@ func main() {
 	fmt.Println("*** Welcome to the Dapr Workflow console app sample!")
 	fmt.Println("*** Using this app, you can place orders that start workflows.")
 
-	w, err := workflow.NewWorker()
-	if err != nil {
-		log.Fatalf("failed to start worker: %v", err)
-	}
+	r := workflow.NewRegistry()
 
-	if err := w.RegisterWorkflow(OrderProcessingWorkflow); err != nil {
+	if err := r.AddWorkflow(OrderProcessingWorkflow); err != nil {
 		log.Fatal(err)
 	}
-	if err := w.RegisterActivity(NotifyActivity); err != nil {
+	if err := r.AddActivity(NotifyActivity); err != nil {
 		log.Fatal(err)
 	}
-	if err := w.RegisterActivity(RequestApprovalActivity); err != nil {
+	if err := r.AddActivity(RequestApprovalActivity); err != nil {
 		log.Fatal(err)
 	}
-	if err := w.RegisterActivity(VerifyInventoryActivity); err != nil {
+	if err := r.AddActivity(VerifyInventoryActivity); err != nil {
 		log.Fatal(err)
 	}
-	if err := w.RegisterActivity(ProcessPaymentActivity); err != nil {
+	if err := r.AddActivity(ProcessPaymentActivity); err != nil {
 		log.Fatal(err)
 	}
-	if err := w.RegisterActivity(UpdateInventoryActivity); err != nil {
+	if err := r.AddActivity(UpdateInventoryActivity); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := w.Start(); err != nil {
-		log.Fatal(err)
-	}
-
-	daprClient, err := client.NewClient()
-	if err != nil {
-		log.Fatalf("failed to initialise dapr client: %v", err)
-	}
-	wfClient, err := workflow.NewClient(workflow.WithDaprClient(daprClient))
+	wfClient, err := client.NewWorkflowClient()
 	if err != nil {
 		log.Fatalf("failed to initialise workflow client: %v", err)
 	}
 
+	if err := wfClient.StartWorker(context.Background(), r); err != nil {
+		log.Fatal(err)
+	}
+
+	dclient, err := client.NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
 	inventory := []InventoryItem{
 		{ItemName: "paperclip", PerItemCost: 5, Quantity: 100},
 		{ItemName: "cars", PerItemCost: 5000, Quantity: 10},
 		{ItemName: "computers", PerItemCost: 500, Quantity: 100},
 	}
-	if err := restockInventory(daprClient, inventory); err != nil {
+	if err := restockInventory(dclient, inventory); err != nil {
 		log.Fatalf("failed to restock: %v", err)
 	}
 
@@ -1830,7 +1827,7 @@ func main() {
 		TotalCost: totalCost,
 	}
 
-	id, err := wfClient.ScheduleNewWorkflow(context.Background(), workflowName, workflow.WithInput(orderPayload))
+	id, err := wfClient.ScheduleWorkflow(context.Background(), workflowName, workflow.WithInput(orderPayload))
 	if err != nil {
 		log.Fatalf("failed to start workflow: %v", err)
 	}
@@ -1847,7 +1844,7 @@ func main() {
 		log.Fatalf("failed to get workflow: %v", err)
 	}
 
-	fmt.Printf("workflow status: %v\n", respFetch.RuntimeStatus)
+	fmt.Printf("workflow status: %v\n", respFetch.String())
 
 	fmt.Println("Purchase of item is complete")
 }
@@ -1865,7 +1862,6 @@ func restockInventory(daprClient client.Client, inventory []InventoryItem) error
 	}
 	return nil
 }
-
 ```
 
 #### `order-processor/workflow.go`
@@ -1881,18 +1877,18 @@ import (
 	"log"
 	"time"
 
+	"github.com/dapr/durabletask-go/workflow"
 	"github.com/dapr/go-sdk/client"
-	"github.com/dapr/go-sdk/workflow"
 )
 
 // OrderProcessingWorkflow is the main workflow for orchestrating activities in the order process.
 func OrderProcessingWorkflow(ctx *workflow.WorkflowContext) (any, error) {
-	orderID := ctx.InstanceID()
+	orderID := ctx.ID()
 	var orderPayload OrderPayload
 	if err := ctx.GetInput(&orderPayload); err != nil {
 		return nil, err
 	}
-	err := ctx.CallActivity(NotifyActivity, workflow.ActivityInput(Notification{
+	err := ctx.CallActivity(NotifyActivity, workflow.WithActivityInput(Notification{
 		Message: fmt.Sprintf("Received order %s for %d %s - $%d", orderID, orderPayload.Quantity, orderPayload.ItemName, orderPayload.TotalCost),
 	})).Await(nil)
 	if err != nil {
@@ -1900,7 +1896,7 @@ func OrderProcessingWorkflow(ctx *workflow.WorkflowContext) (any, error) {
 	}
 
 	var verifyInventoryResult InventoryResult
-	if err := ctx.CallActivity(VerifyInventoryActivity, workflow.ActivityInput(InventoryRequest{
+	if err := ctx.CallActivity(VerifyInventoryActivity, workflow.WithActivityInput(InventoryRequest{
 		RequestID: orderID,
 		ItemName:  orderPayload.ItemName,
 		Quantity:  orderPayload.Quantity,
@@ -1910,13 +1906,13 @@ func OrderProcessingWorkflow(ctx *workflow.WorkflowContext) (any, error) {
 
 	if !verifyInventoryResult.Success {
 		notification := Notification{Message: fmt.Sprintf("Insufficient inventory for %s", orderPayload.ItemName)}
-		err := ctx.CallActivity(NotifyActivity, workflow.ActivityInput(notification)).Await(nil)
+		err := ctx.CallActivity(NotifyActivity, workflow.WithActivityInput(notification)).Await(nil)
 		return OrderResult{Processed: false}, err
 	}
 
 	if orderPayload.TotalCost > 5000 {
 		var approvalRequired ApprovalRequired
-		if err := ctx.CallActivity(RequestApprovalActivity, workflow.ActivityInput(orderPayload)).Await(&approvalRequired); err != nil {
+		if err := ctx.CallActivity(RequestApprovalActivity, workflow.WithActivityInput(orderPayload)).Await(&approvalRequired); err != nil {
 			return OrderResult{Processed: false}, err
 		}
 		if err := ctx.WaitForExternalEvent("manager_approval", time.Second*200).Await(nil); err != nil {
@@ -1924,43 +1920,43 @@ func OrderProcessingWorkflow(ctx *workflow.WorkflowContext) (any, error) {
 		}
 		// TODO: Confirm timeout flow - this will be in the form of an error.
 		if approvalRequired.Approval {
-			if err := ctx.CallActivity(NotifyActivity, workflow.ActivityInput(Notification{Message: fmt.Sprintf("Payment for order %s has been approved!", orderID)})).Await(nil); err != nil {
+			if err := ctx.CallActivity(NotifyActivity, workflow.WithActivityInput(Notification{Message: fmt.Sprintf("Payment for order %s has been approved!", orderID)})).Await(nil); err != nil {
 				log.Printf("failed to notify of a successful order: %v\n", err)
 			}
 		} else {
-			if err := ctx.CallActivity(NotifyActivity, workflow.ActivityInput(Notification{Message: fmt.Sprintf("Payment for order %s has been rejected!", orderID)})).Await(nil); err != nil {
+			if err := ctx.CallActivity(NotifyActivity, workflow.WithActivityInput(Notification{Message: fmt.Sprintf("Payment for order %s has been rejected!", orderID)})).Await(nil); err != nil {
 				log.Printf("failed to notify of an unsuccessful order :%v\n", err)
 			}
 			return OrderResult{Processed: false}, err
 		}
 	}
-	err = ctx.CallActivity(ProcessPaymentActivity, workflow.ActivityInput(PaymentRequest{
+	err = ctx.CallActivity(ProcessPaymentActivity, workflow.WithActivityInput(PaymentRequest{
 		RequestID:          orderID,
 		ItemBeingPurchased: orderPayload.ItemName,
 		Amount:             orderPayload.TotalCost,
 		Quantity:           orderPayload.Quantity,
 	})).Await(nil)
 	if err != nil {
-		if err := ctx.CallActivity(NotifyActivity, workflow.ActivityInput(Notification{Message: fmt.Sprintf("Order %s failed!", orderID)})).Await(nil); err != nil {
+		if err := ctx.CallActivity(NotifyActivity, workflow.WithActivityInput(Notification{Message: fmt.Sprintf("Order %s failed!", orderID)})).Await(nil); err != nil {
 			log.Printf("failed to notify of a failed order: %v", err)
 		}
 		return OrderResult{Processed: false}, err
 	}
 
-	err = ctx.CallActivity(UpdateInventoryActivity, workflow.ActivityInput(PaymentRequest{
+	err = ctx.CallActivity(UpdateInventoryActivity, workflow.WithActivityInput(PaymentRequest{
 		RequestID:          orderID,
 		ItemBeingPurchased: orderPayload.ItemName,
 		Amount:             orderPayload.TotalCost,
 		Quantity:           orderPayload.Quantity,
 	})).Await(nil)
 	if err != nil {
-		if err := ctx.CallActivity(NotifyActivity, workflow.ActivityInput(Notification{Message: fmt.Sprintf("Order %s failed!", orderID)})).Await(nil); err != nil {
+		if err := ctx.CallActivity(NotifyActivity, workflow.WithActivityInput(Notification{Message: fmt.Sprintf("Order %s failed!", orderID)})).Await(nil); err != nil {
 			log.Printf("failed to notify of a failed order: %v", err)
 		}
 		return OrderResult{Processed: false}, err
 	}
 
-	if err := ctx.CallActivity(NotifyActivity, workflow.ActivityInput(Notification{Message: fmt.Sprintf("Order %s has completed!", orderID)})).Await(nil); err != nil {
+	if err := ctx.CallActivity(NotifyActivity, workflow.WithActivityInput(Notification{Message: fmt.Sprintf("Order %s has completed!", orderID)})).Await(nil); err != nil {
 		log.Printf("failed to notify of a successful order: %v", err)
 	}
 	return OrderResult{Processed: true}, err
@@ -2061,13 +2057,12 @@ func RequestApprovalActivity(ctx workflow.ActivityContext) (any, error) {
 	fmt.Printf("RequestApprovalActivity: Requesting approval for payment of %dUSD for %d %s\n", input.TotalCost, input.Quantity, input.ItemName)
 	return ApprovalRequired{Approval: true}, nil
 }
-
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 ## Tell us what you think!
 
@@ -2077,8 +2072,8 @@ Join the discussion in our [discord channel](https://discord.com/channels/778680
 
 ## Next steps
 
-- Set up Dapr Workflow with any programming language using [HTTP instead of an SDK]({{< ref howto-manage-workflow.md >}})
+- Set up Dapr Workflow with any programming language using [HTTP instead of an SDK]({{% ref howto-manage-workflow.md %}})
 - Walk through a more in-depth [.NET SDK example workflow](https://github.com/dapr/dotnet-sdk/tree/master/examples/Workflow)
-- Learn more about [Workflow as a Dapr building block]({{< ref workflow-overview >}})
+- Learn more about [Workflow as a Dapr building block]({{% ref workflow-overview %}})
 
 {{< button text="Explore Dapr tutorials  >>" page="getting-started/tutorials/_index.md" >}}

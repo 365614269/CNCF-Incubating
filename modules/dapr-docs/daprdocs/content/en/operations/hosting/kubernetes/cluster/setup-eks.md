@@ -113,6 +113,29 @@ You should see the following response:
 ✅  Success! Dapr has been installed to namespace dapr-system. To verify, run `dapr status -k' in your terminal. To get started, go here: https://docs.dapr.io/getting-started
 ```
 
+## IAM Roles for Service Accounts (IRSA)
+
+You can attach custom annotations to the ServiceAccounts created by the `dapr_rbac` Helm subchart—useful for enabling IAM Roles for Service Accounts (IRSA) on AWS EKS.
+This enables fine-grained, secure access control for Dapr components using EKS’s IRSA mechanism.
+Update your Dapr Helm values files to include the following necessary annotations for the ServiceAccounts.
+
+See [here]({{% ref authenticating-aws.md %}}) for more information on AWS authentication.
+
+```yaml
+serviceAccount:
+  operator:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/operator-role
+  injector:
+    annotations: {}
+  placement:
+    annotations: {}
+  scheduler:
+    annotations: {}
+  sentry:
+    annotations: {}
+````
+
 ## Troubleshooting
 
 ### Access permissions
@@ -127,6 +150,6 @@ aws eks --region [your_aws_region] update-kubeconfig --name [your_eks_cluster_na
 
 - [Learn more about EKS clusters](https://docs.aws.amazon.com/eks/latest/userguide/clusters.html)
 - [Learn more about eksctl](https://eksctl.io/getting-started/)
-- [Try out a Dapr quickstart]({{< ref quickstarts.md >}})
-- Learn how to [deploy Dapr on your cluster]({{< ref kubernetes-deploy.md >}})
-- [Kubernetes production guidelines]({{< ref kubernetes-production.md >}})
+- [Try out a Dapr quickstart]({{% ref quickstarts.md %}})
+- Learn how to [deploy Dapr on your cluster]({{% ref kubernetes-deploy.md %}})
+- [Kubernetes production guidelines]({{% ref kubernetes-production.md %}})

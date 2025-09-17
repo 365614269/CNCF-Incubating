@@ -21,7 +21,6 @@
 #include "lib/common.h"
 #include "lib/ipv6.h"
 #include "lib/ipv4.h"
-#include "lib/eth.h"
 #include "lib/dbg.h"
 #include "lib/trace.h"
 #include "lib/l3.h"
@@ -87,12 +86,12 @@ handle_ipv6(struct __ctx_buff *ctx, __u32 identity, __s8 *ext_err __maybe_unused
 	}
 #endif
 
-	if (!revalidate_data(ctx, &data, &data_end, &ip6))
-		return DROP_INVALID;
-
 #ifndef ENABLE_HOST_ROUTING
 	return TC_ACT_OK;
 #endif
+
+	if (!revalidate_data(ctx, &data, &data_end, &ip6))
+		return DROP_INVALID;
 
 	ep = lookup_ip6_endpoint(ip6);
 	if (ep && !(ep->flags & ENDPOINT_MASK_HOST_DELIVERY)) {
@@ -196,9 +195,6 @@ handle_ipv4(struct __ctx_buff *ctx, __u32 identity, __s8 *ext_err __maybe_unused
 	}
 #endif
 
-	if (!revalidate_data(ctx, &data, &data_end, &ip4))
-		return DROP_INVALID;
-
 #ifndef ENABLE_HOST_ROUTING
 	/* Without bpf_redirect_neigh() helper, we cannot redirect a
 	 * packet to a local endpoint in the direct routing mode, as
@@ -211,6 +207,9 @@ handle_ipv4(struct __ctx_buff *ctx, __u32 identity, __s8 *ext_err __maybe_unused
 	 */
 	return TC_ACT_OK;
 #endif
+
+	if (!revalidate_data(ctx, &data, &data_end, &ip4))
+		return DROP_INVALID;
 
 	/* Lookup IPv4 address in list of local endpoints and host IPs */
 	ep = lookup_ip4_endpoint(ip4);
@@ -269,13 +268,9 @@ int cil_from_wireguard(struct __ctx_buff *ctx)
 	int __maybe_unused ret;
 	__u32 __maybe_unused identity = UNKNOWN_ID;
 	__s8 __maybe_unused ext_err = 0;
-	__u16 proto = 0;
+	__u16 proto = ctx_get_protocol(ctx);
 
 	ctx_skip_nodeport_clear(ctx);
-
-	/* Pass unknown traffic to the stack */
-	if (!validate_ethertype(ctx, &proto))
-		return TC_ACT_OK;
 
 	bpf_clear_meta(ctx);
 	check_and_store_ip_trace_id(ctx);

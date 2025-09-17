@@ -21,15 +21,34 @@ Dapr provides end-to-end security with the service invocation API, with the abil
 
 <img src="/images/security-end-to-end-communication.png" width=1000>
 
+## Application Identity
+
+In Dapr, Application Identity is built around the concept of an App ID.
+The App ID is the single atomic unit of identity in Dapr:
+
+- Every Dapr-enabled application has an App ID. Multiple replicas of the application share the same App ID.
+- All routing, service discovery, security policies, and access control in Dapr are derived from this App ID.
+- Service-to-service communication in Dapr uses the App ID instead of relying on IP addresses or hostnames, enabling stable and portable addressing across environments.
+
+For example, when one service calls another using Dapr's service invocation API, it calls the target by its App ID rather than its network location.
+This abstraction ensures that security policies, mutual TLS (mTLS) certificates, and access controls consistently apply at the application identity level.
+
+## Namespaces and Scoping
+
+While App IDs uniquely identify applications, namespaces provide an additional layer of scoping and isolation, especially in multi-tenant or large environments.
+
+- Namespaces allow operators to deploy Dapr applications in logically separated groups.
+- Two applications can have the same App ID in different namespaces without conflicting because security, routing, and discovery are namespace-aware.
+
 ## Service invocation scoping access policy
 
-Dapr applications can be scoped to namespaces for deployment and security. You can call between services deployed to different namespaces. Read the [Service invocation across namespaces]({{< ref "service-invocation-namespaces.md" >}}) article for more details.
+Dapr applications can be scoped to namespaces for deployment and security. You can call between services deployed to different namespaces. Read the [Service invocation across namespaces]({{% ref "service-invocation-namespaces" %}}) article for more details.
 
-Dapr applications can restrict which operations can be called, including which applications are allowed (or denied) to call it. Read [How-To: Apply access control list configuration for service invocation]({{< ref invoke-allowlist.md >}}) for more details.
+Dapr applications can restrict which operations can be called, including which applications are allowed (or denied) to call it. Read [How-To: Apply access control list configuration for service invocation]({{% ref invoke-allowlist %}}) for more details.
 
 ## Pub/sub topic scoping access policy
 
-For pub/sub components, you can limit which topic types and applications are allowed to publish and subscribe to specific topics. Read [Scope Pub/Sub topic access]({{< ref "pubsub-scopes.md" >}}) for more details.
+For pub/sub components, you can limit which topic types and applications are allowed to publish and subscribe to specific topics. Read [Scope Pub/Sub topic access]({{% ref "pubsub-scopes" %}}) for more details.
 
 ## Encryption of data using mTLS
 
@@ -58,7 +77,7 @@ When a new Dapr sidecar initializes, it checks if mTLS is enabled. If so, an ECD
 
 mTLS can be turned on/off by editing the default configuration deployed with Dapr via the `spec.mtls.enabled` field.
 
-[You can do this for both Kubernetes and self-hosted modes]({{< ref mtls.md >}}).
+[You can do this for both Kubernetes and self-hosted modes]({{% ref mtls %}}).
 
 #### mTLS in self hosted mode
 
@@ -81,7 +100,7 @@ The diagram below shows how the Sentry system service issues certificates for ap
 
 ### Preventing IP addresses on Dapr
 
-To prevent Dapr sidecars from being called on any IP address (especially in production environments such as Kubernetes), Dapr restricts its listening IP addresses to `localhost`. Use the [dapr-listen-addresses]({{<ref arguments-annotations-overview>}}) setting if you need to enable access from external addresses.
+To prevent Dapr sidecars from being called on any IP address (especially in production environments such as Kubernetes), Dapr restricts its listening IP addresses to `localhost`. Use the [dapr-listen-addresses]({{%ref arguments-annotations-overview%}}) setting if you need to enable access from external addresses.
 
 ## Secure Dapr to application communication
 
@@ -92,8 +111,8 @@ The Dapr sidecar runs close to the application through `localhost`, and is recom
 
 For more details on configuring API token security, read:
 
-- [Using an API token to authentication requests from an application to Dapr]({{< ref api-token.md >}}).
-- [Using an API token to authentication requests from Dapr to the application]({{< ref app-api-token.md >}})
+- [Using an API token to authentication requests from an application to Dapr]({{% ref api-token %}}).
+- [Using an API token to authentication requests from Dapr to the application]({{% ref app-api-token %}})
 
 ## Secure Dapr to control plane communication
 
@@ -124,15 +143,21 @@ Dapr is designed for operators to manage mTLS certificates and enforce OAuth pol
 
 ## mTLS Certificate deployment and rotation
 
-While operators and developers can bring their own certificates into Dapr, Dapr automatically creates and persists self-signed root and issuer certificates. Read [Setup & configure mTLS certificates]({{< ref mtls.md >}}) for more details.
+While operators and developers can bring their own certificates into Dapr, Dapr automatically creates and persists self-signed root and issuer certificates. Read [Setup & configure mTLS certificates]({{% ref mtls %}}) for more details.
 
 ## Middleware endpoint authorization with OAuth
 
-With Dapr OAuth 2.0 middleware, you can enable OAuth authorization on Dapr endpoints for your APIs. Read [Configure endpoint authorization with OAuth]({{< ref oauth.md >}}) for details. Dapr has other middleware components that you can use for OpenID Connect and OPA Policies. For more details, [read about supported middleware]({{< ref supported-middleware.md >}}).
+With Dapr OAuth 2.0 middleware, you can enable OAuth authorization on Dapr endpoints for your APIs. Read [Configure endpoint authorization with OAuth]({{% ref oauth %}}) for details. Dapr has other middleware components that you can use for OpenID Connect and OPA Policies. For more details, [read about supported middleware]({{% ref supported-middleware %}}).
 
 ## Network security
 
 You can adopt common network security technologies, such as network security groups (NSGs), demilitarized zones (DMZs), and firewalls, to provide layers of protection over your networked resources. For example, unless configured to talk to an external binding target, Dapr sidecars don’t open connections to the internet and most binding implementations only use outbound connections. You can design your firewall rules to allow outbound connections only through designated ports.
+
+## Run as non-root in Kubernetes
+When running in Kubernetes, Dapr services ensure each process is running as non-root. This is done by checking the UID & GID of the process is `65532`, and fatal erroring if it is not what is expected. If you must run a non-default UID & GID in Kubernetes, set the following env var to skip this check.
+```bash
+DAPR_UNSAFE_SKIP_CONTAINER_UID_GID_CHECK="true"
+```
 
 # Security policies
 
@@ -144,19 +169,19 @@ In certain scenarios, such as with zero trust networks or when exposing the Dapr
 
 <img src="/images/security-dapr-API-scoping.png" width=1000>
 
-Read [How-To: Selectively enable Dapr APIs on the Dapr sidecar]({{< ref api-allowlist.md >}}) for more details.
+Read [How-To: Selectively enable Dapr APIs on the Dapr sidecar]({{% ref api-allowlist %}}) for more details.
 
 ## Secret scoping access policy
 
-To limit the Dapr application's access to secrets, you can define secret scopes. Add a secret scope policy to the application configuration with restrictive permissions. Read [How To: Use secret scoping]({{< ref secret-scope.md >}}) for more details.
+To limit the Dapr application's access to secrets, you can define secret scopes. Add a secret scope policy to the application configuration with restrictive permissions. Read [How To: Use secret scoping]({{% ref secret-scope %}}) for more details.
 
 ## Component application scoping access policy and secret usage
 
-Dapr components can be namespaced. That means a Dapr sidecar instance can only access the components that have been deployed to the same namespace. Read [How-To: Scope components to one or more applications using namespaces]({{< ref component-scopes.md >}}) for more details.
+Dapr components can be namespaced. That means a Dapr sidecar instance can only access the components that have been deployed to the same namespace. Read [How-To: Scope components to one or more applications using namespaces]({{% ref component-scopes %}}) for more details.
 
-Dapr provides application-level scoping for components by allowing you to specify which applications can consume specific components and deny others. Read [restricting application access to components with scopes]({{< ref "component-scopes.md#application-access-to-components-with-scopes" >}}) for more details.
+Dapr provides application-level scoping for components by allowing you to specify which applications can consume specific components and deny others. Read [restricting application access to components with scopes]({{% ref "component-scopes#application-access-to-components-with-scopes" %}}) for more details.
 
-Dapr components can use Dapr's built-in secret management capability to manage secrets. Read the [secret store overview]({{< ref secrets-overview.md >}}) and [How-To: Reference secrets in components]({{< ref component-secrets.md >}}) for more details.
+Dapr components can use Dapr's built-in secret management capability to manage secrets. Read the [secret store overview]({{% ref secrets-overview %}}) and [How-To: Reference secrets in components]({{% ref component-secrets %}}) for more details.
 
 ## Bindings security
 
@@ -173,7 +198,7 @@ By default Dapr doesn't transform the state data from applications. This means:
 
 Dapr components can use a configured authentication method to authenticate with the underlying state store. Many state store implementations use official client libraries that generally use secured communication channels with the servers.
 
-However, application state often needs to get encrypted at rest to provide stronger security in enterprise workloads or regulated environments. Dapr provides automatic client-side state encryption based on AES256. Read [How-To: Encrypt application state]({{< ref howto-encrypt-state.md >}}) for more details.
+However, application state often needs to get encrypted at rest to provide stronger security in enterprise workloads or regulated environments. Dapr provides automatic client-side state encryption based on AES256. Read [How-To: Encrypt application state]({{% ref howto-encrypt-state %}}) for more details.
 
 ## Dapr Runtime state
 
@@ -281,8 +306,8 @@ The full report can be found [here](/docs/Dapr-july-2020-security-audit-report.p
 
 ## Reporting a security issue
 
-Visit [this page]({{< ref support-security-issues.md >}}) to report a security issue to the Dapr maintainers.
+Visit [this page]({{% ref support-security-issues %}}) to report a security issue to the Dapr maintainers.
 
 ## Related links
 
-[Operational Security]({{< ref "security.md" >}})
+[Operational Security]({{% ref "security" %}})

@@ -3,13 +3,13 @@ type: docs
 title: "State store component specs"
 linkTitle: "State stores"
 description: "The supported state stores that interface with Dapr"
-weight: 4000
+weight: 10000
 aliases:
   - "/operations/components/setup-state-store/supported-state-stores/"
 no_list: true
 ---
 
-The following table lists state stores supported, at various levels, by the Dapr state management building block. [Learn how to set up different state stores for Dapr state management.]({{< ref setup-state-store.md >}})
+The following table lists state stores supported, at various levels, by the Dapr state management building block. [Learn how to set up different state stores for Dapr state management.]({{% ref setup-state-store.md %}})
 
 {{< partial "components/description.html" >}}
 

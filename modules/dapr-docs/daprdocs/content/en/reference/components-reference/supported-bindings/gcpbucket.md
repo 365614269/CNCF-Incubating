@@ -9,7 +9,7 @@ aliases:
 
 ## Component format
 
-To setup GCP Storage Bucket binding create a component of type `bindings.gcp.bucket`. See [this guide]({{< ref "howto-bindings.md#1-create-a-binding" >}}) on how to create and apply a binding configuration.
+To setup GCP Storage Bucket binding create a component of type `bindings.gcp.bucket`. See [this guide]({{% ref "howto-bindings.md#1-create-a-binding" %}}) on how to create and apply a binding configuration.
 
 
 ```yaml
@@ -47,10 +47,12 @@ spec:
     value: "<bool>"
   - name: encodeBase64
     value: "<bool>"
+  - name: contentType
+    value: "<string>"
 ```
 
 {{% alert title="Warning" color="warning" %}}
-The above example uses secrets as plain strings. It is recommended to use a secret store for the secrets as described [here]({{< ref component-secrets.md >}}).
+The above example uses secrets as plain strings. It is recommended to use a secret store for the secrets as described [here]({{% ref component-secrets.md %}}).
 {{% /alert %}}
 
 ## Spec metadata fields
@@ -70,6 +72,12 @@ The above example uses secrets as plain strings. It is recommended to use a secr
 | `client_x509_cert_url` | N | Output | If using explicit credentials, this field should contain the `client_x509_cert_url` field from the service account json | `https://www.googleapis.com/robot/v1/metadata/x509/<PROJECT_NAME>.iam.gserviceaccount.com`|
 | `decodeBase64` | N | Output | Configuration to decode base64 file content before saving to bucket storage. (In case of saving a file with binary content). `true` is the only allowed positive value. Other positive variations like `"True", "1"` are not acceptable. Defaults to `false` | `true`, `false` |
 | `encodeBase64` | N | Output | Configuration to encode base64 file content before return the content. (In case of opening a file with binary content). `true` is the only allowed positive value. Other positive variations like `"True", "1"` are not acceptable. Defaults to `false` | `true`, `false` |
+| `contentType` | N | Output | The MIME type to set for objects created in the bucket. If not specified, GCP attempts to auto-detect the content type. | `"text/csv"`, `"application/json"`, `"image/png"` |
+
+## GCP Credentials
+
+Since the GCP Storage Bucket component uses the GCP Go Client Libraries, by default it authenticates using **Application Default Credentials**. This is explained further in the [Authenticate to GCP Cloud services using client libraries](https://cloud.google.com/docs/authentication/client-libraries) guide.
+Also, see how to [Set up Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc).
 
 ## GCP Credentials
 
@@ -82,8 +90,13 @@ This component supports **output binding** with the following operations:
 
 - `create` : [Create file](#create-file)
 - `get` : [Get file](#get-file)
+- `bulkGet` : [Bulk get objects](#bulk-get-objects)
 - `delete` : [Delete file](#delete-file)
 - `list`: [List file](#list-files)
+- `copy`: [Copy file](#copy-files)
+- `move`: [Move file](#move-files)
+- `rename`: [Rename file](#rename-files)
+
 
 ### Create file
 
@@ -100,47 +113,67 @@ To perform a create operation, invoke the GCP Storage Bucket binding with a `POS
 The metadata parameters are:
 - `key` - (optional) the name of the object
 - `decodeBase64` - (optional) configuration to decode base64 file content before saving to storage
+- `contentType` - (optional) the MIME type of the object being created
 
 #### Examples
 ##### Save text to a random generated UUID file
 
-{{< tabs Windows Linux >}}
-  {{% codetab %}}
+{{< tabpane text=true >}}
+  {{% tab "Windows" %}}
   On Windows, utilize cmd prompt (PowerShell has different escaping mechanism)
   ```bash
   curl -d "{ \"operation\": \"create\", \"data\": \"Hello World\" }" http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-  {{% codetab %}}
+  {{% tab "Linux" %}}
   ```bash
   curl -d '{ "operation": "create", "data": "Hello World" }' \
         http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 ##### Save text to a specific file
 
-{{< tabs Windows Linux >}}
+{{< tabpane text=true >}}
 
-  {{% codetab %}}
+  {{% tab "Windows" %}}
   ```bash
   curl -d "{ \"operation\": \"create\", \"data\": \"Hello World\", \"metadata\": { \"key\": \"my-test-file.txt\" } }" \
         http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-  {{% codetab %}}
+  {{% tab "Linux" %}}
   ```bash
   curl -d '{ "operation": "create", "data": "Hello World", "metadata": { "key": "my-test-file.txt" } }' \
         http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
+##### Save a CSV file with correct content type
+
+{{< tabpane text=true >}}
+
+  {{% tab %}}
+  ```bash
+  curl -d "{ \"operation\": \"create\", \"data\": \"$(cat data.csv | base64)\", \"metadata\": { \"key\": \"data.csv\", \"contentType\": \"text/csv\", \"decodeBase64\": \"true\" } }" \
+        http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
+  ```
+  {{% /tab %}}
+
+  {{% tab %}}
+  ```bash
+  curl -d '{ "operation": "create", "data": "'"$(base64 < data.csv)"'", "metadata": { "key": "data.csv", "contentType": "text/csv", "decodeBase64": "true" } }' \
+        http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
+  ```
+  {{% /tab %}}
+
+{{< /tabpane >}}
 
 ##### Upload a file
 
@@ -148,22 +181,23 @@ To upload a file, pass the file contents as the data payload; you may want to en
 
 Then you can upload it as you would normally:
 
-{{< tabs Windows Linux >}}
+{{< tabpane text=true >}}
 
-  {{% codetab %}}
+  {{% tab "Windows" %}}
   ```bash
-  curl -d "{ \"operation\": \"create\", \"data\": \"(YOUR_FILE_CONTENTS)\", \"metadata\": { \"key\": \"my-test-file.jpg\" } }" http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
+  curl -d "{ \"operation\": \"create\", \"data\": \"(YOUR_FILE_CONTENTS)\", \"metadata\": { \"key\": \"my-test-file.jpg\", \"contentType\": \"image/jpeg\" } }" http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-  {{% codetab %}}
+  {{% tab "Linux" %}}
   ```bash
-  curl -d '{ "operation": "create", "data": "$(cat my-test-file.jpg)", "metadata": { "key": "my-test-file.jpg" } }' \
+  curl -d '{ "operation": "create", "data": "$(cat my-test-file.jpg | base64)", "metadata": { "key": "my-test-file.jpg", "contentType": "image/jpeg", "decodeBase64": "true" } }' \
         http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
+
 #### Response
 
 The response body will contain the following JSON:
@@ -195,27 +229,93 @@ The metadata parameters are:
 
 #### Example
 
-{{< tabs Windows Linux >}}
+{{< tabpane text=true >}}
 
-  {{% codetab %}}
+  {{% tab "Windows" %}}
   ```bash
   curl -d '{ \"operation\": \"get\", \"metadata\": { \"key\": \"my-test-file.txt\" }}' http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-  {{% codetab %}}
+  {{% tab "Linux" %}}
   ```bash
   curl -d '{ "operation": "get", "metadata": { "key": "my-test-file.txt" }}' \
         http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 #### Response
 
 The response body contains the value stored in the object.
 
+### Bulk get objects
+
+To perform a bulk get operation that retrieves all bucket files at once, invoke the GCP bucket binding with a `POST` method and the following JSON body:
+
+```json
+{
+  "operation": "bulkGet",
+}
+```
+
+The metadata parameters are:
+
+- `encodeBase64` - (optional) configuration to encode base64 file content before return the content for all files
+
+#### Example
+
+{{< tabpane text=true >}}
+
+  {{% tab header="Windows" %}}
+  ```bash
+  curl -d '{ \"operation\": \"bulkget\"}' http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
+  ```
+  {{% /tab %}}
+
+  {{% tab header="Linux" %}}
+  ```bash
+  curl -d '{ "operation": "bulkget"}' \
+        http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
+  ```
+  {{% /tab %}}
+
+{{< /tabpane >}}
+
+#### Response
+
+The response body contains an array of objects, where each object represents a file in the bucket with the following structure:
+
+```json
+[
+  {
+    "name": "file1.txt",
+    "data": "content of file1",
+    "attrs": {
+      "bucket": "mybucket",
+      "name": "file1.txt",
+      "size": 1234,
+      ...
+    }
+  },
+  {
+    "name": "file2.txt",
+    "data": "content of file2",
+    "attrs": {
+      "bucket": "mybucket",
+      "name": "file2.txt",
+      "size": 5678,
+      ...
+    }
+  }
+]
+```
+
+Each object in the array contains:
+- `name`: The name of the file
+- `data`: The content of the file
+- `attrs`: Object attributes from GCP Storage including metadata like creation time, size, content type, etc.
 
 ### Delete object
 
@@ -239,22 +339,22 @@ The metadata parameters are:
 
 ##### Delete object
 
-{{< tabs Windows Linux >}}
+{{< tabpane text=true >}}
 
-  {{% codetab %}}
+  {{% tab "Windows" %}}
   ```bash
   curl -d '{ \"operation\": \"delete\", \"metadata\": { \"key\": \"my-test-file.txt\" }}' http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-  {{% codetab %}}
+  {{% tab "Linux" %}}
   ```bash
   curl -d '{ "operation": "delete", "metadata": { "key": "my-test-file.txt" }}' \
         http://localhost:<dapr-port>/v1.0/bindings/<binding-name>
   ```
-  {{% /codetab %}}
+  {{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 #### Response
 An HTTP 204 (No Content) and empty body will be retuned if successful.
@@ -262,7 +362,7 @@ An HTTP 204 (No Content) and empty body will be retuned if successful.
 
 ### List objects
 
-To perform a list object operation, invoke the S3  binding with a `POST` method and the following JSON body:
+To perform a list object operation, invoke the GCP bucket binding with a `POST` method and the following JSON body:
 
 ```json
 {
@@ -321,10 +421,68 @@ The list of objects will be returned as JSON array in the following form:
 	}
 ]
 ```
+
+### Copy objects
+
+To perform a copy object operation, invoke the GCP bucket binding with a `POST` method and the following JSON body:
+
+```json
+{
+  "operation": "copy",
+  "metadata": {
+    "key": "source-file.txt",
+    "destinationBucket": "destination-bucket-name"
+  }
+}
+```
+
+The metadata parameters are:
+
+- `key` - the name of the source object (required)
+- `destinationBucket` - the name of the destination bucket (required)
+
+### Move objects
+
+To perform a move object operation, invoke the GCP bucket binding with a `POST` method and the following JSON body:
+
+```json
+{
+  "operation": "move",
+  "metadata": {
+    "key": "source-file.txt",
+    "destinationBucket": "destination-bucket-name"
+  }
+}
+```
+
+The metadata parameters are:
+
+- `key` - the name of the source object (required)
+- `destinationBucket` - the name of the destination bucket (required)
+
+### Rename objects
+
+To perform a rename object operation, invoke the GCP bucket binding with a `POST` method and the following JSON body:
+
+```json
+{
+  "operation": "rename",
+  "metadata": {
+    "key": "old-name.txt",
+    "newName": "new-name.txt"
+  }
+}
+```
+
+The metadata parameters are:
+
+- `key` - the current name of the object (required)
+- `newName` - the new name of the object (required)
+
 ## Related links
 
-- [Basic schema for a Dapr component]({{< ref component-schema >}})
-- [Bindings building block]({{< ref bindings >}})
-- [How-To: Trigger application with input binding]({{< ref howto-triggers.md >}})
-- [How-To: Use bindings to interface with external resources]({{< ref howto-bindings.md >}})
-- [Bindings API reference]({{< ref bindings_api.md >}})
+- [Basic schema for a Dapr component]({{% ref component-schema %}})
+- [Bindings building block]({{% ref bindings %}})
+- [How-To: Trigger application with input binding]({{% ref howto-triggers.md %}})
+- [How-To: Use bindings to interface with external resources]({{% ref howto-bindings.md %}})
+- [Bindings API reference]({{% ref bindings_api.md %}})

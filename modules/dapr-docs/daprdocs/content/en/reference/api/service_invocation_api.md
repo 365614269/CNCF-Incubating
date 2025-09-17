@@ -3,7 +3,7 @@ type: docs
 title: "Service invocation API reference"
 linkTitle: "Service invocation API"
 description: "Detailed documentation on the service invocation API"
-weight: 100
+weight: 1400
 ---
 
 Dapr provides users with the ability to call other applications that are using Dapr with a unique named identifier (appId), or HTTP endpoints that are not using Dapr.
@@ -134,6 +134,18 @@ In case you are invoking `mathService` on a different namespace, you can use the
 
 In this URL, `testing` is the namespace that `mathService` is running in.
 
+### Headers in Service Invocation Requests
+
+When Dapr invokes a service, it automatically adds the following headers to the request:
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `dapr-caller-app-id` | The ID of the calling application | `myapp` |
+| `dapr-caller-namespace` | The namespace of the calling application | `production` |
+| `dapr-callee-app-id` | The ID of the called application | `mathService` |
+
+These headers are available in both HTTP and gRPC service invocation requests.
+
 #### Non-Dapr Endpoint Example
 
 If the `mathService` service was a non-Dapr application, then it could be invoked using service invocation via an `HTTPEndpoint`, as well as a Fully Qualified Domain Name (FQDN) URL.
@@ -149,4 +161,4 @@ curl http://localhost:3500/v1.0/invoke/http://mathServiceURL.com/method/add \
 ```
 
 ## Next Steps
-- [How-To: Invoke and discover services]({{< ref howto-invoke-discover-services.md >}})
+- [How-To: Invoke and discover services]({{% ref howto-invoke-discover-services.md %}})

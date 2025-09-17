@@ -26,8 +26,7 @@ If you are just getting started, it is recommended to use workload identity fede
 
 ## Managed identities and workload identity federation
 
-When your application is running on a supported Azure service (such as Azure VMs, Azure Container Apps, Azure Web Apps, etc), an identity for your application can be assigned at the infrastructure level.
-
+With Managed Identities (MI), your application can authenticate with Microsoft Entra ID and obtain an access token to make requests to Azure services. When your application is running on a supported Azure service (such as Azure VMs, Azure Container Apps, Azure Web Apps, etc), an identity for your application can be assigned at the infrastructure level. You can also setup Microsoft Entra ID to federate trust to your Dapr application identity directly by using a [Federated Identity Credential](https://learn.microsoft.com/graph/api/resources/federatedidentitycredentials-overview?view=graph-rest-1.0). This allows you to configure access to your Microsoft resources even when not running on Microsoft infrastructure. To see how to configure Dapr to use a federated identity, see the section on [Authenticating with a Federated Identity Credential](#authenticating-with-a-federated-identity-credential).
 This is done through [system or user assigned managed identities]({{< ref howto-mi.md >}}), or [workload identity federation]({{< ref howto-wif.md >}}).
 
 Once using managed identities, your code doesn't have to deal with credentials, which:
@@ -109,11 +108,109 @@ When running on Kubernetes, you can also use references to Kubernetes secrets fo
 |-----------------|----------|----------------------------|------------------------------------------|
 | `azureClientId` | N        | Client ID (application ID) | `"c7dd251f-811f-4ba2-a905-acd4d3f8f08b"` |
 
-[Using Managed Identities]({{< ref howto-mi.md >}}), the `azureClientId` field is generally recommended. The field is optional when using a system-assigned identity, but may be required when using user-assigned identities.
+[Using Managed Identities]({{% ref howto-mi.md %}}), the `azureClientId` field is generally recommended. The field is optional when using a system-assigned identity, but may be required when using user-assigned identities.
 
 #### Authenticating with Workload Identity on AKS
 
 When running on Azure Kubernetes Service (AKS), you can authenticate components using Workload Identity. Refer to the Azure AKS documentation on [enabling Workload Identity](https://learn.microsoft.com/azure/aks/workload-identity-overview) for your Kubernetes resources.
+
+#### Authenticating with a Federated Identity Credential
+
+You can use a [Federated Identity Credential](https://learn.microsoft.com/graph/api/resources/federatedidentitycredentials-overview?view=graph-rest-1.0) in Microsoft Entra ID to federate trust directly to your Dapr installation regardless of where it is running. This allows you to easily configure access rules against your Dapr application's [SPIFFE](https://spiffe.io/) ID consistently across different clouds.
+
+In order to federate trust, you must be running Dapr Sentry with JWT issuing and OIDC discovery enabled. These can be configured using the following Dapr Sentry helm values:
+
+```yaml
+jwt:
+  # Enable JWT token issuance by Sentry
+  enabled: true
+  # Issuer value for JWT tokens
+  issuer: "<your-issuer-domain>"
+
+oidc:
+  enabled: true
+  server:
+    # Port for the OIDC HTTP server
+    port: 9080
+  tls:
+    # Enable TLS for the OIDC HTTP server
+    enabled: true
+    # TLS certificate file for the OIDC HTTP server
+    certFile: "<path-to-tls-cert.pem>"
+    # TLS certificate file for the OIDC HTTP server
+    keyFile: "<path-to-tls-key.pem>"
+```
+
+{{% alert title="Warning" color="warning" %}}
+The `issuer` value must match exactly the value you provide when creating the Federated Identity Credential in Microsoft Entra ID.
+{{% /alert %}}
+
+Providing these settings exposes the following endpoints on your Dapr Sentry installation on the provided OIDC HTTP port:
+```
+/.well-known/openid-configuration
+/jwks.json
+```
+
+You also need to provide the Dapr runtime configuration to request a JWT token with the Azure audience `api://AzureADTokenExchange`.
+When running in standalone mode, this can be provided using the flag `--sentry-request-jwt-audiences=api://AzureADTokenExchange`.
+When running in Kubernetes, this can be provided by decorating the application Kubernetes manifest with the annotations `"dapr.io/sentry-request-jwt-audiences": "api://AzureADTokenExchange"`.
+This ensures Sentry service issues a JWT token with the correct audience, which is required for Microsoft Entra ID to validate the token.
+
+In order for Microsoft Entra ID to be able to access the OIDC endpoints, you must expose them on a public address. You must ensure that the domain that you are serving these endpoints via is the same as the issuer you provided when configuration Dapr Sentry.
+
+You can now create your federated credential in Microsoft Entra ID. 
+
+```shell
+cat > creds.json <<EOF
+{ 
+  "name": "DaprAppIDSpiffe",
+  "issuer": "https://<your-issuer-domain>",
+  "subject": spiffe://public/ns/<dapr-app-id-namespace>/<dapr-app-id>",
+  "audiences": ["api://AzureADTokenExchange"],
+  "description": "Credential for Dapr App ID"
+}
+EOF
+
+export APP_ID=$(az ad app create --display-name my-dapr-app --enable-access-token-issuance --enable-id-token-issuance | jq .id)
+az ad sp create --id $APP_ID
+az ad app federated-credential create --id $APP_ID --parameters ./creds.json
+```
+
+Now that you have a federated credential for your Microsoft Entra ID Application Registration, you can assign the desired roles to it's service principal.
+
+An example of assigning "Storage Blob Data Owner" role is below.
+```shell
+az role assignment create --assignee-object-id $APP_ID --assignee-principal-type ServicePrincipal --role "Storage Blob Data Owner" --scope "/subscriptions/$SUBSCRIPTION/resourceGroups/$GROUP/providers/Microsoft.Storage/storageAccounts/$ACCOUNT_NAME"
+```
+
+To configure a Dapr Component to access an Azure resource using the federated credentail, you first need to fetch your `clientId` and `tenantId`:
+```shell
+CLIENT_ID=$(az ad app show --id $APP_ID --query appId --output tsv)
+TENANT_ID=$(az account show --query tenantId --output tsv)
+```
+
+Then you can create your Azure Dapr Component and simply provide these value:
+```yaml
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: azureblob
+spec:
+  type: state.azure.blobstorage
+  version: v2
+  initTimeout: 10s # Increase the init timeout to allow enough time for Azure to perform the token exchange
+  metadata:
+  - name: clientId
+    value: $CLIENT_ID
+  - name: tenantId
+    value:  $TENANT_ID
+  - name: accountName
+    value: $ACCOUNT_NAME
+  - name: containerName
+    value: $CONTAINER_NAME
+```
+
+The Dapr runtime uses these details to authenticate with Microsoft Entra ID, using the Dapr Sentry issued JWT token to exchange for an access token to access the Azure resource.
 
 #### Authenticating using Azure CLI credentials (development-only)
 
@@ -132,9 +229,9 @@ Using this authentication method does not require setting any metadata option.
 
 In this example, you will set up an Azure Key Vault secret store component that uses Microsoft Entra ID to authenticate.
 
-{{< tabs "Self-Hosted" "Kubernetes">}}
+{{< tabpane text=true >}}
 
-{{% codetab %}}
+{{% tab "Self-Hosted" %}}
 
 To use a **client secret**, create a file called `azurekeyvault.yaml` in the components directory, filling in with the details from the above setup process:
 
@@ -179,9 +276,9 @@ spec:
   - name: azureCertificateFile
     value : "[pfx_certificate_file_fully_qualified_local_path]"
 ```
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
+{{% tab "Kubernetes" %}}
 In Kubernetes, you store the client secret or the certificate into the Kubernetes Secret Store and then refer to those in the YAML file.
 
 To use a **client secret**:
@@ -276,9 +373,9 @@ To use a **certificate**:
     kubectl apply -f azurekeyvault.yaml
     ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 ## Next steps
 
@@ -288,7 +385,7 @@ To use a **certificate**:
 
 - [Microsoft Entra ID app credential: Azure CLI reference](https://docs.microsoft.com/cli/azure/ad/app/credential)
 - [Azure Managed Service Identity (MSI) overview](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/overview)
-- [Secrets building block]({{< ref secrets >}})
-- [How-To: Retrieve a secret]({{< ref "howto-secrets.md" >}})
-- [How-To: Reference secrets in Dapr components]({{< ref component-secrets.md >}})
-- [Secrets API reference]({{< ref secrets_api.md >}})
+- [Secrets building block]({{% ref secrets %}})
+- [How-To: Retrieve a secret]({{% ref "howto-secrets.md" %}})
+- [How-To: Reference secrets in Dapr components]({{% ref component-secrets.md %}})
+- [Secrets API reference]({{% ref secrets_api.md %}})

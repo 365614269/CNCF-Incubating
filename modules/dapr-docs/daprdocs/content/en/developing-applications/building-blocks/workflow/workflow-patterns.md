@@ -25,10 +25,9 @@ While the pattern is simple, there are many complexities hidden in the implement
 
 Dapr Workflow solves these complexities by allowing you to implement the task chaining pattern concisely as a simple function in the programming language of your choice, as shown in the following example.
 
-{{< tabs Python JavaScript ".NET" Java Go >}}
+{{< tabpane text=true >}}
 
-{{% codetab %}}
-<!--python-->
+{{% tab "Python" %}}
 
 ```python
 import dapr.ext.workflow as wf
@@ -65,15 +64,14 @@ def step3(ctx, activity_input):
 
 def error_handler(ctx, error):
     print(f'Executing error handler: {error}.')
-    # Do some compensating work
+    # Apply some compensating work
 ```
 
 > **Note** Workflow retry policies will be available in a future version of the Python SDK.
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--javascript-->
+{{% tab "JavaScript" %}}
 
 ```javascript
 import { DaprWorkflowClient, WorkflowActivityContext, WorkflowContext, WorkflowRuntime, TWorkflow } from "@dapr/dapr";
@@ -141,13 +139,13 @@ async function start() {
 start().catch((e) => {
   console.error(e);
   process.exit(1);
+ # Apply custom compensation logic
 });
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--dotnet-->
+{{% tab ".NET" %}}
 
 ```csharp
 // Expotential backoff retry policy that survives long outages
@@ -177,10 +175,9 @@ catch (TaskFailedException) // Task failures are surfaced as TaskFailedException
 
 > **Note** In the example above, `"Step1"`, `"Step2"`, `"Step3"`, and `"MyCompensation"` represent workflow activities, which are functions in your code that actually implement the steps of the workflow. For brevity, these activity implementations are left out of this example.
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--java-->
+{{% tab "Java" %}}
 
 ```java
 public class ChainWorkflow extends Workflow {
@@ -232,10 +229,9 @@ public class ChainWorkflow extends Workflow {
     }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--go-->
+{{% tab "Go" %}}
 
 ```go
 func TaskChainWorkflow(ctx *workflow.WorkflowContext) (any, error) {
@@ -283,9 +279,9 @@ func Step3(ctx workflow.ActivityContext) (any, error) {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 As you can see, the workflow is expressed as a simple series of statements in the programming language of your choice. This allows any engineer in the organization to quickly understand the end-to-end flow without necessarily needing to understand the end-to-end system architecture.
 
@@ -303,7 +299,7 @@ In the fan-out/fan-in design pattern, you execute multiple tasks simultaneously 
 
 <img src="/images/workflow-overview/workflows-fanin-fanout.png" width=800 alt="Diagram showing how the fan-out/fan-in workflow pattern works">
 
-In addition to the challenges mentioned in [the previous pattern]({{< ref "workflow-patterns.md#task-chaining" >}}), there are several important questions to consider when implementing the fan-out/fan-in pattern manually:
+In addition to the challenges mentioned in [the previous pattern]({{% ref "workflow-patterns.md#task-chaining" %}}), there are several important questions to consider when implementing the fan-out/fan-in pattern manually:
 
 - How do you control the degree of parallelism?
 - How do you know when to trigger subsequent aggregation steps?
@@ -311,10 +307,9 @@ In addition to the challenges mentioned in [the previous pattern]({{< ref "workf
 
 Dapr Workflows provides a way to express the fan-out/fan-in pattern as a simple function, as shown in the following example:
 
-{{< tabs Python JavaScript ".NET" Java Go >}}
+{{< tabpane text=true >}}
 
-{{% codetab %}}
-<!--python-->
+{{% tab "Python" %}}
 
 ```python
 import time
@@ -351,10 +346,9 @@ def process_results(ctx, final_result: int):
     print(f'Final result: {final_result}.')
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--javascript-->
+{{% tab "JavaScript" %}}
 
 ```javascript
 import {
@@ -405,7 +399,7 @@ async function start() {
 
     // Return a result for the given work item, which is also a random number in this case
     // For more information about random numbers in workflow please check
-    // https://learn.microsoft.com/azure/azure-functions/durable/durable-functions-code-constraints?tabs=csharp#random-numbers
+    // https://learn.microsoft.com/azure/azure-functions/durable/durable-functions-code-constraints?tabpane=csharp#random-numbers
     return Math.floor(Math.random() * 11);
   }
 
@@ -459,10 +453,9 @@ start().catch((e) => {
 });
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--dotnet-->
+{{% tab ".NET" %}}
 
 ```csharp
 // Get a list of N work items to process in parallel.
@@ -484,10 +477,9 @@ int sum = parallelTasks.Sum(t => t.Result);
 await context.CallActivityAsync("PostResults", sum);
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--java-->
+{{% tab "Java" %}}
 
 ```java
 public class FaninoutWorkflow extends Workflow {
@@ -510,10 +502,9 @@ public class FaninoutWorkflow extends Workflow {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--go-->
+{{% tab "Go" %}}
 
 ```go
 func BatchProcessingWorkflow(ctx *workflow.WorkflowContext) (any, error) {
@@ -576,9 +567,9 @@ func ProcessResults(ctx workflow.ActivityContext) (any, error) {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 The key takeaways from this example are:
 
@@ -590,10 +581,10 @@ Furthermore, the execution of the workflow is durable. If a workflow starts 100 
 
 It's possible to go further and limit the degree of concurrency using simple, language-specific constructs. The sample code below illustrates how to restrict the degree of fan-out to just 5 concurrent activity executions:
 
-{{< tabs ".NET" >}}
+{{< tabpane text=true >}}
 
-{{% codetab %}}
-<!-- .NET -->
+{{% tab ".NET" %}}
+
 ```csharp
 
 //Revisiting the earlier example...
@@ -620,9 +611,31 @@ var sum = results.Sum(t => t);
 await context.CallActivityAsync("PostResults", sum);
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
+
+You can process workflow activities in parallel while putting an upper cap on concurrency by using the following extension methods on the `WorkflowContext`:
+
+{{< tabpane text=true >}}
+
+{{% tab header=".NET" %}}
+
+```csharp
+//Revisiting the earlier example...
+// Get a list of work items to process
+var workBatch = await context.CallActivityAsync<object[]>("GetWorkBatch", null);
+
+// Process deterministically in parallel with an upper cap of 5 activities at a time
+var results = await context.ProcessInParallelAsync(workBatch, workItem => context.CallActivityAsync<int>("ProcessWorkItem", workItem), maxConcurrency: 5);
+
+var sum = results.Sum(t => t);
+await context.CallActivityAsync("PostResults", sum);
+```
+
+{{% /tab %}}
+
+{{< /tabpane >}}
 
 Limiting the degree of concurrency in this way can be useful for limiting contention against shared resources. For example, if the activities need to call into external resources that have their own concurrency limits, like a databases or external APIs, it can be useful to ensure that no more than a specified number of activities call that resource concurrently.
 
@@ -714,12 +727,11 @@ The following diagram provides a rough illustration of this pattern.
 
 Depending on the business needs, there may be a single monitor or there may be multiple monitors, one for each business entity (for example, a stock). Furthermore, the amount of time to sleep may need to change, depending on the circumstances. These requirements make using cron-based scheduling systems impractical.
 
-Dapr Workflow supports this pattern natively by allowing you to implement _eternal workflows_. Rather than writing infinite while-loops ([which is an anti-pattern]({{< ref "workflow-features-concepts.md#infinite-loops-and-eternal-workflows" >}})), Dapr Workflow exposes a _continue-as-new_ API that workflow authors can use to restart a workflow function from the beginning with a new input.
+Dapr Workflow supports this pattern natively by allowing you to implement _eternal workflows_. Rather than writing infinite while-loops ([which is an anti-pattern]({{% ref "workflow-features-concepts.md#infinite-loops-and-eternal-workflows" %}})), Dapr Workflow exposes a _continue-as-new_ API that workflow authors can use to restart a workflow function from the beginning with a new input.
 
-{{< tabs Python JavaScript ".NET" Java Go >}}
+{{< tabpane text=true >}}
 
-{{% codetab %}}
-<!--python-->
+{{% tab "Python" %}}
 
 ```python
 from dataclasses import dataclass
@@ -763,10 +775,9 @@ def send_alert(ctx, message: str):
     print(f'*** Alert: {message}')
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--javascript-->
+{{% tab "JavaScript" %}}
 
 ```javascript
 const statusMonitorWorkflow: TWorkflow = async function* (ctx: WorkflowContext): any {
@@ -791,10 +802,9 @@ const statusMonitorWorkflow: TWorkflow = async function* (ctx: WorkflowContext):
   };
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--dotnet-->
+{{% tab ".NET" %}}
 
 ```csharp
 public override async Task<object> RunAsync(WorkflowContext context, MyEntityState myEntityState)
@@ -832,10 +842,9 @@ public override async Task<object> RunAsync(WorkflowContext context, MyEntitySta
 
 > This example assumes you have a predefined `MyEntityState` class with a boolean `IsHealthy` property.
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--java-->
+{{% tab "Java" %}}
 
 ```java
 public class MonitorWorkflow extends Workflow {
@@ -874,10 +883,9 @@ public class MonitorWorkflow extends Workflow {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--go-->
+{{% tab "Go" %}}
 
 ```go
 type JobStatus struct {
@@ -927,9 +935,9 @@ func SendAlert(ctx workflow.ActivityContext) (any, error) {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 A workflow implementing the monitor pattern can loop forever or it can terminate itself gracefully by not calling _continue-as-new_.
 
@@ -939,9 +947,9 @@ This pattern can also be expressed using actors and reminders. The difference is
 
 ## External system interaction
 
-In some cases, a workflow may need to pause and wait for an external system to perform some action. For example, a workflow may need to pause and wait for a payment to be received. In this case, a payment system might publish an event to a pub/sub topic on receipt of a payment, and a listener on that topic can raise an event to the workflow using the [raise event workflow API]({{< ref "howto-manage-workflow.md#raise-an-event" >}}).
+In some cases, a workflow may need to pause and wait for an external system to perform some action. For example, a workflow may need to pause and wait for a payment to be received. In this case, a payment system might publish an event to a pub/sub topic on receipt of a payment, and a listener on that topic can raise an event to the workflow using the [raise event workflow API]({{% ref "howto-manage-workflow.md#raise-an-event" %}}).
 
-Another very common scenario is when a workflow needs to pause and wait for a human, for example when approving a purchase order. Dapr Workflow supports this event pattern via the [external events]({{< ref "workflow-features-concepts.md#external-events" >}}) feature.
+Another very common scenario is when a workflow needs to pause and wait for a human, for example when approving a purchase order. Dapr Workflow supports this event pattern via the [external events]({{% ref "workflow-features-concepts.md#external-events" %}}) feature.
 
 Here's an example workflow for a purchase order involving a human:
 
@@ -957,10 +965,9 @@ The following diagram illustrates this flow.
 
 The following example code shows how this pattern can be implemented using Dapr Workflow.
 
-{{< tabs Python JavaScript ".NET" Java Go >}}
+{{< tabpane text=true >}}
 
-{{% codetab %}}
-<!--python-->
+{{% tab "Python" %}}
 
 ```python
 from dataclasses import dataclass
@@ -1016,10 +1023,9 @@ def place_order(_, order: Order) -> None:
     print(f'*** Placing order: {order}')
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--javascript-->
+{{% tab "JavaScript" %}}
 
 ```javascript
 import {
@@ -1156,10 +1162,9 @@ start().catch((e) => {
 });
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--dotnet-->
+{{% tab ".NET" %}}
 
 ```csharp
 public override async Task<OrderResult> RunAsync(WorkflowContext context, OrderPayload order)
@@ -1200,10 +1205,9 @@ public override async Task<OrderResult> RunAsync(WorkflowContext context, OrderP
 
 > **Note** In the example above, `RequestApprovalActivity` is the name of a workflow activity to invoke and `ApprovalResult` is an enumeration defined by the workflow app. For brevity, these definitions were left out of the example code.
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--java-->
+{{% tab "Java" %}}
 
 ```java
 public class ExternalSystemInteractionWorkflow extends Workflow {
@@ -1237,10 +1241,9 @@ public class ExternalSystemInteractionWorkflow extends Workflow {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--go-->
+{{% tab "Go" %}}
 
 ```go
 type Order struct {
@@ -1294,16 +1297,15 @@ func PlaceOrder(ctx workflow.ActivityContext) (any, error) {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
-The code that delivers the event to resume the workflow execution is external to the workflow. Workflow events can be delivered to a waiting workflow instance using the [raise event]({{< ref "howto-manage-workflow.md#raise-an-event" >}}) workflow management API, as shown in the following example:
+The code that delivers the event to resume the workflow execution is external to the workflow. Workflow events can be delivered to a waiting workflow instance using the [raise event]({{% ref "howto-manage-workflow.md#raise-an-event" %}}) workflow management API, as shown in the following example:
 
-{{< tabs Python JavaScript ".NET" Java Go >}}
+{{< tabpane text=true >}}
 
-{{% codetab %}}
-<!--python-->
+{{% tab "Python" %}}
 
 ```python
 from dapr.clients import DaprClient
@@ -1317,10 +1319,9 @@ with DaprClient() as d:
         event_data=asdict(Approval("Jane Doe")))
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--javascript-->
+{{% tab "JavaScript" %}}
 
 ```javascript
 import { DaprClient } from "@dapr/dapr";
@@ -1330,10 +1331,9 @@ import { DaprClient } from "@dapr/dapr";
   }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--dotnet-->
+{{% tab ".NET" %}}
 
 ```csharp
 // Raise the workflow event to the waiting workflow
@@ -1344,20 +1344,18 @@ await daprClient.RaiseWorkflowEventAsync(
     eventData: ApprovalResult.Approved);
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--java-->
+{{% tab "Java" %}}
 
 ```java
 System.out.println("**SendExternalMessage: RestartEvent**");
 client.raiseEvent(restartingInstanceId, "RestartEvent", "RestartEventPayload");
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{% codetab %}}
-<!--go-->
+{{% tab "Go" %}}
 
 ```go
 func raiseEvent() {
@@ -1380,11 +1378,214 @@ func raiseEvent() {
 }
 ```
 
-{{% /codetab %}}
+{{% /tab %}}
 
-{{< /tabs >}}
+{{< /tabpane >}}
 
 External events don't have to be directly triggered by humans. They can also be triggered by other systems. For example, a workflow may need to pause and wait for a payment to be received. In this case, a payment system might publish an event to a pub/sub topic on receipt of a payment, and a listener on that topic can raise an event to the workflow using the raise event workflow API.
+
+## Compensation
+
+The compensation pattern (also known as the saga pattern) provides a mechanism for rolling back or undoing operations that have already been executed when a workflow fails partway through. This pattern is particularly important for long-running workflows that span multiple microservices where traditional database transactions are not feasible.
+
+In distributed microservice architectures, you often need to coordinate operations across multiple services. When these operations cannot be wrapped in a single transaction, the compensation pattern provides a way to maintain consistency by defining compensating actions for each step in the workflow.
+
+The compensation pattern addresses several critical challenges:
+
+- **Distributed Transaction Management**: When a workflow spans multiple microservices, each with their own data stores, traditional ACID transactions are not possible. The compensation pattern provides transactional consistency by ensuring operations are either all completed successfully or all undone through compensation.
+- **Partial Failure Recovery**: If a workflow fails after some steps have completed successfully, the compensation pattern allows you to undo those completed steps gracefully.
+- **Business Process Integrity**: Ensures that business processes can be properly rolled back in case of failures, maintaining the integrity of your business operations.
+- **Long-Running Processes**: For workflows that may run for hours, days, or longer, traditional locking mechanisms are impractical. Compensation provides a way to handle failures in these scenarios.
+
+Common use cases for the compensation pattern include:
+
+- **E-commerce Order Processing**: Reserve inventory, charge payment, and ship orders. If shipping fails, you need to release the inventory and refund the payment.
+- **Financial Transactions**: In a money transfer, if crediting the destination account fails, you need to rollback the debit from the source account.
+- **Resource Provisioning**: When provisioning cloud resources across multiple providers, if one step fails, you need to clean up all previously provisioned resources.
+- **Multi-Step Business Processes**: Any business process that involves multiple irreversible steps that may need to be undone in case of later failures.
+
+Dapr Workflow provides support for the compensation pattern, allowing you to register compensation activities for each step and execute them in reverse order when needed.
+
+Here's an example workflow for an e-commerce process:
+
+1. A workflow is triggered when an order is received.
+1. A reservation is made for the order in the inventory.
+1. The payment is processed.
+1. The order is shipped.
+1. If any of the above actions results in an error, the actions are compensated with another action:
+   - The shipment is cancelled.
+   - The payment is refunded.
+   - The inventory reservation is released.
+
+The following diagram illustrates this flow.
+
+<img src="/images/workflow-overview/workflows-compensation.png" width=600 alt="Diagram showing how the compensation pattern."/>
+
+{{< tabpane text=true >}}
+
+{{% tab "Java" %}}
+
+```java
+public class PaymentProcessingWorkflow implements Workflow {
+
+    @Override
+    public WorkflowStub create() {
+        return ctx -> {
+            ctx.getLogger().info("Starting Workflow: " + ctx.getName());
+            var orderId = ctx.getInput(String.class);
+            List<String> compensations = new ArrayList<>();
+
+            try {
+                // Step 1: Reserve inventory
+                String reservationId = ctx.callActivity(ReserveInventoryActivity.class.getName(), orderId, String.class).await();
+                ctx.getLogger().info("Inventory reserved: {}", reservationId);
+                compensations.add("ReleaseInventory");
+
+                // Step 2: Process payment
+                String paymentId = ctx.callActivity(ProcessPaymentActivity.class.getName(), orderId, String.class).await();
+                ctx.getLogger().info("Payment processed: {}", paymentId);
+                compensations.add("RefundPayment");
+
+                // Step 3: Ship order
+                String shipmentId = ctx.callActivity(ShipOrderActivity.class.getName(), orderId, String.class).await();
+                ctx.getLogger().info("Order shipped: {}", shipmentId);
+                compensations.add("CancelShipment");
+
+            } catch (TaskFailedException e) {
+                ctx.getLogger().error("Activity failed: {}", e.getMessage());
+
+                // Execute compensations in reverse order
+                Collections.reverse(compensations);
+                for (String compensation : compensations) {
+                    try {
+                        switch (compensation) {
+                            case "CancelShipment":
+                                String shipmentCancelResult = ctx.callActivity(
+                                    CancelShipmentActivity.class.getName(),
+                                    orderId,
+                                    String.class).await();
+                                ctx.getLogger().info("Shipment cancellation completed: {}", shipmentCancelResult);
+                                break;
+
+                            case "RefundPayment":
+                                String refundResult = ctx.callActivity(
+                                    RefundPaymentActivity.class.getName(),
+                                    orderId,
+                                    String.class).await();
+                                ctx.getLogger().info("Payment refund completed: {}", refundResult);
+                                break;
+
+                            case "ReleaseInventory":
+                                String releaseResult = ctx.callActivity(
+                                    ReleaseInventoryActivity.class.getName(),
+                                    orderId,
+                                    String.class).await();
+                                ctx.getLogger().info("Inventory release completed: {}", releaseResult);
+                                break;
+                        }
+                    } catch (TaskFailedException ex) {
+                        ctx.getLogger().error("Compensation activity failed: {}", ex.getMessage());
+                    }
+                }
+                ctx.complete("Order processing failed, compensation applied");
+            }
+
+			// Step 4: Send confirmation
+			ctx.callActivity(SendConfirmationActivity.class.getName(), orderId, Void.class).await();
+            ctx.getLogger().info("Confirmation sent for order: {}", orderId);
+
+            ctx.complete("Order processed successfully: " + orderId);
+        };
+    }
+}
+
+// Example activities
+class ReserveInventoryActivity implements WorkflowActivity {
+    @Override
+    public Object run(WorkflowActivityContext ctx) {
+        String orderId = ctx.getInput(String.class);
+        // Logic to reserve inventory
+        String reservationId = "reservation_" + orderId;
+        System.out.println("Reserved inventory for order: " + orderId);
+        return reservationId;
+    }
+}
+
+class ReleaseInventoryActivity implements WorkflowActivity {
+    @Override
+    public Object run(WorkflowActivityContext ctx) {
+        String reservationId = ctx.getInput(String.class);
+        // Logic to release inventory reservation
+        System.out.println("Released inventory reservation: " + reservationId);
+        return "Released: " + reservationId;
+    }
+}
+
+class ProcessPaymentActivity implements WorkflowActivity {
+    @Override
+    public Object run(WorkflowActivityContext ctx) {
+        String orderId = ctx.getInput(String.class);
+        // Logic to process payment
+        String paymentId = "payment_" + orderId;
+        System.out.println("Processed payment for order: " + orderId);
+        return paymentId;
+    }
+}
+
+class RefundPaymentActivity implements WorkflowActivity {
+    @Override
+    public Object run(WorkflowActivityContext ctx) {
+        String paymentId = ctx.getInput(String.class);
+        // Logic to refund payment
+        System.out.println("Refunded payment: " + paymentId);
+        return "Refunded: " + paymentId;
+    }
+}
+
+class ShipOrderActivity implements WorkflowActivity {
+    @Override
+    public Object run(WorkflowActivityContext ctx) {
+        String orderId = ctx.getInput(String.class);
+        // Logic to ship order
+        String shipmentId = "shipment_" + orderId;
+        System.out.println("Shipped order: " + orderId);
+        return shipmentId;
+    }
+}
+
+class CancelShipmentActivity implements WorkflowActivity {
+    @Override
+    public Object run(WorkflowActivityContext ctx) {
+        String shipmentId = ctx.getInput(String.class);
+        // Logic to cancel shipment
+        System.out.println("Canceled shipment: " + shipmentId);
+        return "Canceled: " + shipmentId;
+    }
+}
+
+class SendConfirmationActivity implements WorkflowActivity {
+    @Override
+    public Object run(WorkflowActivityContext ctx) {
+        String orderId = ctx.getInput(String.class);
+        // Logic to send confirmation
+        System.out.println("Sent confirmation for order: " + orderId);
+        return null;
+    }
+}
+```
+
+{{% /tab %}}
+
+{{< /tabpane >}}
+
+The key benefits of using Dapr Workflow's compensation pattern include:
+
+- **Compensation Control**: You have full control over when and how compensation activities are executed.
+- **Flexible Configuration**: You can implement custom logic for determining which compensations to run.
+- **Error Handling**: Handle compensation failures according to your specific business requirements.
+- **Simple Implementation**: No additional framework dependencies - just standard workflow activities and exception handling.
+
+The compensation pattern ensures that your distributed workflows can maintain consistency and recover gracefully from failures, making it an essential tool for building reliable microservice architectures.
 
 ## Next steps
 
@@ -1392,10 +1593,10 @@ External events don't have to be directly triggered by humans. They can also be 
 
 ## Related links
 
-- [Try out Dapr Workflows using the quickstart]({{< ref workflow-quickstart.md >}})
-- [Workflow overview]({{< ref workflow-overview.md >}})
-- [Workflow API reference]({{< ref workflow_api.md >}})
-- Try out the following examples: 
+- [Try out Dapr Workflows using the quickstart]({{% ref workflow-quickstart.md %}})
+- [Workflow overview]({{% ref workflow-overview.md %}})
+- [Workflow API reference]({{% ref workflow_api.md %}})
+- Try out the following examples:
    - [Python](https://github.com/dapr/python-sdk/tree/master/examples/demo_workflow)
    - [JavaScript](https://github.com/dapr/js-sdk/tree/main/examples/workflow)
    - [.NET](https://github.com/dapr/dotnet-sdk/tree/master/examples/Workflow)

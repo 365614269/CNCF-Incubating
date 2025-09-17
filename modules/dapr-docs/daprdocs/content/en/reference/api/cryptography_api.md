@@ -3,11 +3,11 @@ type: docs
 title: "Cryptography API reference"
 linkTitle: "Cryptography API"
 description: "Detailed documentation on the cryptography API"
-weight: 1300
+weight: 600
 ---
 
 Dapr provides cross-platform and cross-language support for encryption and decryption support via the 
-cryptography building block. Besides the [language specific SDKs]({{<ref sdks>}}), a developer can invoke these capabilities using
+cryptography building block. Besides the [language specific SDKs]({{%ref sdks%}}), a developer can invoke these capabilities using
 the HTTP API endpoints below.
 
 > The HTTP APIs are intended for development and testing only. For production scenarios, the use of the SDKs is strongly

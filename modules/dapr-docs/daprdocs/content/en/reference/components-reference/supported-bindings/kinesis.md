@@ -8,10 +8,10 @@ aliases:
 ---
 ## Component format
 
-To setup AWS Kinesis binding create a component of type `bindings.aws.kinesis`. See [this guide]({{< ref "howto-bindings.md#1-create-a-binding" >}}) on how to create and apply a binding configuration.
+To setup AWS Kinesis binding create a component of type `bindings.aws.kinesis`. See [this guide]({{% ref "howto-bindings.md#1-create-a-binding" %}}) on how to create and apply a binding configuration.
 
 See [this](https://aws.amazon.com/kinesis/data-streams/getting-started/) for instructions on how to set up an AWS Kinesis data streams
-See [Authenticating to AWS]({{< ref authenticating-aws.md >}}) for information about authentication-related attributes
+See [Authenticating to AWS]({{% ref authenticating-aws.md %}}) for information about authentication-related attributes
 
 ```yaml
 apiVersion: dapr.io/v1alpha1
@@ -38,9 +38,11 @@ spec:
     value: "*****************"
   - name: direction
     value: "input, output"
+  - name: endpoint
+    value: "http://localhost:4566" # Optional: Custom endpoint (e.g. for LocalStack)  
 ```
 {{% alert title="Warning" color="warning" %}}
-The above example uses secrets as plain strings. It is recommended to use a secret store for the secrets as described [here]({{< ref component-secrets.md >}}).
+The above example uses secrets as plain strings. It is recommended to use a secret store for the secrets as described [here]({{% ref component-secrets.md %}}).
 {{% /alert %}}
 
 ## Spec metadata fields
@@ -55,6 +57,8 @@ The above example uses secrets as plain strings. It is recommended to use a secr
 | `secretKey`          | Y        | Output | The AWS Secret Access Key to access this resource                       | `"secretAccessKey"` |
 | `sessionToken`       | N        | Output | The AWS session token to use                                            | `"sessionToken"`    |
 | `direction`       | N        | Input/Output | The direction of the binding                                            | `"input"`, `"output"`, `"input, output"`    |
+| `endpoint`        | N        | Input | Custom endpoint for Kinesis and DynamoDB (for example to enable AWS LocalStack support) | `"http://localhost:4566"` |
+
 
 {{% alert title="Important" color="warning" %}}
 When running the Dapr sidecar (daprd) with your application on EKS (AWS Kubernetes), if you're using a node/pod that has already been attached to an IAM policy defining access to AWS resources, you **must not** provide AWS access-key, secret-key, and tokens in the definition of the component spec you're using.  
@@ -69,9 +73,9 @@ This component supports **output binding** with the following operations:
 - `create`
 ## Related links
 
-- [Basic schema for a Dapr component]({{< ref component-schema >}})
-- [Bindings building block]({{< ref bindings >}})
-- [How-To: Trigger application with input binding]({{< ref howto-triggers.md >}})
-- [How-To: Use bindings to interface with external resources]({{< ref howto-bindings.md >}})
-- [Bindings API reference]({{< ref bindings_api.md >}})
-- [Authenticating to AWS]({{< ref authenticating-aws.md >}})
+- [Basic schema for a Dapr component]({{% ref component-schema %}})
+- [Bindings building block]({{% ref bindings %}})
+- [How-To: Trigger application with input binding]({{% ref howto-triggers.md %}})
+- [How-To: Use bindings to interface with external resources]({{% ref howto-bindings.md %}})
+- [Bindings API reference]({{% ref bindings_api.md %}})
+- [Authenticating to AWS]({{% ref authenticating-aws.md %}})

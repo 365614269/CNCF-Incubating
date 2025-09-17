@@ -1,9 +1,9 @@
 ---
 type: docs
-title: "Distributed Lock API reference"
-linkTitle: "Distributed Lock API"
+title: "Distributed lock API reference"
+linkTitle: "Distributed lock API"
 description: "Detailed documentation on the distributed lock API"
-weight: 900
+weight: 700
 ---
 
 ## Lock
@@ -21,7 +21,7 @@ POST http://localhost:<daprPort>/v1.0-alpha1/lock/<storename>
 Parameter | Description
 --------- | -----------
 `daprPort` | The Dapr port
-`storename` | The `metadata.name` field component file. Refer to the [component schema]({{< ref component-schema.md >}})
+`storename` | The `metadata.name` field component file. Refer to the [component schema]({{% ref component-schema.md %}})
 
 #### Query Parameters
 
@@ -95,7 +95,7 @@ POST http://localhost:<daprPort>/v1.0-alpha1/unlock/<storename>
 Parameter | Description
 --------- | -----------
 `daprPort` | The Dapr port
-`storename` | The `metadata.name` field component file. Refer to the [component schema]({{< ref component-schema.md >}})
+`storename` | The `metadata.name` field component file. Refer to the [component schema]({{% ref component-schema.md %}})
 
 #### Query Parameters
 

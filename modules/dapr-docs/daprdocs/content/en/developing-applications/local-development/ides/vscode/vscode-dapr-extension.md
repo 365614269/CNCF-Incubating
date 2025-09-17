@@ -6,8 +6,12 @@ weight: 10000
 description:  "How to develop and run Dapr applications with the Dapr extension"
 ---
 
+{{% alert title="Deprecation notice" color="primary" %}}
+The extension was previously supported by Microsoft, but is now deprecated. The extension will remain available in the Visual Studio Code marketplace, but it will no longer receive updates or support.
 
-Dapr offers a *preview* [Dapr Visual Studio Code extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-dapr) for local development which enables users a variety of features related to better managing their Dapr applications and debugging of your Dapr applications for all supported Dapr languages which are .NET, Go, PHP, Python and Java.
+{{% /alert %}}
+
+The *deprecated* [Dapr Visual Studio Code extension](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-dapr) for local development which enables users a variety of features related to better managing their Dapr applications and debugging of your Dapr applications for all supported Dapr languages which are .NET, Go, PHP, Python and Java.
 
 <a href="vscode:extension/ms-azuretools.vscode-dapr" class="btn btn-primary" role="button">Open in VSCode</a>
 
@@ -64,6 +68,4 @@ Using the VS Code extension, you can debug multiple Dapr applications at the sam
 
 Watch this [video](https://www.youtube.com/watch?v=OtbYCBt9C34&t=85) on how to use the Dapr VS Code extension:
 
-<div class="embed-responsive embed-responsive-16by9">
-<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/OtbYCBt9C34?start=85" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-</div>
+{{< youtube id=OtbYCBt9C34 start=85 >}}
