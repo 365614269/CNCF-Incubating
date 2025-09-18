@@ -32,12 +32,12 @@ jobs:
       GOPATH: ${{ github.workspace }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v6
 
     - name: Install requirements
       run: python3 -m pip install -r requirements.txt
