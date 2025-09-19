@@ -1165,6 +1165,8 @@ healthCheckICMPFailureThreshold: 3
 hostFirewall:
   # -- Enables the enforcement of host policies in the eBPF datapath.
   enabled: false
+# -- Enable routing to a service that has zero endpoints
+enableNoServiceEndpointsRoutable: true
 # -- Configure socket LB
 socketLB:
   # -- Enable socket LB
@@ -3540,14 +3542,6 @@ clustermesh:
       # -- The type of service used for apiserver access.
       type: NodePort
       # -- Optional port to use as the node port for apiserver access.
-      #
-      # WARNING: make sure to configure a different NodePort in each cluster if
-      # kube-proxy replacement is enabled, as Cilium is currently affected by a known
-      # bug (#24692) when NodePorts are handled by the KPR implementation. If a service
-      # with the same NodePort exists both in the local and the remote cluster, all
-      # traffic originating from inside the cluster and targeting the corresponding
-      # NodePort will be redirected to a local backend, regardless of whether the
-      # destination node belongs to the local or the remote cluster.
       nodePort: 32379
       # -- Annotations for the clustermesh-apiserver service.
       # Example annotations to configure an internal load balancer on different cloud providers:

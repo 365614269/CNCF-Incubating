@@ -152,6 +152,7 @@ func (c *lrpController) run(ctx context.Context, health cell.Health) error {
 				cleanup(wtxn)
 			}
 			delete(cleanupFuncs, lrpID)
+			delete(watchSets, lrpID)
 			if c.p.LRPMetrics != nil {
 				c.p.LRPMetrics.DelLRPConfig(lrpID)
 			}
@@ -274,7 +275,7 @@ func (c *lrpController) processRedirectPolicy(wtxn writer.WriteTxn, lrpID lb.Ser
 			matchingPods = append(matchingPods, getPodInfo(pod))
 		}
 	}
-	c.updateRedirectBackends(wtxn, ws, lrp, matchingPods)
+	c.updateRedirectBackends(wtxn, lrp, matchingPods)
 	c.updateSkipLB(wtxn, ws, lrp, matchingPods)
 	c.updateRedirects(wtxn, ws, cleanup, lrp, matchingPods)
 
@@ -356,7 +357,7 @@ func (c *lrpController) updateRedirects(wtxn writer.WriteTxn, ws *statedb.WatchS
 	return cleanup
 }
 
-func (c *lrpController) updateRedirectBackends(wtxn writer.WriteTxn, ws *statedb.WatchSet, lrp *LocalRedirectPolicy, pods []podInfo) {
+func (c *lrpController) updateRedirectBackends(wtxn writer.WriteTxn, lrp *LocalRedirectPolicy, pods []podInfo) {
 	portNameMatches := func(portName string) bool {
 		for bePortName := range lrp.BackendPortsByPortName {
 			if string(bePortName) == strings.ToLower(portName) {
@@ -404,8 +405,12 @@ func (c *lrpController) updateRedirectBackends(wtxn writer.WriteTxn, ws *statedb
 	newCount := len(beps)
 	orphanCount := 0
 	for be := range c.p.Writer.Backends().List(wtxn, lb.BackendByServiceName(lrpServiceName)) {
+		inst := be.GetInstance(lrpServiceName)
+		if inst == nil {
+			continue
+		}
 		if slices.ContainsFunc(beps, func(bep lb.BackendParams) bool {
-			return bep.Address == be.Address
+			return inst.DeepEqual(&bep)
 		}) {
 			newCount--
 		} else {
@@ -576,6 +581,7 @@ func (c *lrpController) frontendsToSkip(txn statedb.ReadTxn, ws *statedb.WatchSe
 	feAddrs := []lb.L3n4Addr{}
 	fes, watch := c.p.Writer.Frontends().ListWatch(txn, lb.FrontendByServiceName(targetName))
 	ws.Add(watch)
+
 	for fe := range fes {
 		if lrp.LRPType == lrpConfigTypeAddr || fe.RedirectTo != nil {
 			feAddrs = append(feAddrs, fe.Address)
