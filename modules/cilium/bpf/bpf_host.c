@@ -60,6 +60,10 @@
  #define host_wg_encrypt_hook(ctx, proto, src_sec_identity)			\
 	 wg_maybe_redirect_to_encrypt(ctx, proto, src_sec_identity)
 
+#ifndef tcx_early_hook
+#define tcx_early_hook(ctx, proto) CTX_ACT_OK
+#endif
+
 /* Bit 0 is skipped for robustness, as it's used in some places to indicate from_host itself. */
 #define FROM_HOST_FLAG_NEED_HOSTFW (1 << 1)
 #define FROM_HOST_FLAG_HOST_ID (1 << 2)
@@ -394,7 +398,7 @@ skip_tunnel:
 
 #if defined(ENABLE_IPSEC) && !defined(TUNNEL_MODE)
 	if (from_proxy && !identity_is_cluster(info->sec_identity))
-		ctx->mark = MARK_MAGIC_PROXY_TO_WORLD;
+		ctx->mark = MARK_MAGIC_SKIP_TPROXY;
 #endif /* ENABLE_IPSEC && !TUNNEL_MODE */
 
 	return CTX_ACT_OK;
@@ -847,7 +851,7 @@ skip_tunnel:
 
 #if defined(ENABLE_IPSEC) && !defined(TUNNEL_MODE)
 	if (from_proxy && !identity_is_cluster(info->sec_identity))
-		ctx->mark = MARK_MAGIC_PROXY_TO_WORLD;
+		ctx->mark = MARK_MAGIC_SKIP_TPROXY;
 #endif /* ENABLE_IPSEC && !TUNNEL_MODE */
 
 	return CTX_ACT_OK;
@@ -1271,9 +1275,11 @@ int cil_from_netdev(struct __ctx_buff *ctx)
 	if (ctx->mark == MARK_MAGIC_DECRYPT)
 		return CTX_ACT_OK;
 #endif
+	ret = tcx_early_hook(ctx, proto);
+	if (ret != CTX_ACT_OK)
+		return ret;
 
 	return do_netdev(ctx, proto, UNKNOWN_ID, TRACE_FROM_NETWORK, false);
-
 drop_err:
 	return send_drop_notify_error(ctx, src_id, ret, METRIC_INGRESS);
 }
@@ -1329,15 +1335,6 @@ int cil_from_host(struct __ctx_buff *ctx)
 	if (magic == MARK_MAGIC_PROXY_INGRESS ||  magic == MARK_MAGIC_PROXY_EGRESS)
 		obs_point = TRACE_FROM_PROXY;
 
-#ifdef ENABLE_IPSEC
-	if (magic == MARK_MAGIC_ENCRYPT) {
-		send_trace_notify(ctx, TRACE_FROM_STACK, identity, UNKNOWN_ID,
-				  TRACE_EP_ID_UNKNOWN, ctx->ingress_ifindex,
-				  TRACE_REASON_ENCRYPTED, 0, proto);
-		return CTX_ACT_OK;
-	}
-#endif /* ENABLE_IPSEC */
-
 	return do_netdev(ctx, proto, identity, obs_point, true);
 }
 
@@ -1374,6 +1371,17 @@ int cil_to_netdev(struct __ctx_buff *ctx)
 		src_sec_identity = get_identity(ctx);
 #endif
 
+	/* Load the ethertype just once: */
+	validate_ethertype(ctx, &proto);
+
+#ifdef ENABLE_IPSEC
+	if (magic == MARK_MAGIC_ENCRYPT)
+		send_trace_notify(ctx, TRACE_FROM_STACK,
+				  ctx_load_meta(ctx, CB_ENCRYPT_IDENTITY), UNKNOWN_ID,
+				  TRACE_EP_ID_UNKNOWN, ctx->ingress_ifindex,
+				  TRACE_REASON_ENCRYPTED, 0, proto);
+#endif /* ENABLE_IPSEC */
+
 	/* Filter allowed vlan id's and pass them back to kernel.
 	 */
 	if (ctx->vlan_present) {
@@ -1396,9 +1404,6 @@ int cil_to_netdev(struct __ctx_buff *ctx)
 		goto drop_err;
 	}
 #endif
-
-	/* Load the ethertype just once: */
-	validate_ethertype(ctx, &proto);
 
 #ifdef ENABLE_HOST_FIREWALL
 	/* This was initially added for Egress GW. There it's no longer needed,
@@ -1748,16 +1753,16 @@ int cil_to_host(struct __ctx_buff *ctx)
 	 *
 	 * This iptables rule, created by
 	 * iptables.Manager.inboundProxyRedirectRule() is ignored by the mark
-	 * MARK_MAGIC_PROXY_TO_WORLD, in the control plane.
+	 * MARK_MAGIC_SKIP_TPROXY, in the control plane.
 	 * Technically, it is also ignored by MARK_MAGIC_ENCRYPT but reusing
 	 * this mark breaks further processing as its used in the XFRM subsystem.
 	 *
 	 * Therefore, if the packet's mark is zero, indicating it was forwarded
-	 * from 'cilium_host', mark the packet with MARK_MAGIC_PROXY_TO_WORLD
+	 * from 'cilium_host', mark the packet with MARK_MAGIC_SKIP_TPROXY
 	 * and allow it to enter the foward path once punted to stack.
 	 */
 	if (ctx->mark == 0 && THIS_INTERFACE_IFINDEX == CILIUM_NET_IFINDEX)
-		ctx->mark = MARK_MAGIC_PROXY_TO_WORLD;
+		ctx->mark = MARK_MAGIC_SKIP_TPROXY;
 #endif /* !TUNNEL_MODE */
 
 # ifdef ENABLE_NODEPORT
